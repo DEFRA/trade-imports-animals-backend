@@ -1,97 +1,118 @@
-version: '3.4'
 services:
+  
   localstack:
     image: localstack/localstack:3.0.2
+    container_name: localstack
+    profiles: [ 'infra', 'services' ]
     ports:
-      - '4566:4566' # LocalStack Gateway
-      - '4510-4559:4510-4559' # external services port range
+      - '4566:4566'
+      - '4510-4559:4510-4559'
     env_file:
-      - 'compose/aws.env'
+      - './compose/aws.env'
     environment:
       DEBUG: ${DEBUG:-1}
-      LS_LOG: WARN # Localstack DEBUG Level
-      SERVICES: s3,sqs,sns,firehose
+      LS_LOG: WARN
+      SERVICES: s3,sqs,sns,cloudwatch,sts
       LOCALSTACK_HOST: 127.0.0.1
     volumes:
-      - '${TMPDIR:-/tmp}/localstack:/var/lib/localstack'
+      - localstack-data:/var/lib/localstack
       - ./compose/start-localstack.sh:/etc/localstack/init/ready.d/start-localstack.sh
     healthcheck:
-      test: ['CMD', 'curl', 'localhost:4566']
+      test: [ 'CMD', 'curl', 'localhost:4566' ]
       interval: 5s
       start_period: 5s
       retries: 3
     networks:
-      - cdp-tenant
-
-  redis:
-    image: redis:7.2.3-alpine3.18
-    ports:
-      - '6379:6379'
-    restart: always
-    networks:
-      - cdp-tenant
-
+      - trade-imports-tenant
+      
   mongodb:
-    image: mongo:6.0.13
-    networks:
-      - cdp-tenant
+    image: mongo:7.0
+    container_name: mongodb
+    profiles: ['infra', 'services']
+    restart: always
     ports:
       - '27017:27017'
     volumes:
-      - mongodb-data:/data
-    restart: always
+      - mongodb-data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', 'db.adminCommand("ping")']
+      interval: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - trade-imports-tenant
 
-  ################################################################################
-
-  # your-frontend:
-  #   image: defradigital/your-frontend:${YOUR_FRONTEND_VERSION:-latest}
-  #   ports:
-  #     - '3000:3000'
-  #   links:
-  #     - 'localstack:localstack'
-  #     - 'redis:redis'
-  #   depends_on:
-  #     localstack:
-  #       condition: service_healthy
-  #     redis:
-  #       condition: service_started
-  #   env_file:
-  #     - 'compose/aws.env'
-  #   environment:
-  #     PORT: 3000
-  #     NODE_ENV: development
-  #     REDIS_HOST: redis
-  #     LOCALSTACK_ENDPOINT: http://localstack:4566
-  #     USE_SINGLE_INSTANCE_CACHE: true
-  #   networks:
-  #     - cdp-tenant
-
-  your-backend:
-    build: ./
+  redis:
+    image: redis:7.2.3-alpine3.18
+    container_name: redis
+    profiles: ['infra', 'services']
     ports:
-      - '8080:8080'
-    links:
-      - 'localstack:localstack'
-      - 'mongodb:mongodb'
+      - '6379:6379'
+    restart: always
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - trade-imports-tenant
+      
+  trade-imports-animals-backend:
+    container_name: trade-imports-animals-backend
+    profiles: [ 'services' ]
+    build:
+      context: .
+      target: development
     depends_on:
       localstack:
         condition: service_healthy
       mongodb:
-        condition: service_started
+        condition: service_healthy
     env_file:
-      - 'compose/aws.env'
+      - './compose/aws.env'  
+    ports:
+      - '8085:8085'
+      - '5005:5005' # Java debug port
     environment:
-      PORT: 8080
+      # Server
+      PORT: 8085
+
+      # Service Identity
+      SERVICE_VERSION: 0.0.0-local
+      ENVIRONMENT: local
+
+      # MongoDB
+      MONGO_URI: mongodb://mongodb:27017
+      MONGO_DATABASE: trade-imports-animals-backend
+
+      # AWS (via LocalStack)
       LOCALSTACK_ENDPOINT: http://localstack:4566
-      MONGO_URI: mongodb://mongodb:27017/
+      AWS_REGION: eu-west-2
+
+      # Logging
+      LOG_LEVEL: DEBUG
+
+      # Metrics (disabled locally)
+      METRICS_ENABLED: true
+
+      # Spring profile (local = exposes debugging actuator endpoints)
+      SPRING_PROFILES_ACTIVE: local
+
+      # Java Debug (optional - uncomment to enable remote debugging)
+      # JAVA_TOOL_OPTIONS: -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
     networks:
-      - cdp-tenant
+      - trade-imports-tenant
+    # Note: No volume mounts for Java (requires rebuild for code changes)
+    # For faster development, use 'mvn spring-boot:run' directly on host
 
 ################################################################################
 
-volumes:
-  mongodb-data:
 
+volumes:
+  localstack-data:
+  mongodb-data:
+    
 networks:
-  cdp-tenant:
-    driver: bridge
+  trade-imports-tenant:
+    name: trade-imports-tenant

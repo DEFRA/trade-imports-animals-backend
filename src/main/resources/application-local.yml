@@ -1,0 +1,25 @@
+# Development profile - exposes additional actuator endpoints for debugging
+# MongoDB URI should be set via MONGO_URI environment variable
+# (defaults are in application.yml)
+
+logging:
+  level:
+    root: DEBUG
+    uk.gov.defra.trade.imports.animals: DEBUG
+    org.mongodb.driver: ${LOGGING_LEVEL_ORG_MONGODB_DRIVER:WARN}
+    org.springframework: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK:INFO}
+    org.springframework.web: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB:INFO}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,env
+  endpoint:
+    health:
+      show-details: when-authorized
+spring:
+  data:
+    mongodb:
+      ssl:
+        enabled: false
