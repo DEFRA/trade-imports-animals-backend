@@ -1,0 +1,14 @@
+{
+  "interactiveLogin": true,
+  "httpServer": "NettyWrapper",
+  "tokenCallbacks": [
+    {
+      "issuerId": "default",
+      "tokenExpiry": 120,
+      "requestMappings": [
+        {
+        }
+      ]
+    }
+  ]
+}

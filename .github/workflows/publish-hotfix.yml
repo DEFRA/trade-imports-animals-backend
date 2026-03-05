@@ -14,24 +14,30 @@ env:
 
 jobs:
   build:
-    if: github.run_number != 1
     name: CDP-build-hotfix-workflow
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Depth 0 required for branch-based versioning
+          fetch-depth: 0 # Depth 0 is required for branch-based versioning
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: 'corretto'
+          java-version-file: '.java-version'
+          cache: 'maven'
+
+      # Ensure tests pass. Add more checks if required
+      - run: mvn clean verify
+
       - name: Publish Hot Fix
         uses: DEFRA/cdp-build-action/build-hotfix@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-    ## SonarCloud
-    ## Uncomment to unable SonarCloud scan
-    ## Requires project to be set up in SonarCloud
-    ## and the SonarCloud token to be set in the repository secrets
-#   sonarcloud-scan:
-#     name: CDP SonarCloud Scan
-#     uses: ./.github/workflows/sonarcloud.yml
-#     needs: build
-#     secrets: inherit
+
+#     - name: SonarCloud Scan
+#       uses: SonarSource/sonarqube-scan-action@v5
+#       env:
+#         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}

@@ -1,0 +1,93 @@
+server:
+  port: ${PORT:8085}
+  shutdown: graceful
+
+spring:
+  application:
+    name: trade-imports-animals-backend
+  data:
+    mongodb:
+      uri: ${MONGO_URI:mongodb://localhost:27017}
+      database: ${MONGO_DATABASE:trade-imports-animals-backend}
+      auto-index-creation: true
+      read-preference: ${MONGO_READ_PREFERENCE:secondary}
+      write-concern: ${MONGO_WRITE_CONCERN:majority}
+      connection-pool:
+        min-size: ${MONGO_POOL_MIN_SIZE:10}
+        max-size: ${MONGO_POOL_MAX_SIZE:100}
+        max-wait-time-ms: ${MONGO_POOL_MAX_WAIT_TIME_MS:2000}
+        max-connection-idle-time-ms: ${MONGO_POOL_MAX_IDLE_TIME_MS:60000}
+      ssl:
+        enabled: false
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+# CDP platform configuration
+cdp:
+  environment: ${ENVIRONMENT:local}
+  service-version: ${SERVICE_VERSION:0.0.0-local}
+  tracing:
+    header-name: ${TRACING_HEADER:x-cdp-request-id}
+  proxy:
+    url: ${HTTP_PROXY:}
+    
+# Trade auth api configuration
+trade-auth:
+  client-id: test
+  client-secret: test_value
+  scope: default
+  connectionTimeout: 3000
+  readTimeout: 3000
+
+# MDM api configuration
+mdm-service:
+  ocpApimSubscriptionKey: test
+  connectionTimeout: 3000
+  readTimeout: 3000
+
+# AWS configuration
+aws:
+  region: ${AWS_REGION:eu-west-2}
+  emf:
+    enabled: ${AWS_EMF_ENABLED:false}
+    environment: ${AWS_EMF_ENVIRONMENT:Local}
+    namespace: ${AWS_EMF_NAMESPACE:}
+    service:
+      name: ${AWS_EMF_SERVICE_NAME:trade-imports-animals-backend}
+      type: ${AWS_EMF_SERVICE_TYPE:SpringBootApp}
+
+# Logging configuration
+logging:
+  level:
+    root: INFO
+    uk.gov.defra.trade.imports.animals: ${LOG_LEVEL:INFO}
+    uk.gov.defra.trade.imports.animals.common.metrics: ${LOGGING_LEVEL_UK_GOV_DEFRA_CDP_TRADE_DEMO_COMMON_METRICS:INFO}
+    org.springframework: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK:INFO}
+    org.springframework.web: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB:DEBUG}
+    org.mongodb.driver: ${LOGGING_LEVEL_ORG_MONGODB_DRIVER:WARN}
+
+# Actuator endpoints
+# Production: Only health endpoint exposed (secure by default)
+# Development: Use dev profile (application-local.yml) for debugging endpoints
+management:
+  endpoints:
+    web:
+      base-path: /
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+  info:
+    env:
+      enabled: true
+  health:
+    mongo:
+      enabled: false
+
+# Application info (exposed via /info endpoint)
+info:
+  app:
+    name: ${spring.application.name}
+    version: ${cdp.service-version}
+    environment: ${cdp.environment}
