@@ -43,7 +43,7 @@ import org.testcontainers.utility.DockerImageName;
 abstract class IntegrationBase {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(IntegrationBase.class);
-    static final List<String> SERVICES_TO_MOCK = List.of("mdm-service");
+    static final List<String> SERVICES_TO_MOCK = List.of();
 
     @LocalServerPort
     int port;
@@ -79,9 +79,6 @@ abstract class IntegrationBase {
                 OAUTH_CONTAINER.getMappedPort(8080)));
         registry.add("auth-api.resource", () -> "http://%s:%d".formatted(OAUTH_CONTAINER.getHost(),
             OAUTH_CONTAINER.getMappedPort(8080)));
-        registry.add("trade-auth.api.url",
-            () -> "http://%s:%d/tenant/oauth2/v2.0/token".formatted(OAUTH_CONTAINER.getHost(),
-                OAUTH_CONTAINER.getMappedPort(8080)));
 
         registry.add("spring.security.oauth2.client.provider.trade-platform.token-uri",
             () -> "http://%s:%d/trade-platform/token".formatted(OAUTH_CONTAINER.getHost(),
@@ -150,18 +147,6 @@ abstract class IntegrationBase {
             .map(body -> body.get("access_token"))
             .map(JsonNode::asText)
             .orElseThrow();
-    }
-
-    void stubMdmResponse() {
-        usingStub()
-            .when(request()
-                .withMethod("GET")
-                .withPath("/mdm-service/mdm/trade/bcp/bcps")
-                .withHeader("Ocp-Apim-Subscription-Key", "test")
-            )
-            .respond(response().withBody(
-                getJsonFromFile("integration/mdm-response.json")
-            ).withHeader("x-ms-middleware-request-id", "trace-id"));
     }
     
     @SneakyThrows

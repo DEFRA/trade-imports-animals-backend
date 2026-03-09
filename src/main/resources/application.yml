@@ -34,29 +34,6 @@ cdp:
   cloudwatch:
     endpoint: ${AWS_EMF_AGENT_ENDPOINT:http://localhost:4566}
   proxyUrl: ${HTTP_PROXY:}
-  
-# ipaffs configuration
-ipaffs:
-  api:
-    environment: ${IPAFFS_API_ENVIRONMENT:snd}
-    baseUrl: ${IPAFFS_API_BASE_URL:https://importnotification-api-static-snd.azure.defra.cloud}
-  
-# Trade auth api configuration
-trade-auth:
-  api:
-    url: ${TRADE_PLATFORM_AUTH_URL:http://localhost:3002/tenant/oauth2/v2.0/token}
-  client-id: ${TRADE_PLATFORM_CLIENT_ID:test}
-  client-secret: ${TRADE_PLATFORM_CLIENT_SECRET:test_value}
-  scope: ${TRADE_PLATFORM_SCOPE:default}
-  connectionTimeout: 3000
-  readTimeout: 3000
-  
-# MDM api configuration
-mdm-service:
-  url: ${MDM_SERVICE_URL:http://localhost:4065}
-  ocpApimSubscriptionKey: ${TRADE_PLATFORM_SUBSCRIPTION_KEY:test}
-  connectionTimeout: 3000
-  readTimeout: 3000
 
 # AWS configuration
 aws:

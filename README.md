@@ -1,6 +1,6 @@
 # trade-imports-animals-backend
 
-Core delivery C# ASP.NET backend template.
+Core delivery Java Spring Boot backend template.
 
 * [Install MongoDB](#install-mongodb)
 * [Inspect MongoDB](#inspect-mongodb)
@@ -22,7 +22,7 @@ A local environment with:
 - A commented out frontend example.
 
 ```bash
-docker compose up --build -d
+docker compose --profile services up --build -d
 ```
 
 A more extensive setup is available in [github.com/DEFRA/cdp-local-environment](https://github.com/DEFRA/cdp-local-environment)
@@ -31,10 +31,10 @@ A more extensive setup is available in [github.com/DEFRA/cdp-local-environment](
 
 #### MongoDB via Docker
 
-See above.
+Run infrastructure services (MongoDB, Localstack, Redis):
 
-```
-docker compose up -d mongodb
+```bash
+docker compose --profile infra up -d
 ```
 
 #### MongoDB locally
@@ -66,18 +66,18 @@ You can use the CDP Terminal to access the environments' MongoDB.
 
 Run the tests with:
 
-Tests run by running a full `WebApplication` backed by [Ephemeral MongoDB](https://github.com/asimmon/ephemeral-mongo).
-Tests do not use mocking of any sort and read and write from the in-memory database.
+Tests run by running a full Spring Boot application backed by [Testcontainers](https://testcontainers.com/).
+Tests do not use mocking of any sort and read and write from the containerized database.
 
 ```bash
-dotnet test
-````
+mvn test
+```
 
 ### Running
 
-Run CDP-Deployments application:
+Run the application:
 ```bash
-dotnet run --project TradeImportsAnimalsBackend --launch-profile Development
+mvn spring-boot:run
 ```
 
 ### SonarCloud
@@ -87,7 +87,7 @@ Example SonarCloud configuration are available in the GitHub Action workflows.
 ### Dependabot
 
 We have added an example dependabot configuration file to the repository. You can enable it by renaming
-the [.github/example.dependabot.yml](.github/example.dependabot.yml) to `.github/dependabot.yml`
+the [.github/example.dependabot.yml](.github/dependabot.yml) to `.github/dependabot.yml`
 
 
 ### About the licence
