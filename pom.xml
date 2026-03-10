@@ -155,10 +155,6 @@
       <artifactId>nimbus-jose-jwt</artifactId>
       <version>10.6</version>
     </dependency>
-    <dependency>
-      <groupId>com.github.ben-manes.caffeine</groupId>
-      <artifactId>caffeine</artifactId>
-    </dependency>
 
     <!-- Testing -->
     <dependency>
@@ -252,10 +248,6 @@
               <goal>check</goal>
             </goals>
             <configuration>
-              <excludes>
-                <exclude>uk/gov/defra/trade/imports/animals/debug/**</exclude>
-                <exclude>uk/gov/defra/trade/imports/animals/domain/mdm/**</exclude>
-              </excludes>
               <rules>
                 <rule>
                   <element>BUNDLE</element>
@@ -271,11 +263,6 @@
             </configuration>
           </execution>
         </executions>
-        <configuration>
-          <excludes>
-            <exclude>uk/gov/defra/trade/imports/animals/debug/**</exclude>
-          </excludes>
-        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

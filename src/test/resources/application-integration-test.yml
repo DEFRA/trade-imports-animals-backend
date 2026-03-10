@@ -30,20 +30,6 @@ cdp:
     header-name: ${TRACING_HEADER:x-cdp-request-id}
   proxy:
     url: ${HTTP_PROXY:}
-    
-# Trade auth api configuration
-trade-auth:
-  client-id: test
-  client-secret: test_value
-  scope: default
-  connectionTimeout: 3000
-  readTimeout: 3000
-
-# MDM api configuration
-mdm-service:
-  ocpApimSubscriptionKey: test
-  connectionTimeout: 3000
-  readTimeout: 3000
 
 # AWS configuration
 aws:
