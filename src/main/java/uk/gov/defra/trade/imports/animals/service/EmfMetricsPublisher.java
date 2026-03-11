@@ -37,7 +37,7 @@ public class EmfMetricsPublisher {
                     measurement -> {
                       var name = meter.getId().getName();
                       var value = measurement.getValue();
-                      log.debug("Publishing metrics for {} with a value of {}", name, value);
+                      log.trace("Publishing metrics for {} with a value of {}", name, value);
                       metricsLogger.putMetric(name, value);
                     }));
     meterRegistry.getMeters()
