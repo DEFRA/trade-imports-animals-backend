@@ -1,0 +1,379 @@
+package uk.gov.defra.trade.imports.animals.integration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.List;
+import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.web.reactive.server.EntityExchangeResult;
+import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.Origin;
+
+@Slf4j
+class NotificationIT extends IntegrationBase {
+
+    private static final String NOTIFICATION_ENDPOINT = "/notifications";
+
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    @BeforeEach
+    void setUp() {
+        notificationRepository.deleteAll();
+    }
+
+    @Test
+    void post_shouldCreateNewNotification() {
+        // Given
+        NotificationDto notificationDto = createNotificationDto("GB", "Live bovine animals");
+
+        // When
+        EntityExchangeResult<Notification> result = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDto)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult();
+
+        // Then
+        Notification created = result.getResponseBody();
+        assertThat(created).isNotNull();
+        assertThat(created.getId()).isNotNull();
+        assertThat(created.getReferenceNumber()).isNotNull();
+        assertThat(created.getReferenceNumber()).startsWith("DRAFT.IMP.");
+        assertThat(created.getOrigin()).isNotNull();
+        assertThat(created.getOrigin().getCountryCode()).isEqualTo("GB");
+        assertThat(created.getCommodity()).isEqualTo("Live bovine animals");
+    }
+
+    @Test
+    void post_shouldCreateNotificationWithOriginDetails() {
+        // Given
+        Origin origin = new Origin("IE", "true", "REF-001");
+        NotificationDto notificationDto = NotificationDto.builder()
+            .origin(origin)
+            .commodity("Live cattle")
+            .build();
+
+        // When
+        EntityExchangeResult<Notification> result = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDto)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult();
+
+        // Then
+        Notification created = result.getResponseBody();
+        assertThat(created).isNotNull();
+        assertThat(created.getId()).isNotNull();
+        assertThat(created.getReferenceNumber()).isNotNull();
+        assertThat(created.getOrigin().getCountryCode()).isEqualTo("IE");
+        assertThat(created.getOrigin().getRequiresRegionCode()).isEqualTo("true");
+        assertThat(created.getOrigin().getInternalReference()).isEqualTo("REF-001");
+        assertThat(created.getCommodity()).isEqualTo("Live cattle");
+    }
+
+    @Test
+    void post_shouldUpdateExistingNotification() {
+        // Given - create initial notification
+        NotificationDto initial = createNotificationDto("FR", "Live sheep");
+        EntityExchangeResult<Notification> createResult = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(initial)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult();
+
+        String createdId = createResult.getResponseBody().getId();
+        String referenceNumber = createResult.getResponseBody().getReferenceNumber();
+
+        // When - update the notification
+        NotificationDto updateDto = NotificationDto.builder()
+            .referenceNumber(referenceNumber)
+            .origin(new Origin("ES", "false", "REF-002"))
+            .commodity("Live pigs")
+            .build();
+
+        EntityExchangeResult<Notification> result = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(updateDto)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult();
+
+        // Then
+        Notification updated = result.getResponseBody();
+        assertThat(updated).isNotNull();
+        assertThat(updated.getId()).isEqualTo(createdId);
+        assertThat(updated.getReferenceNumber()).isEqualTo(referenceNumber);
+        assertThat(updated.getOrigin().getCountryCode()).isEqualTo("ES");
+        assertThat(updated.getCommodity()).isEqualTo("Live pigs");
+
+        // Verify only one notification exists
+        assertThat(findAllNotifications()).hasSize(1);
+    }
+
+    @Test
+    void findAll_shouldReturnAllNotifications() {
+        // Given - create multiple notifications
+        NotificationDto notificationDto1 = createNotificationDto("GB", "Live cattle");
+        NotificationDto notificationDto2 = createNotificationDto("IE", "Live sheep");
+        NotificationDto notificationDto3 = createNotificationDto("FR", "Live pigs");
+
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notificationDto1).exchange();
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notificationDto2).exchange();
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notificationDto3).exchange();
+
+        // When
+        List<Notification> notifications = findAllNotifications();
+
+        // Then
+        assertThat(notifications).isNotNull().hasSize(3);
+        assertThat(notifications)
+            .extracting(n -> n.getOrigin().getCountryCode())
+            .containsExactlyInAnyOrder("GB", "IE", "FR");
+        assertThat(notifications)
+            .extracting(Notification::getId)
+            .allMatch(id -> id != null && !id.isEmpty());
+        assertThat(notifications)
+            .extracting(Notification::getReferenceNumber)
+            .allMatch(ref -> ref != null && ref.startsWith("DRAFT.IMP."));
+    }
+
+    @Test
+    void findAll_shouldReturnEmptyList_whenNoNotifications() {
+        // When
+        List<Notification> notifications = findAllNotifications();
+
+        // Then
+        assertThat(notifications).isNotNull().isEmpty();
+    }
+
+    @Test
+    void post_shouldAllowMultipleNotificationsWithNullReferenceNumber() {
+        // Given - create multiple notifications without explicitly setting referenceNumber
+        NotificationDto notificationDto1 = createNotificationDto("GB", "Live cattle");
+        NotificationDto notificationDto2 = createNotificationDto("IE", "Live sheep");
+        NotificationDto notificationDto3 = createNotificationDto("FR", "Live pigs");
+
+        // When - save all notifications
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDto1)
+            .exchange()
+            .expectStatus().isOk();
+
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDto2)
+            .exchange()
+            .expectStatus().isOk();
+
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDto3)
+            .exchange()
+            .expectStatus().isOk();
+
+        // Then - verify all notifications were created with generated referenceNumbers
+        List<Notification> allNotifications = findAllNotifications();
+        assertThat(allNotifications).hasSize(3);
+        assertThat(allNotifications)
+            .extracting(Notification::getReferenceNumber)
+            .allMatch(ref -> ref != null && ref.startsWith("DRAFT.IMP."));
+        assertThat(allNotifications)
+            .extracting(n -> n.getOrigin().getCountryCode())
+            .containsExactlyInAnyOrder("GB", "IE", "FR");
+    }
+
+    @Test
+    void post_shouldUpdateExistingNotificationWithSameReferenceNumber() {
+        // Given - create first notification
+        NotificationDto notificationDto1 = createNotificationDto("GB", "Live cattle");
+        EntityExchangeResult<Notification> createResult = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDto1)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult();
+
+        String referenceNumber = createResult.getResponseBody().getReferenceNumber();
+
+        // When - attempt to create second notification with same referenceNumber
+        Origin origin = new Origin();
+        origin.setCountryCode("IE");
+        NotificationDto notificationDto2 = NotificationDto.builder()
+            .referenceNumber(referenceNumber)
+            .origin(origin)
+            .commodity("Live sheep")
+            .build();
+
+        // Then - expect updated notification
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDto2)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult();
+
+        // Verify only one notification was saved
+        List<Notification> allNotifications = findAllNotifications();
+        assertThat(allNotifications).hasSize(1);
+        assertThat(allNotifications.getFirst().getReferenceNumber()).isEqualTo(referenceNumber);
+        assertThat(allNotifications.getFirst().getOrigin().getCountryCode()).isEqualTo("IE");
+        assertThat(allNotifications.getFirst().getCommodity()).isEqualTo("Live sheep");
+    }
+
+    @Test
+    void fullCrudFlow_shouldWorkEndToEnd() {
+        // 1. Create notification
+        NotificationDto createDto = createNotificationDto("NL", "Live horses");
+        EntityExchangeResult<Notification> createResult = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createDto)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult();
+
+        Notification created = createResult.getResponseBody();
+        assertThat(created.getId()).isNotNull();
+        assertThat(created.getReferenceNumber()).isNotNull();
+        assertThat(created.getReferenceNumber()).startsWith("DRAFT.IMP.");
+        assertThat(created.getOrigin().getCountryCode()).isEqualTo("NL");
+        assertThat(created.getCommodity()).isEqualTo("Live horses");
+
+        // 2. Verify findAll returns the created notification
+        List<Notification> allNotifications = findAllNotifications();
+        assertThat(allNotifications).hasSize(1);
+        assertThat(allNotifications.get(0).getId()).isEqualTo(created.getId());
+
+        // 3. Update the notification
+        NotificationDto updateDto = NotificationDto.builder()
+            .referenceNumber(created.getReferenceNumber())
+            .origin(new Origin("BE", "false", "REF-BE-001"))
+            .commodity("Live donkeys")
+            .build();
+
+        EntityExchangeResult<Notification> updateResult = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(updateDto)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult();
+
+        Notification updated = updateResult.getResponseBody();
+        assertThat(updated.getId()).isEqualTo(created.getId());
+        assertThat(updated.getReferenceNumber()).isEqualTo(created.getReferenceNumber());
+        assertThat(updated.getOrigin().getCountryCode()).isEqualTo("BE");
+        assertThat(updated.getCommodity()).isEqualTo("Live donkeys");
+
+        // 4. Verify only one notification exists
+        assertThat(findAllNotifications()).hasSize(1);
+
+        // 5. Verify the notification was updated in database
+        Notification persisted = notificationRepository.findById(created.getId()).orElse(null);
+        assertThat(persisted).isNotNull();
+        assertThat(persisted.getOrigin().getCountryCode()).isEqualTo("BE");
+        assertThat(persisted.getCommodity()).isEqualTo("Live donkeys");
+    }
+
+    @Test
+    void post_shouldGenerateReferenceNumberAutomatically() {
+        // Given
+        NotificationDto notificationDto = createNotificationDto("DE", "Live goats");
+
+        // When
+        EntityExchangeResult<Notification> result = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDto)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult();
+
+        // Then - verify reference number format
+        Notification created = result.getResponseBody();
+        assertThat(created).isNotNull();
+        assertThat(created.getId()).isNotNull();
+        assertThat(created.getReferenceNumber()).isNotNull();
+
+        // Reference number should follow pattern: DRAFT.IMP.YYYY.<id>
+        assertThat(created.getReferenceNumber()).matches("DRAFT\\.IMP\\.\\d{4}\\..+");
+        assertThat(created.getReferenceNumber()).contains(created.getId());
+
+        log.info("Notification ID: {}", created.getId());
+        log.info("Generated reference number: {}", created.getReferenceNumber());
+    }
+
+    @Test
+    void post_shouldHandleDifferentCommodityTypes() {
+        // Given - create notifications with different commodity types
+        NotificationDto cattle = createNotificationDto("GB", "Live bovine animals");
+        NotificationDto sheep = createNotificationDto("IE", "Live ovine animals");
+        NotificationDto pigs = createNotificationDto("FR", "Live porcine animals");
+
+        // When - create all notifications
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(cattle).exchange()
+            .expectStatus().isOk();
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(sheep).exchange()
+            .expectStatus().isOk();
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(pigs).exchange()
+            .expectStatus().isOk();
+
+        // Then
+        List<Notification> notifications = findAllNotifications();
+        assertThat(notifications).hasSize(3);
+        assertThat(notifications)
+            .extracting(Notification::getCommodity)
+            .containsExactlyInAnyOrder(
+                "Live bovine animals",
+                "Live ovine animals",
+                "Live porcine animals"
+            );
+    }
+
+    private List<Notification> findAllNotifications() {
+        return webClient("NoAuth")
+            .get()
+            .uri(NOTIFICATION_ENDPOINT)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBodyList(Notification.class)
+            .returnResult().getResponseBody();
+    }
+
+    private NotificationDto createNotificationDto(String countryCode, String commodity) {
+        Origin origin = new Origin();
+        origin.setCountryCode(countryCode);
+
+        return NotificationDto.builder()
+            .origin(origin)
+            .commodity(commodity)
+            .build();
+    }
+}

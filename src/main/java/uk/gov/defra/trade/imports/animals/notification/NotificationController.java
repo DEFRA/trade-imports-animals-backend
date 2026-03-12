@@ -1,0 +1,42 @@
+package uk.gov.defra.trade.imports.animals.notification;
+
+import io.micrometer.core.annotation.Timed;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+@RequestMapping("/notifications")
+@Tag(name = "Notification API", description = "CRUD operations for the notification in the animals journey")
+@Slf4j
+@RequiredArgsConstructor
+public class NotificationController {
+
+    private final NotificationService notificationService;
+    
+    @PostMapping
+    @Operation(summary = "Post Origin of the Import", description = "Submits an origin to the backend")
+    @Timed("controller.postNotification.time")
+    public ResponseEntity<Notification> post(@Valid @RequestBody NotificationDto notificationDto) {
+        log.info("POST /notification - Creating Notification with country code: {}", notificationDto.getOrigin().getCountryCode());
+        return ResponseEntity.ok(notificationService.saveOriginOfImport(notificationDto));
+    }
+
+    @GetMapping
+    @Operation(summary = "List notifications", description = "Returns all import notifications")
+    @Timed("controller.getAllNotifications.time")
+    public List<Notification> findAll() {
+        log.debug("GET /notifications - Fetching all notifications");
+        return notificationService.findAll();
+    }
+
+}
