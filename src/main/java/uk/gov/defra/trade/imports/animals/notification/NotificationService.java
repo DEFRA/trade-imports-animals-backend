@@ -1,11 +1,11 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
-import io.micrometer.common.util.StringUtils;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
