@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 
@@ -28,13 +29,13 @@ class NotificationIT extends IntegrationBase {
     @Test
     void post_shouldCreateNewNotification() {
         // Given
-        Notification notification = createNotification("GB", "Live bovine animals");
+        NotificationDto notificationDto = createNotificationDto("GB", "Live bovine animals");
 
         // When
         EntityExchangeResult<Notification> result = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notification)
+            .bodyValue(notificationDto)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -55,15 +56,16 @@ class NotificationIT extends IntegrationBase {
     void post_shouldCreateNotificationWithOriginDetails() {
         // Given
         Origin origin = new Origin("IE", "true", "REF-001");
-        Notification notification = new Notification();
-        notification.setOrigin(origin);
-        notification.setCommodity("Live cattle");
+        NotificationDto notificationDto = NotificationDto.builder()
+            .origin(origin)
+            .commodity("Live cattle")
+            .build();
 
         // When
         EntityExchangeResult<Notification> result = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notification)
+            .bodyValue(notificationDto)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -83,7 +85,7 @@ class NotificationIT extends IntegrationBase {
     @Test
     void post_shouldUpdateExistingNotification() {
         // Given - create initial notification
-        Notification initial = createNotification("FR", "Live sheep");
+        NotificationDto initial = createNotificationDto("FR", "Live sheep");
         EntityExchangeResult<Notification> createResult = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
@@ -97,16 +99,16 @@ class NotificationIT extends IntegrationBase {
         String referenceNumber = createResult.getResponseBody().getReferenceNumber();
 
         // When - update the notification
-        Notification update = new Notification();
-        update.setId(createdId);
-        update.setReferenceNumber(referenceNumber);
-        update.setOrigin(new Origin("ES", "false", "REF-002"));
-        update.setCommodity("Live pigs");
+        NotificationDto updateDto = NotificationDto.builder()
+            .referenceNumber(referenceNumber)
+            .origin(new Origin("ES", "false", "REF-002"))
+            .commodity("Live pigs")
+            .build();
 
         EntityExchangeResult<Notification> result = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(update)
+            .bodyValue(updateDto)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -127,13 +129,13 @@ class NotificationIT extends IntegrationBase {
     @Test
     void findAll_shouldReturnAllNotifications() {
         // Given - create multiple notifications
-        Notification notification1 = createNotification("GB", "Live cattle");
-        Notification notification2 = createNotification("IE", "Live sheep");
-        Notification notification3 = createNotification("FR", "Live pigs");
+        NotificationDto notificationDto1 = createNotificationDto("GB", "Live cattle");
+        NotificationDto notificationDto2 = createNotificationDto("IE", "Live sheep");
+        NotificationDto notificationDto3 = createNotificationDto("FR", "Live pigs");
 
-        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notification1).exchange();
-        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notification2).exchange();
-        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notification3).exchange();
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notificationDto1).exchange();
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notificationDto2).exchange();
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notificationDto3).exchange();
 
         // When
         List<Notification> notifications = findAllNotifications();
@@ -163,29 +165,29 @@ class NotificationIT extends IntegrationBase {
     @Test
     void post_shouldAllowMultipleNotificationsWithNullReferenceNumber() {
         // Given - create multiple notifications without explicitly setting referenceNumber
-        Notification notification1 = createNotification("GB", "Live cattle");
-        Notification notification2 = createNotification("IE", "Live sheep");
-        Notification notification3 = createNotification("FR", "Live pigs");
+        NotificationDto notificationDto1 = createNotificationDto("GB", "Live cattle");
+        NotificationDto notificationDto2 = createNotificationDto("IE", "Live sheep");
+        NotificationDto notificationDto3 = createNotificationDto("FR", "Live pigs");
 
         // When - save all notifications
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notification1)
+            .bodyValue(notificationDto1)
             .exchange()
             .expectStatus().isOk();
 
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notification2)
+            .bodyValue(notificationDto2)
             .exchange()
             .expectStatus().isOk();
 
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notification3)
+            .bodyValue(notificationDto3)
             .exchange()
             .expectStatus().isOk();
 
@@ -203,11 +205,11 @@ class NotificationIT extends IntegrationBase {
     @Test
     void post_shouldUpdateExistingNotificationWithSameReferenceNumber() {
         // Given - create first notification
-        Notification notification1 = createNotification("GB", "Live cattle");
+        NotificationDto notificationDto1 = createNotificationDto("GB", "Live cattle");
         EntityExchangeResult<Notification> createResult = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notification1)
+            .bodyValue(notificationDto1)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -216,14 +218,19 @@ class NotificationIT extends IntegrationBase {
         String referenceNumber = createResult.getResponseBody().getReferenceNumber();
 
         // When - attempt to create second notification with same referenceNumber
-        Notification notification2 = createNotification("IE", "Live sheep");
-        notification2.setReferenceNumber(referenceNumber);
+        Origin origin = new Origin();
+        origin.setCountryCode("IE");
+        NotificationDto notificationDto2 = NotificationDto.builder()
+            .referenceNumber(referenceNumber)
+            .origin(origin)
+            .commodity("Live sheep")
+            .build();
 
         // Then - expect updated notification
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notification2)
+            .bodyValue(notificationDto2)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -240,11 +247,11 @@ class NotificationIT extends IntegrationBase {
     @Test
     void fullCrudFlow_shouldWorkEndToEnd() {
         // 1. Create notification
-        Notification createNotification = createNotification("NL", "Live horses");
+        NotificationDto createDto = createNotificationDto("NL", "Live horses");
         EntityExchangeResult<Notification> createResult = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotification)
+            .bodyValue(createDto)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -263,16 +270,16 @@ class NotificationIT extends IntegrationBase {
         assertThat(allNotifications.get(0).getId()).isEqualTo(created.getId());
 
         // 3. Update the notification
-        Notification updateNotification = new Notification();
-        updateNotification.setId(created.getId());
-        updateNotification.setReferenceNumber(created.getReferenceNumber());
-        updateNotification.setOrigin(new Origin("BE", "false", "REF-BE-001"));
-        updateNotification.setCommodity("Live donkeys");
+        NotificationDto updateDto = NotificationDto.builder()
+            .referenceNumber(created.getReferenceNumber())
+            .origin(new Origin("BE", "false", "REF-BE-001"))
+            .commodity("Live donkeys")
+            .build();
 
         EntityExchangeResult<Notification> updateResult = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(updateNotification)
+            .bodyValue(updateDto)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -297,13 +304,13 @@ class NotificationIT extends IntegrationBase {
     @Test
     void post_shouldGenerateReferenceNumberAutomatically() {
         // Given
-        Notification notification = createNotification("DE", "Live goats");
+        NotificationDto notificationDto = createNotificationDto("DE", "Live goats");
 
         // When
         EntityExchangeResult<Notification> result = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notification)
+            .bodyValue(notificationDto)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -326,9 +333,9 @@ class NotificationIT extends IntegrationBase {
     @Test
     void post_shouldHandleDifferentCommodityTypes() {
         // Given - create notifications with different commodity types
-        Notification cattle = createNotification("GB", "Live bovine animals");
-        Notification sheep = createNotification("IE", "Live ovine animals");
-        Notification pigs = createNotification("FR", "Live porcine animals");
+        NotificationDto cattle = createNotificationDto("GB", "Live bovine animals");
+        NotificationDto sheep = createNotificationDto("IE", "Live ovine animals");
+        NotificationDto pigs = createNotificationDto("FR", "Live porcine animals");
 
         // When - create all notifications
         webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(cattle).exchange()
@@ -360,14 +367,13 @@ class NotificationIT extends IntegrationBase {
             .returnResult().getResponseBody();
     }
 
-    private Notification createNotification(String countryCode, String commodity) {
+    private NotificationDto createNotificationDto(String countryCode, String commodity) {
         Origin origin = new Origin();
         origin.setCountryCode(countryCode);
 
-        Notification notification = new Notification();
-        notification.setOrigin(origin);
-        notification.setCommodity(commodity);
-
-        return notification;
+        return NotificationDto.builder()
+            .origin(origin)
+            .commodity(commodity)
+            .build();
     }
 }

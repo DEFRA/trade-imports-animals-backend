@@ -34,9 +34,10 @@ class NotificationControllerTest {
     void post_shouldCreateNotificationAndReturnReferenceNumber() throws Exception {
         // Given
         Origin origin = new Origin("GB", "true", "CUSTOMER-REF-123");
-        Notification notification = new Notification();
-        notification.setOrigin(origin);
-        notification.setCommodity("Live bovine animals");
+        NotificationDto notificationDto = NotificationDto.builder()
+            .origin(origin)
+            .commodity("Live bovine animals")
+            .build();
 
         String expectedReferenceNumber = "DRAFT.IMP.2026.00000001";
         Notification savedNotification = new Notification();
@@ -45,13 +46,13 @@ class NotificationControllerTest {
         savedNotification.setOrigin(origin);
         savedNotification.setCommodity("Live bovine animals");
 
-        when(notificationService.saveOriginOfImport(any(Notification.class)))
+        when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
             .thenReturn(savedNotification);
 
         // When & Then
         mockMvc.perform(post("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(notification)))
+                .content(objectMapper.writeValueAsString(notificationDto)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value("507f1f77bcf86cd799439011"))
             .andExpect(jsonPath("$.referenceNumber").value(expectedReferenceNumber))
@@ -64,8 +65,9 @@ class NotificationControllerTest {
     void post_shouldAcceptNotificationWithAllOriginFields() throws Exception {
         // Given
         Origin origin = new Origin("FR", "false", "INTERNAL-456");
-        Notification notification = new Notification();
-        notification.setOrigin(origin);
+        NotificationDto notificationDto = NotificationDto.builder()
+            .origin(origin)
+            .build();
 
         String expectedReferenceNumber = "DRAFT.IMP.2026.00000042";
         Notification savedNotification = new Notification();
@@ -73,13 +75,13 @@ class NotificationControllerTest {
         savedNotification.setReferenceNumber(expectedReferenceNumber);
         savedNotification.setOrigin(origin);
 
-        when(notificationService.saveOriginOfImport(any(Notification.class)))
+        when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
             .thenReturn(savedNotification);
 
         // When & Then
         mockMvc.perform(post("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(notification)))
+                .content(objectMapper.writeValueAsString(notificationDto)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value("507f1f77bcf86cd799439012"))
             .andExpect(jsonPath("$.referenceNumber").value(expectedReferenceNumber))
@@ -91,24 +93,25 @@ class NotificationControllerTest {
     void post_shouldAcceptNotificationWithExistingId() throws Exception {
         // Given - updating existing notification
         String existingId = "507f1f77bcf86cd799439011";
+        String referenceNumber = "DRAFT.IMP.2026." + existingId;
         Origin origin = new Origin("DE", "true", "UPDATE-REF");
-        Notification notification = new Notification();
-        notification.setId(existingId);
-        notification.setOrigin(origin);
-        notification.setReferenceNumber("DRAFT.IMP.2026." + existingId);
+        NotificationDto notificationDto = NotificationDto.builder()
+            .referenceNumber(referenceNumber)
+            .origin(origin)
+            .build();
 
         Notification savedNotification = new Notification();
         savedNotification.setId(existingId);
-        savedNotification.setReferenceNumber("DRAFT.IMP.2026." + existingId);
+        savedNotification.setReferenceNumber(referenceNumber);
         savedNotification.setOrigin(origin);
 
-        when(notificationService.saveOriginOfImport(any(Notification.class)))
+        when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
             .thenReturn(savedNotification);
 
         // When & Then
         mockMvc.perform(post("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(notification)))
+                .content(objectMapper.writeValueAsString(notificationDto)))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.id").value(existingId))
             .andExpect(jsonPath("$.referenceNumber").value("DRAFT.IMP.2026." + existingId))

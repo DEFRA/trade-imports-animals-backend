@@ -26,9 +26,9 @@ public class NotificationController {
     @PostMapping
     @Operation(summary = "Post Origin of the Import", description = "Submits an origin to the backend")
     @Timed("controller.postNotification.time")
-    public ResponseEntity<Notification> post(@Valid @RequestBody Notification notification) {
-        log.info("POST /notification - Creating Notification with country code: {}", notification.getOrigin().getCountryCode());
-        return ResponseEntity.ok(notificationService.saveOriginOfImport(notification));
+    public ResponseEntity<Notification> post(@Valid @RequestBody NotificationDto notificationDto) {
+        log.info("POST /notification - Creating Notification with country code: {}", notificationDto.getOrigin().getCountryCode());
+        return ResponseEntity.ok(notificationService.saveOriginOfImport(notificationDto));
     }
 
     @GetMapping

@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import io.micrometer.common.util.StringUtils;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -15,23 +16,11 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
 
-    public Notification saveOriginOfImport(Notification notification) {
-        if (StringUtils.isBlank(notification.getReferenceNumber())) {
-            var saved = notificationRepository.save(notification);
-            log.info("Notification saved with id: {}", saved.getId());
-            saved.setReferenceNumber(createReferenceNumber(saved));
-            log.info("Notification reference number set to: {}", saved.getReferenceNumber());
-            return notificationRepository.save(saved);
+    public Notification saveOriginOfImport(NotificationDto notificationDto) {
+        if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
+            return createNotification(notificationDto);
         } else {
-            Notification existingNotification = notificationRepository.findByReferenceNumber(
-                    notification.getReferenceNumber())
-                .orElseThrow(() -> new NotFoundException(
-                    "Cannot find notification with reference number: "
-                        + notification.getReferenceNumber()));
-            log.info("Notification already exists, updating {}", notification.getReferenceNumber());
-            existingNotification.setOrigin(notification.getOrigin());
-            existingNotification.setCommodity(notification.getCommodity());
-            return notificationRepository.save(existingNotification);
+            return updateNotification(notificationDto);
         }
     }
 
@@ -44,5 +33,31 @@ public class NotificationService {
 
     private String createReferenceNumber(Notification notification) {
         return "DRAFT.IMP." + LocalDate.now().getYear() + "." + notification.getId();
+    }
+
+    private Notification createNotification(NotificationDto dto) {
+        Notification notification = new Notification();
+        notification.setCreated(LocalDateTime.now());
+        setNotificationDetails(dto, notification);
+        var saved = notificationRepository.save(notification);
+        log.info("Notification saved with id: {}", saved.getId());
+        saved.setReferenceNumber(createReferenceNumber(saved));
+        log.info("Notification reference number set to: {}", saved.getReferenceNumber());
+        return notificationRepository.save(saved);
+    }
+
+    private Notification updateNotification(NotificationDto dto) {
+        Notification existingNotification = notificationRepository.findByReferenceNumber(
+            dto.getReferenceNumber()).orElseThrow(() -> new NotFoundException(
+            "Cannot find notification with reference number: " + dto.getReferenceNumber()));
+        log.info("Notification already exists, updating {}", dto.getReferenceNumber());
+        setNotificationDetails(dto, existingNotification);
+        return notificationRepository.save(existingNotification);
+    }
+
+    private void setNotificationDetails(NotificationDto dto, Notification notification) {
+        notification.setOrigin(dto.getOrigin());
+        notification.setCommodity(dto.getCommodity());
+        notification.setUpdated(LocalDateTime.now());
     }
 }

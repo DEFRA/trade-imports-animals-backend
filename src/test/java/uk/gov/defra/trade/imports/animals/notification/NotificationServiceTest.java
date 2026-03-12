@@ -32,10 +32,11 @@ class NotificationServiceTest {
 
     @Test
     void saveOriginOfImport_shouldSaveNewNotificationAndGenerateReferenceNumber() {
-        // Given - new notification without ID
+        // Given - new notification without referenceNumber
         Origin origin = new Origin("GB", "true", "REF123");
-        Notification newNotification = new Notification();
-        newNotification.setOrigin(origin);
+        NotificationDto notificationDto = NotificationDto.builder()
+            .origin(origin)
+            .build();
 
         // Simulate MongoDB auto-generating ID on first save
         String generatedId = "507f1f77bcf86cd799439011";
@@ -54,7 +55,7 @@ class NotificationServiceTest {
             .thenReturn(savedWithRef); // Second save returns notification with reference number
 
         // When
-        Notification result = notificationService.saveOriginOfImport(newNotification);
+        Notification result = notificationService.saveOriginOfImport(notificationDto);
 
         // Then
         assertThat(result).isNotNull();
@@ -70,26 +71,34 @@ class NotificationServiceTest {
     void saveOriginOfImport_shouldUpdateExistingNotification() {
         // Given - existing notification with ID and reference number
         String existingId = "507f191e810c19729de860ea";
+        String referenceNumber = "DRAFT.IMP.2026." + existingId;
         Origin origin = new Origin("FR", "false", "REF456");
+
         Notification existingNotification = new Notification();
         existingNotification.setId(existingId);
-        existingNotification.setReferenceNumber("DRAFT.IMP.2026." + existingId);
+        existingNotification.setReferenceNumber(referenceNumber);
         existingNotification.setOrigin(origin);
 
-        when(notificationRepository.findByReferenceNumber(existingNotification.getReferenceNumber()))
+        when(notificationRepository.findByReferenceNumber(referenceNumber))
             .thenReturn(Optional.of(existingNotification));
 
-        Notification updatedNotification = Notification.builder()
-            .id(existingId)
-            .referenceNumber(existingNotification.getReferenceNumber())
+        NotificationDto updateDto = NotificationDto.builder()
+            .referenceNumber(referenceNumber)
             .origin(origin)
             .commodity("Fish")
             .build();
-        
-        when(notificationRepository.save(updatedNotification)).thenReturn(updatedNotification);
-        
+
+        Notification updatedNotification = Notification.builder()
+            .id(existingId)
+            .referenceNumber(referenceNumber)
+            .origin(origin)
+            .commodity("Fish")
+            .build();
+
+        when(notificationRepository.save(any(Notification.class))).thenReturn(updatedNotification);
+
         // When
-        Notification result = notificationService.saveOriginOfImport(updatedNotification);
+        Notification result = notificationService.saveOriginOfImport(updateDto);
 
         // Then
         assertThat(result).isNotNull();
@@ -97,15 +106,16 @@ class NotificationServiceTest {
         assertThat(result.getId()).isEqualTo(existingId);
         assertThat(result.getOrigin()).isEqualTo(origin);
         assertThat(result.getCommodity()).isEqualTo("Fish");
-        verify(notificationRepository, times(1)).save(updatedNotification);
+        verify(notificationRepository, times(1)).save(any(Notification.class));
     }
 
     @Test
     void saveOriginOfImport_shouldUseFullObjectIdInReferenceNumber() {
         // Given - new notification
         Origin origin = new Origin("DE", "true", "REF789");
-        Notification newNotification = new Notification();
-        newNotification.setOrigin(origin);
+        NotificationDto notificationDto = NotificationDto.builder()
+            .origin(origin)
+            .build();
 
         String generatedId = "65a1b2c3d4e5f67890abcdef";
         Notification savedWithId = new Notification();
@@ -122,7 +132,7 @@ class NotificationServiceTest {
             .thenReturn(savedWithRef);
 
         // When
-        Notification result = notificationService.saveOriginOfImport(newNotification);
+        Notification result = notificationService.saveOriginOfImport(notificationDto);
 
         // Then
         assertThat(result).isNotNull();
@@ -133,8 +143,9 @@ class NotificationServiceTest {
     void saveOriginOfImport_shouldIncludeCurrentYearInReferenceNumber() {
         // Given
         Origin origin = new Origin("IT", "false", "REF999");
-        Notification newNotification = new Notification();
-        newNotification.setOrigin(origin);
+        NotificationDto notificationDto = NotificationDto.builder()
+            .origin(origin)
+            .build();
 
         String generatedId = "507f1f77bcf86cd799439999";
         Notification savedWithId = new Notification();
@@ -152,7 +163,7 @@ class NotificationServiceTest {
             .thenReturn(savedWithRef);
 
         // When
-        Notification result = notificationService.saveOriginOfImport(newNotification);
+        Notification result = notificationService.saveOriginOfImport(notificationDto);
 
         // Then
         assertThat(result).isNotNull();
