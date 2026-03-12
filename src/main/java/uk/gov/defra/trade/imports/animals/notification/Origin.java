@@ -9,13 +9,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class Origin {
     
-    /** the country of origin for the import. */
-    private String countryOfOrigin;
-    
-    /** whether the consignment requires a region code. */
+    private String countryCode;
     private String requiresRegionCode;
-    
-    /** the customer internal reference. */
     private String internalReference;
     
 }

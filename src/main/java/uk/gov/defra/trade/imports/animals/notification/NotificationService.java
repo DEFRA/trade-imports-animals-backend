@@ -1,34 +1,48 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import io.micrometer.common.util.StringUtils;
 import java.time.LocalDate;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
-import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Service;
+import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class NotificationService {
-    
+
     private final NotificationRepository notificationRepository;
-    
-    String saveOriginOfImport(Notification notification) {
-        if (notification.getId() == null) {
+
+    public Notification saveOriginOfImport(Notification notification) {
+        if (StringUtils.isBlank(notification.getReferenceNumber())) {
             var saved = notificationRepository.save(notification);
             log.info("Notification saved with id: {}", saved.getId());
             saved.setReferenceNumber(createReferenceNumber(saved));
             log.info("Notification reference number set to: {}", saved.getReferenceNumber());
-            return notificationRepository.save(saved).getReferenceNumber();
+            return notificationRepository.save(saved);
+        } else {
+            Notification existingNotification = notificationRepository.findByReferenceNumber(
+                    notification.getReferenceNumber())
+                .orElseThrow(() -> new NotFoundException(
+                    "Cannot find notification with reference number: "
+                        + notification.getReferenceNumber()));
+            log.info("Notification already exists, updating {}", notification.getReferenceNumber());
+            existingNotification.setOrigin(notification.getOrigin());
+            existingNotification.setCommodity(notification.getCommodity());
+            return notificationRepository.save(existingNotification);
         }
-        log.info("Notification already exists, updating {}", notification.getReferenceNumber());
-        return notificationRepository.save(notification).getReferenceNumber();
-
     }
-    
+
+    public List<Notification> findAll() {
+        log.debug("Fetching all notifications");
+        List<Notification> notifications = notificationRepository.findAll();
+        log.debug("Found {} notifications", notifications.size());
+        return notifications;
+    }
+
     private String createReferenceNumber(Notification notification) {
-        var paddedId = StringUtils.leftPad(String.valueOf(notification.getId()), 8, "0");
-        return "DRAFT.CHEDA." + LocalDate.now().getYear() + "." + paddedId;
+        return "DRAFT.IMP." + LocalDate.now().getYear() + "." + notification.getId();
     }
 }
