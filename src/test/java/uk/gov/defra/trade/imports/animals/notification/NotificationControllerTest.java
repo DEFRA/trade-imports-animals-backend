@@ -1,11 +1,17 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
@@ -191,5 +197,49 @@ class NotificationControllerTest {
             .andExpect(jsonPath("$[0].referenceNumber").value("DRAFT.IMP.2026.507f1f77bcf86cd799439013"))
             .andExpect(jsonPath("$[0].origin.countryCode").value("IE"))
             .andExpect(jsonPath("$[0].commodity").value("Live pigs"));
+    }
+
+    @Test
+    void delete_shouldReturn204_whenAllReferenceNumbersExist() throws Exception {
+        // Given
+        List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111", "DRAFT.IMP.2026.222");
+        doNothing().when(notificationService).deleteByReferenceNumbers(referenceNumbers);
+
+        // When & Then
+        mockMvc.perform(delete("/notifications")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(referenceNumbers)))
+            .andExpect(status().isNoContent());
+
+        verify(notificationService).deleteByReferenceNumbers(referenceNumbers);
+    }
+
+    @Test
+    void delete_shouldReturn404_whenReferenceNumberNotFound() throws Exception {
+        // Given
+        List<String> referenceNumbers = List.of("DRAFT.IMP.2026.MISSING");
+        doThrow(new NotFoundException(
+            "Cannot find notifications with reference numbers: DRAFT.IMP.2026.MISSING"))
+            .when(notificationService).deleteByReferenceNumbers(referenceNumbers);
+
+        // When & Then — also validates that NotFoundException resolves to 404 (not 500)
+        // through the full Spring dispatch chain (GlobalExceptionHandler handler priority check)
+        mockMvc.perform(delete("/notifications")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(referenceNumbers)))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.detail").value(
+                "Cannot find notifications with reference numbers: DRAFT.IMP.2026.MISSING"));
+    }
+
+    @Test
+    void delete_shouldReturn400_whenListIsEmpty() throws Exception {
+        // When & Then
+        mockMvc.perform(delete("/notifications")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("[]"))
+            .andExpect(status().isBadRequest());
+
+        verify(notificationService, never()).deleteByReferenceNumbers(any());
     }
 }
