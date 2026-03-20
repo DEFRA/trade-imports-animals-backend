@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpMethod;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
@@ -17,6 +19,8 @@ import uk.gov.defra.trade.imports.animals.notification.Origin;
 class NotificationIT extends IntegrationBase {
 
     private static final String NOTIFICATION_ENDPOINT = "/notifications";
+    private static final String ADMIN_SECRET_HEADER = "Trade-Imports-Animals-Admin-Secret";
+    private static final String VALID_ADMIN_SECRET = "test-admin-secret";
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -355,6 +359,111 @@ class NotificationIT extends IntegrationBase {
                 "Live ovine animals",
                 "Live porcine animals"
             );
+    }
+
+    @Test
+    void delete_shouldDeleteNotifications_whenAllReferenceNumbersExist() {
+        // Given — create two notifications
+        String ref1 = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        String ref2 = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("IE", "Live sheep"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When — delete both by reference number
+        webClient("NoAuth")
+            .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
+            .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .bodyValue(List.of(ref1, ref2))
+            .exchange()
+            .expectStatus().isNoContent();
+
+        // Then — both are gone
+        assertThat(findAllNotifications()).isEmpty();
+    }
+
+    @Test
+    void delete_shouldReturn404_whenReferenceNumberDoesNotExist() {
+        // When — attempt to delete a non-existent reference number
+        webClient("NoAuth")
+            .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
+            .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .bodyValue(List.of("DRAFT.IMP.2026.DOESNOTEXIST"))
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(404)
+            .jsonPath("$.detail").value(
+                Matchers.containsString("DRAFT.IMP.2026.DOESNOTEXIST"));
+    }
+
+    @Test
+    void delete_shouldReturn404AndNotDeleteAnything_whenOneReferenceNumberIsMissing() {
+        // Given — create one notification
+        String existingRef = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("FR", "Live pigs"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When — attempt to delete the existing one plus a missing one
+        webClient("NoAuth")
+            .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
+            .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .bodyValue(List.of(existingRef, "DRAFT.IMP.2026.MISSING"))
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.detail").value(Matchers.containsString("DRAFT.IMP.2026.MISSING"));
+
+        // Then — the existing notification was NOT deleted (all-or-nothing)
+        List<Notification> remaining = findAllNotifications();
+        assertThat(remaining).hasSize(1);
+        assertThat(remaining.getFirst().getReferenceNumber()).isEqualTo(existingRef);
+    }
+
+    @Test
+    void delete_shouldReturn400_whenListIsEmpty() {
+        // When
+        webClient("NoAuth")
+            .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
+            .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .bodyValue(List.of())
+            .exchange()
+            .expectStatus().isBadRequest();
+
+        // Then — DB state should be unchanged (empty as per @BeforeEach)
+        assertThat(findAllNotifications()).isEmpty();
+    }
+
+    @Test
+    void delete_shouldReturn401_whenAdminSecretHeaderIsMissing() {
+        // When — no Trade-Imports-Animals-Admin-Secret header
+        webClient("NoAuth")
+            .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(List.of("DRAFT.IMP.2026.ANY"))
+            .exchange()
+            .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void delete_shouldReturn401_whenAdminSecretHeaderIsIncorrect() {
+        // When — wrong secret value
+        webClient("NoAuth")
+            .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
+            .header(ADMIN_SECRET_HEADER, "wrong-secret")
+            .bodyValue(List.of("DRAFT.IMP.2026.ANY"))
+            .exchange()
+            .expectStatus().isUnauthorized();
     }
 
     private List<Notification> findAllNotifications() {

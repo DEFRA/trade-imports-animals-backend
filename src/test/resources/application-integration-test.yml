@@ -71,6 +71,10 @@ management:
     mongo:
       enabled: false
 
+# Admin secret for privileged endpoints
+admin:
+  secret: test-admin-secret
+
 # Application info (exposed via /info endpoint)
 info:
   app:

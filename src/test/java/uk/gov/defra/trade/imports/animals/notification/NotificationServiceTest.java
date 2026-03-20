@@ -1,10 +1,14 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 import java.time.LocalDate;
 import java.util.Arrays;
@@ -248,5 +252,72 @@ class NotificationServiceTest {
         assertThat(result).extracting(Notification::getCommodity)
             .containsExactly("Live cattle", "Live sheep", "Live pigs");
         verify(notificationRepository, times(1)).findAll();
+    }
+
+    @Test
+    void deleteByReferenceNumbers_shouldDeleteAll_whenAllFound() {
+        // Given
+        String ref1 = "DRAFT.IMP.2026.111";
+        String ref2 = "DRAFT.IMP.2026.222";
+        Notification n1 = Notification.builder().id("111").referenceNumber(ref1).build();
+        Notification n2 = Notification.builder().id("222").referenceNumber(ref2).build();
+
+        when(notificationRepository.findAllByReferenceNumberIn(List.of(ref1, ref2)))
+            .thenReturn(List.of(n1, n2));
+
+        // When
+        notificationService.deleteByReferenceNumbers(List.of(ref1, ref2));
+
+        // Then — deleteAll is called with the found notifications
+        verify(notificationRepository).deleteAll(List.of(n1, n2));
+    }
+
+    @Test
+    void deleteByReferenceNumbers_shouldThrowNotFoundException_whenOneIsMissing() {
+        // Given
+        String existingRef = "DRAFT.IMP.2026.111";
+        String missingRef  = "DRAFT.IMP.2026.MISSING";
+        Notification n1 = Notification.builder().id("111").referenceNumber(existingRef).build();
+
+        when(notificationRepository.findAllByReferenceNumberIn(List.of(existingRef, missingRef)))
+            .thenReturn(List.of(n1));
+
+        // When / Then
+        assertThatThrownBy(() ->
+            notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef)))
+            .isInstanceOf(NotFoundException.class)
+            .hasMessageContaining(missingRef);
+
+        // deleteAll must NOT be called — no partial deletes
+        verify(notificationRepository, never()).deleteAll(anyList());
+    }
+
+    @Test
+    void deleteByReferenceNumbers_shouldListAllMissingRefs_inExceptionMessage() {
+        // Given
+        String missing1 = "DRAFT.IMP.2026.AAA";
+        String missing2 = "DRAFT.IMP.2026.BBB";
+
+        when(notificationRepository.findAllByReferenceNumberIn(List.of(missing1, missing2)))
+            .thenReturn(Collections.emptyList());
+
+        // When / Then
+        assertThatThrownBy(() ->
+            notificationService.deleteByReferenceNumbers(List.of(missing1, missing2)))
+            .isInstanceOf(NotFoundException.class)
+            .hasMessageContaining(missing1)
+            .hasMessageContaining(missing2);
+
+        verify(notificationRepository, never()).deleteAll(anyList());
+    }
+
+    @Test
+    void deleteByReferenceNumbers_shouldDoNothing_whenListIsEmpty() {
+        // When — empty list is passed (defensive guard; controller rejects this before reaching service)
+        notificationService.deleteByReferenceNumbers(Collections.emptyList());
+
+        // Then — repository is never called
+        verify(notificationRepository, never()).findAllByReferenceNumberIn(anyList());
+        verify(notificationRepository, never()).deleteAll(anyList());
     }
 }

@@ -8,6 +8,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,6 +38,18 @@ public class NotificationController {
     public List<Notification> findAll() {
         log.debug("GET /notifications - Fetching all notifications");
         return notificationService.findAll();
+    }
+
+    @DeleteMapping
+    @Operation(summary = "Delete notifications", description = "Deletes notifications by reference numbers")
+    @Timed("controller.deleteNotifications.time")
+    public ResponseEntity<Void> delete(@RequestBody List<String> referenceNumbers) {
+        if (referenceNumbers == null || referenceNumbers.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+        log.info("DELETE /notifications - Deleting {} notifications", referenceNumbers.size());
+        notificationService.deleteByReferenceNumbers(referenceNumbers);
+        return ResponseEntity.noContent().build();
     }
 
 }

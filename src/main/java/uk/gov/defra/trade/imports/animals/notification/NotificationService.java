@@ -3,6 +3,8 @@ package uk.gov.defra.trade.imports.animals.notification;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -29,6 +31,25 @@ public class NotificationService {
         List<Notification> notifications = notificationRepository.findAll();
         log.debug("Found {} notifications", notifications.size());
         return notifications;
+    }
+
+    public void deleteByReferenceNumbers(List<String> referenceNumbers) {
+        if (referenceNumbers == null || referenceNumbers.isEmpty()) {
+            return;
+        }
+        List<Notification> found = notificationRepository.findAllByReferenceNumberIn(referenceNumbers);
+        Set<String> foundRefs = found.stream()
+            .map(Notification::getReferenceNumber)
+            .collect(Collectors.toSet());
+        List<String> missing = referenceNumbers.stream()
+            .filter(ref -> !foundRefs.contains(ref))
+            .toList();
+        if (!missing.isEmpty()) {
+            throw new NotFoundException(
+                "Cannot find notifications with reference numbers: " + String.join(", ", missing));
+        }
+        log.info("Deleting {} notifications", found.size());
+        notificationRepository.deleteAll(found);
     }
 
     private String createReferenceNumber(Notification notification) {
