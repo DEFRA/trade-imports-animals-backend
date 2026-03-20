@@ -96,6 +96,10 @@ management:
           requests:
             active: true
   
+# Admin secret for privileged endpoints
+admin:
+  secret: ${TRADE_IMPORTS_ANIMALS_ADMIN_SECRET:local-trade-imports-animals-admin-secret}
+
 # Application info (exposed via /info endpoint)
 info:
   app:

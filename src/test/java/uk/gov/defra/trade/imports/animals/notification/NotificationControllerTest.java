@@ -22,9 +22,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(NotificationController.class)
+@TestPropertySource(properties = "admin.secret=test-secret")
 class NotificationControllerTest {
 
     @Autowired
@@ -208,6 +210,7 @@ class NotificationControllerTest {
         // When & Then
         mockMvc.perform(delete("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
+                .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isNoContent());
 
@@ -226,6 +229,7 @@ class NotificationControllerTest {
         // through the full Spring dispatch chain (GlobalExceptionHandler handler priority check)
         mockMvc.perform(delete("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
+                .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.detail").value(
@@ -237,6 +241,7 @@ class NotificationControllerTest {
         // When & Then
         mockMvc.perform(delete("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
+                .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
                 .content("[]"))
             .andExpect(status().isBadRequest());
 
