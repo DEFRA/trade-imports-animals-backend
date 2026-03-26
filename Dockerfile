@@ -1,5 +1,5 @@
 ﻿# Multi-stage Dockerfile for Trade Imports Animals Backend
-# Uses Amazon Corretto 21 (matches project configuration)
+# Uses Amazon Corretto 25 (matches project configuration)
 
 ################################################################################
 # Stage 1: Build
@@ -7,7 +7,7 @@
 # - Run tests
 # - Create executable JAR
 ################################################################################
-FROM amazoncorretto:21-alpine AS build
+FROM amazoncorretto:25-alpine AS build
 
 WORKDIR /build
 
@@ -33,7 +33,7 @@ RUN mvn clean package -DskipTests -B
 # - Includes development tools
 # - For local development with docker compose
 ################################################################################
-FROM amazoncorretto:21-alpine AS development
+FROM amazoncorretto:25-alpine AS development
 
 WORKDIR /app
 
@@ -61,7 +61,7 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 # - Minimal runtime image
 # - Meets all CDP platform requirements
 ################################################################################
-FROM amazoncorretto:21-alpine AS production
+FROM amazoncorretto:25-alpine AS production
 
 WORKDIR /app
 

@@ -16,12 +16,12 @@
   <artifactId>trade-imports-animals-backend</artifactId>
   <version>0.1.0</version>
   <name>Trade Imports Animals Backend</name>
-  <description>Trade Imports Animals Backend - Spring Boot 3.5 with Java 21</description>
+  <description>Trade Imports Animals Backend - Spring Boot 3.5 with Java 25</description>
 
   <properties>
-    <java.version>21</java.version>
-    <maven.compiler.source>21</maven.compiler.source>
-    <maven.compiler.target>21</maven.compiler.target>
+    <java.version>25</java.version>
+    <maven.compiler.source>25</maven.compiler.source>
+    <maven.compiler.target>25</maven.compiler.target>
     <jjwt.version>0.13.0</jjwt.version>
     <amazon.awssdk.version>2.40.2</amazon.awssdk.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -227,7 +227,7 @@
       <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
-        <version>0.8.12</version>
+        <version>0.8.13</version>
         <executions>
           <execution>
             <goals>
@@ -269,8 +269,8 @@
         <artifactId>maven-compiler-plugin</artifactId>
         <version>3.13.0</version>
         <configuration>
-          <source>21</source>
-          <target>21</target>
+          <source>25</source>
+          <target>25</target>
           <annotationProcessorPaths>
             <path>
               <groupId>org.projectlombok</groupId>
