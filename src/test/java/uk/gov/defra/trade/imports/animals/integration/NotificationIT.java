@@ -10,6 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
+import uk.gov.defra.trade.imports.animals.audit.Audit;
+import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
+import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
@@ -25,9 +28,13 @@ class NotificationIT extends IntegrationBase {
     @Autowired
     private NotificationRepository notificationRepository;
 
+    @Autowired
+    private AuditRepository auditRepository;
+
     @BeforeEach
     void setUp() {
         notificationRepository.deleteAll();
+        auditRepository.deleteAll();
     }
 
     @Test
@@ -382,6 +389,8 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .header("x-cdp-request-id", "trace-001")
+            .header("User-Id", "user-001")
             .bodyValue(List.of(ref1, ref2))
             .exchange()
             .expectStatus().isNoContent();
@@ -391,11 +400,45 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void delete_shouldCreateSuccessAuditRecord_whenNotificationsDeleted() {
+        // Given
+        String ref = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When
+        webClient("NoAuth")
+            .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
+            .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .header("x-cdp-request-id", "trace-audit-success")
+            .header("User-Id", "user-audit")
+            .bodyValue(List.of(ref))
+            .exchange()
+            .expectStatus().isNoContent();
+
+        // Then — a SUCCESS audit record is persisted
+        List<Audit> audits = auditRepository.findAll();
+        assertThat(audits).hasSize(1);
+        Audit audit = audits.getFirst();
+        assertThat(audit.getResult()).isEqualTo(Result.SUCCESS);
+        assertThat(audit.getNotificationReferenceNumbers()).containsExactly(ref);
+        assertThat(audit.getNumberOfNotifications()).isEqualTo(1);
+        assertThat(audit.getTraceId()).isEqualTo("trace-audit-success");
+        assertThat(audit.getUserId()).isEqualTo("user-audit");
+        assertThat(audit.getTimestamp()).isNotNull();
+    }
+
+    @Test
     void delete_shouldReturn404_whenReferenceNumberDoesNotExist() {
         // When — attempt to delete a non-existent reference number
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .header("x-cdp-request-id", "trace-002")
+            .header("User-Id", "user-002")
             .bodyValue(List.of("DRAFT.IMP.2026.DOESNOTEXIST"))
             .exchange()
             .expectStatus().isNotFound()
@@ -403,6 +446,28 @@ class NotificationIT extends IntegrationBase {
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value(
                 Matchers.containsString("DRAFT.IMP.2026.DOESNOTEXIST"));
+    }
+
+    @Test
+    void delete_shouldCreateFailureAuditRecord_whenReferenceNumberDoesNotExist() {
+        // When — attempt to delete a non-existent reference number
+        webClient("NoAuth")
+            .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
+            .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .header("x-cdp-request-id", "trace-audit-failure")
+            .header("User-Id", "user-audit-failure")
+            .bodyValue(List.of("DRAFT.IMP.2026.DOESNOTEXIST"))
+            .exchange()
+            .expectStatus().isNotFound();
+
+        // Then — a FAILURE audit record is persisted
+        List<Audit> audits = auditRepository.findAll();
+        assertThat(audits).hasSize(1);
+        Audit audit = audits.getFirst();
+        assertThat(audit.getResult()).isEqualTo(Result.FAILURE);
+        assertThat(audit.getNotificationReferenceNumbers()).containsExactly("DRAFT.IMP.2026.DOESNOTEXIST");
+        assertThat(audit.getTraceId()).isEqualTo("trace-audit-failure");
+        assertThat(audit.getUserId()).isEqualTo("user-audit-failure");
     }
 
     @Test
@@ -419,6 +484,8 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .header("x-cdp-request-id", "trace-003")
+            .header("User-Id", "user-003")
             .bodyValue(List.of(existingRef, "DRAFT.IMP.2026.MISSING"))
             .exchange()
             .expectStatus().isNotFound()

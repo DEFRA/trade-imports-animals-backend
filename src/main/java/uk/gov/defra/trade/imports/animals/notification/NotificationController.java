@@ -7,11 +7,13 @@ import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,12 +25,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class NotificationController {
 
     private final NotificationService notificationService;
-    
+
     @PostMapping
     @Operation(summary = "Post Origin of the Import", description = "Submits an origin to the backend")
     @Timed("controller.postNotification.time")
     public ResponseEntity<Notification> post(@Valid @RequestBody NotificationDto notificationDto) {
-        log.info("POST /notification - Creating Notification with country code: {}", notificationDto.getOrigin().getCountryCode());
+        log.info("POST /notification - Creating Notification with country code: {}",
+            notificationDto.getOrigin().getCountryCode());
         return ResponseEntity.ok(notificationService.saveOriginOfImport(notificationDto));
     }
 
@@ -43,13 +46,13 @@ public class NotificationController {
     @DeleteMapping
     @Operation(summary = "Delete notifications", description = "Deletes notifications by reference numbers")
     @Timed("controller.deleteNotifications.time")
-    public ResponseEntity<Void> delete(@RequestBody List<String> referenceNumbers) {
+    public ResponseEntity<Void> delete(@RequestBody List<String> referenceNumbers,
+        @RequestHeader HttpHeaders headers) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
         log.info("DELETE /notifications - Deleting {} notifications", referenceNumbers.size());
-        notificationService.deleteByReferenceNumbers(referenceNumbers);
+        notificationService.deleteByReferenceNumbers(referenceNumbers, headers);
         return ResponseEntity.noContent().build();
     }
-
 }

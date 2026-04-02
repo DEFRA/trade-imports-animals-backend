@@ -3,12 +3,18 @@ package uk.gov.defra.trade.imports.animals.notification;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
+import uk.gov.defra.trade.imports.animals.audit.Action;
+import uk.gov.defra.trade.imports.animals.audit.Audit;
+import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
+import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 @Service
@@ -17,6 +23,7 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
+    private final AuditRepository auditRepository;
 
     public Notification saveOriginOfImport(NotificationDto notificationDto) {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
@@ -33,11 +40,12 @@ public class NotificationService {
         return notifications;
     }
 
-    public void deleteByReferenceNumbers(List<String> referenceNumbers) {
+    public void deleteByReferenceNumbers(List<String> referenceNumbers, HttpHeaders headers) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return;
         }
-        List<Notification> found = notificationRepository.findAllByReferenceNumberIn(referenceNumbers);
+        List<Notification> found = notificationRepository.findAllByReferenceNumberIn(
+            referenceNumbers);
         Set<String> foundRefs = found.stream()
             .map(Notification::getReferenceNumber)
             .collect(Collectors.toSet());
@@ -45,11 +53,13 @@ public class NotificationService {
             .filter(ref -> !foundRefs.contains(ref))
             .toList();
         if (!missing.isEmpty()) {
+            createNotificationAuditRecord(referenceNumbers, headers, Result.FAILURE);
             throw new NotFoundException(
                 "Cannot find notifications with reference numbers: " + String.join(", ", missing));
         }
         log.info("Deleting {} notifications", found.size());
         notificationRepository.deleteAll(found);
+        createNotificationAuditRecord(referenceNumbers, headers, Result.SUCCESS);
     }
 
     private String createReferenceNumber(Notification notification) {
@@ -80,5 +90,20 @@ public class NotificationService {
         notification.setOrigin(dto.getOrigin());
         notification.setCommodity(dto.getCommodity());
         notification.setUpdated(LocalDateTime.now());
+    }
+
+    private void createNotificationAuditRecord(
+        List<String> referenceNumbers, HttpHeaders headers, Result result) {
+        Audit auditRecord = Audit.builder()
+            .action(Action.DELETE_NOTIFICATIONS)
+            .result(result)
+            .notificationReferenceNumbers(referenceNumbers)
+            .numberOfNotifications(referenceNumbers.size())
+            .traceId(Objects.requireNonNull(headers.get("x-cdp-request-id")).getFirst())
+            .userId(Objects.requireNonNull(headers.get("User-Id")).getFirst())
+            .timestamp(LocalDateTime.now())
+            .build();
+
+        auditRepository.save(auditRecord);
     }
 }
