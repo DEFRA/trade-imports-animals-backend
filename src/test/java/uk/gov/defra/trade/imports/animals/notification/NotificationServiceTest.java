@@ -8,6 +8,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import uk.gov.defra.trade.imports.animals.audit.Audit;
+import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
+import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 import java.time.LocalDate;
@@ -18,8 +21,10 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpHeaders;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
@@ -27,11 +32,21 @@ class NotificationServiceTest {
     @Mock
     private NotificationRepository notificationRepository;
 
+    @Mock
+    private AuditRepository auditRepository;
+
     private NotificationService notificationService;
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationService(notificationRepository);
+        notificationService = new NotificationService(notificationRepository, auditRepository);
+    }
+
+    private HttpHeaders headersWithAuditFields() {
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("x-cdp-request-id", "test-trace-id");
+        headers.add("User-Id", "test-user-id");
+        return headers;
     }
 
     @Test
@@ -261,15 +276,27 @@ class NotificationServiceTest {
         String ref2 = "DRAFT.IMP.2026.222";
         Notification n1 = Notification.builder().id("111").referenceNumber(ref1).build();
         Notification n2 = Notification.builder().id("222").referenceNumber(ref2).build();
+        HttpHeaders headers = headersWithAuditFields();
 
         when(notificationRepository.findAllByReferenceNumberIn(List.of(ref1, ref2)))
             .thenReturn(List.of(n1, n2));
+        when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
         // When
-        notificationService.deleteByReferenceNumbers(List.of(ref1, ref2));
+        notificationService.deleteByReferenceNumbers(List.of(ref1, ref2), headers);
 
         // Then — deleteAll is called with the found notifications
         verify(notificationRepository).deleteAll(List.of(n1, n2));
+
+        // And an audit record is saved with SUCCESS
+        ArgumentCaptor<Audit> auditCaptor = ArgumentCaptor.forClass(Audit.class);
+        verify(auditRepository).save(auditCaptor.capture());
+        Audit saved = auditCaptor.getValue();
+        assertThat(saved.getResult()).isEqualTo(Result.SUCCESS);
+        assertThat(saved.getNotificationReferenceNumbers()).containsExactly(ref1, ref2);
+        assertThat(saved.getNumberOfNotifications()).isEqualTo(2);
+        assertThat(saved.getTraceId()).isEqualTo("test-trace-id");
+        assertThat(saved.getUserId()).isEqualTo("test-user-id");
     }
 
     @Test
@@ -278,18 +305,25 @@ class NotificationServiceTest {
         String existingRef = "DRAFT.IMP.2026.111";
         String missingRef  = "DRAFT.IMP.2026.MISSING";
         Notification n1 = Notification.builder().id("111").referenceNumber(existingRef).build();
+        HttpHeaders headers = headersWithAuditFields();
 
         when(notificationRepository.findAllByReferenceNumberIn(List.of(existingRef, missingRef)))
             .thenReturn(List.of(n1));
+        when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
         // When / Then
         assertThatThrownBy(() ->
-            notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef)))
+            notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef), headers))
             .isInstanceOf(NotFoundException.class)
             .hasMessageContaining(missingRef);
 
         // deleteAll must NOT be called — no partial deletes
         verify(notificationRepository, never()).deleteAll(anyList());
+
+        // But a FAILURE audit record is saved
+        ArgumentCaptor<Audit> auditCaptor = ArgumentCaptor.forClass(Audit.class);
+        verify(auditRepository).save(auditCaptor.capture());
+        assertThat(auditCaptor.getValue().getResult()).isEqualTo(Result.FAILURE);
     }
 
     @Test
@@ -297,27 +331,31 @@ class NotificationServiceTest {
         // Given
         String missing1 = "DRAFT.IMP.2026.AAA";
         String missing2 = "DRAFT.IMP.2026.BBB";
+        HttpHeaders headers = headersWithAuditFields();
 
         when(notificationRepository.findAllByReferenceNumberIn(List.of(missing1, missing2)))
             .thenReturn(Collections.emptyList());
+        when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
         // When / Then
         assertThatThrownBy(() ->
-            notificationService.deleteByReferenceNumbers(List.of(missing1, missing2)))
+            notificationService.deleteByReferenceNumbers(List.of(missing1, missing2), headers))
             .isInstanceOf(NotFoundException.class)
             .hasMessageContaining(missing1)
             .hasMessageContaining(missing2);
 
         verify(notificationRepository, never()).deleteAll(anyList());
+        verify(auditRepository).save(any(Audit.class));
     }
 
     @Test
     void deleteByReferenceNumbers_shouldDoNothing_whenListIsEmpty() {
         // When — empty list is passed (defensive guard; controller rejects this before reaching service)
-        notificationService.deleteByReferenceNumbers(Collections.emptyList());
+        notificationService.deleteByReferenceNumbers(Collections.emptyList(), new HttpHeaders());
 
         // Then — repository is never called
         verify(notificationRepository, never()).findAllByReferenceNumberIn(anyList());
         verify(notificationRepository, never()).deleteAll(anyList());
+        verify(auditRepository, never()).save(any(Audit.class));
     }
 }

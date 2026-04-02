@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -11,7 +12,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
@@ -20,10 +20,12 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 @WebMvcTest(NotificationController.class)
 @TestPropertySource(properties = "admin.secret=test-secret")
@@ -35,7 +37,7 @@ class NotificationControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private NotificationService notificationService;
 
     @Test
@@ -205,7 +207,7 @@ class NotificationControllerTest {
     void delete_shouldReturn204_whenAllReferenceNumbersExist() throws Exception {
         // Given
         List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111", "DRAFT.IMP.2026.222");
-        doNothing().when(notificationService).deleteByReferenceNumbers(referenceNumbers);
+        doNothing().when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), any(HttpHeaders.class));
 
         // When & Then
         mockMvc.perform(delete("/notifications")
@@ -214,7 +216,7 @@ class NotificationControllerTest {
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isNoContent());
 
-        verify(notificationService).deleteByReferenceNumbers(referenceNumbers);
+        verify(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), any(HttpHeaders.class));
     }
 
     @Test
@@ -223,7 +225,7 @@ class NotificationControllerTest {
         List<String> referenceNumbers = List.of("DRAFT.IMP.2026.MISSING");
         doThrow(new NotFoundException(
             "Cannot find notifications with reference numbers: DRAFT.IMP.2026.MISSING"))
-            .when(notificationService).deleteByReferenceNumbers(referenceNumbers);
+            .when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), any(HttpHeaders.class));
 
         // When & Then — also validates that NotFoundException resolves to 404 (not 500)
         // through the full Spring dispatch chain (GlobalExceptionHandler handler priority check)
@@ -245,6 +247,6 @@ class NotificationControllerTest {
                 .content("[]"))
             .andExpect(status().isBadRequest());
 
-        verify(notificationService, never()).deleteByReferenceNumbers(any());
+        verify(notificationService, never()).deleteByReferenceNumbers(any(), any());
     }
 }
