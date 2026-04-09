@@ -15,6 +15,10 @@ public class NotificationDto {
     
     private Origin origin;
     
-    private String commodity;
+    private Commodity commodity;
+
+    private String reasonForImport;
+
+    private AdditionalDetails additionalDetails;
 
 }

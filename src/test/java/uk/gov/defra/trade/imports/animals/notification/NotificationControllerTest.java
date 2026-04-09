@@ -44,9 +44,16 @@ class NotificationControllerTest {
     void post_shouldCreateNotificationAndReturnReferenceNumber() throws Exception {
         // Given
         Origin origin = new Origin("GB", "true", "CUSTOMER-REF-123");
+        Species species = new Species("BOV", "Bovine", 5, null);
+        CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species));
+        Commodity commodity = Commodity.builder()
+            .name("Live bovine animals")
+            .commodityComplement(List.of(complement))
+            .build();
         NotificationDto notificationDto = NotificationDto.builder()
             .origin(origin)
-            .commodity("Live bovine animals")
+            .commodity(commodity)
+            .reasonForImport("PERMANENT")
             .build();
 
         String expectedReferenceNumber = "DRAFT.IMP.2026.00000001";
@@ -54,7 +61,8 @@ class NotificationControllerTest {
         savedNotification.setId("507f1f77bcf86cd799439011");
         savedNotification.setReferenceNumber(expectedReferenceNumber);
         savedNotification.setOrigin(origin);
-        savedNotification.setCommodity("Live bovine animals");
+        savedNotification.setCommodity(commodity);
+        savedNotification.setReasonForImport("PERMANENT");
 
         when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
             .thenReturn(savedNotification);
@@ -68,7 +76,10 @@ class NotificationControllerTest {
             .andExpect(jsonPath("$.referenceNumber").value(expectedReferenceNumber))
             .andExpect(jsonPath("$.origin.countryCode").value("GB"))
             .andExpect(jsonPath("$.origin.internalReference").value("CUSTOMER-REF-123"))
-            .andExpect(jsonPath("$.commodity").value("Live bovine animals"));
+            .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
+            .andExpect(jsonPath("$.commodity.commodityComplement[0].typeOfCommodity").value("LIVE"))
+            .andExpect(jsonPath("$.commodity.commodityComplement[0].species[0].value").value("BOV"))
+            .andExpect(jsonPath("$.reasonForImport").value("PERMANENT"));
     }
 
     @Test
@@ -150,14 +161,14 @@ class NotificationControllerTest {
         notification1.setId("507f1f77bcf86cd799439011");
         notification1.setReferenceNumber("DRAFT.IMP.2026.507f1f77bcf86cd799439011");
         notification1.setOrigin(origin1);
-        notification1.setCommodity("Live cattle");
+        notification1.setCommodity(Commodity.builder().name("Live cattle").build());
 
         Origin origin2 = new Origin("FR", "false", "REF-FR-002");
         Notification notification2 = new Notification();
         notification2.setId("507f1f77bcf86cd799439012");
         notification2.setReferenceNumber("DRAFT.IMP.2026.507f1f77bcf86cd799439012");
         notification2.setOrigin(origin2);
-        notification2.setCommodity("Live sheep");
+        notification2.setCommodity(Commodity.builder().name("Live sheep").build());
 
         List<Notification> notifications = Arrays.asList(notification1, notification2);
         when(notificationService.findAll()).thenReturn(notifications);
@@ -171,11 +182,11 @@ class NotificationControllerTest {
             .andExpect(jsonPath("$[0].id").value("507f1f77bcf86cd799439011"))
             .andExpect(jsonPath("$[0].referenceNumber").value("DRAFT.IMP.2026.507f1f77bcf86cd799439011"))
             .andExpect(jsonPath("$[0].origin.countryCode").value("GB"))
-            .andExpect(jsonPath("$[0].commodity").value("Live cattle"))
+            .andExpect(jsonPath("$[0].commodity.name").value("Live cattle"))
             .andExpect(jsonPath("$[1].id").value("507f1f77bcf86cd799439012"))
             .andExpect(jsonPath("$[1].referenceNumber").value("DRAFT.IMP.2026.507f1f77bcf86cd799439012"))
             .andExpect(jsonPath("$[1].origin.countryCode").value("FR"))
-            .andExpect(jsonPath("$[1].commodity").value("Live sheep"));
+            .andExpect(jsonPath("$[1].commodity.name").value("Live sheep"));
     }
 
     @Test
@@ -186,7 +197,7 @@ class NotificationControllerTest {
         notification.setId("507f1f77bcf86cd799439013");
         notification.setReferenceNumber("DRAFT.IMP.2026.507f1f77bcf86cd799439013");
         notification.setOrigin(origin);
-        notification.setCommodity("Live pigs");
+        notification.setCommodity(Commodity.builder().name("Live pigs").build());
 
         List<Notification> notifications = Collections.singletonList(notification);
         when(notificationService.findAll()).thenReturn(notifications);
@@ -200,7 +211,7 @@ class NotificationControllerTest {
             .andExpect(jsonPath("$[0].id").value("507f1f77bcf86cd799439013"))
             .andExpect(jsonPath("$[0].referenceNumber").value("DRAFT.IMP.2026.507f1f77bcf86cd799439013"))
             .andExpect(jsonPath("$[0].origin.countryCode").value("IE"))
-            .andExpect(jsonPath("$[0].commodity").value("Live pigs"));
+            .andExpect(jsonPath("$[0].commodity.name").value("Live pigs"));
     }
 
     @Test
