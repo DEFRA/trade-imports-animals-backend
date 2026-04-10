@@ -440,6 +440,180 @@ class DocumentIT extends IntegrationBase {
     }
 
     // ---------------------------------------------------------------------------
+    // Test: scan callback for unknown uploadId → 404
+    // ---------------------------------------------------------------------------
+
+    /**
+     * POST to /document-uploads/{id}/scan-results with an uploadId that does not exist in MongoDB
+     * returns 404 with a problem+json body containing status=404.
+     */
+    @Test
+    void scanResult_unknownUploadId_shouldReturn404() throws IOException {
+        // Arrange — no document persisted for this uploadId
+        String unknownUploadId = "non-existent-upload-id";
+        String completePayload = loadFixtureAsString("fixtures/cdp-scan-callback-complete.json");
+
+        // Act / Assert
+        webClient("NoAuth")
+            .post()
+            .uri("/document-uploads/" + unknownUploadId + "/scan-results")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(completePayload)
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(404);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Test: multi-file scan callback with mixed COMPLETE + REJECTED
+    // ---------------------------------------------------------------------------
+
+    /**
+     * POST a scan callback with two files — one COMPLETE (s3Key populated) and one REJECTED
+     * (s3Key null). The aggregate scanStatus should be REJECTED because numberOfRejectedFiles > 0.
+     * Both file entries should be stored with the correct per-file fileStatus and s3Key values.
+     */
+    @Test
+    void scanResult_mixedCompleteAndRejected_shouldSetAggregateStatusToRejected() throws IOException {
+        // Arrange — initiate to get a PENDING document
+        stubCdpUploaderAndInitiate();
+
+        String mixedPayload = """
+            {
+              "uploadStatus": "ready",
+              "numberOfRejectedFiles": 1,
+              "metadata": {},
+              "form": {
+                "cleanFile": {
+                  "fileId": "file-clean-001",
+                  "filename": "clean.pdf",
+                  "contentType": "application/pdf",
+                  "fileStatus": "complete",
+                  "contentLength": 1024,
+                  "checksumSha256": "abc123",
+                  "detectedContentType": "application/pdf",
+                  "s3Key": "%s/file-clean-001",
+                  "s3Bucket": "%s",
+                  "hasError": false,
+                  "errorMessage": null
+                },
+                "virusFile": {
+                  "fileId": "file-virus-002",
+                  "filename": "eicar.pdf",
+                  "contentType": "application/pdf",
+                  "fileStatus": "rejected",
+                  "contentLength": 68,
+                  "checksumSha256": "def456",
+                  "detectedContentType": "application/pdf",
+                  "s3Key": null,
+                  "s3Bucket": null,
+                  "hasError": true,
+                  "errorMessage": "Virus detected"
+                }
+              }
+            }
+            """.formatted(UPLOAD_ID_FROM_FIXTURE, DOCUMENTS_BUCKET);
+
+        // Act
+        webClient("NoAuth")
+            .post()
+            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/scan-results")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(mixedPayload)
+            .exchange()
+            .expectStatus().isNoContent();
+
+        // Assert MongoDB state
+        AccompanyingDocument persisted =
+            accompanyingDocumentRepository.findByUploadId(UPLOAD_ID_FROM_FIXTURE).orElseThrow();
+        assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
+        assertThat(persisted.getFiles()).hasSize(2);
+
+        var cleanFile = persisted.getFiles().stream()
+            .filter(f -> "file-clean-001".equals(f.fileId()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("clean file not found"));
+        assertThat(cleanFile.fileStatus()).isEqualTo(FileStatus.COMPLETE);
+        assertThat(cleanFile.s3Key()).isNotNull();
+        assertThat(cleanFile.s3Key()).isEqualTo(UPLOAD_ID_FROM_FIXTURE + "/file-clean-001");
+
+        var virusFile = persisted.getFiles().stream()
+            .filter(f -> "file-virus-002".equals(f.fileId()))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("virus file not found"));
+        assertThat(virusFile.fileStatus()).isEqualTo(FileStatus.REJECTED);
+        assertThat(virusFile.s3Key()).isNull();
+    }
+
+    // ---------------------------------------------------------------------------
+    // Test: dateOfIssue round-trip
+    // ---------------------------------------------------------------------------
+
+    /**
+     * Initiates a document upload with dateOfIssue="2026-01-15", then reads the persisted entity
+     * from MongoDB and asserts the dateOfIssue Instant represents midnight UTC on that date.
+     */
+    @Test
+    void initiate_withDateOfIssue_shouldPersistDateOfIssueAsInstant() throws IOException {
+        // Arrange — stub cdp-uploader /initiate
+        usingStub()
+            .when(request().withMethod("POST").withPath("/initiate"))
+            .respond(
+                response()
+                    .withStatusCode(200)
+                    .withContentType(org.mockserver.model.MediaType.APPLICATION_JSON)
+                    .withBody(getJsonFromFile("fixtures/cdp-initiate-response.json")));
+
+        // Act — include dateOfIssue in the request body
+        webClient("NoAuth")
+            .post()
+            .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+            .bodyValue("""
+                {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234","dateOfIssue":"2026-01-15"}
+                """)
+            .exchange()
+            .expectStatus().isCreated();
+
+        // Assert MongoDB
+        AccompanyingDocument doc =
+            accompanyingDocumentRepository.findByUploadId(UPLOAD_ID_FROM_FIXTURE).orElseThrow();
+        assertThat(doc.getDateOfIssue()).isNotNull();
+        assertThat(doc.getDateOfIssue())
+            .isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
+    }
+
+    /**
+     * Initiates a document upload without dateOfIssue, then asserts the stored dateOfIssue is null.
+     */
+    @Test
+    void initiate_withoutDateOfIssue_shouldPersistNullDateOfIssue() throws IOException {
+        // Arrange — stub cdp-uploader /initiate
+        usingStub()
+            .when(request().withMethod("POST").withPath("/initiate"))
+            .respond(
+                response()
+                    .withStatusCode(200)
+                    .withContentType(org.mockserver.model.MediaType.APPLICATION_JSON)
+                    .withBody(getJsonFromFile("fixtures/cdp-initiate-response.json")));
+
+        // Act — no dateOfIssue field in the request body
+        webClient("NoAuth")
+            .post()
+            .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+            .bodyValue("""
+                {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234"}
+                """)
+            .exchange()
+            .expectStatus().isCreated();
+
+        // Assert MongoDB
+        AccompanyingDocument doc =
+            accompanyingDocumentRepository.findByUploadId(UPLOAD_ID_FROM_FIXTURE).orElseThrow();
+        assertThat(doc.getDateOfIssue()).isNull();
+    }
+
+    // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
 

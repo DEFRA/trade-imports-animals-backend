@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
@@ -257,6 +258,149 @@ class DocumentServiceTest {
         .hasMessageContaining(uploadId);
 
     verify(accompanyingDocumentRepository, never()).save(any());
+  }
+
+  // ─── handleScanResult — null numberOfRejectedFiles ───────────────────────
+
+  @Test
+  void handleScanResult_shouldUpdateStatusToRejected_whenNumberOfRejectedFilesIsNull() {
+    // Given — null numberOfRejectedFiles: the condition (null != null && null == 0) is false,
+    // so the production code sets scanStatus = REJECTED.
+    String uploadId = "upload-id-null-rejected";
+    AccompanyingDocument document = AccompanyingDocument.builder()
+        .uploadId(uploadId)
+        .scanStatus(ScanStatus.PENDING)
+        .build();
+    when(accompanyingDocumentRepository.findByUploadId(uploadId))
+        .thenReturn(Optional.of(document));
+    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    CdpScanResultForm form = new CdpScanResultForm();
+    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, null);
+
+    // When
+    documentService.handleScanResult(uploadId, payload);
+
+    // Then
+    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
+    verify(accompanyingDocumentRepository).save(captor.capture());
+    assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.REJECTED);
+  }
+
+  // ─── initiate — invalid DocumentType ─────────────────────────────────────
+
+  @Test
+  void initiate_shouldThrowIllegalArgumentException_whenDocumentTypeIsInvalid() {
+    // Given
+    String notificationRef = "DRAFT.IMP.2026.invalid-type";
+    String redirectUrl = "";
+
+    DocumentUploadRequest request = new DocumentUploadRequest(
+        "INVALID_TYPE", "UK/GB/2026/001", null);
+
+    when(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef))
+        .thenReturn(Collections.emptyList());
+
+    when(cdpConfig.uploader()).thenReturn(uploaderConfig);
+    when(cdpConfig.backend()).thenReturn(backendConfig);
+    when(cdpConfig.s3()).thenReturn(s3Config);
+    when(uploaderConfig.maxFileSize()).thenReturn(20971520L);
+    when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
+    when(backendConfig.baseUrl()).thenReturn("http://backend");
+    when(s3Config.documentsBucket()).thenReturn("documents-bucket");
+
+    CdpUploaderInitiateResponse uploaderResponse =
+        new CdpUploaderInitiateResponse("upload-id-invalid-type",
+            "https://cdp-uploader/form/upload-id-invalid-type",
+            "https://cdp-uploader/status/upload-id-invalid-type");
+    when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
+        .thenReturn(uploaderResponse);
+
+    // When / Then — DocumentType.valueOf("INVALID_TYPE") throws IllegalArgumentException
+    assertThatThrownBy(() -> documentService.initiate(notificationRef, request, redirectUrl))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  // ─── initiate — null dateOfIssue ─────────────────────────────────────────
+
+  @Test
+  void initiate_shouldPersistNullDateOfIssue_whenDateOfIssueIsNull() {
+    // Given
+    String notificationRef = "DRAFT.IMP.2026.no-date";
+    String redirectUrl = "";
+
+    DocumentUploadRequest request = new DocumentUploadRequest("ITAHC", "UK/GB/2026/001", null);
+
+    when(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef))
+        .thenReturn(Collections.emptyList());
+
+    when(cdpConfig.uploader()).thenReturn(uploaderConfig);
+    when(cdpConfig.backend()).thenReturn(backendConfig);
+    when(cdpConfig.s3()).thenReturn(s3Config);
+    when(uploaderConfig.maxFileSize()).thenReturn(20971520L);
+    when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
+    when(backendConfig.baseUrl()).thenReturn("http://backend");
+    when(s3Config.documentsBucket()).thenReturn("documents-bucket");
+
+    CdpUploaderInitiateResponse uploaderResponse =
+        new CdpUploaderInitiateResponse("upload-id-no-date",
+            "https://cdp-uploader/form/upload-id-no-date",
+            "https://cdp-uploader/status/upload-id-no-date");
+    when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
+        .thenReturn(uploaderResponse);
+
+    AccompanyingDocument savedDoc = AccompanyingDocument.builder()
+        .uploadId("upload-id-no-date")
+        .scanStatus(ScanStatus.PENDING)
+        .build();
+    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
+        .thenReturn(savedDoc);
+
+    // When
+    documentService.initiate(notificationRef, request, redirectUrl);
+
+    // Then
+    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
+    verify(accompanyingDocumentRepository).save(captor.capture());
+    assertThat(captor.getValue().getDateOfIssue()).isNull();
+  }
+
+  // ─── initiate — DuplicateKeyException → IllegalStateException ────────────
+
+  @Test
+  void initiate_shouldThrowIllegalStateException_whenSaveThrowsDuplicateKeyException() {
+    // Given — production code catches DuplicateKeyException and re-throws IllegalStateException
+    String notificationRef = "DRAFT.IMP.2026.concurrent";
+    String redirectUrl = "";
+
+    DocumentUploadRequest request = new DocumentUploadRequest("ITAHC", "UK/GB/2026/001", null);
+
+    when(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef))
+        .thenReturn(Collections.emptyList());
+
+    when(cdpConfig.uploader()).thenReturn(uploaderConfig);
+    when(cdpConfig.backend()).thenReturn(backendConfig);
+    when(cdpConfig.s3()).thenReturn(s3Config);
+    when(uploaderConfig.maxFileSize()).thenReturn(20971520L);
+    when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
+    when(backendConfig.baseUrl()).thenReturn("http://backend");
+    when(s3Config.documentsBucket()).thenReturn("documents-bucket");
+
+    CdpUploaderInitiateResponse uploaderResponse =
+        new CdpUploaderInitiateResponse("upload-id-dup",
+            "https://cdp-uploader/form/upload-id-dup",
+            "https://cdp-uploader/status/upload-id-dup");
+    when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
+        .thenReturn(uploaderResponse);
+
+    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
+        .thenThrow(new DuplicateKeyException("duplicate key: uploadId"));
+
+    // When / Then
+    assertThatThrownBy(() -> documentService.initiate(notificationRef, request, redirectUrl))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("upload-id-dup");
   }
 
   // ─── findFile ────────────────────────────────────────────────────────────────

@@ -112,6 +112,23 @@ class AccompanyingDocumentTest {
     assertThat(status).isEqualTo(FileStatus.REJECTED);
   }
 
+  // ─── dateOfIssue JSON round-trip ─────────────────────────────────────────
+
+  @Test
+  void dateOfIssue_instantRoundTrip_survivesJsonSerialiseDeserialise() throws JsonProcessingException {
+    Instant original = Instant.parse("2026-01-15T00:00:00Z");
+
+    AccompanyingDocument doc = AccompanyingDocument.builder()
+        .uploadId("upload-round-trip-1")
+        .dateOfIssue(original)
+        .build();
+
+    String json = objectMapper.writeValueAsString(doc);
+    AccompanyingDocument deserialised = objectMapper.readValue(json, AccompanyingDocument.class);
+
+    assertThat(deserialised.getDateOfIssue()).isEqualTo(original);
+  }
+
   // ─── ScanStatus JSON serialisation ───────────────────────────────────────
 
   @Test
