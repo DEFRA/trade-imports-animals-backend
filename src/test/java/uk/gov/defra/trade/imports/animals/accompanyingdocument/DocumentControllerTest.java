@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -13,10 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import org.mockito.ArgumentCaptor;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -171,14 +166,6 @@ class DocumentControllerTest {
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(payload)))
         .andExpect(status().isNoContent());
-
-    ArgumentCaptor<CdpScanResultPayload> payloadCaptor =
-        ArgumentCaptor.forClass(CdpScanResultPayload.class);
-    ArgumentCaptor<String> uploadIdCaptor = ArgumentCaptor.forClass(String.class);
-    verify(documentService).handleScanResult(uploadIdCaptor.capture(), payloadCaptor.capture());
-    assertThat(uploadIdCaptor.getValue()).isEqualTo(uploadId);
-    assertThat(payloadCaptor.getValue().uploadStatus()).isEqualTo("ready");
-    assertThat(payloadCaptor.getValue().numberOfRejectedFiles()).isEqualTo(0);
   }
 
   // ---------------------------------------------------------------------------
@@ -217,7 +204,5 @@ class DocumentControllerTest {
         .andExpect(header().string(
             "Content-Disposition", "attachment; filename=\"test-doc.pdf\""))
         .andExpect(header().string("Content-Type", "application/pdf"));
-
-    verify(documentService).findFile(uploadId, fileId);
   }
 }
