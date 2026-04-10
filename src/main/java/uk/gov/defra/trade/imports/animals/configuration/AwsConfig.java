@@ -7,7 +7,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.retry.RetryMode;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -34,6 +36,12 @@ public class AwsConfig {
 
     @Value("${app.aws.endpoint-override:}")
     private String endpointOverride;
+
+    @Value("${app.aws.access-key-id:}")
+    private String accessKeyId;
+
+    @Value("${app.aws.secret-access-key:}")
+    private String secretAccessKey;
 
     private StsClient stsClient() {
 
@@ -65,10 +73,17 @@ public class AwsConfig {
     @Bean
     public S3Client s3Client() {
         boolean hasEndpointOverride = endpointOverride != null && !endpointOverride.isBlank();
+        boolean hasStaticCredentials = accessKeyId != null && !accessKeyId.isBlank()
+            && secretAccessKey != null && !secretAccessKey.isBlank();
+
+        var credentialsProvider = hasEndpointOverride && hasStaticCredentials
+            ? StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(accessKeyId, secretAccessKey))
+            : DefaultCredentialsProvider.builder().build();
 
         S3ClientBuilder builder = S3Client.builder()
             .region(Region.of(region))
-            .credentialsProvider(DefaultCredentialsProvider.builder().build())
+            .credentialsProvider(credentialsProvider)
             .overrideConfiguration(c -> c
                 .retryStrategy(RetryMode.ADAPTIVE)
                 .apiCallTimeout(Duration.ofSeconds(30))
