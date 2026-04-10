@@ -13,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import org.mockito.ArgumentCaptor;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -65,6 +67,9 @@ class DocumentControllerTest {
         // Then
         .andExpect(status().isCreated())
         .andExpect(header().string("Location", "/document-uploads/upload-abc-123"))
+        .andExpect(header().exists("Location"))
+        .andExpect(header().string("Location",
+            org.hamcrest.Matchers.matchesPattern("/document-uploads/[a-zA-Z0-9-]+")))
         .andExpect(jsonPath("$.uploadId").value("upload-abc-123"))
         .andExpect(jsonPath("$.uploadUrl").value("https://cdp-uploader.example/upload/abc"))
         .andReturn();
@@ -167,7 +172,13 @@ class DocumentControllerTest {
             .content(objectMapper.writeValueAsString(payload)))
         .andExpect(status().isNoContent());
 
-    verify(documentService).handleScanResult(eq(uploadId), any(CdpScanResultPayload.class));
+    ArgumentCaptor<CdpScanResultPayload> payloadCaptor =
+        ArgumentCaptor.forClass(CdpScanResultPayload.class);
+    ArgumentCaptor<String> uploadIdCaptor = ArgumentCaptor.forClass(String.class);
+    verify(documentService).handleScanResult(uploadIdCaptor.capture(), payloadCaptor.capture());
+    assertThat(uploadIdCaptor.getValue()).isEqualTo(uploadId);
+    assertThat(payloadCaptor.getValue().uploadStatus()).isEqualTo("ready");
+    assertThat(payloadCaptor.getValue().numberOfRejectedFiles()).isEqualTo(0);
   }
 
   // ---------------------------------------------------------------------------

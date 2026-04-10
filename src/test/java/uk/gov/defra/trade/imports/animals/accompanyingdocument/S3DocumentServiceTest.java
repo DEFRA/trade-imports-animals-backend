@@ -1,10 +1,12 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -47,6 +49,7 @@ class S3DocumentServiceTest {
     // Given
     String s3Key = "upload-id-001/file-id-001";
     String bucket = "trade-imports-animals-documents";
+    byte[] expectedBytes = "test content".getBytes();
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
     when(cdpConfig.s3()).thenReturn(s3Config);
@@ -55,7 +58,7 @@ class S3DocumentServiceTest {
     ResponseInputStream<GetObjectResponse> responseInputStream =
         new ResponseInputStream<>(
             GetObjectResponse.builder().build(),
-            AbortableInputStream.create(InputStream.nullInputStream()));
+            AbortableInputStream.create(new ByteArrayInputStream(expectedBytes)));
 
     when(s3Client.getObject(any(GetObjectRequest.class))).thenReturn(responseInputStream);
 
@@ -67,6 +70,7 @@ class S3DocumentServiceTest {
         .bucket(bucket)
         .key(s3Key)
         .build());
+    assertThat(outputStream.toByteArray()).isEqualTo(expectedBytes);
   }
 
   @Test
