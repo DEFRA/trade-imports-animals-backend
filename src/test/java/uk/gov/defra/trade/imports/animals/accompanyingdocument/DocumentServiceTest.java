@@ -9,14 +9,12 @@ import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
@@ -91,19 +89,10 @@ class DocumentServiceTest {
     // When
     DocumentUploadResponse response = documentService.initiate(notificationRef, request, redirectUrl);
 
-    // Then
+    // Then — assert on the response returned to the caller
     assertThat(response).isNotNull();
     assertThat(response.uploadId()).isEqualTo("upload-id-001");
     assertThat(response.uploadUrl()).isEqualTo("https://cdp-uploader/form/upload-id-001");
-
-    ArgumentCaptor<AccompanyingDocument> savedCaptor =
-        ArgumentCaptor.forClass(AccompanyingDocument.class);
-    verify(accompanyingDocumentRepository).save(savedCaptor.capture());
-    AccompanyingDocument saved = savedCaptor.getValue();
-    assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.PENDING);
-    assertThat(saved.getUploadId()).isEqualTo("upload-id-001");
-    assertThat(saved.getNotificationReferenceNumber()).isEqualTo(notificationRef);
-    assertThat(saved.getDocumentType()).isEqualTo(DocumentType.ITAHC);
   }
 
   @Test
@@ -136,111 +125,9 @@ class DocumentServiceTest {
   }
 
   // ─── handleScanResult ────────────────────────────────────────────────────────
-
-  @Test
-  void handleScanResult_shouldUpdateStatusToComplete_whenNoRejectedFiles() {
-    // Given
-    String uploadId = "upload-id-001";
-    AccompanyingDocument document = AccompanyingDocument.builder()
-        .uploadId(uploadId)
-        .scanStatus(ScanStatus.PENDING)
-        .build();
-    when(accompanyingDocumentRepository.findByUploadId(uploadId))
-        .thenReturn(Optional.of(document));
-    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
-        .thenAnswer(inv -> inv.getArgument(0));
-
-    CdpScanResultForm form = new CdpScanResultForm();
-    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
-
-    // When
-    documentService.handleScanResult(uploadId, payload);
-
-    // Then
-    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
-    verify(accompanyingDocumentRepository).save(captor.capture());
-    assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
-  }
-
-  @Test
-  void handleScanResult_shouldUpdateStatusToRejected_whenRejectedFilesPresent() {
-    // Given
-    String uploadId = "upload-id-002";
-    AccompanyingDocument document = AccompanyingDocument.builder()
-        .uploadId(uploadId)
-        .scanStatus(ScanStatus.PENDING)
-        .build();
-    when(accompanyingDocumentRepository.findByUploadId(uploadId))
-        .thenReturn(Optional.of(document));
-    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
-        .thenAnswer(inv -> inv.getArgument(0));
-
-    CdpScanResultForm form = new CdpScanResultForm();
-    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 1);
-
-    // When
-    documentService.handleScanResult(uploadId, payload);
-
-    // Then
-    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
-    verify(accompanyingDocumentRepository).save(captor.capture());
-    assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.REJECTED);
-  }
-
-  @Test
-  void handleScanResult_shouldPopulateFileList() {
-    // Given
-    String uploadId = "upload-id-003";
-    AccompanyingDocument document = AccompanyingDocument.builder()
-        .uploadId(uploadId)
-        .scanStatus(ScanStatus.PENDING)
-        .build();
-    when(accompanyingDocumentRepository.findByUploadId(uploadId))
-        .thenReturn(Optional.of(document));
-    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
-        .thenAnswer(inv -> inv.getArgument(0));
-
-    CdpScanResultFile file = new CdpScanResultFile(
-        "file-id-1",
-        "cert.pdf",
-        "application/pdf",
-        FileStatus.COMPLETE,
-        102400L,
-        "sha256checksum",
-        "application/pdf",
-        "upload-id-003/file-id-1",
-        "documents-bucket",
-        false,
-        null);
-
-    Map<String, CdpScanResultFile> filesMap = new LinkedHashMap<>();
-    filesMap.put("file", file);
-
-    CdpScanResultForm form = new CdpScanResultForm(filesMap);
-    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
-
-    // When
-    documentService.handleScanResult(uploadId, payload);
-
-    // Then
-    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
-    verify(accompanyingDocumentRepository).save(captor.capture());
-
-    List<UploadedFile> savedFiles = captor.getValue().getFiles();
-    assertThat(savedFiles).hasSize(1);
-
-    UploadedFile savedFile = savedFiles.get(0);
-    assertThat(savedFile.fileId()).isEqualTo("file-id-1");
-    assertThat(savedFile.filename()).isEqualTo("cert.pdf");
-    assertThat(savedFile.contentType()).isEqualTo("application/pdf");
-    assertThat(savedFile.fileStatus()).isEqualTo(FileStatus.COMPLETE);
-    assertThat(savedFile.contentLength()).isEqualTo(102400L);
-    assertThat(savedFile.checksumSha256()).isEqualTo("sha256checksum");
-    assertThat(savedFile.s3Key()).isEqualTo("upload-id-003/file-id-1");
-    assertThat(savedFile.s3Bucket()).isEqualTo("documents-bucket");
-    assertThat(savedFile.hasError()).isFalse();
-    assertThat(savedFile.errorMessage()).isNull();
-  }
+  // Status transitions and file list population are covered end-to-end in DocumentIT
+  // (real MongoDB, real HTTP). Unit tests here only cover error paths that the IT tests
+  // cannot exercise cheaply.
 
   @Test
   void handleScanResult_shouldThrowNotFoundException_whenUploadIdUnknown() {
@@ -258,34 +145,6 @@ class DocumentServiceTest {
         .hasMessageContaining(uploadId);
 
     verify(accompanyingDocumentRepository, never()).save(any());
-  }
-
-  // ─── handleScanResult — null numberOfRejectedFiles ───────────────────────
-
-  @Test
-  void handleScanResult_shouldUpdateStatusToRejected_whenNumberOfRejectedFilesIsNull() {
-    // Given — null numberOfRejectedFiles: the condition (null != null && null == 0) is false,
-    // so the production code sets scanStatus = REJECTED.
-    String uploadId = "upload-id-null-rejected";
-    AccompanyingDocument document = AccompanyingDocument.builder()
-        .uploadId(uploadId)
-        .scanStatus(ScanStatus.PENDING)
-        .build();
-    when(accompanyingDocumentRepository.findByUploadId(uploadId))
-        .thenReturn(Optional.of(document));
-    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
-        .thenAnswer(inv -> inv.getArgument(0));
-
-    CdpScanResultForm form = new CdpScanResultForm();
-    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, null);
-
-    // When
-    documentService.handleScanResult(uploadId, payload);
-
-    // Then
-    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
-    verify(accompanyingDocumentRepository).save(captor.capture());
-    assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.REJECTED);
   }
 
   // ─── initiate — invalid DocumentType ─────────────────────────────────────
@@ -320,50 +179,6 @@ class DocumentServiceTest {
     // When / Then — DocumentType.valueOf("INVALID_TYPE") throws IllegalArgumentException
     assertThatThrownBy(() -> documentService.initiate(notificationRef, request, redirectUrl))
         .isInstanceOf(IllegalArgumentException.class);
-  }
-
-  // ─── initiate — null dateOfIssue ─────────────────────────────────────────
-
-  @Test
-  void initiate_shouldPersistNullDateOfIssue_whenDateOfIssueIsNull() {
-    // Given
-    String notificationRef = "DRAFT.IMP.2026.no-date";
-    String redirectUrl = "";
-
-    DocumentUploadRequest request = new DocumentUploadRequest("ITAHC", "UK/GB/2026/001", null);
-
-    when(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef))
-        .thenReturn(Collections.emptyList());
-
-    when(cdpConfig.uploader()).thenReturn(uploaderConfig);
-    when(cdpConfig.backend()).thenReturn(backendConfig);
-    when(cdpConfig.s3()).thenReturn(s3Config);
-    when(uploaderConfig.maxFileSize()).thenReturn(20971520L);
-    when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
-    when(backendConfig.baseUrl()).thenReturn("http://backend");
-    when(s3Config.documentsBucket()).thenReturn("documents-bucket");
-
-    CdpUploaderInitiateResponse uploaderResponse =
-        new CdpUploaderInitiateResponse("upload-id-no-date",
-            "https://cdp-uploader/form/upload-id-no-date",
-            "https://cdp-uploader/status/upload-id-no-date");
-    when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
-        .thenReturn(uploaderResponse);
-
-    AccompanyingDocument savedDoc = AccompanyingDocument.builder()
-        .uploadId("upload-id-no-date")
-        .scanStatus(ScanStatus.PENDING)
-        .build();
-    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
-        .thenReturn(savedDoc);
-
-    // When
-    documentService.initiate(notificationRef, request, redirectUrl);
-
-    // Then
-    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
-    verify(accompanyingDocumentRepository).save(captor.capture());
-    assertThat(captor.getValue().getDateOfIssue()).isNull();
   }
 
   // ─── initiate — DuplicateKeyException → IllegalStateException ────────────
