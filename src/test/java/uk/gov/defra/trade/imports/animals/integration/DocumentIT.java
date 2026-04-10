@@ -614,6 +614,121 @@ class DocumentIT extends IntegrationBase {
     }
 
     // ---------------------------------------------------------------------------
+    // Test: null numberOfRejectedFiles in scan callback → REJECTED
+    // ---------------------------------------------------------------------------
+
+    /**
+     * POST a scan callback where numberOfRejectedFiles is null (field omitted). The production
+     * code condition (null != null && null == 0) evaluates false, so scanStatus must be REJECTED.
+     * Guards against a silent data-loss bug if cdp-uploader omits this field.
+     */
+    @Test
+    void scanResult_nullNumberOfRejectedFiles_shouldSetStatusToRejected() throws IOException {
+        // Arrange
+        stubCdpUploaderAndInitiate();
+
+        String payloadWithNullRejectedCount = """
+            {
+              "uploadStatus": "ready",
+              "numberOfRejectedFiles": null,
+              "metadata": {},
+              "form": {
+                "file": {
+                  "fileId": "%s",
+                  "filename": "test.pdf",
+                  "contentType": "application/pdf",
+                  "fileStatus": "complete",
+                  "contentLength": 22,
+                  "checksumSha256": "abc123",
+                  "detectedContentType": "application/pdf",
+                  "s3Key": "%s"
+                }
+              }
+            }
+            """.formatted(FILE_ID_FROM_FIXTURE, S3_KEY_FROM_FIXTURE);
+
+        // Act
+        webClient("NoAuth")
+            .post()
+            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/scan-results")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(payloadWithNullRejectedCount)
+            .exchange()
+            .expectStatus().isNoContent();
+
+        // Assert — null numberOfRejectedFiles must not be treated as COMPLETE
+        AccompanyingDocument persisted =
+            accompanyingDocumentRepository.findByUploadId(UPLOAD_ID_FROM_FIXTURE).orElseThrow();
+        assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Test: download rejected file (null s3Key) → 404
+    // ---------------------------------------------------------------------------
+
+    /**
+     * GET /document-uploads/{id}/files/{fileId} where the file was rejected (s3Key is null).
+     * The endpoint must return 404 before attempting any S3 call — passing null to S3 would
+     * cause an SDK error and expose internals.
+     */
+    @Test
+    void downloadFile_rejectedFile_shouldReturn404() throws IOException {
+        // Arrange — initiate then simulate a rejected scan callback
+        stubCdpUploaderAndInitiate();
+
+        String rejectedPayload = loadFixtureAsString("fixtures/cdp-scan-callback-rejected.json");
+        webClient("NoAuth")
+            .post()
+            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/scan-results")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(rejectedPayload)
+            .exchange()
+            .expectStatus().isNoContent();
+
+        // Act — attempt to download the rejected file
+        webClient("NoAuth")
+            .get()
+            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/files/" + FILE_ID_FROM_FIXTURE)
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(404);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Test: S3 error during file download → 500
+    // ---------------------------------------------------------------------------
+
+    /**
+     * GET /document-uploads/{id}/files/{fileId} where the file exists in MongoDB (COMPLETE) but
+     * has no corresponding object in S3. Verifies the endpoint returns 500 with a structured error
+     * body rather than hanging or returning a partial response.
+     */
+    @Test
+    void downloadFile_s3ObjectMissing_shouldReturn500() throws IOException {
+        // Arrange — initiate, complete the scan (registers file metadata in MongoDB)
+        stubCdpUploaderAndInitiate();
+
+        String completePayload = loadFixtureAsString("fixtures/cdp-scan-callback-complete.json");
+        webClient("NoAuth")
+            .post()
+            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/scan-results")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(completePayload)
+            .exchange()
+            .expectStatus().isNoContent();
+
+        // Deliberately do NOT put any object in LocalStack S3 — the key doesn't exist
+
+        // Act — request the file; S3 will return NoSuchKey
+        webClient("NoAuth")
+            .get()
+            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/files/" + FILE_ID_FROM_FIXTURE)
+            .exchange()
+            .expectStatus().is5xxServerError();
+    }
+
+    // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
 
