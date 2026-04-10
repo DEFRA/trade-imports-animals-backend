@@ -1,0 +1,282 @@
+package uk.gov.defra.trade.imports.animals.accompanyingdocument;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.LocalDate;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
+import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+
+@ExtendWith(MockitoExtension.class)
+class DocumentServiceTest {
+
+  @Mock
+  private AccompanyingDocumentRepository accompanyingDocumentRepository;
+
+  @Mock
+  private CdpUploaderClient cdpUploaderClient;
+
+  @Mock
+  private CdpConfig cdpConfig;
+
+  @Mock
+  private CdpConfig.UploaderConfig uploaderConfig;
+
+  @Mock
+  private CdpConfig.BackendConfig backendConfig;
+
+  @Mock
+  private CdpConfig.S3Config s3Config;
+
+  private DocumentService documentService;
+
+  @BeforeEach
+  void setUp() {
+    documentService = new DocumentService(
+        accompanyingDocumentRepository,
+        cdpUploaderClient,
+        cdpConfig);
+  }
+
+  // ─── initiate ────────────────────────────────────────────────────────────────
+
+  @Test
+  void initiate_shouldCallCdpUploaderAndSaveWithPendingStatus() {
+    // Given
+    String notificationRef = "DRAFT.IMP.2026.abc123";
+    String redirectUrl = "https://frontend.example.com/documents";
+
+    DocumentUploadRequest request = new DocumentUploadRequest(
+        "ITAHC", "UK/GB/2026/001", LocalDate.of(2026, 1, 15));
+
+    when(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef))
+        .thenReturn(Collections.emptyList());
+
+    when(cdpConfig.uploader()).thenReturn(uploaderConfig);
+    when(cdpConfig.backend()).thenReturn(backendConfig);
+    when(cdpConfig.s3()).thenReturn(s3Config);
+    when(uploaderConfig.maxFileSize()).thenReturn(20971520L);
+    when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
+    when(backendConfig.baseUrl()).thenReturn("http://backend");
+    when(s3Config.documentsBucket()).thenReturn("documents-bucket");
+
+    CdpUploaderInitiateResponse uploaderResponse =
+        new CdpUploaderInitiateResponse("upload-id-001", "https://cdp-uploader/form/upload-id-001", "https://cdp-uploader/status/upload-id-001");
+    when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
+        .thenReturn(uploaderResponse);
+
+    AccompanyingDocument savedDoc = AccompanyingDocument.builder()
+        .uploadId("upload-id-001")
+        .scanStatus(ScanStatus.PENDING)
+        .build();
+    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
+        .thenReturn(savedDoc);
+
+    // When
+    DocumentUploadResponse response = documentService.initiate(notificationRef, request, redirectUrl);
+
+    // Then
+    assertThat(response).isNotNull();
+    assertThat(response.uploadId()).isEqualTo("upload-id-001");
+    assertThat(response.uploadUrl()).isEqualTo("https://cdp-uploader/form/upload-id-001");
+
+    ArgumentCaptor<AccompanyingDocument> savedCaptor =
+        ArgumentCaptor.forClass(AccompanyingDocument.class);
+    verify(accompanyingDocumentRepository).save(savedCaptor.capture());
+    AccompanyingDocument saved = savedCaptor.getValue();
+    assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.PENDING);
+    assertThat(saved.getUploadId()).isEqualTo("upload-id-001");
+    assertThat(saved.getNotificationReferenceNumber()).isEqualTo(notificationRef);
+    assertThat(saved.getDocumentType()).isEqualTo(DocumentType.ITAHC);
+  }
+
+  @Test
+  void initiate_shouldReturnExistingUpload_whenPendingUploadAlreadyExistsForRef() {
+    // Given
+    String notificationRef = "DRAFT.IMP.2026.abc123";
+    String redirectUrl = "https://frontend.example.com/documents";
+
+    DocumentUploadRequest request = new DocumentUploadRequest("ITAHC", "UK/GB/2026/001", null);
+
+    AccompanyingDocument existingPending = AccompanyingDocument.builder()
+        .uploadId("existing-upload-id")
+        .scanStatus(ScanStatus.PENDING)
+        .notificationReferenceNumber(notificationRef)
+        .build();
+
+    when(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef))
+        .thenReturn(List.of(existingPending));
+
+    // When
+    DocumentUploadResponse response = documentService.initiate(notificationRef, request, redirectUrl);
+
+    // Then
+    assertThat(response).isNotNull();
+    assertThat(response.uploadId()).isEqualTo("existing-upload-id");
+
+    // cdp-uploader must NOT be called again
+    verify(cdpUploaderClient, never()).initiate(any());
+    verify(accompanyingDocumentRepository, never()).save(any());
+  }
+
+  // ─── handleScanResult ────────────────────────────────────────────────────────
+
+  @Test
+  void handleScanResult_shouldUpdateStatusToComplete_whenNoRejectedFiles() {
+    // Given
+    String uploadId = "upload-id-001";
+    AccompanyingDocument document = AccompanyingDocument.builder()
+        .uploadId(uploadId)
+        .scanStatus(ScanStatus.PENDING)
+        .build();
+    when(accompanyingDocumentRepository.findByUploadId(uploadId))
+        .thenReturn(Optional.of(document));
+    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    CdpScanResultForm form = new CdpScanResultForm();
+    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
+
+    // When
+    documentService.handleScanResult(uploadId, payload);
+
+    // Then
+    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
+    verify(accompanyingDocumentRepository).save(captor.capture());
+    assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+  }
+
+  @Test
+  void handleScanResult_shouldUpdateStatusToRejected_whenRejectedFilesPresent() {
+    // Given
+    String uploadId = "upload-id-002";
+    AccompanyingDocument document = AccompanyingDocument.builder()
+        .uploadId(uploadId)
+        .scanStatus(ScanStatus.PENDING)
+        .build();
+    when(accompanyingDocumentRepository.findByUploadId(uploadId))
+        .thenReturn(Optional.of(document));
+    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    CdpScanResultForm form = new CdpScanResultForm();
+    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 1);
+
+    // When
+    documentService.handleScanResult(uploadId, payload);
+
+    // Then
+    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
+    verify(accompanyingDocumentRepository).save(captor.capture());
+    assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.REJECTED);
+  }
+
+  @Test
+  void handleScanResult_shouldPopulateFileList() {
+    // Given
+    String uploadId = "upload-id-003";
+    AccompanyingDocument document = AccompanyingDocument.builder()
+        .uploadId(uploadId)
+        .scanStatus(ScanStatus.PENDING)
+        .build();
+    when(accompanyingDocumentRepository.findByUploadId(uploadId))
+        .thenReturn(Optional.of(document));
+    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    CdpScanResultFile file = new CdpScanResultFile(
+        "file-id-1",
+        "cert.pdf",
+        "application/pdf",
+        FileStatus.COMPLETE,
+        102400L,
+        "sha256checksum",
+        "application/pdf",
+        "upload-id-003/file-id-1",
+        "documents-bucket",
+        false,
+        null);
+
+    Map<String, CdpScanResultFile> filesMap = new LinkedHashMap<>();
+    filesMap.put("file", file);
+
+    CdpScanResultForm form = new CdpScanResultForm(filesMap);
+    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
+
+    // When
+    documentService.handleScanResult(uploadId, payload);
+
+    // Then
+    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
+    verify(accompanyingDocumentRepository).save(captor.capture());
+
+    List<UploadedFile> savedFiles = captor.getValue().getFiles();
+    assertThat(savedFiles).hasSize(1);
+
+    UploadedFile savedFile = savedFiles.get(0);
+    assertThat(savedFile.fileId()).isEqualTo("file-id-1");
+    assertThat(savedFile.filename()).isEqualTo("cert.pdf");
+    assertThat(savedFile.contentType()).isEqualTo("application/pdf");
+    assertThat(savedFile.fileStatus()).isEqualTo(FileStatus.COMPLETE);
+    assertThat(savedFile.contentLength()).isEqualTo(102400L);
+    assertThat(savedFile.checksumSha256()).isEqualTo("sha256checksum");
+    assertThat(savedFile.s3Key()).isEqualTo("upload-id-003/file-id-1");
+    assertThat(savedFile.s3Bucket()).isEqualTo("documents-bucket");
+    assertThat(savedFile.hasError()).isFalse();
+    assertThat(savedFile.errorMessage()).isNull();
+  }
+
+  @Test
+  void handleScanResult_shouldThrowNotFoundException_whenUploadIdUnknown() {
+    // Given
+    String uploadId = "non-existent-upload-id";
+    when(accompanyingDocumentRepository.findByUploadId(uploadId))
+        .thenReturn(Optional.empty());
+
+    CdpScanResultForm form = new CdpScanResultForm();
+    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
+
+    // When / Then
+    assertThatThrownBy(() -> documentService.handleScanResult(uploadId, payload))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining(uploadId);
+
+    verify(accompanyingDocumentRepository, never()).save(any());
+  }
+
+  // ─── findFile ────────────────────────────────────────────────────────────────
+
+  @Test
+  void findFile_shouldThrowNotFoundException_whenFileIdUnknown() {
+    // Given
+    String uploadId = "upload-id-004";
+    String unknownFileId = "file-id-not-present";
+
+    AccompanyingDocument document = AccompanyingDocument.builder()
+        .uploadId(uploadId)
+        .files(Collections.emptyList())
+        .build();
+    when(accompanyingDocumentRepository.findByUploadId(uploadId))
+        .thenReturn(Optional.of(document));
+
+    // When / Then
+    assertThatThrownBy(() -> documentService.findFile(uploadId, unknownFileId))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining(unknownFileId);
+  }
+}
