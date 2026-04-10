@@ -13,6 +13,7 @@ import uk.gov.defra.trade.imports.animals.interceptor.TraceIdPropagationIntercep
 
 import java.net.http.HttpClient;
 import java.time.Duration;
+import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 
 /**
  * Configuration for HTTP clients with custom SSL/TLS certificates and trace ID propagation.
@@ -114,5 +115,17 @@ public class RestClientConfig {
   @Bean
   public RestTemplate restTemplate(RestTemplateBuilder builder) {
     return builder.build();
+  }
+
+  /**
+   * RestClient pre-configured with the cdp-uploader base URL.
+   *
+   * <p>Uses the shared {@link RestClient.Builder} so it inherits custom SSL context and trace ID
+   * propagation. The builder is cloned — the shared bean is not mutated.
+   */
+  @Bean
+  public RestClient cdpUploaderRestClient(RestClient.Builder builder, CdpConfig cdpConfig) {
+    log.debug("Creating cdpUploaderRestClient with base URL: {}", cdpConfig.uploader().baseUrl());
+    return builder.baseUrl(cdpConfig.uploader().baseUrl()).build();
   }
 }

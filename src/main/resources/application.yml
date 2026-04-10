@@ -37,6 +37,14 @@ cdp:
   cloudwatch:
     endpoint: ${AWS_EMF_AGENT_ENDPOINT:http://localhost:4566}
   proxyUrl: ${HTTP_PROXY:}
+  uploader:
+    base-url: ${CDP_UPLOADER_BASE_URL:http://localhost:7337}
+    max-file-size: ${CDP_UPLOADER_MAX_FILE_SIZE:20971520}
+    mime-types: ${CDP_UPLOADER_MIME_TYPES:application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,application/vnd.ms-excel}
+  backend:
+    base-url: ${CDP_BACKEND_BASE_URL:http://localhost:8085}
+  s3:
+    documents-bucket: ${CDP_DOCUMENTS_BUCKET:trade-imports-animals-documents}
 
 # AWS configuration
 aws:
