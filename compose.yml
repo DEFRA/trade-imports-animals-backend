@@ -113,8 +113,12 @@ services:
       MONGO_DATABASE: trade-imports-animals-backend
 
       # AWS (via LocalStack)
-      LOCALSTACK_ENDPOINT: http://localstack:4566
+      APP_AWS_ENDPOINT_OVERRIDE: http://localstack:4566
       AWS_REGION: eu-west-2
+
+      # CDP Uploader
+      CDP_UPLOADER_BASE_URL: http://cdp-uploader:7337
+      CDP_DOCUMENTS_BUCKET: trade-imports-animals-documents
 
       # Logging
       LOG_LEVEL: DEBUG
