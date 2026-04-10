@@ -23,3 +23,13 @@ spring:
     mongodb:
       ssl:
         enabled: false
+
+# SpringDoc — enable Swagger UI locally
+springdoc:
+  swagger-ui:
+    enabled: true
+
+# App-level AWS overrides for local development
+app:
+  aws:
+    endpoint-override: http://localhost:4566
