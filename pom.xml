@@ -186,19 +186,27 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers</artifactId>
-      <version>1.20.4</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>mongodb</artifactId>
-      <version>1.20.4</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <version>1.20.4</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>localstack</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>url-connection-client</artifactId>
+      <version>${amazon.awssdk.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -226,6 +234,13 @@
         </executions>
         <configuration>
           <skipTests>${skipTests}</skipTests>
+          <systemPropertyVariables>
+            <!-- Docker Desktop 29+ requires minimum API version 1.44.
+                 Testcontainers 1.x bundles docker-java 3.4.x which defaults to 1.32.
+                 This property overrides the default so Testcontainers can connect.
+                 Fixed permanently in Testcontainers 2.0.2 (PR #11216). -->
+            <api.version>1.44</api.version>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
       <!-- JaCoCo Code Coverage -->
