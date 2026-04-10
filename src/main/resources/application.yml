@@ -46,6 +46,11 @@ cdp:
   s3:
     documents-bucket: ${CDP_DOCUMENTS_BUCKET:trade-imports-animals-documents}
 
+# Application-level AWS overrides
+app:
+  aws:
+    endpoint-override: ${APP_AWS_ENDPOINT_OVERRIDE:}
+
 # AWS configuration
 aws:
   region: ${AWS_REGION:eu-west-2}
