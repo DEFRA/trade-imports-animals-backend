@@ -3,7 +3,6 @@ package uk.gov.defra.trade.imports.animals.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
-import lombok.extern.slf4j.Slf4j;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,12 +12,15 @@ import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
+import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
+import uk.gov.defra.trade.imports.animals.notification.Commodity;
+import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
+import uk.gov.defra.trade.imports.animals.notification.Species;
 
-@Slf4j
 class NotificationIT extends IntegrationBase {
 
     private static final String NOTIFICATION_ENDPOINT = "/notifications";
@@ -60,7 +62,9 @@ class NotificationIT extends IntegrationBase {
         assertThat(created.getReferenceNumber()).startsWith("DRAFT.IMP.");
         assertThat(created.getOrigin()).isNotNull();
         assertThat(created.getOrigin().getCountryCode()).isEqualTo("GB");
-        assertThat(created.getCommodity()).isEqualTo("Live bovine animals");
+        assertThat(created.getCommodity().getName()).isEqualTo("Live bovine animals");
+        assertThat(created.getReferenceNumber()).matches("DRAFT\\.IMP\\.\\d{4}\\..+");
+        assertThat(created.getReferenceNumber()).contains(created.getId());
     }
 
     @Test
@@ -69,7 +73,7 @@ class NotificationIT extends IntegrationBase {
         Origin origin = new Origin("IE", "true", "REF-001");
         NotificationDto notificationDto = NotificationDto.builder()
             .origin(origin)
-            .commodity("Live cattle")
+            .commodity(Commodity.builder().name("Live cattle").build())
             .build();
 
         // When
@@ -90,7 +94,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(created.getOrigin().getCountryCode()).isEqualTo("IE");
         assertThat(created.getOrigin().getRequiresRegionCode()).isEqualTo("true");
         assertThat(created.getOrigin().getInternalReference()).isEqualTo("REF-001");
-        assertThat(created.getCommodity()).isEqualTo("Live cattle");
+        assertThat(created.getCommodity().getName()).isEqualTo("Live cattle");
     }
 
     @Test
@@ -113,7 +117,7 @@ class NotificationIT extends IntegrationBase {
         NotificationDto updateDto = NotificationDto.builder()
             .referenceNumber(referenceNumber)
             .origin(new Origin("ES", "false", "REF-002"))
-            .commodity("Live pigs")
+            .commodity(Commodity.builder().name("Live pigs").build())
             .build();
 
         EntityExchangeResult<Notification> result = webClient("NoAuth")
@@ -131,7 +135,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(updated.getId()).isEqualTo(createdId);
         assertThat(updated.getReferenceNumber()).isEqualTo(referenceNumber);
         assertThat(updated.getOrigin().getCountryCode()).isEqualTo("ES");
-        assertThat(updated.getCommodity()).isEqualTo("Live pigs");
+        assertThat(updated.getCommodity().getName()).isEqualTo("Live pigs");
 
         // Verify only one notification exists
         assertThat(findAllNotifications()).hasSize(1);
@@ -234,7 +238,7 @@ class NotificationIT extends IntegrationBase {
         NotificationDto notificationDto2 = NotificationDto.builder()
             .referenceNumber(referenceNumber)
             .origin(origin)
-            .commodity("Live sheep")
+            .commodity(Commodity.builder().name("Live sheep").build())
             .build();
 
         // Then - expect updated notification
@@ -252,7 +256,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(allNotifications).hasSize(1);
         assertThat(allNotifications.getFirst().getReferenceNumber()).isEqualTo(referenceNumber);
         assertThat(allNotifications.getFirst().getOrigin().getCountryCode()).isEqualTo("IE");
-        assertThat(allNotifications.getFirst().getCommodity()).isEqualTo("Live sheep");
+        assertThat(allNotifications.getFirst().getCommodity().getName()).isEqualTo("Live sheep");
     }
 
     @Test
@@ -273,7 +277,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(created.getReferenceNumber()).isNotNull();
         assertThat(created.getReferenceNumber()).startsWith("DRAFT.IMP.");
         assertThat(created.getOrigin().getCountryCode()).isEqualTo("NL");
-        assertThat(created.getCommodity()).isEqualTo("Live horses");
+        assertThat(created.getCommodity().getName()).isEqualTo("Live horses");
 
         // 2. Verify findAll returns the created notification
         List<Notification> allNotifications = findAllNotifications();
@@ -284,7 +288,7 @@ class NotificationIT extends IntegrationBase {
         NotificationDto updateDto = NotificationDto.builder()
             .referenceNumber(created.getReferenceNumber())
             .origin(new Origin("BE", "false", "REF-BE-001"))
-            .commodity("Live donkeys")
+            .commodity(Commodity.builder().name("Live donkeys").build())
             .build();
 
         EntityExchangeResult<Notification> updateResult = webClient("NoAuth")
@@ -300,7 +304,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(updated.getId()).isEqualTo(created.getId());
         assertThat(updated.getReferenceNumber()).isEqualTo(created.getReferenceNumber());
         assertThat(updated.getOrigin().getCountryCode()).isEqualTo("BE");
-        assertThat(updated.getCommodity()).isEqualTo("Live donkeys");
+        assertThat(updated.getCommodity().getName()).isEqualTo("Live donkeys");
 
         // 4. Verify only one notification exists
         assertThat(findAllNotifications()).hasSize(1);
@@ -309,36 +313,7 @@ class NotificationIT extends IntegrationBase {
         Notification persisted = notificationRepository.findById(created.getId()).orElse(null);
         assertThat(persisted).isNotNull();
         assertThat(persisted.getOrigin().getCountryCode()).isEqualTo("BE");
-        assertThat(persisted.getCommodity()).isEqualTo("Live donkeys");
-    }
-
-    @Test
-    void post_shouldGenerateReferenceNumberAutomatically() {
-        // Given
-        NotificationDto notificationDto = createNotificationDto("DE", "Live goats");
-
-        // When
-        EntityExchangeResult<Notification> result = webClient("NoAuth")
-            .post()
-            .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDto)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Notification.class)
-            .returnResult();
-
-        // Then - verify reference number format
-        Notification created = result.getResponseBody();
-        assertThat(created).isNotNull();
-        assertThat(created.getId()).isNotNull();
-        assertThat(created.getReferenceNumber()).isNotNull();
-
-        // Reference number should follow pattern: DRAFT.IMP.YYYY.<id>
-        assertThat(created.getReferenceNumber()).matches("DRAFT\\.IMP\\.\\d{4}\\..+");
-        assertThat(created.getReferenceNumber()).contains(created.getId());
-
-        log.info("Notification ID: {}", created.getId());
-        log.info("Generated reference number: {}", created.getReferenceNumber());
+        assertThat(persisted.getCommodity().getName()).isEqualTo("Live donkeys");
     }
 
     @Test
@@ -360,12 +335,91 @@ class NotificationIT extends IntegrationBase {
         List<Notification> notifications = findAllNotifications();
         assertThat(notifications).hasSize(3);
         assertThat(notifications)
-            .extracting(Notification::getCommodity)
+            .extracting(Notification::getCommodity).extracting(Commodity::getName)
             .containsExactlyInAnyOrder(
                 "Live bovine animals",
                 "Live ovine animals",
                 "Live porcine animals"
             );
+    }
+
+    @Test
+    void post_shouldCreateNotificationWithAdditionalDetails() {
+        // Given
+        AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
+        Species species = new Species("BOV", "Bovine", 10, null);
+        CommodityComplement complement = new CommodityComplement("LIVE", 10, null, List.of(species));
+        Commodity commodity = Commodity.builder()
+            .name("Live bovine animals")
+            .commodityComplement(List.of(complement))
+            .build();
+        NotificationDto notificationDto = NotificationDto.builder()
+            .origin(new Origin("GB", "true", "REF-001"))
+            .commodity(commodity)
+            .additionalDetails(additionalDetails)
+            .reasonForImport("PERMANENT")
+            .build();
+
+        // When
+        EntityExchangeResult<Notification> result = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDto)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult();
+
+        // Then
+        Notification created = result.getResponseBody();
+        assertThat(created).isNotNull();
+        assertThat(created.getAdditionalDetails()).isNotNull();
+        assertThat(created.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
+        assertThat(created.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
+        assertThat(created.getReasonForImport()).isEqualTo("PERMANENT");
+        assertThat(created.getCommodity().getCommodityComplement()).hasSize(1);
+        assertThat(created.getCommodity().getCommodityComplement().getFirst().getTypeOfCommodity()).isEqualTo("LIVE");
+        assertThat(created.getCommodity().getCommodityComplement().getFirst().getTotalNoOfAnimals()).isEqualTo(10);
+        assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies()).hasSize(1);
+        assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getValue()).isEqualTo("BOV");
+        assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getText()).isEqualTo("Bovine");
+        assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getNoOfAnimals()).isEqualTo(10);
+    }
+
+    @Test
+    void post_shouldUpdateAdditionalDetails_onExistingNotification() {
+        // Given — create a notification without additionalDetails
+        NotificationDto initial = createNotificationDto("GB", "Live bovine animals");
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(initial)
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When — update with additionalDetails
+        AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "false");
+        NotificationDto updateDto = NotificationDto.builder()
+            .referenceNumber(referenceNumber)
+            .origin(new Origin("GB", "true", "REF-001"))
+            .commodity(Commodity.builder().name("Live bovine animals").build())
+            .additionalDetails(additionalDetails)
+            .build();
+
+        Notification updated = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(updateDto)
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody();
+
+        // Then
+        assertThat(updated).isNotNull();
+        assertThat(updated.getAdditionalDetails()).isNotNull();
+        assertThat(updated.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
+        assertThat(updated.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("false");
+
+        // Verify persisted
+        Notification persisted = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        assertThat(persisted.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
     }
 
     @Test
@@ -549,7 +603,7 @@ class NotificationIT extends IntegrationBase {
 
         return NotificationDto.builder()
             .origin(origin)
-            .commodity(commodity)
+            .commodity(Commodity.builder().name(commodity).build())
             .build();
     }
 }

@@ -14,7 +14,6 @@ import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 import java.time.LocalDate;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -50,7 +49,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    void saveOriginOfImport_shouldSaveNewNotificationAndGenerateReferenceNumber() {
+    void shouldCreateNewNotificationWithGeneratedReferenceNumber() {
         // Given - new notification without referenceNumber
         Origin origin = new Origin("GB", "true", "REF123");
         NotificationDto notificationDto = NotificationDto.builder()
@@ -87,11 +86,18 @@ class NotificationServiceTest {
     }
 
     @Test
-    void saveOriginOfImport_shouldUpdateExistingNotification() {
+    void shouldUpdateExistingNotification() {
         // Given - existing notification with ID and reference number
         String existingId = "507f191e810c19729de860ea";
         String referenceNumber = "DRAFT.IMP.2026." + existingId;
         Origin origin = new Origin("FR", "false", "REF456");
+        AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
+        Species species = new Species("BOV", "Bovine", 5, null);
+        CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species));
+        Commodity commodity = Commodity.builder()
+            .name("Fish")
+            .commodityComplement(List.of(complement))
+            .build();
 
         Notification existingNotification = new Notification();
         existingNotification.setId(existingId);
@@ -104,14 +110,18 @@ class NotificationServiceTest {
         NotificationDto updateDto = NotificationDto.builder()
             .referenceNumber(referenceNumber)
             .origin(origin)
-            .commodity("Fish")
+            .commodity(commodity)
+            .additionalDetails(additionalDetails)
+            .reasonForImport("PERMANENT")
             .build();
 
         Notification updatedNotification = Notification.builder()
             .id(existingId)
             .referenceNumber(referenceNumber)
             .origin(origin)
-            .commodity("Fish")
+            .commodity(commodity)
+            .additionalDetails(additionalDetails)
+            .reasonForImport("PERMANENT")
             .build();
 
         when(notificationRepository.save(any(Notification.class))).thenReturn(updatedNotification);
@@ -124,69 +134,14 @@ class NotificationServiceTest {
         assertThat(result.getReferenceNumber()).isEqualTo("DRAFT.IMP.2026." + existingId);
         assertThat(result.getId()).isEqualTo(existingId);
         assertThat(result.getOrigin()).isEqualTo(origin);
-        assertThat(result.getCommodity()).isEqualTo("Fish");
+        assertThat(result.getCommodity().getName()).isEqualTo("Fish");
+        assertThat(result.getCommodity().getCommodityComplement()).hasSize(1);
+        assertThat(result.getCommodity().getCommodityComplement().getFirst().getTypeOfCommodity()).isEqualTo("LIVE");
+        assertThat(result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getValue()).isEqualTo("BOV");
+        assertThat(result.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
+        assertThat(result.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
+        assertThat(result.getReasonForImport()).isEqualTo("PERMANENT");
         verify(notificationRepository, times(1)).save(any(Notification.class));
-    }
-
-    @Test
-    void saveOriginOfImport_shouldUseFullObjectIdInReferenceNumber() {
-        // Given - new notification
-        Origin origin = new Origin("DE", "true", "REF789");
-        NotificationDto notificationDto = NotificationDto.builder()
-            .origin(origin)
-            .build();
-
-        String generatedId = "65a1b2c3d4e5f67890abcdef";
-        Notification savedWithId = new Notification();
-        savedWithId.setId(generatedId);
-        savedWithId.setOrigin(origin);
-
-        Notification savedWithRef = new Notification();
-        savedWithRef.setId(generatedId);
-        savedWithRef.setOrigin(origin);
-        savedWithRef.setReferenceNumber("DRAFT.IMP." + LocalDate.now().getYear() + "." + generatedId);
-
-        when(notificationRepository.save(any(Notification.class)))
-            .thenReturn(savedWithId)
-            .thenReturn(savedWithRef);
-
-        // When
-        Notification result = notificationService.saveOriginOfImport(notificationDto);
-
-        // Then
-        assertThat(result).isNotNull();
-        assertThat(result.getReferenceNumber()).endsWith(generatedId);
-    }
-
-    @Test
-    void saveOriginOfImport_shouldIncludeCurrentYearInReferenceNumber() {
-        // Given
-        Origin origin = new Origin("IT", "false", "REF999");
-        NotificationDto notificationDto = NotificationDto.builder()
-            .origin(origin)
-            .build();
-
-        String generatedId = "507f1f77bcf86cd799439999";
-        Notification savedWithId = new Notification();
-        savedWithId.setId(generatedId);
-        savedWithId.setOrigin(origin);
-
-        int currentYear = LocalDate.now().getYear();
-        Notification savedWithRef = new Notification();
-        savedWithRef.setId(generatedId);
-        savedWithRef.setOrigin(origin);
-        savedWithRef.setReferenceNumber("DRAFT.IMP." + currentYear + "." + generatedId);
-
-        when(notificationRepository.save(any(Notification.class)))
-            .thenReturn(savedWithId)
-            .thenReturn(savedWithRef);
-
-        // When
-        Notification result = notificationService.saveOriginOfImport(notificationDto);
-
-        // Then
-        assertThat(result).isNotNull();
-        assertThat(result.getReferenceNumber()).contains(String.valueOf(currentYear));
     }
 
     @Test
@@ -200,72 +155,6 @@ class NotificationServiceTest {
         // Then
         assertThat(result).isNotNull();
         assertThat(result).isEmpty();
-        verify(notificationRepository, times(1)).findAll();
-    }
-
-    @Test
-    void findAll_shouldReturnSingleNotification() {
-        // Given
-        Origin origin = new Origin("GB", "true", "REF-001");
-        Notification notification = new Notification();
-        notification.setId("507f1f77bcf86cd799439011");
-        notification.setReferenceNumber("DRAFT.IMP.2026.507f1f77bcf86cd799439011");
-        notification.setOrigin(origin);
-        notification.setCommodity("Live cattle");
-
-        when(notificationRepository.findAll()).thenReturn(Collections.singletonList(notification));
-
-        // When
-        List<Notification> result = notificationService.findAll();
-
-        // Then
-        assertThat(result).isNotNull();
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).getId()).isEqualTo("507f1f77bcf86cd799439011");
-        assertThat(result.get(0).getReferenceNumber()).isEqualTo("DRAFT.IMP.2026.507f1f77bcf86cd799439011");
-        assertThat(result.get(0).getOrigin().getCountryCode()).isEqualTo("GB");
-        assertThat(result.get(0).getCommodity()).isEqualTo("Live cattle");
-        verify(notificationRepository, times(1)).findAll();
-    }
-
-    @Test
-    void findAll_shouldReturnMultipleNotifications() {
-        // Given
-        Origin origin1 = new Origin("GB", "true", "REF-001");
-        Notification notification1 = new Notification();
-        notification1.setId("507f1f77bcf86cd799439011");
-        notification1.setReferenceNumber("DRAFT.IMP.2026.507f1f77bcf86cd799439011");
-        notification1.setOrigin(origin1);
-        notification1.setCommodity("Live cattle");
-
-        Origin origin2 = new Origin("FR", "false", "REF-002");
-        Notification notification2 = new Notification();
-        notification2.setId("507f1f77bcf86cd799439012");
-        notification2.setReferenceNumber("DRAFT.IMP.2026.507f1f77bcf86cd799439012");
-        notification2.setOrigin(origin2);
-        notification2.setCommodity("Live sheep");
-
-        Origin origin3 = new Origin("IE", "true", "REF-003");
-        Notification notification3 = new Notification();
-        notification3.setId("507f1f77bcf86cd799439013");
-        notification3.setReferenceNumber("DRAFT.IMP.2026.507f1f77bcf86cd799439013");
-        notification3.setOrigin(origin3);
-        notification3.setCommodity("Live pigs");
-
-        List<Notification> notifications = Arrays.asList(notification1, notification2, notification3);
-        when(notificationRepository.findAll()).thenReturn(notifications);
-
-        // When
-        List<Notification> result = notificationService.findAll();
-
-        // Then
-        assertThat(result).isNotNull();
-        assertThat(result).hasSize(3);
-        assertThat(result.get(0).getOrigin().getCountryCode()).isEqualTo("GB");
-        assertThat(result.get(1).getOrigin().getCountryCode()).isEqualTo("FR");
-        assertThat(result.get(2).getOrigin().getCountryCode()).isEqualTo("IE");
-        assertThat(result).extracting(Notification::getCommodity)
-            .containsExactly("Live cattle", "Live sheep", "Live pigs");
         verify(notificationRepository, times(1)).findAll();
     }
 
