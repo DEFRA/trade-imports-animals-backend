@@ -7,13 +7,17 @@ import com.mongodb.WriteConcern;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.connection.ConnectionPoolSettings;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import javax.net.ssl.SSLContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.mongodb.config.EnableMongoAuditing;
-import javax.net.ssl.SSLContext;
-import java.util.concurrent.TimeUnit;
+import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.FileStatusReadConverter;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.FileStatusWriteConverter;
 import uk.gov.defra.trade.imports.animals.configuration.tls.TrustStoreConfiguration;
 
 /**
@@ -77,5 +81,16 @@ public class MongoConfig {
   MongoClient mongoClient(MongoClientSettings mongoClientSettings) {
       log.info("Creating MongoDB client");
     return MongoClients.create(mongoClientSettings);
+  }
+
+  /**
+   * Registers custom MongoDB converters so that {@link
+   * uk.gov.defra.trade.imports.animals.accompanyingdocument.FileStatus} is stored and retrieved as
+   * a lowercase string ("complete" / "rejected"), matching the values sent by cdp-uploader.
+   */
+  @Bean
+  MongoCustomConversions mongoCustomConversions() {
+    return new MongoCustomConversions(
+        List.of(new FileStatusWriteConverter(), new FileStatusReadConverter()));
   }
 }
