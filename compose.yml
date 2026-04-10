@@ -58,6 +58,32 @@ services:
     networks:
       - trade-imports-tenant
       
+  cdp-uploader:
+    image: defradigital/cdp-uploader:latest
+    container_name: cdp-uploader
+    profiles: ['infra', 'services']
+    ports:
+      - '7337:7337'
+    depends_on:
+      localstack:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 7337
+      NODE_ENV: development
+      REDIS_HOST: redis
+      USE_SINGLE_INSTANCE_CACHE: true
+      MOCK_VIRUS_SCAN_ENABLED: true
+      MOCK_VIRUS_RESULT_DELAY: 3
+      SQS_ENDPOINT: http://localstack:4566
+      S3_ENDPOINT: http://localstack:4566
+      AWS_REGION: eu-west-2
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    networks:
+      - trade-imports-tenant
+
   trade-imports-animals-backend:
     container_name: trade-imports-animals-backend
     profiles: [ 'services' ]

@@ -1,0 +1,18 @@
+{
+  "uploadStatus": "ready",
+  "metadata": {
+    "reference": "DRAFT.IMP.2025.TEST"
+  },
+  "form": {
+    "file": {
+      "fileId": "c1ec2432-54ed-4153-bd6f-d69a35f598f4",
+      "filename": "test.pdf",
+      "contentType": "application/pdf",
+      "fileStatus": "complete",
+      "contentLength": 22,
+      "checksumSha256": "/SxqL+N296KUYPUFOkjpBtHEck5oMdfvh/HDZDEetbA=",
+      "detectedContentType": "application/pdf",
+      "s3Key": "44f1a20e-0a27-4d61-9aa7-7afa7fb82d85/c1ec2432-54ed-4153-bd6f-d69a35f598f4"
+    }
+  }
+}

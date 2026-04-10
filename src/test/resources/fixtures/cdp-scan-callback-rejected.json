@@ -1,0 +1,18 @@
+{
+  "uploadStatus": "ready",
+  "metadata": {
+    "reference": "DRAFT.IMP.2025.TEST"
+  },
+  "form": {
+    "file": {
+      "fileId": "c1ec2432-54ed-4153-bd6f-d69a35f598f4",
+      "filename": "eicar.pdf",
+      "contentType": "application/pdf",
+      "fileStatus": "rejected",
+      "contentLength": 68,
+      "checksumSha256": "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f",
+      "detectedContentType": "application/pdf",
+      "s3Key": null
+    }
+  }
+}

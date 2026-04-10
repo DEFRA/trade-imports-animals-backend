@@ -5,6 +5,9 @@ server:
 spring:
   application:
     name: trade-imports-animals-backend
+  threads:
+    virtual:
+      enabled: true
   data:
     mongodb:
       uri: ${MONGO_URI:mongodb://localhost:27017/}
@@ -99,6 +102,11 @@ management:
 # Admin secret for privileged endpoints
 admin:
   secret: ${TRADE_IMPORTS_ANIMALS_ADMIN_SECRET:local-trade-imports-animals-admin-secret}
+
+# SpringDoc / Swagger UI — disabled in deployed environments
+springdoc:
+  swagger-ui:
+    enabled: false
 
 # Application info (exposed via /info endpoint)
 info:
