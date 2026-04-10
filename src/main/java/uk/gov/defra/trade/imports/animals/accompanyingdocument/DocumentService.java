@@ -210,11 +210,16 @@ public class DocumentService {
    */
   public UploadedFile findFile(String uploadId, String fileId) {
     AccompanyingDocument document = findByUploadId(uploadId);
-    return document.getFiles().stream()
+    UploadedFile file = document.getFiles().stream()
         .filter(f -> fileId.equals(f.fileId()))
         .findFirst()
         .orElseThrow(
             () -> new NotFoundException(
                 "No file found with fileId: " + fileId + " in uploadId: " + uploadId));
+    if (file.s3Key() == null) {
+      throw new NotFoundException(
+          "File with fileId: " + fileId + " was rejected and is not available for download");
+    }
+    return file;
   }
 }
