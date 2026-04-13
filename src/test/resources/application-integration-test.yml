@@ -70,6 +70,11 @@ management:
   health:
     mongo:
       enabled: false
+  # Disable the EMF metrics publisher — no CloudWatch agent is available in tests
+  # and AWS_EMF_NAMESPACE resolves to blank in local dev, causing
+  # InvalidNamespaceException on every scheduler tick.
+  metrics:
+    enabled: false
 
 # Admin secret for privileged endpoints
 admin:
