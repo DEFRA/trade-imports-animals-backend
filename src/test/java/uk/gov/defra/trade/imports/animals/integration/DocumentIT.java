@@ -103,11 +103,12 @@ class DocumentIT extends IntegrationBase {
     // ---------------------------------------------------------------------------
     // @SuppressWarnings("resource"): GenericContainer is Closeable, but this is an intentionally
     // long-lived static container — lifecycle is managed by Testcontainers' Ryuk reaper.
-    // TODO: pin defradigital/cdp-uploader to a specific version tag (not :latest) so that
-    //       CI cannot silently pull a different image version and break the test suite.
+    // TODO: replace CDP_UPLOADER_IMAGE with a pinned digest/tag once a stable release is tagged.
+    private static final String CDP_UPLOADER_IMAGE = "defradigital/cdp-uploader:latest";
+
     @SuppressWarnings("resource")
     static final GenericContainer<?> CDP_UPLOADER_CONTAINER =
-        new GenericContainer<>(DockerImageName.parse("defradigital/cdp-uploader:latest"))
+        new GenericContainer<>(DockerImageName.parse(CDP_UPLOADER_IMAGE))
             .withExposedPorts(3000)
             .withNetwork(CONTAINER_NETWORK)
             .withNetworkAliases("cdp-uploader")
@@ -386,7 +387,6 @@ class DocumentIT extends IntegrationBase {
         assertThat(dto.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
         assertThat(dto.scanStatus()).isEqualTo(ScanStatus.PENDING);
         assertThat(dto.id()).isNotNull();
-        assertThat(dto.version()).isNotNull();
         assertThat(dto.created()).isNotNull();
     }
 

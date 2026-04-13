@@ -52,7 +52,7 @@ public class RequestTracingFilter implements Filter {
             MDC.put(MDC_HTTP_METHOD, httpRequest.getMethod());
             MDC.put(MDC_URL_FULL, httpRequest.getRequestURL().toString());
 
-            log.info("{} {}", httpRequest.getMethod(), httpRequest.getRequestURL());
+            log.debug("{} {}", httpRequest.getMethod(), httpRequest.getRequestURL());
 
             // Execute filter chain
             chain.doFilter(request, response);

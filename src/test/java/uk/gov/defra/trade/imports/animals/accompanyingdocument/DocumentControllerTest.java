@@ -49,7 +49,7 @@ class DocumentControllerTest {
   void post_shouldReturn201WithLocationHeader() throws Exception {
     // Given
     String ref = "DRAFT.IMP.2026.00000001";
-    DocumentUploadRequest request = new DocumentUploadRequest("ITAHC", "UK/GB/2026/001", LocalDate.of(2026, 1, 15));
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15));
     DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "https://cdp-uploader.example/upload/abc");
 
     when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class), any(String.class)))
@@ -62,9 +62,6 @@ class DocumentControllerTest {
         // Then
         .andExpect(status().isCreated())
         .andExpect(header().string("Location", "/document-uploads/upload-abc-123"))
-        .andExpect(header().exists("Location"))
-        .andExpect(header().string("Location",
-            org.hamcrest.Matchers.matchesPattern("/document-uploads/[a-zA-Z0-9-]+")))
         .andExpect(jsonPath("$.uploadId").value("upload-abc-123"))
         .andExpect(jsonPath("$.uploadUrl").value("https://cdp-uploader.example/upload/abc"))
         .andReturn();

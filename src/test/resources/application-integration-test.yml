@@ -30,6 +30,8 @@ cdp:
     header-name: ${TRACING_HEADER:x-cdp-request-id}
   proxy:
     url: ${HTTP_PROXY:}
+  frontend:
+    base-url: ${CDP_FRONTEND_BASE_URL:http://localhost:3000}
 
 # AWS configuration
 aws:

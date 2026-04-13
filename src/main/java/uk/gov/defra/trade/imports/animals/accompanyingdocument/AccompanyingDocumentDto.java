@@ -10,7 +10,6 @@ import java.util.List;
  */
 public record AccompanyingDocumentDto(
     String id,
-    Long version,
     String notificationReferenceNumber,
     String uploadId,
     DocumentType documentType,
@@ -31,7 +30,6 @@ public record AccompanyingDocumentDto(
   public static AccompanyingDocumentDto from(AccompanyingDocument entity) {
     return new AccompanyingDocumentDto(
         entity.getId(),
-        entity.getVersion(),
         entity.getNotificationReferenceNumber(),
         entity.getUploadId(),
         entity.getDocumentType(),

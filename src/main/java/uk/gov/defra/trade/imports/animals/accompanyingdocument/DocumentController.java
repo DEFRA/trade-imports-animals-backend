@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -58,15 +59,13 @@ public class DocumentController {
   @Timed("document.initiate")
   public ResponseEntity<DocumentUploadResponse> initiate(
       @PathVariable String ref,
-      @RequestBody DocumentUploadRequest request) {
+      @Valid @RequestBody DocumentUploadRequest request) {
 
     log.info("POST /notifications/{}/document-uploads", ref);
 
     // The redirectUrl is where the user's browser is sent after the file upload form is submitted.
-    // The frontend will supply this in a future iteration once the upload page is built.
-    // cdp-uploader validates that this field is a non-empty URI; use the uploader's own base URL
-    // as a syntactically valid placeholder that is always configured.
-    String redirectUrl = "http://localhost";
+    // TODO: the frontend will supply this per-request once the upload page is built (EUDPA-35).
+    String redirectUrl = cdpConfig.frontend().baseUrl();
     DocumentUploadResponse response = documentService.initiate(ref, request, redirectUrl);
 
     URI location = URI.create("/document-uploads/" + response.uploadId());
@@ -127,6 +126,8 @@ public class DocumentController {
    * @param payload  the scan result payload
    * @return 204 No Content
    */
+  // TODO: protect this endpoint with a shared secret or HMAC once cdp-uploader supports
+  //       callback authentication — currently any caller can spoof a scan result (EUDPA-35).
   @PostMapping("/document-uploads/{upload-id}/scan-results")
   @Operation(
       summary = "Handle scan result",
@@ -167,6 +168,11 @@ public class DocumentController {
     log.info("GET /document-uploads/{}/files/{}", uploadId, fileId);
     UploadedFile file = documentService.findFile(uploadId, fileId);
 
+    // Known limitation: if S3 throws mid-stream after response headers are committed,
+    // the client receives a 200 with a truncated body and no error indication.
+    // This is inherent to StreamingResponseBody — response headers are sent before the body writes.
+    // The test downloadFile_s3ObjectMissing_shouldReturn500 covers the pre-write failure case
+    // (NoSuchKey throws before any bytes are written, so the 500 is correctly returned).
     Map<String, String> mdcContext = MDC.getCopyOfContextMap();
     StreamingResponseBody body = outputStream -> {
       if (mdcContext != null) {

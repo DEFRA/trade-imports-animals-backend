@@ -43,10 +43,11 @@ class EcsLoggingIT extends IntegrationBase {
 
     @Test
     void requestLogging_shouldProduceEcsJsonFormat() throws Exception {
-        // Make a request with CDP trace ID header
-        mockMvc.perform(get("/actuator/info")
+        // Make a request with CDP trace ID header — use an app endpoint so the controller's
+        // own INFO log carries the MDC fields we assert on.
+        mockMvc.perform(get("/document-uploads/ecs-logging-test-id")
                         .header("x-cdp-request-id", "test-trace-123"))
-                .andExpect(status().isNotFound()); // info endpoint not exposed in prod
+                .andExpect(status().isNotFound());
 
         // Capture and parse log output
         String logOutput = outputStreamCaptor.toString(StandardCharsets.UTF_8);
@@ -108,7 +109,7 @@ class EcsLoggingIT extends IntegrationBase {
         outputStreamCaptor.reset();
 
         // Make request WITHOUT x-cdp-request-id header
-        mockMvc.perform(get("/actuator/info"))
+        mockMvc.perform(get("/document-uploads/ecs-logging-test-id"))
                 .andExpect(status().isNotFound());
 
         String logOutput = outputStreamCaptor.toString(StandardCharsets.UTF_8);

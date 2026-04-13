@@ -43,6 +43,8 @@ cdp:
     mime-types: ${CDP_UPLOADER_MIME_TYPES:application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,application/vnd.ms-excel}
   backend:
     base-url: ${CDP_BACKEND_BASE_URL:http://localhost:8085}
+  frontend:
+    base-url: ${CDP_FRONTEND_BASE_URL:http://localhost:3000}
   s3:
     documents-bucket: ${CDP_DOCUMENTS_BUCKET:trade-imports-animals-documents}
 

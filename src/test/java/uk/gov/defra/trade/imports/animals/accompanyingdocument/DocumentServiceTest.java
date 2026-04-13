@@ -61,7 +61,7 @@ class DocumentServiceTest {
     String redirectUrl = "https://frontend.example.com/documents";
 
     DocumentUploadRequest request = new DocumentUploadRequest(
-        "ITAHC", "UK/GB/2026/001", LocalDate.of(2026, 1, 15));
+        DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15));
 
     when(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef))
         .thenReturn(Collections.emptyList());
@@ -101,7 +101,7 @@ class DocumentServiceTest {
     String notificationRef = "DRAFT.IMP.2026.abc123";
     String redirectUrl = "https://frontend.example.com/documents";
 
-    DocumentUploadRequest request = new DocumentUploadRequest("ITAHC", "UK/GB/2026/001", null);
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", null);
 
     AccompanyingDocument existingPending = AccompanyingDocument.builder()
         .uploadId("existing-upload-id")
@@ -147,40 +147,6 @@ class DocumentServiceTest {
     verify(accompanyingDocumentRepository, never()).save(any());
   }
 
-  // ─── initiate — invalid DocumentType ─────────────────────────────────────
-
-  @Test
-  void initiate_shouldThrowIllegalArgumentException_whenDocumentTypeIsInvalid() {
-    // Given
-    String notificationRef = "DRAFT.IMP.2026.invalid-type";
-    String redirectUrl = "";
-
-    DocumentUploadRequest request = new DocumentUploadRequest(
-        "INVALID_TYPE", "UK/GB/2026/001", null);
-
-    when(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef))
-        .thenReturn(Collections.emptyList());
-
-    when(cdpConfig.uploader()).thenReturn(uploaderConfig);
-    when(cdpConfig.backend()).thenReturn(backendConfig);
-    when(cdpConfig.s3()).thenReturn(s3Config);
-    when(uploaderConfig.maxFileSize()).thenReturn(20971520L);
-    when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
-    when(backendConfig.baseUrl()).thenReturn("http://backend");
-    when(s3Config.documentsBucket()).thenReturn("documents-bucket");
-
-    CdpUploaderInitiateResponse uploaderResponse =
-        new CdpUploaderInitiateResponse("upload-id-invalid-type",
-            "https://cdp-uploader/form/upload-id-invalid-type",
-            "https://cdp-uploader/status/upload-id-invalid-type");
-    when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
-        .thenReturn(uploaderResponse);
-
-    // When / Then — DocumentType.valueOf("INVALID_TYPE") throws IllegalArgumentException
-    assertThatThrownBy(() -> documentService.initiate(notificationRef, request, redirectUrl))
-        .isInstanceOf(IllegalArgumentException.class);
-  }
-
   // ─── initiate — DuplicateKeyException → IllegalStateException ────────────
 
   @Test
@@ -189,7 +155,7 @@ class DocumentServiceTest {
     String notificationRef = "DRAFT.IMP.2026.concurrent";
     String redirectUrl = "";
 
-    DocumentUploadRequest request = new DocumentUploadRequest("ITAHC", "UK/GB/2026/001", null);
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", null);
 
     when(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef))
         .thenReturn(Collections.emptyList());

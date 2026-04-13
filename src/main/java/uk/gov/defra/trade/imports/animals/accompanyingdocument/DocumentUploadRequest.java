@@ -9,7 +9,7 @@ import java.time.LocalDate;
 @Schema(description = "Request to initiate an accompanying document upload")
 public record DocumentUploadRequest(
     @Schema(description = "Type of accompanying document", example = "ITAHC")
-    String documentType,
+    DocumentType documentType,
 
     @Schema(description = "Reference number printed on the document", example = "UK/GB/2026/001234")
     String documentReference,
