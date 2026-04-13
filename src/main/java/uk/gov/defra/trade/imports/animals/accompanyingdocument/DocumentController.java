@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ContentDisposition;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
+import org.slf4j.MDC;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 
@@ -165,8 +167,17 @@ public class DocumentController {
     log.info("GET /document-uploads/{}/files/{}", uploadId, fileId);
     UploadedFile file = documentService.findFile(uploadId, fileId);
 
-    StreamingResponseBody body =
-        outputStream -> s3DocumentService.streamToOutput(file.s3Key(), outputStream);
+    Map<String, String> mdcContext = MDC.getCopyOfContextMap();
+    StreamingResponseBody body = outputStream -> {
+      if (mdcContext != null) {
+        MDC.setContextMap(mdcContext);
+      }
+      try {
+        s3DocumentService.streamToOutput(file.s3Key(), outputStream);
+      } finally {
+        MDC.clear();
+      }
+    };
 
     MediaType contentType;
     try {

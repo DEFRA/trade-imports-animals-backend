@@ -3,7 +3,9 @@ package uk.gov.defra.trade.imports.animals.exceptions;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -35,7 +37,7 @@ public class GlobalExceptionHandler {
      * Handle validation errors (400 Bad Request).
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ProblemDetail handleValidationException(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ProblemDetail> handleValidationException(MethodArgumentNotValidException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.warn("Validation error (trace: {}): {}", traceId, ex.getMessage());
 
@@ -47,26 +49,26 @@ public class GlobalExceptionHandler {
         problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
         problemDetail.setTitle("Validation Error");
 
-        // Add trace ID for log correlation
         if (traceId != null) {
             problemDetail.setProperty("traceId", traceId);
         }
 
-        // Add field-level validation errors
         Map<String, String> errors = new HashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             errors.put(error.getField(), error.getDefaultMessage());
         }
         problemDetail.setProperty("errors", errors);
 
-        return problemDetail;
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
     }
 
     /**
      * Handle not found errors (404 Not Found).
      */
     @ExceptionHandler(NotFoundException.class)
-    public ProblemDetail handleNotFoundException(NotFoundException ex) {
+    public ResponseEntity<ProblemDetail> handleNotFoundException(NotFoundException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.warn("Resource not found (trace: {}): {}", traceId, ex.getMessage());
 
@@ -82,14 +84,16 @@ public class GlobalExceptionHandler {
             problemDetail.setProperty("traceId", traceId);
         }
 
-        return problemDetail;
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
     }
 
     /**
      * Handle conflict errors (409 Conflict).
      */
     @ExceptionHandler(ConflictException.class)
-    public ProblemDetail handleConflictException(ConflictException ex) {
+    public ResponseEntity<ProblemDetail> handleConflictException(ConflictException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.warn("Resource conflict (trace: {}): {}", traceId, ex.getMessage());
 
@@ -105,7 +109,9 @@ public class GlobalExceptionHandler {
             problemDetail.setProperty("traceId", traceId);
         }
 
-        return problemDetail;
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
     }
 
     /**
@@ -121,7 +127,7 @@ public class GlobalExceptionHandler {
         IllegalStateException.class,
         IllegalArgumentException.class
     })
-    public ProblemDetail handleException(Exception ex) {
+    public ResponseEntity<ProblemDetail> handleException(Exception ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.error("Unexpected error (trace: {}): {}", traceId, ex.getMessage(), ex);
 
@@ -137,6 +143,8 @@ public class GlobalExceptionHandler {
             problemDetail.setProperty("traceId", traceId);
         }
 
-        return problemDetail;
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
     }
 }

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.util.List;
@@ -11,10 +13,13 @@ import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -23,15 +28,23 @@ class GlobalExceptionHandlerTest {
 
     private GlobalExceptionHandler exceptionHandler;
 
+    // The handler logs WARN/ERROR for every exception it handles — that's correct production
+    // behaviour. In this unit test we only care about return values, so silence the logger to
+    // avoid flooding the test output with expected error logs.
+    private static final Logger HANDLER_LOGGER =
+        (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @BeforeEach
     void setUp() {
         exceptionHandler = new GlobalExceptionHandler();
         MDC.clear();
+        HANDLER_LOGGER.setLevel(Level.OFF);
     }
 
     @AfterEach
     void tearDown() {
         MDC.clear();
+        HANDLER_LOGGER.setLevel(null); // restore — inherit from root
     }
 
     @Test
@@ -46,9 +59,12 @@ class GlobalExceptionHandlerTest {
         );
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleValidationException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleValidationException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Validation Error");
@@ -72,12 +88,12 @@ class GlobalExceptionHandlerTest {
         );
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleValidationException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleValidationException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-        // When traceId is null, the property is never set, so properties may be null or not contain traceId
         Map<String, Object> properties = problemDetail.getProperties();
         if (properties != null) {
             assertThat(properties).doesNotContainKey("traceId");
@@ -92,9 +108,11 @@ class GlobalExceptionHandlerTest {
         NotFoundException exception = new NotFoundException("Notification with id 12345 not found");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleNotFoundException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleNotFoundException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Resource Not Found");
@@ -110,12 +128,12 @@ class GlobalExceptionHandlerTest {
         NotFoundException exception = new NotFoundException("Resource not found");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleNotFoundException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleNotFoundException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
-        // When traceId is null, the property is never set, so properties may be null or not contain traceId
         Map<String, Object> properties = problemDetail.getProperties();
         if (properties != null) {
             assertThat(properties).doesNotContainKey("traceId");
@@ -130,9 +148,11 @@ class GlobalExceptionHandlerTest {
         ConflictException exception = new ConflictException("Notification with reference DRAFT.IMP.2026.001 already exists");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleConflictException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleConflictException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Resource Conflict");
@@ -148,12 +168,12 @@ class GlobalExceptionHandlerTest {
         ConflictException exception = new ConflictException("Resource conflict");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleConflictException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleConflictException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
-        // When traceId is null, the property is never set, so properties may be null or not contain traceId
         Map<String, Object> properties = problemDetail.getProperties();
         if (properties != null) {
             assertThat(properties).doesNotContainKey("traceId");
@@ -168,9 +188,11 @@ class GlobalExceptionHandlerTest {
         RuntimeException exception = new RuntimeException("Unexpected database error");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Internal Server Error");
@@ -186,7 +208,8 @@ class GlobalExceptionHandlerTest {
         IllegalStateException exception = new IllegalStateException("Invalid state");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
         assertThat(problemDetail).isNotNull();
@@ -199,7 +222,8 @@ class GlobalExceptionHandlerTest {
         IllegalArgumentException exception = new IllegalArgumentException("Invalid argument");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
         assertThat(problemDetail).isNotNull();
@@ -212,12 +236,12 @@ class GlobalExceptionHandlerTest {
         RuntimeException exception = new RuntimeException("Error");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
-        // When traceId is null, the property is never set, so properties may be null or not contain traceId
         Map<String, Object> properties = problemDetail.getProperties();
         if (properties != null) {
             assertThat(properties).doesNotContainKey("traceId");
