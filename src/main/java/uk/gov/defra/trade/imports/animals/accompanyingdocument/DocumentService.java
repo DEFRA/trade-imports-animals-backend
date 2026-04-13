@@ -54,9 +54,7 @@ public class DocumentService {
           "Returning existing PENDING upload {} for notification {}",
           doc.getUploadId(),
           notificationRef);
-      // uploadUrl is not stored on the entity; return null to signal the caller should re-initiate
-      // if they need the URL. Controllers must handle this case.
-      return new DocumentUploadResponse(doc.getUploadId(), null);
+      return new DocumentUploadResponse(doc.getUploadId(), doc.getUploadUrl());
     }
 
     // Build callback URL from backend base URL
@@ -68,7 +66,7 @@ public class DocumentService {
 
     Map<String, String> metadata = Map.of(
         "notificationReferenceNumber", notificationRef,
-        "documentType", request.documentType() != null ? request.documentType() : "",
+        "documentType", request.documentType() != null ? request.documentType().name() : "",
         "documentReference", request.documentReference() != null ? request.documentReference() : "");
 
     // The callback URL is POSTed to by cdp-uploader after scanning completes.
@@ -100,15 +98,11 @@ public class DocumentService {
         ? request.dateOfIssue().atStartOfDay(ZoneOffset.UTC).toInstant()
         : null;
 
-    DocumentType documentType = null;
-    if (request.documentType() != null && !request.documentType().isBlank()) {
-      documentType = DocumentType.valueOf(request.documentType());
-    }
-
     AccompanyingDocument document = AccompanyingDocument.builder()
         .notificationReferenceNumber(notificationRef)
         .uploadId(response.uploadId())
-        .documentType(documentType)
+        .uploadUrl(response.uploadUrl())
+        .documentType(request.documentType())
         .documentReference(request.documentReference())
         .dateOfIssue(dateOfIssueInstant)
         .scanStatus(ScanStatus.PENDING)
@@ -145,24 +139,28 @@ public class DocumentService {
     AccompanyingDocument document = findByUploadId(uploadId);
 
     List<UploadedFile> uploadedFiles = new ArrayList<>();
-    for (Map.Entry<String, CdpScanResultFile> entry : payload.form().getFiles().entrySet()) {
-      CdpScanResultFile f = entry.getValue();
-      uploadedFiles.add(new UploadedFile(
-          f.fileId(),
-          f.filename(),
-          f.contentType(),
-          f.contentLength(),
-          f.s3Key(),
-          f.s3Bucket(),
-          f.fileStatus(),
-          f.checksumSha256(),
-          f.detectedContentType(),
-          f.hasError(),
-          f.errorMessage()));
+    if (payload.form() != null) {
+      for (Map.Entry<String, CdpScanResultFile> entry : payload.form().getFiles().entrySet()) {
+        CdpScanResultFile f = entry.getValue();
+        uploadedFiles.add(new UploadedFile(
+            f.fileId(),
+            f.filename(),
+            f.contentType(),
+            f.contentLength(),
+            f.s3Key(),
+            f.s3Bucket(),
+            f.fileStatus(),
+            f.checksumSha256(),
+            f.detectedContentType(),
+            f.hasError(),
+            f.errorMessage()));
+      }
     }
 
     document.setFiles(uploadedFiles);
 
+    // Fail-closed: treat missing or non-zero rejected count as REJECTED to avoid
+    // silently accepting a file when cdp-uploader omits the field.
     ScanStatus scanStatus = (payload.numberOfRejectedFiles() != null
         && payload.numberOfRejectedFiles() == 0)
         ? ScanStatus.COMPLETE

@@ -59,6 +59,7 @@ services:
       - trade-imports-tenant
       
   cdp-uploader:
+    # TODO: pin to a specific digest/tag once a stable release is tagged (currently :latest)
     image: defradigital/cdp-uploader:latest
     container_name: cdp-uploader
     profiles: ['infra', 'services']

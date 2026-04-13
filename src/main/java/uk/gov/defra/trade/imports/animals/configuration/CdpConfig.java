@@ -19,11 +19,14 @@ public record CdpConfig(
     String proxyUrl,
     UploaderConfig uploader,
     BackendConfig backend,
+    FrontendConfig frontend,
     S3Config s3) {
 
   public record UploaderConfig(String baseUrl, Long maxFileSize, List<String> mimeTypes) {}
 
   public record BackendConfig(String baseUrl) {}
+
+  public record FrontendConfig(String baseUrl) {}
 
   public record S3Config(String documentsBucket) {}
 
