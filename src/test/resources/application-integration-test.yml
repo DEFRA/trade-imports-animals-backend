@@ -49,7 +49,7 @@ logging:
     uk.gov.defra.trade.imports.animals: ${LOG_LEVEL:INFO}
     uk.gov.defra.trade.imports.animals.common.metrics: ${LOGGING_LEVEL_UK_GOV_DEFRA_CDP_TRADE_DEMO_COMMON_METRICS:INFO}
     org.springframework: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK:INFO}
-    org.springframework.web: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB:DEBUG}
+    org.springframework.web: INFO
     org.mongodb.driver: ${LOGGING_LEVEL_ORG_MONGODB_DRIVER:WARN}
 
 # Actuator endpoints
