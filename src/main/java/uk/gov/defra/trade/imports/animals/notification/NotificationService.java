@@ -89,6 +89,8 @@ public class NotificationService {
     private void setNotificationDetails(NotificationDto dto, Notification notification) {
         notification.setOrigin(dto.getOrigin());
         notification.setCommodity(dto.getCommodity());
+        notification.setReasonForImport(dto.getReasonForImport());
+        notification.setAdditionalDetails(dto.getAdditionalDetails());
         notification.setUpdated(LocalDateTime.now());
     }
 
