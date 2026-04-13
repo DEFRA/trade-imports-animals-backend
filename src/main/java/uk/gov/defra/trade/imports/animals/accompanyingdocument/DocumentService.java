@@ -71,17 +71,13 @@ public class DocumentService {
         "documentType", request.documentType() != null ? request.documentType() : "",
         "documentReference", request.documentReference() != null ? request.documentReference() : "");
 
-    // We need the uploadId to build the callback URL. cdp-uploader assigns the uploadId, so we
-    // provide a callback template. The cdp-uploader will call us at this path with the uploadId
-    // it generated. Typical pattern: POST /document-uploads/{uploadId}/scan-results.
-    // Since we don't know the uploadId before calling /initiate, we pass a callback base URL and
-    // the uploader appends the uploadId, OR we use a fixed path and the uploadId is in the body.
-    // Based on the todo spec the callback URL format is:
-    //   https://backend.{env}.cdp-int.defra.cloud/document-uploads/{uploadId}/scan-results
-    // cdp-uploader provides the uploadId; we must call /initiate without the uploadId in the
-    // callback, then the uploader substitutes it. We pass {uploadId} as a literal placeholder and
-    // cdp-uploader replaces it.
-    String callbackUrl = callbackBase + "/document-uploads/{uploadId}/scan-results";
+    // The callback URL is POSTed to by cdp-uploader after scanning completes.
+    // cdp-uploader validates the callback as a valid URI and posts to it verbatim — it does NOT
+    // perform any template substitution. Because cdp-uploader assigns the uploadId and we need it
+    // in the callback path, we call /initiate with a "pending" placeholder in the URL, then
+    // immediately replace the placeholder with the real uploadId returned in the /initiate response.
+    // The resolved URL is used for all downstream correlation.
+    String callbackUrl = callbackBase + "/document-uploads/pending/scan-results";
 
     CdpUploaderInitiateRequest initiateRequest = new CdpUploaderInitiateRequest(
         redirectUrl,
