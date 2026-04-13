@@ -3,7 +3,7 @@ package uk.gov.defra.trade.imports.animals.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,6 +18,7 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.containers.localstack.LocalStackContainer.Service;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -86,16 +87,24 @@ class DocumentIT extends IntegrationBase {
     // ---------------------------------------------------------------------------
     // Redis Testcontainer — required by cdp-uploader for session state
     // ---------------------------------------------------------------------------
+    // @SuppressWarnings("resource"): GenericContainer is Closeable, but this is an intentionally
+    // long-lived static container — lifecycle is managed by Testcontainers' Ryuk reaper.
     @SuppressWarnings("resource")
     static final GenericContainer<?> REDIS_CONTAINER =
         new GenericContainer<>(DockerImageName.parse("redis:7.2.3-alpine3.18"))
             .withExposedPorts(6379)
             .withNetwork(CONTAINER_NETWORK)
-            .withNetworkAliases("redis");
+            .withNetworkAliases("redis")
+            .waitingFor(Wait.forLogMessage(".*Ready to accept connections.*\\n", 1)
+                .withStartupTimeout(Duration.ofSeconds(30)));
 
     // ---------------------------------------------------------------------------
     // Real cdp-uploader Testcontainer
     // ---------------------------------------------------------------------------
+    // @SuppressWarnings("resource"): GenericContainer is Closeable, but this is an intentionally
+    // long-lived static container — lifecycle is managed by Testcontainers' Ryuk reaper.
+    // TODO: pin defradigital/cdp-uploader to a specific version tag (not :latest) so that
+    //       CI cannot silently pull a different image version and break the test suite.
     @SuppressWarnings("resource")
     static final GenericContainer<?> CDP_UPLOADER_CONTAINER =
         new GenericContainer<>(DockerImageName.parse("defradigital/cdp-uploader:latest"))
@@ -112,7 +121,9 @@ class DocumentIT extends IntegrationBase {
             .withEnv("AWS_REGION", "eu-west-2")
             .withEnv("AWS_ACCESS_KEY_ID", "test")
             .withEnv("AWS_SECRET_ACCESS_KEY", "test")
-            .withEnv("CONSUMER_BUCKETS", "trade-imports-animals-documents,cdp-uploader-quarantine");
+            .withEnv("CONSUMER_BUCKETS", "trade-imports-animals-documents,cdp-uploader-quarantine")
+            .waitingFor(Wait.forHttp("/health").forPort(3000)
+                .withStartupTimeout(Duration.ofSeconds(60)));
 
     // S3 client wired to LocalStack for test setup (pre-creating buckets / uploading objects)
     private static S3Client localStackS3Client;
@@ -787,27 +798,4 @@ class DocumentIT extends IntegrationBase {
         return body.uploadId();
     }
 
-    /**
-     * Loads a classpath fixture file as a UTF-8 String.
-     */
-    private String loadFixtureAsString(String classpathResource) throws IOException {
-        try (var stream = getClass().getClassLoader().getResourceAsStream(classpathResource)) {
-            if (stream == null) {
-                throw new IllegalArgumentException("Fixture not found: " + classpathResource);
-            }
-            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        }
-    }
-
-    /**
-     * Loads a classpath fixture file as raw bytes.
-     */
-    private byte[] loadFixtureAsBytes(String classpathResource) throws IOException {
-        try (var stream = getClass().getClassLoader().getResourceAsStream(classpathResource)) {
-            if (stream == null) {
-                throw new IllegalArgumentException("Fixture not found: " + classpathResource);
-            }
-            return stream.readAllBytes();
-        }
-    }
 }

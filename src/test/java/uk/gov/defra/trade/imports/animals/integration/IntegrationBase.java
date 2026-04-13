@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
@@ -172,6 +173,30 @@ abstract class IntegrationBase {
                 : null;
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Loads a classpath fixture file as a UTF-8 String.
+     */
+    protected String loadFixtureAsString(String classpathResource) throws IOException {
+        try (var stream = getClass().getClassLoader().getResourceAsStream(classpathResource)) {
+            if (stream == null) {
+                throw new IllegalArgumentException("Fixture not found: " + classpathResource);
+            }
+            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
+
+    /**
+     * Loads a classpath fixture file as raw bytes.
+     */
+    protected byte[] loadFixtureAsBytes(String classpathResource) throws IOException {
+        try (var stream = getClass().getClassLoader().getResourceAsStream(classpathResource)) {
+            if (stream == null) {
+                throw new IllegalArgumentException("Fixture not found: " + classpathResource);
+            }
+            return stream.readAllBytes();
         }
     }
 }
