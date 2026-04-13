@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
@@ -26,6 +27,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 @WebMvcTest(NotificationController.class)
 @TestPropertySource(properties = "admin.secret=test-secret")
@@ -44,7 +46,7 @@ class NotificationControllerTest {
     void post_shouldCreateNotificationAndReturnReferenceNumber() throws Exception {
         // Given
         Origin origin = new Origin("GB", "true", "CUSTOMER-REF-123");
-        Species species = new Species("BOV", "Bovine", 5, null);
+        Species species = species();
         CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species));
         Commodity commodity = Commodity.builder()
             .name("Live bovine animals")
@@ -79,6 +81,10 @@ class NotificationControllerTest {
             .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
             .andExpect(jsonPath("$.commodity.commodityComplement[0].typeOfCommodity").value("LIVE"))
             .andExpect(jsonPath("$.commodity.commodityComplement[0].species[0].value").value("BOV"))
+            .andExpect(jsonPath("$.commodity.commodityComplement[0].species[0].earTag").value(
+                "UK01234567890"))
+            .andExpect(jsonPath("$.commodity.commodityComplement[0].species[0].passport").value(
+                "UK0123456700999"))
             .andExpect(jsonPath("$.reasonForImport").value("PERMANENT"));
     }
 
