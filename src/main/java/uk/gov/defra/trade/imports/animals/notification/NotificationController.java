@@ -43,6 +43,14 @@ public class NotificationController {
         return notificationService.findAll();
     }
 
+    @GetMapping("/reference-numbers")
+    @Operation(summary = "List notification reference numbers", description = "Returns all notification reference numbers without loading full documents")
+    @Timed("controller.getAllReferenceNumbers.time")
+    public List<String> findAllReferenceNumbers() {
+        log.debug("GET /notifications/reference-numbers - Fetching all reference numbers");
+        return notificationService.findAllReferenceNumbers();
+    }
+
     @DeleteMapping
     @Operation(summary = "Delete notifications", description = "Deletes notifications by reference numbers")
     @Timed("controller.deleteNotifications.time")

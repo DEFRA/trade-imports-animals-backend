@@ -260,4 +260,36 @@ class NotificationControllerTest {
 
         verify(notificationService, never()).deleteByReferenceNumbers(any(), any());
     }
+
+    @Test
+    void findAllReferenceNumbers_shouldReturnEmptyList() throws Exception {
+        // Given
+        when(notificationService.findAllReferenceNumbers()).thenReturn(Collections.emptyList());
+
+        // When & Then
+        mockMvc.perform(get("/notifications/reference-numbers")
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray())
+            .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
+    void findAllReferenceNumbers_shouldReturnListOfReferenceNumbers() throws Exception {
+        // Given
+        List<String> referenceNumbers = List.of(
+            "DRAFT.IMP.2026.abc123",
+            "DRAFT.IMP.2026.xyz456"
+        );
+        when(notificationService.findAllReferenceNumbers()).thenReturn(referenceNumbers);
+
+        // When & Then
+        mockMvc.perform(get("/notifications/reference-numbers")
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$").isArray())
+            .andExpect(jsonPath("$.length()").value(2))
+            .andExpect(jsonPath("$[0]").value("DRAFT.IMP.2026.abc123"))
+            .andExpect(jsonPath("$[1]").value("DRAFT.IMP.2026.xyz456"));
+    }
 }
