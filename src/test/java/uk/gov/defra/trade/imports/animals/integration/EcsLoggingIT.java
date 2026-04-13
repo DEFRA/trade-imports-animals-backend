@@ -45,9 +45,9 @@ class EcsLoggingIT extends IntegrationBase {
     void requestLogging_shouldProduceEcsJsonFormat() throws Exception {
         // Make a request with CDP trace ID header — use an app endpoint so the controller's
         // own INFO log carries the MDC fields we assert on.
-        mockMvc.perform(get("/document-uploads/ecs-logging-test-id")
+        mockMvc.perform(get("/notifications/LOGGING-TEST/document-uploads")
                         .header("x-cdp-request-id", "test-trace-123"))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isOk());
 
         // Capture and parse log output
         String logOutput = outputStreamCaptor.toString(StandardCharsets.UTF_8);
@@ -81,7 +81,7 @@ class EcsLoggingIT extends IntegrationBase {
         assertThat(logJson.get("http.request.method").asText()).isEqualTo("GET");
 
         assertThat(logJson.has("url.full")).isTrue();
-        assertThat(logJson.get("url.full").asText()).contains("/document-uploads/ecs-logging-test-id");
+        assertThat(logJson.get("url.full").asText()).contains("/notifications/LOGGING-TEST/document-uploads");
 
         // Verify service metadata
         assertThat(logJson.has("service.name")).isTrue();
@@ -109,8 +109,8 @@ class EcsLoggingIT extends IntegrationBase {
         outputStreamCaptor.reset();
 
         // Make request WITHOUT x-cdp-request-id header
-        mockMvc.perform(get("/document-uploads/ecs-logging-test-id"))
-                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/notifications/LOGGING-TEST/document-uploads"))
+                .andExpect(status().isOk());
 
         String logOutput = outputStreamCaptor.toString(StandardCharsets.UTF_8);
 
