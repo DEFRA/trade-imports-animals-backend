@@ -159,6 +159,35 @@ class NotificationServiceTest {
     }
 
     @Test
+    void findAllReferenceNumbers_shouldReturnEmptyList_whenNoNotificationsExist() {
+        // Given
+        when(notificationRepository.findAllProjectedBy()).thenReturn(Collections.emptyList());
+
+        // When
+        List<String> result = notificationService.findAllReferenceNumbers();
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result).isEmpty();
+        verify(notificationRepository, times(1)).findAllProjectedBy();
+    }
+
+    @Test
+    void findAllReferenceNumbers_shouldReturnReferenceNumbers_whenNotificationsExist() {
+        // Given
+        NotificationReferenceOnly ref1 = () -> "DRAFT.IMP.2026.abc123";
+        NotificationReferenceOnly ref2 = () -> "DRAFT.IMP.2026.xyz456";
+        when(notificationRepository.findAllProjectedBy()).thenReturn(List.of(ref1, ref2));
+
+        // When
+        List<String> result = notificationService.findAllReferenceNumbers();
+
+        // Then
+        assertThat(result).containsExactly("DRAFT.IMP.2026.abc123", "DRAFT.IMP.2026.xyz456");
+        verify(notificationRepository, times(1)).findAllProjectedBy();
+    }
+
+    @Test
     void deleteByReferenceNumbers_shouldDeleteAll_whenAllFound() {
         // Given
         String ref1 = "DRAFT.IMP.2026.111";

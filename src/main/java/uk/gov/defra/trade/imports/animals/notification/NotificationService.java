@@ -40,6 +40,14 @@ public class NotificationService {
         return notifications;
     }
 
+    public List<String> findAllReferenceNumbers() {
+        log.debug("Fetching all notification reference numbers");
+        return notificationRepository.findAllProjectedBy()
+            .stream()
+            .map(NotificationReferenceOnly::getReferenceNumber)
+            .toList();
+    }
+
     public void deleteByReferenceNumbers(List<String> referenceNumbers, HttpHeaders headers) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return;
