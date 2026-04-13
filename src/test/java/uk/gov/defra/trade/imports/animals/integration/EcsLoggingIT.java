@@ -81,7 +81,7 @@ class EcsLoggingIT extends IntegrationBase {
         assertThat(logJson.get("http.request.method").asText()).isEqualTo("GET");
 
         assertThat(logJson.has("url.full")).isTrue();
-        assertThat(logJson.get("url.full").asText()).contains("/actuator/info");
+        assertThat(logJson.get("url.full").asText()).contains("/document-uploads/ecs-logging-test-id");
 
         // Verify service metadata
         assertThat(logJson.has("service.name")).isTrue();
