@@ -1,11 +1,8 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockserver.model.HttpRequest.request;
-import static org.mockserver.model.HttpResponse.response;
 
 import java.io.IOException;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -13,11 +10,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.Network;
 import org.testcontainers.containers.localstack.LocalStackContainer;
 import org.testcontainers.containers.localstack.LocalStackContainer.Service;
 import org.testcontainers.lifecycle.Startables;
@@ -46,36 +44,89 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
  * <p>Infrastructure:
  * <ul>
  *   <li>MongoDB — real Testcontainer from {@link IntegrationBase}
- *   <li>cdp-uploader — stubbed via MockServer (from {@link IntegrationBase})
+ *   <li>cdp-uploader — real {@code defradigital/cdp-uploader} Testcontainer
+ *   <li>Redis — real Testcontainer (required by cdp-uploader)
  *   <li>S3 — LocalStack Testcontainer started in this class
  * </ul>
+ *
+ * <p>Scan callbacks are exercised by posting fixture payloads directly to the backend's
+ * {@code /document-uploads/{uploadId}/scan-results} endpoint; the tests do not wait for
+ * cdp-uploader to call back autonomously.
  */
 @Slf4j
 class DocumentIT extends IntegrationBase {
 
     // ---------------------------------------------------------------------------
-    // Constants matching the fixture files
+    // Constants — these match values embedded in the fixture JSON files.
+    // FILE_ID_FROM_FIXTURE and S3_KEY_FROM_FIXTURE come from cdp-scan-callback-complete.json
+    // and are independent of the uploadId assigned by cdp-uploader at initiation time.
     // ---------------------------------------------------------------------------
-    private static final String UPLOAD_ID_FROM_FIXTURE = "44f1a20e-0a27-4d61-9aa7-7afa7fb82d85";
     private static final String FILE_ID_FROM_FIXTURE = "c1ec2432-54ed-4153-bd6f-d69a35f598f4";
     private static final String S3_KEY_FROM_FIXTURE =
-        UPLOAD_ID_FROM_FIXTURE + "/" + FILE_ID_FROM_FIXTURE;
+        "44f1a20e-0a27-4d61-9aa7-7afa7fb82d85/" + FILE_ID_FROM_FIXTURE;
 
     private static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
     private static final String NOTIFICATION_REF = "DRAFT.IMP.2025.IT001";
+
+    // ---------------------------------------------------------------------------
+    // Shared Docker network — allows cdp-uploader to reach Redis and LocalStack
+    // using stable container-alias hostnames.
+    // ---------------------------------------------------------------------------
+    static final Network CONTAINER_NETWORK = Network.newNetwork();
 
     // ---------------------------------------------------------------------------
     // LocalStack Testcontainer for S3
     // ---------------------------------------------------------------------------
     static final LocalStackContainer LOCAL_STACK_CONTAINER =
         new LocalStackContainer(DockerImageName.parse("localstack/localstack:3"))
-            .withServices(Service.S3);
+            .withServices(Service.S3)
+            .withNetwork(CONTAINER_NETWORK)
+            .withNetworkAliases("localstack");
+
+    // ---------------------------------------------------------------------------
+    // Redis Testcontainer — required by cdp-uploader for session state
+    // ---------------------------------------------------------------------------
+    @SuppressWarnings("resource")
+    static final GenericContainer<?> REDIS_CONTAINER =
+        new GenericContainer<>(DockerImageName.parse("redis:7.2.3-alpine3.18"))
+            .withExposedPorts(6379)
+            .withNetwork(CONTAINER_NETWORK)
+            .withNetworkAliases("redis");
+
+    // ---------------------------------------------------------------------------
+    // Real cdp-uploader Testcontainer
+    // ---------------------------------------------------------------------------
+    @SuppressWarnings("resource")
+    static final GenericContainer<?> CDP_UPLOADER_CONTAINER =
+        new GenericContainer<>(DockerImageName.parse("defradigital/cdp-uploader:latest"))
+            .withExposedPorts(3000)
+            .withNetwork(CONTAINER_NETWORK)
+            .withNetworkAliases("cdp-uploader")
+            .withEnv("PORT", "3000")
+            .withEnv("NODE_ENV", "development")
+            .withEnv("REDIS_HOST", "redis")
+            .withEnv("USE_SINGLE_INSTANCE_CACHE", "true")
+            .withEnv("MOCK_VIRUS_SCAN_ENABLED", "true")
+            .withEnv("MOCK_VIRUS_RESULT_DELAY", "3")
+            .withEnv("S3_ENDPOINT", "http://localstack:4566")
+            .withEnv("AWS_REGION", "eu-west-2")
+            .withEnv("AWS_ACCESS_KEY_ID", "test")
+            .withEnv("AWS_SECRET_ACCESS_KEY", "test")
+            .withEnv("CONSUMER_BUCKETS", "trade-imports-animals-documents,cdp-uploader-quarantine");
 
     // S3 client wired to LocalStack for test setup (pre-creating buckets / uploading objects)
     private static S3Client localStackS3Client;
 
     static {
-        Startables.deepStart(LOCAL_STACK_CONTAINER).join();
+        // Start LocalStack and Redis first; cdp-uploader depends on both.
+        Startables.deepStart(LOCAL_STACK_CONTAINER, REDIS_CONTAINER).join();
+
+        // SQS_ENDPOINT must reference LocalStack — resolve after LocalStack starts.
+        // LocalStack exposes a single port (4566) for all services; use the container-alias
+        // hostname "localstack" so cdp-uploader (running inside Docker) can reach it.
+        CDP_UPLOADER_CONTAINER.withEnv("SQS_ENDPOINT", "http://localstack:4566");
+
+        Startables.deepStart(CDP_UPLOADER_CONTAINER).join();
 
         localStackS3Client = S3Client.builder()
             .endpointOverride(LOCAL_STACK_CONTAINER.getEndpointOverride(Service.S3))
@@ -86,7 +137,7 @@ class DocumentIT extends IntegrationBase {
             .region(Region.of(LOCAL_STACK_CONTAINER.getRegion()))
             .build();
 
-        // Pre-create the buckets needed by the application
+        // Pre-create the buckets needed by the application and cdp-uploader
         localStackS3Client.createBucket(
             CreateBucketRequest.builder().bucket(DOCUMENTS_BUCKET).build());
         localStackS3Client.createBucket(
@@ -94,13 +145,16 @@ class DocumentIT extends IntegrationBase {
 
         log.info("LocalStack S3 started; endpoint={}; buckets created",
             LOCAL_STACK_CONTAINER.getEndpoint());
+        log.info("Redis started on port {}", REDIS_CONTAINER.getMappedPort(6379));
+        log.info("cdp-uploader started on port {}", CDP_UPLOADER_CONTAINER.getMappedPort(3000));
     }
 
     @DynamicPropertySource
     static void registerDocumentITProperties(DynamicPropertyRegistry registry) {
-        // Point cdp-uploader client at MockServer
+        // Point cdp-uploader client at the real container
         registry.add("cdp.uploader.base-url",
-            () -> MOCK_SERVER_CONTAINER.getEndpoint());
+            () -> "http://" + CDP_UPLOADER_CONTAINER.getHost()
+                + ":" + CDP_UPLOADER_CONTAINER.getMappedPort(3000));
 
         // Point S3Client at LocalStack
         registry.add("app.aws.endpoint-override",
@@ -132,22 +186,13 @@ class DocumentIT extends IntegrationBase {
     // ---------------------------------------------------------------------------
 
     /**
-     * Full initiate flow: POST to /notifications/{ref}/document-uploads stubs cdp-uploader
-     * /initiate via MockServer, asserts 201 Created with correct body, and verifies that a PENDING
-     * AccompanyingDocument was persisted in MongoDB.
+     * Full initiate flow: POST to /notifications/{ref}/document-uploads calls the real
+     * cdp-uploader /initiate, asserts 201 Created with correct body shape, and verifies that a
+     * PENDING AccompanyingDocument was persisted in MongoDB.
      */
     @Test
     void initiate_shouldReturn201AndPersistPendingDocument() throws IOException {
-        // Arrange — stub cdp-uploader /initiate with the captured fixture response
-        usingStub()
-            .when(request().withMethod("POST").withPath("/initiate"))
-            .respond(
-                response()
-                    .withStatusCode(200)
-                    .withContentType(org.mockserver.model.MediaType.APPLICATION_JSON)
-                    .withBody(getJsonFromFile("fixtures/cdp-initiate-response.json")));
-
-        // Act
+        // Act — POST to our backend which calls the real cdp-uploader internally
         EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
@@ -156,31 +201,28 @@ class DocumentIT extends IntegrationBase {
                 """)
             .exchange()
             .expectStatus().isCreated()
-            .expectHeader().valueMatches(
-                HttpHeaders.LOCATION, ".*/document-uploads/" + UPLOAD_ID_FROM_FIXTURE)
             .expectBody(DocumentUploadResponse.class)
             .returnResult();
 
         // Assert response body
         DocumentUploadResponse responseBody = result.getResponseBody();
         assertThat(responseBody).isNotNull();
-        assertThat(responseBody.uploadId()).isEqualTo(UPLOAD_ID_FROM_FIXTURE);
-        assertThat(responseBody.uploadUrl())
-            .isEqualTo("http://localhost:7337/upload-and-scan/" + UPLOAD_ID_FROM_FIXTURE);
+        String uploadId = responseBody.uploadId();
+        assertThat(uploadId).isNotBlank();
 
-        // Assert MockServer received the right request
-        usingStub().verify(
-            request()
-                .withMethod("POST")
-                .withPath("/initiate")
-                .withContentType(org.mockserver.model.MediaType.APPLICATION_JSON));
+        // Assert Location header contains the assigned uploadId
+        assertThat(result.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
+            .endsWith("/document-uploads/" + uploadId);
+
+        // Assert the upload URL returned by the real cdp-uploader uses the same uploadId
+        assertThat(responseBody.uploadUrl()).contains("/upload-and-scan/" + uploadId);
 
         // Assert MongoDB persisted a PENDING record
         List<AccompanyingDocument> persisted =
             accompanyingDocumentRepository.findAllByNotificationReferenceNumber(NOTIFICATION_REF);
         assertThat(persisted).hasSize(1);
         AccompanyingDocument doc = persisted.get(0);
-        assertThat(doc.getUploadId()).isEqualTo(UPLOAD_ID_FROM_FIXTURE);
+        assertThat(doc.getUploadId()).isEqualTo(uploadId);
         assertThat(doc.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
         assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.PENDING);
         assertThat(doc.getDocumentType()).isNotNull();
@@ -201,8 +243,8 @@ class DocumentIT extends IntegrationBase {
      */
     @Test
     void scanResult_complete_shouldUpdateStatusAndPopulateFiles() throws IOException {
-        // Arrange — persist a PENDING document first
-        stubCdpUploaderAndInitiate();
+        // Arrange — initiate via real cdp-uploader to get a PENDING record
+        String uploadId = initiateAndGetUploadId();
 
         // Read the complete callback fixture
         String completePayload = loadFixtureAsString("fixtures/cdp-scan-callback-complete.json");
@@ -210,7 +252,7 @@ class DocumentIT extends IntegrationBase {
         // Act — simulate the callback from cdp-uploader
         webClient("NoAuth")
             .post()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/scan-results")
+            .uri("/document-uploads/" + uploadId + "/scan-results")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(completePayload)
             .exchange()
@@ -218,7 +260,7 @@ class DocumentIT extends IntegrationBase {
 
         // Assert MongoDB updated
         AccompanyingDocument persisted =
-            accompanyingDocumentRepository.findByUploadId(UPLOAD_ID_FROM_FIXTURE).orElseThrow();
+            accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
         assertThat(persisted.getFiles()).hasSize(1);
 
@@ -246,14 +288,14 @@ class DocumentIT extends IntegrationBase {
     @Test
     void scanResult_rejected_shouldUpdateStatusToRejected() throws IOException {
         // Arrange
-        stubCdpUploaderAndInitiate();
+        String uploadId = initiateAndGetUploadId();
 
         String rejectedPayload = loadFixtureAsString("fixtures/cdp-scan-callback-rejected.json");
 
         // Act
         webClient("NoAuth")
             .post()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/scan-results")
+            .uri("/document-uploads/" + uploadId + "/scan-results")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(rejectedPayload)
             .exchange()
@@ -261,7 +303,7 @@ class DocumentIT extends IntegrationBase {
 
         // Assert
         AccompanyingDocument persisted =
-            accompanyingDocumentRepository.findByUploadId(UPLOAD_ID_FROM_FIXTURE).orElseThrow();
+            accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
         assertThat(persisted.getFiles()).hasSize(1);
 
@@ -283,7 +325,7 @@ class DocumentIT extends IntegrationBase {
     @Test
     void listDocuments_shouldReturnDocumentsForNotification() throws IOException {
         // Arrange — initiate so we have a document in the DB
-        stubCdpUploaderAndInitiate();
+        String uploadId = initiateAndGetUploadId();
 
         // Act
         EntityExchangeResult<DocumentListResponse> result = webClient("NoAuth")
@@ -299,7 +341,7 @@ class DocumentIT extends IntegrationBase {
         assertThat(listResponse).isNotNull();
         assertThat(listResponse.items()).hasSize(1);
         AccompanyingDocumentDto item = listResponse.items().get(0);
-        assertThat(item.uploadId()).isEqualTo(UPLOAD_ID_FROM_FIXTURE);
+        assertThat(item.uploadId()).isEqualTo(uploadId);
         assertThat(item.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
         assertThat(item.scanStatus()).isEqualTo(ScanStatus.PENDING);
         assertThat(item.id()).isNotNull();
@@ -315,12 +357,12 @@ class DocumentIT extends IntegrationBase {
     @Test
     void getByUploadId_shouldReturn200WithCorrectDto() throws IOException {
         // Arrange
-        stubCdpUploaderAndInitiate();
+        String uploadId = initiateAndGetUploadId();
 
         // Act
         EntityExchangeResult<AccompanyingDocumentDto> result = webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE)
+            .uri("/document-uploads/" + uploadId)
             .exchange()
             .expectStatus().isOk()
             .expectBody(AccompanyingDocumentDto.class)
@@ -329,7 +371,7 @@ class DocumentIT extends IntegrationBase {
         // Assert
         AccompanyingDocumentDto dto = result.getResponseBody();
         assertThat(dto).isNotNull();
-        assertThat(dto.uploadId()).isEqualTo(UPLOAD_ID_FROM_FIXTURE);
+        assertThat(dto.uploadId()).isEqualTo(uploadId);
         assertThat(dto.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
         assertThat(dto.scanStatus()).isEqualTo(ScanStatus.PENDING);
         assertThat(dto.id()).isNotNull();
@@ -349,12 +391,12 @@ class DocumentIT extends IntegrationBase {
     @Test
     void downloadFile_shouldStreamFileFromS3WithCorrectHeaders() throws IOException {
         // Arrange — initiate to get a PENDING record, then simulate a complete scan callback
-        stubCdpUploaderAndInitiate();
+        String uploadId = initiateAndGetUploadId();
 
         String completePayload = loadFixtureAsString("fixtures/cdp-scan-callback-complete.json");
         webClient("NoAuth")
             .post()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/scan-results")
+            .uri("/document-uploads/" + uploadId + "/scan-results")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(completePayload)
             .exchange()
@@ -373,7 +415,7 @@ class DocumentIT extends IntegrationBase {
         // Act
         EntityExchangeResult<byte[]> result = webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/files/" + FILE_ID_FROM_FIXTURE)
+            .uri("/document-uploads/" + uploadId + "/files/" + FILE_ID_FROM_FIXTURE)
             .exchange()
             .expectStatus().isOk()
             .expectHeader().contentType(MediaType.APPLICATION_PDF)
@@ -416,12 +458,12 @@ class DocumentIT extends IntegrationBase {
     @Test
     void downloadFile_unknownFileId_shouldReturn404() throws IOException {
         // Arrange — initiate so document exists, then complete the scan
-        stubCdpUploaderAndInitiate();
+        String uploadId = initiateAndGetUploadId();
 
         String completePayload = loadFixtureAsString("fixtures/cdp-scan-callback-complete.json");
         webClient("NoAuth")
             .post()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/scan-results")
+            .uri("/document-uploads/" + uploadId + "/scan-results")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(completePayload)
             .exchange()
@@ -430,7 +472,7 @@ class DocumentIT extends IntegrationBase {
         // Act — request a file ID that does not exist
         webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/files/non-existent-file-id")
+            .uri("/document-uploads/" + uploadId + "/files/non-existent-file-id")
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
@@ -477,7 +519,7 @@ class DocumentIT extends IntegrationBase {
     @Test
     void scanResult_mixedCompleteAndRejected_shouldSetAggregateStatusToRejected() throws IOException {
         // Arrange — initiate to get a PENDING document
-        stubCdpUploaderAndInitiate();
+        String uploadId = initiateAndGetUploadId();
 
         String mixedPayload = """
             {
@@ -513,12 +555,12 @@ class DocumentIT extends IntegrationBase {
                 }
               }
             }
-            """.formatted(UPLOAD_ID_FROM_FIXTURE, DOCUMENTS_BUCKET);
+            """.formatted(uploadId, DOCUMENTS_BUCKET);
 
         // Act
         webClient("NoAuth")
             .post()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/scan-results")
+            .uri("/document-uploads/" + uploadId + "/scan-results")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(mixedPayload)
             .exchange()
@@ -526,7 +568,7 @@ class DocumentIT extends IntegrationBase {
 
         // Assert MongoDB state
         AccompanyingDocument persisted =
-            accompanyingDocumentRepository.findByUploadId(UPLOAD_ID_FROM_FIXTURE).orElseThrow();
+            accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
         assertThat(persisted.getFiles()).hasSize(2);
 
@@ -536,7 +578,7 @@ class DocumentIT extends IntegrationBase {
             .orElseThrow(() -> new AssertionError("clean file not found"));
         assertThat(cleanFile.fileStatus()).isEqualTo(FileStatus.COMPLETE);
         assertThat(cleanFile.s3Key()).isNotNull();
-        assertThat(cleanFile.s3Key()).isEqualTo(UPLOAD_ID_FROM_FIXTURE + "/file-clean-001");
+        assertThat(cleanFile.s3Key()).isEqualTo(uploadId + "/file-clean-001");
 
         var virusFile = persisted.getFiles().stream()
             .filter(f -> "file-virus-002".equals(f.fileId()))
@@ -556,28 +598,23 @@ class DocumentIT extends IntegrationBase {
      */
     @Test
     void initiate_withDateOfIssue_shouldPersistDateOfIssueAsInstant() throws IOException {
-        // Arrange — stub cdp-uploader /initiate
-        usingStub()
-            .when(request().withMethod("POST").withPath("/initiate"))
-            .respond(
-                response()
-                    .withStatusCode(200)
-                    .withContentType(org.mockserver.model.MediaType.APPLICATION_JSON)
-                    .withBody(getJsonFromFile("fixtures/cdp-initiate-response.json")));
-
         // Act — include dateOfIssue in the request body
-        webClient("NoAuth")
+        EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
             .bodyValue("""
                 {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234","dateOfIssue":"2026-01-15"}
                 """)
             .exchange()
-            .expectStatus().isCreated();
+            .expectStatus().isCreated()
+            .expectBody(DocumentUploadResponse.class)
+            .returnResult();
+
+        String uploadId = result.getResponseBody().uploadId();
 
         // Assert MongoDB
         AccompanyingDocument doc =
-            accompanyingDocumentRepository.findByUploadId(UPLOAD_ID_FROM_FIXTURE).orElseThrow();
+            accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
         assertThat(doc.getDateOfIssue()).isNotNull();
         assertThat(doc.getDateOfIssue())
             .isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
@@ -588,28 +625,23 @@ class DocumentIT extends IntegrationBase {
      */
     @Test
     void initiate_withoutDateOfIssue_shouldPersistNullDateOfIssue() throws IOException {
-        // Arrange — stub cdp-uploader /initiate
-        usingStub()
-            .when(request().withMethod("POST").withPath("/initiate"))
-            .respond(
-                response()
-                    .withStatusCode(200)
-                    .withContentType(org.mockserver.model.MediaType.APPLICATION_JSON)
-                    .withBody(getJsonFromFile("fixtures/cdp-initiate-response.json")));
-
         // Act — no dateOfIssue field in the request body
-        webClient("NoAuth")
+        EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
             .bodyValue("""
                 {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234"}
                 """)
             .exchange()
-            .expectStatus().isCreated();
+            .expectStatus().isCreated()
+            .expectBody(DocumentUploadResponse.class)
+            .returnResult();
+
+        String uploadId = result.getResponseBody().uploadId();
 
         // Assert MongoDB
         AccompanyingDocument doc =
-            accompanyingDocumentRepository.findByUploadId(UPLOAD_ID_FROM_FIXTURE).orElseThrow();
+            accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
         assertThat(doc.getDateOfIssue()).isNull();
     }
 
@@ -625,7 +657,7 @@ class DocumentIT extends IntegrationBase {
     @Test
     void scanResult_nullNumberOfRejectedFiles_shouldSetStatusToRejected() throws IOException {
         // Arrange
-        stubCdpUploaderAndInitiate();
+        String uploadId = initiateAndGetUploadId();
 
         String payloadWithNullRejectedCount = """
             {
@@ -650,7 +682,7 @@ class DocumentIT extends IntegrationBase {
         // Act
         webClient("NoAuth")
             .post()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/scan-results")
+            .uri("/document-uploads/" + uploadId + "/scan-results")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(payloadWithNullRejectedCount)
             .exchange()
@@ -658,7 +690,7 @@ class DocumentIT extends IntegrationBase {
 
         // Assert — null numberOfRejectedFiles must not be treated as COMPLETE
         AccompanyingDocument persisted =
-            accompanyingDocumentRepository.findByUploadId(UPLOAD_ID_FROM_FIXTURE).orElseThrow();
+            accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
     }
 
@@ -674,12 +706,12 @@ class DocumentIT extends IntegrationBase {
     @Test
     void downloadFile_rejectedFile_shouldReturn404() throws IOException {
         // Arrange — initiate then simulate a rejected scan callback
-        stubCdpUploaderAndInitiate();
+        String uploadId = initiateAndGetUploadId();
 
         String rejectedPayload = loadFixtureAsString("fixtures/cdp-scan-callback-rejected.json");
         webClient("NoAuth")
             .post()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/scan-results")
+            .uri("/document-uploads/" + uploadId + "/scan-results")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(rejectedPayload)
             .exchange()
@@ -688,7 +720,7 @@ class DocumentIT extends IntegrationBase {
         // Act — attempt to download the rejected file
         webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/files/" + FILE_ID_FROM_FIXTURE)
+            .uri("/document-uploads/" + uploadId + "/files/" + FILE_ID_FROM_FIXTURE)
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
@@ -707,12 +739,12 @@ class DocumentIT extends IntegrationBase {
     @Test
     void downloadFile_s3ObjectMissing_shouldReturn500() throws IOException {
         // Arrange — initiate, complete the scan (registers file metadata in MongoDB)
-        stubCdpUploaderAndInitiate();
+        String uploadId = initiateAndGetUploadId();
 
         String completePayload = loadFixtureAsString("fixtures/cdp-scan-callback-complete.json");
         webClient("NoAuth")
             .post()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/scan-results")
+            .uri("/document-uploads/" + uploadId + "/scan-results")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(completePayload)
             .exchange()
@@ -723,7 +755,7 @@ class DocumentIT extends IntegrationBase {
         // Act — request the file; S3 will return NoSuchKey
         webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + UPLOAD_ID_FROM_FIXTURE + "/files/" + FILE_ID_FROM_FIXTURE)
+            .uri("/document-uploads/" + uploadId + "/files/" + FILE_ID_FROM_FIXTURE)
             .exchange()
             .expectStatus().is5xxServerError();
     }
@@ -733,26 +765,26 @@ class DocumentIT extends IntegrationBase {
     // ---------------------------------------------------------------------------
 
     /**
-     * Stubs MockServer for cdp-uploader /initiate and calls the backend initiate endpoint so that
-     * a PENDING AccompanyingDocument is saved in MongoDB with the fixture uploadId.
+     * Calls the backend's initiate endpoint (which in turn calls the real cdp-uploader) and
+     * returns the dynamically-assigned uploadId from the response. A PENDING
+     * {@link AccompanyingDocument} is persisted in MongoDB as a side-effect.
      */
-    private void stubCdpUploaderAndInitiate() throws IOException {
-        usingStub()
-            .when(request().withMethod("POST").withPath("/initiate"))
-            .respond(
-                response()
-                    .withStatusCode(200)
-                    .withContentType(org.mockserver.model.MediaType.APPLICATION_JSON)
-                    .withBody(getJsonFromFile("fixtures/cdp-initiate-response.json")));
-
-        webClient("NoAuth")
+    private String initiateAndGetUploadId() {
+        EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
             .bodyValue("""
                 {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234"}
                 """)
             .exchange()
-            .expectStatus().isCreated();
+            .expectStatus().isCreated()
+            .expectBody(DocumentUploadResponse.class)
+            .returnResult();
+
+        DocumentUploadResponse body = result.getResponseBody();
+        assertThat(body).isNotNull();
+        assertThat(body.uploadId()).isNotBlank();
+        return body.uploadId();
     }
 
     /**

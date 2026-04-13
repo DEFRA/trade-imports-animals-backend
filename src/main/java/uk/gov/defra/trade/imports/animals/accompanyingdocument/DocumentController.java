@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 
 /**
  * REST controller for accompanying document upload endpoints.
@@ -35,6 +36,7 @@ public class DocumentController {
 
   private final DocumentService documentService;
   private final S3DocumentService s3DocumentService;
+  private final CdpConfig cdpConfig;
 
   /**
    * Initiate a new document upload session for a notification.
@@ -58,9 +60,11 @@ public class DocumentController {
 
     log.info("POST /notifications/{}/document-uploads", ref);
 
-    // The redirectUrl is not passed by the caller in this MVP; supply a placeholder value.
-    // The frontend is expected to provide this once the upload form flow is integrated.
-    String redirectUrl = "";
+    // The redirectUrl is where the user's browser is sent after the file upload form is submitted.
+    // The frontend will supply this in a future iteration once the upload page is built.
+    // cdp-uploader validates that this field is a non-empty URI; use the uploader's own base URL
+    // as a syntactically valid placeholder that is always configured.
+    String redirectUrl = "http://localhost";
     DocumentUploadResponse response = documentService.initiate(ref, request, redirectUrl);
 
     URI location = URI.create("/document-uploads/" + response.uploadId());
