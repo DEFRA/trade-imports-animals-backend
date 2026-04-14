@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
 import java.util.List;
 import org.hamcrest.Matchers;
@@ -20,6 +21,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Species;
+import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 class NotificationIT extends IntegrationBase {
 
@@ -347,7 +349,7 @@ class NotificationIT extends IntegrationBase {
     void post_shouldCreateNotificationWithAdditionalDetails() {
         // Given
         AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
-        Species species = new Species("BOV", "Bovine", 10, null);
+        Species species = species();
         CommodityComplement complement = new CommodityComplement("LIVE", 10, null, List.of(species));
         Commodity commodity = Commodity.builder()
             .name("Live bovine animals")
@@ -383,6 +385,8 @@ class NotificationIT extends IntegrationBase {
         assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies()).hasSize(1);
         assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getValue()).isEqualTo("BOV");
         assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getText()).isEqualTo("Bovine");
+        assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getEarTag()).isEqualTo("UK01234567890");
+        assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getPassport()).isEqualTo("UK0123456700999");
         assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getNoOfAnimals()).isEqualTo(10);
     }
 

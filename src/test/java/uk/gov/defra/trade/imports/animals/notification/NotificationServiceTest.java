@@ -8,6 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
+
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
@@ -24,6 +26,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
+import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
@@ -92,7 +95,7 @@ class NotificationServiceTest {
         String referenceNumber = "DRAFT.IMP.2026." + existingId;
         Origin origin = new Origin("FR", "false", "REF456");
         AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
-        Species species = new Species("BOV", "Bovine", 5, null);
+        Species species = species();
         CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species));
         Commodity commodity = Commodity.builder()
             .name("Fish")
@@ -138,6 +141,8 @@ class NotificationServiceTest {
         assertThat(result.getCommodity().getCommodityComplement()).hasSize(1);
         assertThat(result.getCommodity().getCommodityComplement().getFirst().getTypeOfCommodity()).isEqualTo("LIVE");
         assertThat(result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getValue()).isEqualTo("BOV");
+        assertThat(result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getEarTag()).isEqualTo("UK01234567890");
+        assertThat(result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getPassport()).isEqualTo("UK0123456700999");
         assertThat(result.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
         assertThat(result.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
         assertThat(result.getReasonForImport()).isEqualTo("PERMANENT");
