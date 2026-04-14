@@ -5,6 +5,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.spec
 
 import java.util.List;
 import org.hamcrest.Matchers;
+import org.springframework.core.ParameterizedTypeReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -589,6 +590,50 @@ class NotificationIT extends IntegrationBase {
             .bodyValue(List.of("DRAFT.IMP.2026.ANY"))
             .exchange()
             .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void findAllReferenceNumbers_shouldReturnEmptyList_whenNoNotificationsExist() {
+        // When
+        List<String> referenceNumbers = findAllReferenceNumbers();
+
+        // Then
+        assertThat(referenceNumbers).isNotNull().isEmpty();
+    }
+
+    @Test
+    void findAllReferenceNumbers_shouldReturnOnlyReferenceNumbers() {
+        // Given — create two notifications
+        String ref1 = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        String ref2 = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("IE", "Live sheep"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When
+        List<String> referenceNumbers = findAllReferenceNumbers();
+
+        // Then — only strings returned, no full document fields
+        assertThat(referenceNumbers).hasSize(2);
+        assertThat(referenceNumbers).containsExactlyInAnyOrder(ref1, ref2);
+    }
+
+    private List<String> findAllReferenceNumbers() {
+        return webClient("NoAuth")
+            .get()
+            .uri(NOTIFICATION_ENDPOINT + "/reference-numbers")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(new ParameterizedTypeReference<List<String>>() {})
+            .returnResult().getResponseBody();
     }
 
     private List<Notification> findAllNotifications() {

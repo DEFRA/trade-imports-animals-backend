@@ -164,12 +164,41 @@ class NotificationServiceTest {
     }
 
     @Test
+    void findAllReferenceNumbers_shouldReturnEmptyList_whenNoNotificationsExist() {
+        // Given
+        when(notificationRepository.findAllProjectedBy()).thenReturn(Collections.emptyList());
+
+        // When
+        List<String> result = notificationService.findAllReferenceNumbers();
+
+        // Then
+        assertThat(result).isNotNull();
+        assertThat(result).isEmpty();
+        verify(notificationRepository, times(1)).findAllProjectedBy();
+    }
+
+    @Test
+    void findAllReferenceNumbers_shouldReturnReferenceNumbers_whenNotificationsExist() {
+        // Given
+        NotificationReferenceOnly ref1 = () -> "DRAFT.IMP.2026.abc123";
+        NotificationReferenceOnly ref2 = () -> "DRAFT.IMP.2026.xyz456";
+        when(notificationRepository.findAllProjectedBy()).thenReturn(List.of(ref1, ref2));
+
+        // When
+        List<String> result = notificationService.findAllReferenceNumbers();
+
+        // Then
+        assertThat(result).containsExactly("DRAFT.IMP.2026.abc123", "DRAFT.IMP.2026.xyz456");
+        verify(notificationRepository, times(1)).findAllProjectedBy();
+    }
+
+    @Test
     void deleteByReferenceNumbers_shouldDeleteAll_whenAllFound() {
         // Given
         String ref1 = "DRAFT.IMP.2026.111";
         String ref2 = "DRAFT.IMP.2026.222";
-        Notification n1 = Notification.builder().id("111").referenceNumber(ref1).build();
-        Notification n2 = Notification.builder().id("222").referenceNumber(ref2).build();
+        NotificationReferenceOnly n1 = () -> ref1;
+        NotificationReferenceOnly n2 = () -> ref2;
         HttpHeaders headers = headersWithAuditFields();
 
         when(notificationRepository.findAllByReferenceNumberIn(List.of(ref1, ref2)))
@@ -179,8 +208,8 @@ class NotificationServiceTest {
         // When
         notificationService.deleteByReferenceNumbers(List.of(ref1, ref2), headers);
 
-        // Then — deleteAll is called with the found notifications
-        verify(notificationRepository).deleteAll(List.of(n1, n2));
+        // Then — deleteAllByReferenceNumberIn is called with the original reference numbers
+        verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
 
         // And an audit record is saved with SUCCESS
         ArgumentCaptor<Audit> auditCaptor = ArgumentCaptor.forClass(Audit.class);
@@ -198,7 +227,7 @@ class NotificationServiceTest {
         // Given
         String existingRef = "DRAFT.IMP.2026.111";
         String missingRef  = "DRAFT.IMP.2026.MISSING";
-        Notification n1 = Notification.builder().id("111").referenceNumber(existingRef).build();
+        NotificationReferenceOnly n1 = () -> existingRef;
         HttpHeaders headers = headersWithAuditFields();
 
         when(notificationRepository.findAllByReferenceNumberIn(List.of(existingRef, missingRef)))
@@ -211,8 +240,8 @@ class NotificationServiceTest {
             .isInstanceOf(NotFoundException.class)
             .hasMessageContaining(missingRef);
 
-        // deleteAll must NOT be called — no partial deletes
-        verify(notificationRepository, never()).deleteAll(anyList());
+        // deleteAllByReferenceNumberIn must NOT be called — no partial deletes
+        verify(notificationRepository, never()).deleteAllByReferenceNumberIn(anyList());
 
         // But a FAILURE audit record is saved
         ArgumentCaptor<Audit> auditCaptor = ArgumentCaptor.forClass(Audit.class);
@@ -238,7 +267,7 @@ class NotificationServiceTest {
             .hasMessageContaining(missing1)
             .hasMessageContaining(missing2);
 
-        verify(notificationRepository, never()).deleteAll(anyList());
+        verify(notificationRepository, never()).deleteAllByReferenceNumberIn(anyList());
         verify(auditRepository).save(any(Audit.class));
     }
 
@@ -249,7 +278,7 @@ class NotificationServiceTest {
 
         // Then — repository is never called
         verify(notificationRepository, never()).findAllByReferenceNumberIn(anyList());
-        verify(notificationRepository, never()).deleteAll(anyList());
+        verify(notificationRepository, never()).deleteAllByReferenceNumberIn(anyList());
         verify(auditRepository, never()).save(any(Audit.class));
     }
 }

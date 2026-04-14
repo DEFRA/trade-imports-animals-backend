@@ -40,14 +40,22 @@ public class NotificationService {
         return notifications;
     }
 
+    public List<String> findAllReferenceNumbers() {
+        log.debug("Fetching all notification reference numbers");
+        return notificationRepository.findAllProjectedBy()
+            .stream()
+            .map(NotificationReferenceOnly::getReferenceNumber)
+            .toList();
+    }
+
     public void deleteByReferenceNumbers(List<String> referenceNumbers, HttpHeaders headers) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return;
         }
-        List<Notification> found = notificationRepository.findAllByReferenceNumberIn(
+        List<NotificationReferenceOnly> found = notificationRepository.findAllByReferenceNumberIn(
             referenceNumbers);
         Set<String> foundRefs = found.stream()
-            .map(Notification::getReferenceNumber)
+            .map(NotificationReferenceOnly::getReferenceNumber)
             .collect(Collectors.toSet());
         List<String> missing = referenceNumbers.stream()
             .filter(ref -> !foundRefs.contains(ref))
@@ -58,7 +66,7 @@ public class NotificationService {
                 "Cannot find notifications with reference numbers: " + String.join(", ", missing));
         }
         log.info("Deleting {} notifications", found.size());
-        notificationRepository.deleteAll(found);
+        notificationRepository.deleteAllByReferenceNumberIn(referenceNumbers);
         createNotificationAuditRecord(referenceNumbers, headers, Result.SUCCESS);
     }
 
