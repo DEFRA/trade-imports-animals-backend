@@ -10,7 +10,10 @@ public interface NotificationRepository extends MongoRepository<Notification, St
 
     Optional<Notification> findByReferenceNumber(String referenceNumber);
 
-    List<Notification> findAllByReferenceNumberIn(List<String> referenceNumbers);
+    List<NotificationReferenceOnly> findAllByReferenceNumberIn(List<String> referenceNumbers);
 
     List<NotificationReferenceOnly> findAllProjectedBy();
+
+    void deleteAllByReferenceNumberIn(List<String> referenceNumbers);
+
 }
