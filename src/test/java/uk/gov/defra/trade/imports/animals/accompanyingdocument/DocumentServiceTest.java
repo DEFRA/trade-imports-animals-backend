@@ -106,7 +106,7 @@ class DocumentServiceTest {
         .thenReturn(Optional.empty());
 
     CdpScanResultForm form = new CdpScanResultForm();
-    CdpScanResultPayload payload = new CdpScanResultPayload("upload-id-001", "ready", Map.of(), form, 0);
+    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
 
     // When / Then
     assertThatThrownBy(() -> documentService.handleScanResult(uploadId, payload))

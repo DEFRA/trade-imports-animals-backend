@@ -75,11 +75,6 @@ public class DocumentService {
     log.info("Initiating cdp-uploader session for notification {}", notificationRef);
     CdpUploaderInitiateResponse response = cdpUploaderClient.initiate(initiateRequest);
 
-    // Build the callback URL with the real uploadId for storing / logging
-    String resolvedCallbackUrl =
-        callbackBase + "/document-uploads/" + response.uploadId() + "/scan-results";
-    log.debug("Resolved callback URL: {}", resolvedCallbackUrl);
-
     Instant dateOfIssueInstant = request.dateOfIssue() != null
         ? request.dateOfIssue().atStartOfDay(ZoneOffset.UTC).toInstant()
         : null;
