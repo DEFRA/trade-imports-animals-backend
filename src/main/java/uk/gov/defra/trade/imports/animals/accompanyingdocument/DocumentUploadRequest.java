@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDate;
+import org.springframework.lang.Nullable;
 
 /**
  * Request body for initiating an accompanying document upload.
@@ -15,4 +16,9 @@ public record DocumentUploadRequest(
     String documentReference,
 
     @Schema(description = "Date of issue on the physical document", example = "2026-01-15")
-    LocalDate dateOfIssue) {}
+    LocalDate dateOfIssue,
+
+    @Nullable
+    @Schema(description = "URL to redirect the user to after the upload form is submitted",
+        example = "http://localhost:3000/accompanying-documents/upload-received")
+    String redirectUrl) {}
