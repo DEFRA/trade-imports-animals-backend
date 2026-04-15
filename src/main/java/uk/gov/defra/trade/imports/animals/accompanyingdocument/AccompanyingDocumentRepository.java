@@ -12,4 +12,7 @@ public interface AccompanyingDocumentRepository
   List<AccompanyingDocument> findAllByNotificationReferenceNumber(String referenceNumber);
 
   Optional<AccompanyingDocument> findByUploadId(String uploadId);
+
+  Optional<AccompanyingDocument> findFirstByNotificationReferenceNumberAndScanStatus(
+      String notificationReferenceNumber, ScanStatus scanStatus);
 }

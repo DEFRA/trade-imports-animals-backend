@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -61,10 +62,7 @@ class DocumentServiceTest {
     String redirectUrl = "https://frontend.example.com/documents";
 
     DocumentUploadRequest request = new DocumentUploadRequest(
-        DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15));
-
-    when(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef))
-        .thenReturn(Collections.emptyList());
+        DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15), redirectUrl);
 
     when(cdpConfig.uploader()).thenReturn(uploaderConfig);
     when(cdpConfig.backend()).thenReturn(backendConfig);
@@ -95,35 +93,6 @@ class DocumentServiceTest {
     assertThat(response.uploadUrl()).isEqualTo("https://cdp-uploader/form/upload-id-001");
   }
 
-  @Test
-  void initiate_shouldReturnExistingUpload_whenPendingUploadAlreadyExistsForRef() {
-    // Given
-    String notificationRef = "DRAFT.IMP.2026.abc123";
-    String redirectUrl = "https://frontend.example.com/documents";
-
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", null);
-
-    AccompanyingDocument existingPending = AccompanyingDocument.builder()
-        .uploadId("existing-upload-id")
-        .scanStatus(ScanStatus.PENDING)
-        .notificationReferenceNumber(notificationRef)
-        .build();
-
-    when(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef))
-        .thenReturn(List.of(existingPending));
-
-    // When
-    DocumentUploadResponse response = documentService.initiate(notificationRef, request, redirectUrl);
-
-    // Then
-    assertThat(response).isNotNull();
-    assertThat(response.uploadId()).isEqualTo("existing-upload-id");
-
-    // cdp-uploader must NOT be called again
-    verify(cdpUploaderClient, never()).initiate(any());
-    verify(accompanyingDocumentRepository, never()).save(any());
-  }
-
   // ─── handleScanResult ────────────────────────────────────────────────────────
   // Status transitions and file list population are covered end-to-end in DocumentIT
   // (real MongoDB, real HTTP). Unit tests here only cover error paths that the IT tests
@@ -137,7 +106,7 @@ class DocumentServiceTest {
         .thenReturn(Optional.empty());
 
     CdpScanResultForm form = new CdpScanResultForm();
-    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
+    CdpScanResultPayload payload = new CdpScanResultPayload("upload-id-001", "ready", Map.of(), form, 0);
 
     // When / Then
     assertThatThrownBy(() -> documentService.handleScanResult(uploadId, payload))
@@ -155,10 +124,7 @@ class DocumentServiceTest {
     String notificationRef = "DRAFT.IMP.2026.concurrent";
     String redirectUrl = "";
 
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", null);
-
-    when(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef))
-        .thenReturn(Collections.emptyList());
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", null, null);
 
     when(cdpConfig.uploader()).thenReturn(uploaderConfig);
     when(cdpConfig.backend()).thenReturn(backendConfig);

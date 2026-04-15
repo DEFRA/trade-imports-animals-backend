@@ -43,20 +43,6 @@ public class DocumentService {
   public DocumentUploadResponse initiate(
       String notificationRef, DocumentUploadRequest request, String redirectUrl) {
 
-    // Idempotency: return existing PENDING upload if one already exists for this notification
-    List<AccompanyingDocument> existing =
-        accompanyingDocumentRepository.findAllByNotificationReferenceNumber(notificationRef);
-    Optional<AccompanyingDocument> pending =
-        existing.stream().filter(d -> d.getScanStatus() == ScanStatus.PENDING).findFirst();
-    if (pending.isPresent()) {
-      AccompanyingDocument doc = pending.get();
-      log.info(
-          "Returning existing PENDING upload {} for notification {}",
-          doc.getUploadId(),
-          notificationRef);
-      return new DocumentUploadResponse(doc.getUploadId(), doc.getUploadUrl());
-    }
-
     // Build callback URL from backend base URL
     // A temporary placeholder uploadId is used for the path; cdp-uploader will assign the real one
     // and return it in the response. We use a path template here because cdp-uploader uses the
@@ -136,7 +122,22 @@ public class DocumentService {
    * @throws NotFoundException if no document with the given upload ID exists
    */
   public void handleScanResult(String uploadId, CdpScanResultPayload payload) {
-    AccompanyingDocument document = findByUploadId(uploadId);
+    // cdp-uploader does not include uploadId in the callback payload body.
+    // When the path variable is the "pending" placeholder used at initiation time,
+    // look up the document by notification reference from the callback metadata instead.
+    AccompanyingDocument document;
+    if ("pending".equals(uploadId)
+        && payload.metadata() != null
+        && payload.metadata().containsKey("notificationReferenceNumber")) {
+      String notificationRef = payload.metadata().get("notificationReferenceNumber");
+      log.info("Resolving pending callback via notificationRef={}", notificationRef);
+      document = accompanyingDocumentRepository
+          .findFirstByNotificationReferenceNumberAndScanStatus(notificationRef, ScanStatus.PENDING)
+          .orElseThrow(() -> new NotFoundException(
+              "No pending document found for notification: " + notificationRef));
+    } else {
+      document = findByUploadId(uploadId);
+    }
 
     List<UploadedFile> uploadedFiles = new ArrayList<>();
     if (payload.form() != null) {

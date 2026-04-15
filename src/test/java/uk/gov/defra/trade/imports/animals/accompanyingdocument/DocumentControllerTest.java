@@ -49,7 +49,7 @@ class DocumentControllerTest {
   void post_shouldReturn201WithLocationHeader() throws Exception {
     // Given
     String ref = "DRAFT.IMP.2026.00000001";
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15));
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15), null);
     DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "https://cdp-uploader.example/upload/abc");
 
     when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class), any(String.class)))
@@ -154,7 +154,7 @@ class DocumentControllerTest {
     // Given
     String uploadId = "upload-abc-123";
     CdpScanResultForm form = new CdpScanResultForm(Map.of());
-    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
+    CdpScanResultPayload payload = new CdpScanResultPayload("upload-id-001", "ready", Map.of(), form, 0);
 
     doNothing().when(documentService).handleScanResult(eq(uploadId), any(CdpScanResultPayload.class));
 

@@ -64,8 +64,9 @@ public class DocumentController {
     log.info("POST /notifications/{}/document-uploads", ref);
 
     // The redirectUrl is where the user's browser is sent after the file upload form is submitted.
-    // TODO: the frontend will supply this per-request once the upload page is built (EUDPA-35).
-    String redirectUrl = cdpConfig.frontend().baseUrl();
+    String redirectUrl = (request.redirectUrl() != null && !request.redirectUrl().isBlank())
+        ? request.redirectUrl()
+        : cdpConfig.frontend().baseUrl();
     DocumentUploadResponse response = documentService.initiate(ref, request, redirectUrl);
 
     URI location = URI.create("/document-uploads/" + response.uploadId());
@@ -136,9 +137,13 @@ public class DocumentController {
   @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
   @Timed("document.scanResult")
   public ResponseEntity<Void> scanResult(
-      @PathVariable("upload-id") String uploadId,
+      @PathVariable("upload-id") String pathUploadId,
       @RequestBody CdpScanResultPayload payload) {
 
+    // cdp-uploader includes the real uploadId in the payload body.
+    // The path variable may be a placeholder ("pending") set at initiation time
+    // because the uploadId is not known until after cdp-uploader assigns it.
+    String uploadId = payload.uploadId() != null ? payload.uploadId() : pathUploadId;
     log.info("POST /document-uploads/{}/scan-results uploadStatus={}", uploadId,
         payload.uploadStatus());
     documentService.handleScanResult(uploadId, payload);
