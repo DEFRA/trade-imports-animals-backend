@@ -137,13 +137,11 @@ public class DocumentController {
   @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
   @Timed("document.scanResult")
   public ResponseEntity<Void> scanResult(
-      @PathVariable("upload-id") String pathUploadId,
+      @PathVariable("upload-id") String uploadId,
       @RequestBody CdpScanResultPayload payload) {
 
-    // cdp-uploader includes the real uploadId in the payload body.
-    // The path variable may be a placeholder ("pending") set at initiation time
-    // because the uploadId is not known until after cdp-uploader assigns it.
-    String uploadId = payload.uploadId() != null ? payload.uploadId() : pathUploadId;
+    // cdp-uploader does not include uploadId in the callback payload body.
+    // The path variable will always be the "pending" placeholder set at initiation time.
     log.info("POST /document-uploads/{}/scan-results uploadStatus={}", uploadId,
         payload.uploadStatus());
     documentService.handleScanResult(uploadId, payload);

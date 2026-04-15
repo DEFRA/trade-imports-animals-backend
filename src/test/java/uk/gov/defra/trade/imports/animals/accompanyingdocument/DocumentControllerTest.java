@@ -154,7 +154,7 @@ class DocumentControllerTest {
     // Given
     String uploadId = "upload-abc-123";
     CdpScanResultForm form = new CdpScanResultForm(Map.of());
-    CdpScanResultPayload payload = new CdpScanResultPayload("upload-id-001", "ready", Map.of(), form, 0);
+    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
 
     doNothing().when(documentService).handleScanResult(eq(uploadId), any(CdpScanResultPayload.class));
 
