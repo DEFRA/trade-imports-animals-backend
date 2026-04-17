@@ -10,11 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
-import uk.gov.defra.trade.imports.animals.audit.Audit;
-import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
-import uk.gov.defra.trade.imports.animals.audit.Result;
-import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
-
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
@@ -26,7 +21,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
-import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
+import uk.gov.defra.trade.imports.animals.audit.Audit;
+import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
+import uk.gov.defra.trade.imports.animals.audit.Result;
+import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
@@ -101,6 +99,7 @@ class NotificationServiceTest {
             .name("Fish")
             .commodityComplement(List.of(complement))
             .build();
+        String cphNumber = "123456789";
 
         Notification existingNotification = new Notification();
         existingNotification.setId(existingId);
@@ -116,6 +115,7 @@ class NotificationServiceTest {
             .commodity(commodity)
             .additionalDetails(additionalDetails)
             .reasonForImport("PERMANENT")
+            .cphNumber(cphNumber)
             .build();
 
         Notification updatedNotification = Notification.builder()
@@ -125,6 +125,7 @@ class NotificationServiceTest {
             .commodity(commodity)
             .additionalDetails(additionalDetails)
             .reasonForImport("PERMANENT")
+            .cphNumber(cphNumber)
             .build();
 
         when(notificationRepository.save(any(Notification.class))).thenReturn(updatedNotification);
@@ -146,6 +147,7 @@ class NotificationServiceTest {
         assertThat(result.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
         assertThat(result.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
         assertThat(result.getReasonForImport()).isEqualTo("PERMANENT");
+        assertThat(result.getCphNumber()).isEqualTo("123456789");
         verify(notificationRepository, times(1)).save(any(Notification.class));
     }
 

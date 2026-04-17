@@ -28,6 +28,8 @@ public class Notification {
     private String reasonForImport;
     
     private AdditionalDetails additionalDetails;
+    
+    private String cphNumber;
 
     private LocalDateTime created;
 
