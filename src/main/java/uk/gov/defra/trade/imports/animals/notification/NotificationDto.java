@@ -20,5 +20,7 @@ public class NotificationDto {
     private String reasonForImport;
 
     private AdditionalDetails additionalDetails;
+    
+    private String cphNumber;
 
 }
