@@ -31,9 +31,12 @@ springdoc:
     enabled: true
 
 # App-level AWS overrides for local development
+# Credentials are dummy values accepted by LocalStack — never use real keys here
 app:
   aws:
     endpoint-override: http://localhost:4566
+    access-key-id: test
+    secret-access-key: test
 
 # Use host.docker.internal so cdp-uploader (Docker) can POST scan callbacks back to this service
 # running on the host machine. The default (localhost:8085) is unreachable from inside Docker.
