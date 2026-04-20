@@ -16,6 +16,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -118,6 +119,26 @@ public class DocumentController {
     log.info("GET /document-uploads/{}", uploadId);
     AccompanyingDocument document = documentService.findByUploadId(uploadId);
     return ResponseEntity.ok(AccompanyingDocumentDto.from(document));
+  }
+
+  /**
+   * Delete an accompanying document upload session.
+   *
+   * @param uploadId the upload session identifier
+   * @return 204 No Content
+   */
+  @DeleteMapping("/document-uploads/{upload-id}")
+  @Operation(
+      summary = "Delete document upload",
+      description = "Removes an accompanying document upload session from the notification")
+  @ApiResponse(responseCode = "204", description = "Document deleted", content = @Content)
+  @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
+  @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
+  @Timed("document.delete")
+  public ResponseEntity<Void> delete(@PathVariable("upload-id") String uploadId) {
+    log.info("DELETE /document-uploads/{}", uploadId);
+    documentService.deleteByUploadId(uploadId);
+    return ResponseEntity.noContent().build();
   }
 
   /**

@@ -167,6 +167,18 @@ public class DocumentService {
   }
 
   /**
+   * Deletes the accompanying document with the given upload ID.
+   *
+   * @param uploadId the upload session identifier
+   * @throws NotFoundException if not found
+   */
+  public void deleteByUploadId(String uploadId) {
+    AccompanyingDocument document = findByUploadId(uploadId);
+    accompanyingDocumentRepository.delete(document);
+    log.info("Deleted AccompanyingDocument with uploadId {}", uploadId);
+  }
+
+  /**
    * Returns all accompanying documents for the given notification reference.
    *
    * @param ref the notification reference number
