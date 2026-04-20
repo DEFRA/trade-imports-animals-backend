@@ -150,6 +150,20 @@ class DocumentServiceTest {
         .hasMessageContaining("upload-id-dup");
   }
 
+  // ─── deleteForNotificationRefs ───────────────────────────────────────────────
+
+  @Test
+  void deleteForNotificationRefs_shouldDeleteAllDocumentsForGivenRefs() {
+    // Given
+    List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111", "DRAFT.IMP.2026.222");
+
+    // When
+    documentService.deleteForNotificationRefs(referenceNumbers);
+
+    // Then
+    verify(accompanyingDocumentRepository).deleteAllByNotificationReferenceNumberIn(referenceNumbers);
+  }
+
   // ─── findFile ────────────────────────────────────────────────────────────────
 
   @Test
