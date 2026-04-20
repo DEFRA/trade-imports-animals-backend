@@ -178,6 +178,17 @@ public class DocumentService {
   }
 
   /**
+   * Deletes all accompanying documents belonging to the given notification reference numbers.
+   * Called as part of cascade deletion when notifications are removed.
+   *
+   * @param referenceNumbers the parent notification reference numbers whose documents should be deleted
+   */
+  public void deleteForNotificationRefs(List<String> referenceNumbers) {
+    log.info("Cascade deleting accompanying documents for {} notification(s)", referenceNumbers.size());
+    accompanyingDocumentRepository.deleteAllByNotificationReferenceNumberIn(referenceNumbers);
+  }
+
+  /**
    * Returns the accompanying document with the given upload ID.
    *
    * @param uploadId the upload session identifier

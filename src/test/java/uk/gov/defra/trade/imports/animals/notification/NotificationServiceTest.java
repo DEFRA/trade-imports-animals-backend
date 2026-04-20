@@ -21,6 +21,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpHeaders;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
@@ -35,11 +39,14 @@ class NotificationServiceTest {
     @Mock
     private AuditRepository auditRepository;
 
+    @Mock
+    private DocumentService documentService;
+
     private NotificationService notificationService;
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationService(notificationRepository, auditRepository);
+        notificationService = new NotificationService(notificationRepository, auditRepository, documentService);
     }
 
     private HttpHeaders headersWithAuditFields() {
@@ -282,5 +289,103 @@ class NotificationServiceTest {
         verify(notificationRepository, never()).findAllByReferenceNumberIn(anyList());
         verify(notificationRepository, never()).deleteAllByReferenceNumberIn(anyList());
         verify(auditRepository, never()).save(any(Audit.class));
+    }
+
+    @Test
+    void deleteByReferenceNumbers_shouldCascadeDeleteDocuments_whenNotificationsDeleted() {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.111";
+        NotificationReferenceOnly notificationRef = () -> referenceNumber;
+        HttpHeaders headers = headersWithAuditFields();
+
+        when(notificationRepository.findAllByReferenceNumberIn(List.of(referenceNumber)))
+            .thenReturn(List.of(notificationRef));
+        when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
+
+        // When
+        notificationService.deleteByReferenceNumbers(List.of(referenceNumber), headers);
+
+        // Then — notification deleted then documents cascade deleted
+        verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(referenceNumber));
+        verify(documentService).deleteForNotificationRefs(List.of(referenceNumber));
+    }
+
+    // ─── findByRef ───────────────────────────────────────────────────────────────
+
+    @Test
+    void findByRef_shouldReturnHydratedNotification_withDocuments() {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.abc123";
+        Origin origin = new Origin("GB", "true", "REF-001");
+        Notification notification = Notification.builder()
+            .id("notif-id-001")
+            .referenceNumber(referenceNumber)
+            .origin(origin)
+            .commodity(Commodity.builder().name("Live bovine animals").build())
+            .build();
+
+        AccompanyingDocument document = AccompanyingDocument.builder()
+            .id("doc-id-001")
+            .notificationReferenceNumber(referenceNumber)
+            .uploadId("upload-abc-123")
+            .documentType(DocumentType.ITAHC)
+            .documentReference("UK/GB/2026/001")
+            .scanStatus(ScanStatus.COMPLETE)
+            .files(Collections.emptyList())
+            .build();
+
+        when(notificationRepository.findByReferenceNumber(referenceNumber))
+            .thenReturn(Optional.of(notification));
+        when(documentService.findByNotificationRef(referenceNumber))
+            .thenReturn(List.of(document));
+
+        // When
+        NotificationResponse response = notificationService.findByRef(referenceNumber);
+
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
+        assertThat(response.origin().getCountryCode()).isEqualTo("GB");
+        assertThat(response.accompanyingDocuments()).hasSize(1);
+        assertThat(response.accompanyingDocuments().getFirst().uploadId()).isEqualTo("upload-abc-123");
+        assertThat(response.accompanyingDocuments().getFirst().scanStatus()).isEqualTo(ScanStatus.COMPLETE);
+    }
+
+    @Test
+    void findByRef_shouldReturnNotificationWithEmptyDocuments_whenNoneUploaded() {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.xyz456";
+        Notification notification = Notification.builder()
+            .id("notif-id-002")
+            .referenceNumber(referenceNumber)
+            .origin(new Origin("IE", "false", null))
+            .build();
+
+        when(notificationRepository.findByReferenceNumber(referenceNumber))
+            .thenReturn(Optional.of(notification));
+        when(documentService.findByNotificationRef(referenceNumber))
+            .thenReturn(Collections.emptyList());
+
+        // When
+        NotificationResponse response = notificationService.findByRef(referenceNumber);
+
+        // Then
+        assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
+        assertThat(response.accompanyingDocuments()).isEmpty();
+    }
+
+    @Test
+    void findByRef_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
+        when(notificationRepository.findByReferenceNumber(referenceNumber))
+            .thenReturn(Optional.empty());
+
+        // When / Then
+        assertThatThrownBy(() -> notificationService.findByRef(referenceNumber))
+            .isInstanceOf(NotFoundException.class)
+            .hasMessageContaining(referenceNumber);
+
+        verify(documentService, never()).findByNotificationRef(any());
     }
 }

@@ -26,6 +26,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
@@ -265,6 +268,57 @@ class NotificationControllerTest {
             .andExpect(status().isBadRequest());
 
         verify(notificationService, never()).deleteByReferenceNumbers(any(), any());
+    }
+
+    // ─── GET /{referenceNumber} ──────────────────────────────────────────────────
+
+    @Test
+    void findByRef_shouldReturn200WithHydratedNotification() throws Exception {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.abc123";
+        Origin origin = new Origin("GB", "true", "REF-001");
+
+        AccompanyingDocumentDto document = new AccompanyingDocumentDto(
+            "doc-id-001", referenceNumber, "upload-abc-123",
+            DocumentType.ITAHC, "UK/GB/2026/001",
+            null, null, ScanStatus.COMPLETE,
+            Collections.emptyList(), null, null);
+
+        NotificationResponse response = new NotificationResponse(
+            "notif-id-001", referenceNumber, origin,
+            Commodity.builder().name("Live bovine animals").build(),
+            "PERMANENT", null, null, null, null,
+            List.of(document));
+
+        when(notificationService.findByRef(referenceNumber)).thenReturn(response);
+
+        // When / Then
+        mockMvc.perform(get("/notifications/{referenceNumber}", referenceNumber)
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.referenceNumber").value(referenceNumber))
+            .andExpect(jsonPath("$.origin.countryCode").value("GB"))
+            .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
+            .andExpect(jsonPath("$.accompanyingDocuments").isArray())
+            .andExpect(jsonPath("$.accompanyingDocuments.length()").value(1))
+            .andExpect(jsonPath("$.accompanyingDocuments[0].uploadId").value("upload-abc-123"))
+            .andExpect(jsonPath("$.accompanyingDocuments[0].scanStatus").value("COMPLETE"));
+    }
+
+    @Test
+    void findByRef_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
+        when(notificationService.findByRef(referenceNumber))
+            .thenThrow(new NotFoundException(
+                "Cannot find notification with reference number: " + referenceNumber));
+
+        // When / Then
+        mockMvc.perform(get("/notifications/{referenceNumber}", referenceNumber)
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.detail").value(
+                "Cannot find notification with reference number: " + referenceNumber));
     }
 
     @Test

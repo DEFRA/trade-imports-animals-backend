@@ -15,4 +15,6 @@ public interface AccompanyingDocumentRepository
 
   Optional<AccompanyingDocument> findFirstByNotificationReferenceNumberAndScanStatus(
       String notificationReferenceNumber, ScanStatus scanStatus);
+
+  void deleteAllByNotificationReferenceNumberIn(List<String> referenceNumbers);
 }

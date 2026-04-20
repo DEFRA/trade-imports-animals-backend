@@ -11,6 +11,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
@@ -20,6 +24,7 @@ import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationResponse;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Species;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
@@ -36,10 +41,14 @@ class NotificationIT extends IntegrationBase {
     @Autowired
     private AuditRepository auditRepository;
 
+    @Autowired
+    private AccompanyingDocumentRepository accompanyingDocumentRepository;
+
     @BeforeEach
     void setUp() {
         notificationRepository.deleteAll();
         auditRepository.deleteAll();
+        accompanyingDocumentRepository.deleteAll();
     }
 
     @Test
@@ -624,6 +633,117 @@ class NotificationIT extends IntegrationBase {
         // Then — only strings returned, no full document fields
         assertThat(referenceNumbers).hasSize(2);
         assertThat(referenceNumbers).containsExactlyInAnyOrder(ref1, ref2);
+    }
+
+    @Test
+    void findByRef_shouldReturnHydratedNotification_withAccompanyingDocuments() {
+        // Given — create a notification
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live bovine animals"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // And directly persist an accompanying document (bypasses cdp-uploader)
+        AccompanyingDocument document = AccompanyingDocument.builder()
+            .notificationReferenceNumber(referenceNumber)
+            .uploadId("upload-it-test-001")
+            .documentType(DocumentType.ITAHC)
+            .documentReference("UK/GB/2026/IT-001")
+            .scanStatus(ScanStatus.COMPLETE)
+            .build();
+        accompanyingDocumentRepository.save(document);
+
+        // When
+        NotificationResponse response = webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationResponse.class)
+            .returnResult().getResponseBody();
+
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
+        assertThat(response.origin().getCountryCode()).isEqualTo("GB");
+        assertThat(response.accompanyingDocuments()).hasSize(1);
+        assertThat(response.accompanyingDocuments().getFirst().uploadId()).isEqualTo("upload-it-test-001");
+        assertThat(response.accompanyingDocuments().getFirst().documentType()).isEqualTo(DocumentType.ITAHC);
+        assertThat(response.accompanyingDocuments().getFirst().scanStatus()).isEqualTo(ScanStatus.COMPLETE);
+    }
+
+    @Test
+    void findByRef_shouldReturn200WithEmptyDocuments_whenNoDocumentsUploaded() {
+        // Given — notification with no documents
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("IE", "Live sheep"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When
+        NotificationResponse response = webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationResponse.class)
+            .returnResult().getResponseBody();
+
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
+        assertThat(response.accompanyingDocuments()).isEmpty();
+    }
+
+    @Test
+    void findByRef_shouldReturn404_whenReferenceNumberDoesNotExist() {
+        webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", "DRAFT.IMP.2026.DOESNOTEXIST")
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(404)
+            .jsonPath("$.detail").value(
+                org.hamcrest.Matchers.containsString("DRAFT.IMP.2026.DOESNOTEXIST"));
+    }
+
+    @Test
+    void delete_shouldCascadeDeleteAccompanyingDocuments_whenNotificationDeleted() {
+        // Given — create a notification
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("FR", "Live pigs"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // And persist an accompanying document directly
+        AccompanyingDocument document = AccompanyingDocument.builder()
+            .notificationReferenceNumber(referenceNumber)
+            .uploadId("upload-cascade-test-001")
+            .documentType(DocumentType.VETERINARY_HEALTH_CERTIFICATE)
+            .scanStatus(ScanStatus.COMPLETE)
+            .build();
+        accompanyingDocumentRepository.save(document);
+        assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(referenceNumber))
+            .hasSize(1);
+
+        // When — delete the notification
+        webClient("NoAuth")
+            .method(org.springframework.http.HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
+            .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .header("x-cdp-request-id", "trace-cascade-001")
+            .header("User-Id", "user-cascade-001")
+            .bodyValue(List.of(referenceNumber))
+            .exchange()
+            .expectStatus().isNoContent();
+
+        // Then — notification and its documents are both gone
+        assertThat(notificationRepository.findByReferenceNumber(referenceNumber)).isEmpty();
+        assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(referenceNumber))
+            .isEmpty();
     }
 
     private List<String> findAllReferenceNumbers() {

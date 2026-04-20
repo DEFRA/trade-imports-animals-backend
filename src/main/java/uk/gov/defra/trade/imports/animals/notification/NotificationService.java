@@ -11,6 +11,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
@@ -24,6 +26,7 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
+    private final DocumentService documentService;
 
     public Notification saveOriginOfImport(NotificationDto notificationDto) {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
@@ -31,6 +34,14 @@ public class NotificationService {
         } else {
             return updateNotification(notificationDto);
         }
+    }
+
+    public NotificationResponse findByRef(String referenceNumber) {
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                "Cannot find notification with reference number: " + referenceNumber));
+        List<AccompanyingDocument> documents = documentService.findByNotificationRef(referenceNumber);
+        return NotificationResponse.from(notification, documents);
     }
 
     public List<Notification> findAll() {
@@ -67,6 +78,7 @@ public class NotificationService {
         }
         log.info("Deleting {} notifications", found.size());
         notificationRepository.deleteAllByReferenceNumberIn(referenceNumbers);
+        documentService.deleteForNotificationRefs(referenceNumbers);
         createNotificationAuditRecord(referenceNumbers, headers, Result.SUCCESS);
     }
 
