@@ -149,27 +149,27 @@ public class DocumentController {
   }
 
   /**
-   * Download a file that was uploaded as part of a document upload session.
+   * Download the file associated with a document upload session.
+   *
+   * <p>Each upload session contains exactly one file. The file is streamed directly from S3.
    *
    * @param uploadId the upload session identifier
-   * @param fileId   the file identifier within the session
    * @return 200 OK with the file content streamed from S3
    */
-  @GetMapping("/document-uploads/{upload-id}/files/{file-id}")
+  @GetMapping("/document-uploads/{upload-id}/file")
   @Operation(
       summary = "Download uploaded file",
-      description = "Streams a scanned file from S3")
+      description = "Streams the scanned file for an upload session from S3")
   @ApiResponse(responseCode = "200", description = "File streamed",
       content = @Content(mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE))
   @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
   @ApiResponse(responseCode = "404", description = "File not found", content = @Content)
   @Timed("document.downloadFile")
   public ResponseEntity<StreamingResponseBody> downloadFile(
-      @PathVariable("upload-id") String uploadId,
-      @PathVariable("file-id") String fileId) {
+      @PathVariable("upload-id") String uploadId) {
 
-    log.info("GET /document-uploads/{}/files/{}", uploadId, fileId);
-    UploadedFile file = documentService.findFile(uploadId, fileId);
+    log.info("GET /document-uploads/{}/file", uploadId);
+    UploadedFile file = documentService.findFile(uploadId);
 
     // Known limitation: if S3 throws mid-stream after response headers are committed,
     // the client receives a 200 with a truncated body and no error indication.

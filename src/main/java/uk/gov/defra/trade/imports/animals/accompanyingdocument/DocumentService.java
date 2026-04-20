@@ -139,7 +139,6 @@ public class DocumentService {
       for (Map.Entry<String, CdpScanResultFile> entry : payload.form().getFiles().entrySet()) {
         CdpScanResultFile f = entry.getValue();
         uploadedFiles.add(new UploadedFile(
-            f.fileId(),
             f.filename(),
             f.contentType(),
             f.contentLength(),
@@ -202,24 +201,25 @@ public class DocumentService {
   }
 
   /**
-   * Returns the specific uploaded file within a document identified by {@code uploadId}.
+   * Returns the uploaded file for the given upload session.
+   *
+   * <p>Each upload session contains exactly one file. Throws {@link NotFoundException} if the
+   * session has no file or if the file was rejected (s3Key is null).
    *
    * @param uploadId the upload session identifier
-   * @param fileId   the file identifier
    * @return the uploaded file record
-   * @throws NotFoundException if the document or file is not found
+   * @throws NotFoundException if the document has no file or the file was rejected
    */
-  public UploadedFile findFile(String uploadId, String fileId) {
+  public UploadedFile findFile(String uploadId) {
     AccompanyingDocument document = findByUploadId(uploadId);
     UploadedFile file = document.getFiles().stream()
-        .filter(f -> fileId.equals(f.fileId()))
         .findFirst()
         .orElseThrow(
             () -> new NotFoundException(
-                "No file found with fileId: " + fileId + " in uploadId: " + uploadId));
+                "No file found for uploadId: " + uploadId));
     if (file.s3Key() == null) {
       throw new NotFoundException(
-          "File with fileId: " + fileId + " was rejected and is not available for download");
+          "File for uploadId: " + uploadId + " was rejected and is not available for download");
     }
     return file;
   }

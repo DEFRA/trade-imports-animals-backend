@@ -166,22 +166,20 @@ class DocumentControllerTest {
   }
 
   // ---------------------------------------------------------------------------
-  // GET /document-uploads/{upload-id}/files/{file-id}
+  // GET /document-uploads/{upload-id}/file
   // ---------------------------------------------------------------------------
 
   @Test
   void downloadFile_shouldReturn200WithStreamBody() throws Exception {
     // Given
     String uploadId = "upload-abc-123";
-    String fileId = "file-xyz-456";
     byte[] fileContent = "PDF file content".getBytes();
 
     UploadedFile uploadedFile = new UploadedFile(
-        fileId,
         "test-doc.pdf",
         "application/pdf",
         (long) fileContent.length,
-        uploadId + "/" + fileId,
+        uploadId + "/some-internal-file-id",
         "documents-bucket",
         FileStatus.COMPLETE,
         "sha256abc",
@@ -189,14 +187,14 @@ class DocumentControllerTest {
         false,
         null);
 
-    when(documentService.findFile(uploadId, fileId)).thenReturn(uploadedFile);
+    when(documentService.findFile(uploadId)).thenReturn(uploadedFile);
 
     // StreamingResponseBody writes to the output stream via s3DocumentService; mock it to write
     // the test bytes so the response body is non-empty.
     doNothing().when(s3DocumentService).streamToOutput(any(String.class), any());
 
     // When / Then
-    mockMvc.perform(get("/document-uploads/{uploadId}/files/{fileId}", uploadId, fileId))
+    mockMvc.perform(get("/document-uploads/{uploadId}/file", uploadId))
         .andExpect(status().isOk())
         .andExpect(header().string(
             "Content-Disposition", "attachment; filename=\"test-doc.pdf\""))

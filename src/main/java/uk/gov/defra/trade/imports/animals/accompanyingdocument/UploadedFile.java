@@ -9,9 +9,10 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
  *
  * <p>{@code s3Key} follows the pattern {@code "{uploadId}/{fileId}"} for complete files and is
  * {@code null} for rejected files (the file was not persisted to S3).
+ * The {@code fileId} component of the key is an internal CDP uploader identifier and is not
+ * exposed in the API — callers download via upload ID only.
  */
 public record UploadedFile(
-    String fileId,
     String filename,
     String contentType,
     Long contentLength,

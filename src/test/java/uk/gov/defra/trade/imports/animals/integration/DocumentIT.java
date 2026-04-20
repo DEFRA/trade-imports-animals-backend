@@ -277,7 +277,6 @@ class DocumentIT extends IntegrationBase {
         assertThat(persisted.getFiles()).hasSize(1);
 
         var file = persisted.getFiles().get(0);
-        assertThat(file.fileId()).isEqualTo(FILE_ID_FROM_FIXTURE);
         assertThat(file.filename()).isEqualTo("test.pdf");
         assertThat(file.contentType()).isEqualTo("application/pdf");
         assertThat(file.fileStatus()).isEqualTo(FileStatus.COMPLETE);
@@ -320,7 +319,6 @@ class DocumentIT extends IntegrationBase {
         assertThat(persisted.getFiles()).hasSize(1);
 
         var file = persisted.getFiles().get(0);
-        assertThat(file.fileId()).isEqualTo(FILE_ID_FROM_FIXTURE);
         assertThat(file.filename()).isEqualTo("eicar.pdf");
         assertThat(file.fileStatus()).isEqualTo(FileStatus.REJECTED);
         assertThat(file.s3Key()).isNull();
@@ -395,7 +393,7 @@ class DocumentIT extends IntegrationBase {
     // ---------------------------------------------------------------------------
 
     /**
-     * GET /document-uploads/{id}/files/{fileId} — uploads a test file to LocalStack S3 at the
+     * GET /document-uploads/{id}/file — uploads a test file to LocalStack S3 at the
      * fixture s3Key, then asserts that the endpoint streams the file bytes and returns correct
      * Content-Type and Content-Disposition headers.
      */
@@ -426,7 +424,7 @@ class DocumentIT extends IntegrationBase {
         // Act
         EntityExchangeResult<byte[]> result = webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + uploadId + "/files/" + FILE_ID_FROM_FIXTURE)
+            .uri("/document-uploads/" + uploadId + "/file")
             .exchange()
             .expectStatus().isOk()
             .expectHeader().contentType(MediaType.APPLICATION_PDF)
@@ -463,33 +461,24 @@ class DocumentIT extends IntegrationBase {
     }
 
     /**
-     * GET /document-uploads/{id}/files/{fileId} with an unknown fileId (but valid uploadId)
-     * returns 404 problem+json.
+     * GET /document-uploads/{id}/file where the upload session has no files (scan callback not yet
+     * received) returns 404 problem+json.
      */
     @Test
-    void downloadFile_unknownFileId_shouldReturn404() throws IOException {
-        // Arrange — initiate so document exists, then complete the scan
+    void downloadFile_noFilesPresent_shouldReturn404() {
+        // Arrange — initiate only; do not post a scan callback, so the files list is empty
         String uploadId = initiateAndGetUploadId();
 
-        String completePayload = loadFixtureAsString("fixtures/cdp-scan-callback-complete.json");
-        webClient("NoAuth")
-            .post()
-            .uri("/document-uploads/" + uploadId + "/scan-results")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(completePayload)
-            .exchange()
-            .expectStatus().isNoContent();
-
-        // Act — request a file ID that does not exist
+        // Act — attempt to download before any scan callback has populated the files list
         webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + uploadId + "/files/non-existent-file-id")
+            .uri("/document-uploads/" + uploadId + "/file")
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value((String detail) ->
-                assertThat(detail).contains("non-existent-file-id"));
+                assertThat(detail).contains(uploadId));
     }
 
     // ---------------------------------------------------------------------------
@@ -584,18 +573,16 @@ class DocumentIT extends IntegrationBase {
         assertThat(persisted.getFiles()).hasSize(2);
 
         var cleanFile = persisted.getFiles().stream()
-            .filter(f -> "file-clean-001".equals(f.fileId()))
+            .filter(f -> FileStatus.COMPLETE.equals(f.fileStatus()))
             .findFirst()
             .orElseThrow(() -> new AssertionError("clean file not found"));
-        assertThat(cleanFile.fileStatus()).isEqualTo(FileStatus.COMPLETE);
         assertThat(cleanFile.s3Key()).isNotNull();
         assertThat(cleanFile.s3Key()).isEqualTo(uploadId + "/file-clean-001");
 
         var virusFile = persisted.getFiles().stream()
-            .filter(f -> "file-virus-002".equals(f.fileId()))
+            .filter(f -> FileStatus.REJECTED.equals(f.fileStatus()))
             .findFirst()
             .orElseThrow(() -> new AssertionError("virus file not found"));
-        assertThat(virusFile.fileStatus()).isEqualTo(FileStatus.REJECTED);
         assertThat(virusFile.s3Key()).isNull();
     }
 
@@ -710,7 +697,7 @@ class DocumentIT extends IntegrationBase {
     // ---------------------------------------------------------------------------
 
     /**
-     * GET /document-uploads/{id}/files/{fileId} where the file was rejected (s3Key is null).
+     * GET /document-uploads/{id}/file where the file was rejected (s3Key is null).
      * The endpoint must return 404 before attempting any S3 call — passing null to S3 would
      * cause an SDK error and expose internals.
      */
@@ -731,7 +718,7 @@ class DocumentIT extends IntegrationBase {
         // Act — attempt to download the rejected file
         webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + uploadId + "/files/" + FILE_ID_FROM_FIXTURE)
+            .uri("/document-uploads/" + uploadId + "/file")
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
@@ -743,7 +730,7 @@ class DocumentIT extends IntegrationBase {
     // ---------------------------------------------------------------------------
 
     /**
-     * GET /document-uploads/{id}/files/{fileId} where the file exists in MongoDB (COMPLETE) but
+     * GET /document-uploads/{id}/file where the file exists in MongoDB (COMPLETE) but
      * has no corresponding object in S3. Verifies the endpoint returns 500 with a structured error
      * body rather than hanging or returning a partial response.
      */
@@ -766,7 +753,7 @@ class DocumentIT extends IntegrationBase {
         // Act — request the file; S3 will return NoSuchKey
         webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + uploadId + "/files/" + FILE_ID_FROM_FIXTURE)
+            .uri("/document-uploads/" + uploadId + "/file")
             .exchange()
             .expectStatus().is5xxServerError();
     }

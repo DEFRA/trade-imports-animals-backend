@@ -167,10 +167,9 @@ class DocumentServiceTest {
   // ─── findFile ────────────────────────────────────────────────────────────────
 
   @Test
-  void findFile_shouldThrowNotFoundException_whenFileIdUnknown() {
+  void findFile_shouldThrowNotFoundException_whenNoFilesPresent() {
     // Given
     String uploadId = "upload-id-004";
-    String unknownFileId = "file-id-not-present";
 
     AccompanyingDocument document = AccompanyingDocument.builder()
         .uploadId(uploadId)
@@ -180,8 +179,8 @@ class DocumentServiceTest {
         .thenReturn(Optional.of(document));
 
     // When / Then
-    assertThatThrownBy(() -> documentService.findFile(uploadId, unknownFileId))
+    assertThatThrownBy(() -> documentService.findFile(uploadId))
         .isInstanceOf(NotFoundException.class)
-        .hasMessageContaining(unknownFileId);
+        .hasMessageContaining(uploadId);
   }
 }

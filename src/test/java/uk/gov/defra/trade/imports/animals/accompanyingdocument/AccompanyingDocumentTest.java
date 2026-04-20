@@ -74,8 +74,8 @@ class AccompanyingDocumentTest {
   @Test
   void builder_filesCanBePopulated() {
     UploadedFile file = new UploadedFile(
-        "file-id-1", "test.pdf", "application/pdf", 1024L,
-        "upload-uuid-1/file-id-1", "my-bucket", FileStatus.COMPLETE,
+        "test.pdf", "application/pdf", 1024L,
+        "upload-uuid-1/some-internal-file-id", "my-bucket", FileStatus.COMPLETE,
         "sha256hash", "application/pdf", false, null);
 
     AccompanyingDocument doc = AccompanyingDocument.builder()
@@ -83,7 +83,7 @@ class AccompanyingDocumentTest {
         .build();
 
     assertThat(doc.getFiles()).hasSize(1);
-    assertThat(doc.getFiles().get(0).fileId()).isEqualTo("file-id-1");
+    assertThat(doc.getFiles().get(0).filename()).isEqualTo("test.pdf");
   }
 
   // ─── FileStatus JSON serialisation ───────────────────────────────────────
