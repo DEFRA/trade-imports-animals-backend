@@ -29,6 +29,8 @@ public class Notification {
     
     private AdditionalDetails additionalDetails;
     
+    private Consignor consignor;
+    
     private String cphNumber;
 
     private LocalDateTime created;
