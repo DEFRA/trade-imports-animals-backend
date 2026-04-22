@@ -21,6 +21,8 @@ public class NotificationDto {
 
     private AdditionalDetails additionalDetails;
     
+    private Consignor consignor;
+    
     private String cphNumber;
 
 }
