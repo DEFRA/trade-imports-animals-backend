@@ -100,6 +100,11 @@ class NotificationServiceTest {
             .commodityComplement(List.of(complement))
             .build();
         String cphNumber = "123456789";
+        
+        Transport transport = Transport.builder()
+            .portOfEntry("ABERDEEN")
+            .arrivalDate(LocalDate.of(2026, 1, 1))
+            .build();
 
         Notification existingNotification = new Notification();
         existingNotification.setId(existingId);
@@ -116,6 +121,7 @@ class NotificationServiceTest {
             .additionalDetails(additionalDetails)
             .reasonForImport("PERMANENT")
             .cphNumber(cphNumber)
+            .transport(transport)
             .build();
 
         Notification updatedNotification = Notification.builder()
@@ -126,6 +132,7 @@ class NotificationServiceTest {
             .additionalDetails(additionalDetails)
             .reasonForImport("PERMANENT")
             .cphNumber(cphNumber)
+            .transport(transport)
             .build();
 
         when(notificationRepository.save(any(Notification.class))).thenReturn(updatedNotification);
@@ -148,6 +155,7 @@ class NotificationServiceTest {
         assertThat(result.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
         assertThat(result.getReasonForImport()).isEqualTo("PERMANENT");
         assertThat(result.getCphNumber()).isEqualTo("123456789");
+        assertThat(result.getTransport()).isEqualTo(transport);
         verify(notificationRepository, times(1)).save(any(Notification.class));
     }
 

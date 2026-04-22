@@ -30,6 +30,8 @@ public class Notification {
     private AdditionalDetails additionalDetails;
     
     private String cphNumber;
+    
+    private Transport transport;
 
     private LocalDateTime created;
 

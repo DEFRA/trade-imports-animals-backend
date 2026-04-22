@@ -100,6 +100,7 @@ public class NotificationService {
         notification.setReasonForImport(dto.getReasonForImport());
         notification.setAdditionalDetails(dto.getAdditionalDetails());
         notification.setCphNumber(dto.getCphNumber());
+        notification.setTransport(dto.getTransport());
         notification.setUpdated(LocalDateTime.now());
     }
 

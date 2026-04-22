@@ -22,5 +22,7 @@ public class NotificationDto {
     private AdditionalDetails additionalDetails;
     
     private String cphNumber;
+    
+    private Transport transport;
 
 }

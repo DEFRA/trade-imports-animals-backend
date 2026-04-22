@@ -1,8 +1,8 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
+import java.time.LocalDate;
 import java.util.List;
 import org.hamcrest.Matchers;
 import org.springframework.core.ParameterizedTypeReference;
@@ -10,7 +10,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
-import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
@@ -22,6 +21,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Species;
+import uk.gov.defra.trade.imports.animals.notification.Transport;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 class NotificationIT extends IntegrationBase {
@@ -43,105 +43,93 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void post_shouldCreateNewNotification() {
+    void post_shouldMapAllFieldsToNotificationAndSave() {
         // Given
-        NotificationDto notificationDto = createNotificationDto("GB", "Live bovine animals");
+        Species species = NotificationTestData.species();
+        CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species));
+        Commodity commodity = Commodity.builder()
+            .name("Live bovine animals")
+            .commodityComplement(List.of(complement))
+            .build();
+        Transport transport = Transport.builder()
+            .portOfEntry("GBFXT")
+            .arrivalDate(LocalDate.of(2026, 4, 22))
+            .build();
+        NotificationDto notificationDto = NotificationDto.builder()
+            .origin(new Origin("GB", "true", "REF-001"))
+            .commodity(commodity)
+            .reasonForImport("PERMANENT")
+            .additionalDetails(new AdditionalDetails("HUMAN_CONSUMPTION", "true"))
+            .cphNumber("22/123/4567")
+            .transport(transport)
+            .build();
 
         // When
-        EntityExchangeResult<Notification> result = webClient("NoAuth")
+        Notification created = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
             .bodyValue(notificationDto)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
-            .returnResult();
+            .returnResult().getResponseBody();
 
-        // Then
-        Notification created = result.getResponseBody();
+        // Then — verify response
         assertThat(created).isNotNull();
         assertThat(created.getId()).isNotNull();
-        assertThat(created.getReferenceNumber()).isNotNull();
-        assertThat(created.getReferenceNumber()).startsWith("DRAFT.IMP.");
-        assertThat(created.getOrigin()).isNotNull();
-        assertThat(created.getOrigin().getCountryCode()).isEqualTo("GB");
-        assertThat(created.getCommodity().getName()).isEqualTo("Live bovine animals");
         assertThat(created.getReferenceNumber()).matches("DRAFT\\.IMP\\.\\d{4}\\..+");
         assertThat(created.getReferenceNumber()).contains(created.getId());
-    }
 
-    @Test
-    void post_shouldCreateNotificationWithOriginDetails() {
-        // Given
-        Origin origin = new Origin("IE", "true", "REF-001");
-        NotificationDto notificationDto = NotificationDto.builder()
-            .origin(origin)
-            .commodity(Commodity.builder().name("Live cattle").build())
-            .build();
-
-        // When
-        EntityExchangeResult<Notification> result = webClient("NoAuth")
-            .post()
-            .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDto)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Notification.class)
-            .returnResult();
-
-        // Then
-        Notification created = result.getResponseBody();
-        assertThat(created).isNotNull();
-        assertThat(created.getId()).isNotNull();
-        assertThat(created.getReferenceNumber()).isNotNull();
-        assertThat(created.getOrigin().getCountryCode()).isEqualTo("IE");
+        assertThat(created.getOrigin().getCountryCode()).isEqualTo("GB");
         assertThat(created.getOrigin().getRequiresRegionCode()).isEqualTo("true");
         assertThat(created.getOrigin().getInternalReference()).isEqualTo("REF-001");
-        assertThat(created.getCommodity().getName()).isEqualTo("Live cattle");
-    }
 
-    @Test
-    void post_shouldUpdateExistingNotification() {
-        // Given - create initial notification
-        NotificationDto initial = createNotificationDto("FR", "Live sheep");
-        EntityExchangeResult<Notification> createResult = webClient("NoAuth")
-            .post()
-            .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(initial)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Notification.class)
-            .returnResult();
+        assertThat(created.getCommodity().getName()).isEqualTo("Live bovine animals");
+        CommodityComplement createdComplement = created.getCommodity().getCommodityComplement().getFirst();
+        assertThat(createdComplement.getTypeOfCommodity()).isEqualTo("LIVE");
+        assertThat(createdComplement.getTotalNoOfAnimals()).isEqualTo(10);
+        assertThat(createdComplement.getTotalNoOfPackages()).isEqualTo(5);
+        Species createdSpecies = createdComplement.getSpecies().getFirst();
+        assertThat(createdSpecies.getValue()).isEqualTo("BOV");
+        assertThat(createdSpecies.getText()).isEqualTo("Bovine");
+        assertThat(createdSpecies.getNoOfAnimals()).isEqualTo(10);
+        assertThat(createdSpecies.getNoOfPackages()).isEqualTo(5);
+        assertThat(createdSpecies.getEarTag()).isEqualTo("UK01234567890");
+        assertThat(createdSpecies.getPassport()).isEqualTo("UK0123456700999");
 
-        String createdId = createResult.getResponseBody().getId();
-        String referenceNumber = createResult.getResponseBody().getReferenceNumber();
+        assertThat(created.getReasonForImport()).isEqualTo("PERMANENT");
+        assertThat(created.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
+        assertThat(created.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
+        assertThat(created.getCphNumber()).isEqualTo("22/123/4567");
+        assertThat(created.getTransport().getPortOfEntry()).isEqualTo("GBFXT");
+        assertThat(created.getTransport().getArrivalDate()).isEqualTo(LocalDate.of(2026, 4, 22));
 
-        // When - update the notification
-        NotificationDto updateDto = NotificationDto.builder()
-            .referenceNumber(referenceNumber)
-            .origin(new Origin("ES", "false", "REF-002"))
-            .commodity(Commodity.builder().name("Live pigs").build())
-            .build();
+        // Verify persisted — reload via API
+        Notification persisted = findAllNotifications().getFirst();
+        assertThat(persisted.getId()).isEqualTo(created.getId());
+        assertThat(persisted.getOrigin().getCountryCode()).isEqualTo("GB");
+        assertThat(persisted.getOrigin().getRequiresRegionCode()).isEqualTo("true");
+        assertThat(persisted.getOrigin().getInternalReference()).isEqualTo("REF-001");
 
-        EntityExchangeResult<Notification> result = webClient("NoAuth")
-            .post()
-            .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(updateDto)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Notification.class)
-            .returnResult();
+        assertThat(persisted.getCommodity().getName()).isEqualTo("Live bovine animals");
+        CommodityComplement persistedComplement = persisted.getCommodity().getCommodityComplement().getFirst();
+        assertThat(persistedComplement.getTypeOfCommodity()).isEqualTo("LIVE");
+        assertThat(persistedComplement.getTotalNoOfAnimals()).isEqualTo(10);
+        assertThat(persistedComplement.getTotalNoOfPackages()).isEqualTo(5);
+        Species persistedSpecies = persistedComplement.getSpecies().getFirst();
+        assertThat(persistedSpecies.getValue()).isEqualTo("BOV");
+        assertThat(persistedSpecies.getText()).isEqualTo("Bovine");
+        assertThat(persistedSpecies.getNoOfAnimals()).isEqualTo(10);
+        assertThat(persistedSpecies.getNoOfPackages()).isEqualTo(5);
+        assertThat(persistedSpecies.getEarTag()).isEqualTo("UK01234567890");
+        assertThat(persistedSpecies.getPassport()).isEqualTo("UK0123456700999");
 
-        // Then
-        Notification updated = result.getResponseBody();
-        assertThat(updated).isNotNull();
-        assertThat(updated.getId()).isEqualTo(createdId);
-        assertThat(updated.getReferenceNumber()).isEqualTo(referenceNumber);
-        assertThat(updated.getOrigin().getCountryCode()).isEqualTo("ES");
-        assertThat(updated.getCommodity().getName()).isEqualTo("Live pigs");
-
-        // Verify only one notification exists
-        assertThat(findAllNotifications()).hasSize(1);
+        assertThat(persisted.getReasonForImport()).isEqualTo("PERMANENT");
+        assertThat(persisted.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
+        assertThat(persisted.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
+        assertThat(persisted.getCphNumber()).isEqualTo("22/123/4567");
+        assertThat(persisted.getTransport().getPortOfEntry()).isEqualTo("GBFXT");
+        assertThat(persisted.getTransport().getArrivalDate()).isEqualTo(LocalDate.of(2026, 4, 22));
     }
 
     @Test
@@ -221,193 +209,42 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void post_shouldUpdateExistingNotificationWithSameReferenceNumber() {
-        // Given - create first notification
-        NotificationDto notificationDto1 = createNotificationDto("GB", "Live cattle");
-        EntityExchangeResult<Notification> createResult = webClient("NoAuth")
-            .post()
-            .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDto1)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Notification.class)
-            .returnResult();
-
-        String referenceNumber = createResult.getResponseBody().getReferenceNumber();
-
-        // When - attempt to create second notification with same referenceNumber
-        Origin origin = new Origin();
-        origin.setCountryCode("IE");
-        NotificationDto notificationDto2 = NotificationDto.builder()
-            .referenceNumber(referenceNumber)
-            .origin(origin)
-            .commodity(Commodity.builder().name("Live sheep").build())
+    void post_shouldUpdateAllFieldsOnExistingNotification() {
+        // Given — create a notification with initial values for all fields
+        Species initialSpecies = new Species("OVI", "Ovine", 5, 2, "UK09876543210", "UK0987654300888");
+        CommodityComplement initialComplement = new CommodityComplement("LIVE", 5, 2, List.of(initialSpecies));
+        NotificationDto initial = NotificationDto.builder()
+            .origin(new Origin("IE", "false", "REF-initial"))
+            .commodity(Commodity.builder()
+                .name("Live ovine animals")
+                .commodityComplement(List.of(initialComplement))
+                .build())
+            .reasonForImport("TRANSIT")
+            .additionalDetails(new AdditionalDetails("OTHER", "false"))
+            .cphNumber("11/111/1111")
+            .transport(Transport.builder().portOfEntry("GBBEL").arrivalDate(LocalDate.of(2026, 1, 1)).build())
             .build();
 
-        // Then - expect updated notification
-        webClient("NoAuth")
-            .post()
-            .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDto2)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Notification.class)
-            .returnResult();
-
-        // Verify only one notification was saved
-        List<Notification> allNotifications = findAllNotifications();
-        assertThat(allNotifications).hasSize(1);
-        assertThat(allNotifications.getFirst().getReferenceNumber()).isEqualTo(referenceNumber);
-        assertThat(allNotifications.getFirst().getOrigin().getCountryCode()).isEqualTo("IE");
-        assertThat(allNotifications.getFirst().getCommodity().getName()).isEqualTo("Live sheep");
-    }
-
-    @Test
-    void fullCrudFlow_shouldWorkEndToEnd() {
-        // 1. Create notification
-        NotificationDto createDto = createNotificationDto("NL", "Live horses");
-        EntityExchangeResult<Notification> createResult = webClient("NoAuth")
-            .post()
-            .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createDto)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Notification.class)
-            .returnResult();
-
-        Notification created = createResult.getResponseBody();
-        assertThat(created.getId()).isNotNull();
-        assertThat(created.getReferenceNumber()).isNotNull();
-        assertThat(created.getReferenceNumber()).startsWith("DRAFT.IMP.");
-        assertThat(created.getOrigin().getCountryCode()).isEqualTo("NL");
-        assertThat(created.getCommodity().getName()).isEqualTo("Live horses");
-
-        // 2. Verify findAll returns the created notification
-        List<Notification> allNotifications = findAllNotifications();
-        assertThat(allNotifications).hasSize(1);
-        assertThat(allNotifications.get(0).getId()).isEqualTo(created.getId());
-
-        // 3. Update the notification
-        NotificationDto updateDto = NotificationDto.builder()
-            .referenceNumber(created.getReferenceNumber())
-            .origin(new Origin("BE", "false", "REF-BE-001"))
-            .commodity(Commodity.builder().name("Live donkeys").build())
-            .build();
-
-        EntityExchangeResult<Notification> updateResult = webClient("NoAuth")
-            .post()
-            .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(updateDto)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Notification.class)
-            .returnResult();
-
-        Notification updated = updateResult.getResponseBody();
-        assertThat(updated.getId()).isEqualTo(created.getId());
-        assertThat(updated.getReferenceNumber()).isEqualTo(created.getReferenceNumber());
-        assertThat(updated.getOrigin().getCountryCode()).isEqualTo("BE");
-        assertThat(updated.getCommodity().getName()).isEqualTo("Live donkeys");
-
-        // 4. Verify only one notification exists
-        assertThat(findAllNotifications()).hasSize(1);
-
-        // 5. Verify the notification was updated in database
-        Notification persisted = notificationRepository.findById(created.getId()).orElse(null);
-        assertThat(persisted).isNotNull();
-        assertThat(persisted.getOrigin().getCountryCode()).isEqualTo("BE");
-        assertThat(persisted.getCommodity().getName()).isEqualTo("Live donkeys");
-    }
-
-    @Test
-    void post_shouldHandleDifferentCommodityTypes() {
-        // Given - create notifications with different commodity types
-        NotificationDto cattle = createNotificationDto("GB", "Live bovine animals");
-        NotificationDto sheep = createNotificationDto("IE", "Live ovine animals");
-        NotificationDto pigs = createNotificationDto("FR", "Live porcine animals");
-
-        // When - create all notifications
-        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(cattle).exchange()
-            .expectStatus().isOk();
-        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(sheep).exchange()
-            .expectStatus().isOk();
-        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(pigs).exchange()
-            .expectStatus().isOk();
-
-        // Then
-        List<Notification> notifications = findAllNotifications();
-        assertThat(notifications).hasSize(3);
-        assertThat(notifications)
-            .extracting(Notification::getCommodity).extracting(Commodity::getName)
-            .containsExactlyInAnyOrder(
-                "Live bovine animals",
-                "Live ovine animals",
-                "Live porcine animals"
-            );
-    }
-
-    @Test
-    void post_shouldCreateNotificationWithAdditionalDetails() {
-        // Given
-        AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
-        Species species = species();
-        CommodityComplement complement = new CommodityComplement("LIVE", 10, null, List.of(species));
-        Commodity commodity = Commodity.builder()
-            .name("Live bovine animals")
-            .commodityComplement(List.of(complement))
-            .build();
-        NotificationDto notificationDto = NotificationDto.builder()
-            .origin(new Origin("GB", "true", "REF-001"))
-            .commodity(commodity)
-            .additionalDetails(additionalDetails)
-            .reasonForImport("PERMANENT")
-            .build();
-
-        // When
-        EntityExchangeResult<Notification> result = webClient("NoAuth")
-            .post()
-            .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDto)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Notification.class)
-            .returnResult();
-
-        // Then
-        Notification created = result.getResponseBody();
-        assertThat(created).isNotNull();
-        assertThat(created.getAdditionalDetails()).isNotNull();
-        assertThat(created.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
-        assertThat(created.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
-        assertThat(created.getReasonForImport()).isEqualTo("PERMANENT");
-        assertThat(created.getCommodity().getCommodityComplement()).hasSize(1);
-        assertThat(created.getCommodity().getCommodityComplement().getFirst().getTypeOfCommodity()).isEqualTo("LIVE");
-        assertThat(created.getCommodity().getCommodityComplement().getFirst().getTotalNoOfAnimals()).isEqualTo(10);
-        assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies()).hasSize(1);
-        assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getValue()).isEqualTo("BOV");
-        assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getText()).isEqualTo("Bovine");
-        assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getEarTag()).isEqualTo("UK01234567890");
-        assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getPassport()).isEqualTo("UK0123456700999");
-        assertThat(created.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getNoOfAnimals()).isEqualTo(10);
-    }
-
-    @Test
-    void post_shouldUpdateAdditionalDetails_onExistingNotification() {
-        // Given — create a notification without additionalDetails
-        NotificationDto initial = createNotificationDto("GB", "Live bovine animals");
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT).bodyValue(initial)
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
-        // When — update with additionalDetails
-        AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "false");
+        // When — update every field with new values
+        Species updatedSpecies = NotificationTestData.species();
+        CommodityComplement updatedComplement = new CommodityComplement("LIVE", 10, 5, List.of(updatedSpecies));
         NotificationDto updateDto = NotificationDto.builder()
             .referenceNumber(referenceNumber)
-            .origin(new Origin("GB", "true", "REF-001"))
-            .commodity(Commodity.builder().name("Live bovine animals").build())
-            .additionalDetails(additionalDetails)
+            .origin(new Origin("GB", "true", "REF-updated"))
+            .commodity(Commodity.builder()
+                .name("Live bovine animals")
+                .commodityComplement(List.of(updatedComplement))
+                .build())
+            .reasonForImport("PERMANENT")
+            .additionalDetails(new AdditionalDetails("HUMAN_CONSUMPTION", "true"))
+            .cphNumber("22/123/4567")
+            .transport(Transport.builder().portOfEntry("GBFXT").arrivalDate(LocalDate.of(2026, 4, 22)).build())
             .build();
 
         Notification updated = webClient("NoAuth")
@@ -416,15 +253,45 @@ class NotificationIT extends IntegrationBase {
             .expectBody(Notification.class).returnResult()
             .getResponseBody();
 
-        // Then
+        // Then — verify response reflects updated values
         assertThat(updated).isNotNull();
-        assertThat(updated.getAdditionalDetails()).isNotNull();
+        assertThat(updated.getReferenceNumber()).isEqualTo(referenceNumber);
+        assertThat(updated.getOrigin().getCountryCode()).isEqualTo("GB");
+        assertThat(updated.getOrigin().getRequiresRegionCode()).isEqualTo("true");
+        assertThat(updated.getOrigin().getInternalReference()).isEqualTo("REF-updated");
+        assertThat(updated.getCommodity().getName()).isEqualTo("Live bovine animals");
+        CommodityComplement updatedComplementResult = updated.getCommodity().getCommodityComplement().getFirst();
+        assertThat(updatedComplementResult.getTypeOfCommodity()).isEqualTo("LIVE");
+        assertThat(updatedComplementResult.getTotalNoOfAnimals()).isEqualTo(10);
+        assertThat(updatedComplementResult.getTotalNoOfPackages()).isEqualTo(5);
+        Species updatedSpeciesResult = updatedComplementResult.getSpecies().getFirst();
+        assertThat(updatedSpeciesResult.getValue()).isEqualTo("BOV");
+        assertThat(updatedSpeciesResult.getText()).isEqualTo("Bovine");
+        assertThat(updatedSpeciesResult.getNoOfAnimals()).isEqualTo(10);
+        assertThat(updatedSpeciesResult.getNoOfPackages()).isEqualTo(5);
+        assertThat(updatedSpeciesResult.getEarTag()).isEqualTo("UK01234567890");
+        assertThat(updatedSpeciesResult.getPassport()).isEqualTo("UK0123456700999");
+        assertThat(updated.getReasonForImport()).isEqualTo("PERMANENT");
         assertThat(updated.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
-        assertThat(updated.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("false");
+        assertThat(updated.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
+        assertThat(updated.getCphNumber()).isEqualTo("22/123/4567");
+        assertThat(updated.getTransport().getPortOfEntry()).isEqualTo("GBFXT");
+        assertThat(updated.getTransport().getArrivalDate()).isEqualTo(LocalDate.of(2026, 4, 22));
 
-        // Verify persisted
-        Notification persisted = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        // Verify only one notification exists and reload via API
+        List<Notification> all = findAllNotifications();
+        assertThat(all).hasSize(1);
+        Notification persisted = all.getFirst();
+        assertThat(persisted.getOrigin().getCountryCode()).isEqualTo("GB");
+        assertThat(persisted.getOrigin().getRequiresRegionCode()).isEqualTo("true");
+        assertThat(persisted.getOrigin().getInternalReference()).isEqualTo("REF-updated");
+        assertThat(persisted.getCommodity().getName()).isEqualTo("Live bovine animals");
+        assertThat(persisted.getReasonForImport()).isEqualTo("PERMANENT");
         assertThat(persisted.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
+        assertThat(persisted.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
+        assertThat(persisted.getCphNumber()).isEqualTo("22/123/4567");
+        assertThat(persisted.getTransport().getPortOfEntry()).isEqualTo("GBFXT");
+        assertThat(persisted.getTransport().getArrivalDate()).isEqualTo(LocalDate.of(2026, 4, 22));
     }
 
     @Test
