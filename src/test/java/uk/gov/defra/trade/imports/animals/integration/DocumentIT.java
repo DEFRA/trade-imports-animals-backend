@@ -210,7 +210,7 @@ class DocumentIT extends IntegrationBase {
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
             .bodyValue("""
-                {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234"}
+                {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234","dateOfIssue":"2026-01-15"}
                 """)
             .exchange()
             .expectStatus().isCreated()
@@ -619,31 +619,6 @@ class DocumentIT extends IntegrationBase {
             .isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
     }
 
-    /**
-     * Initiates a document upload without dateOfIssue, then asserts the stored dateOfIssue is null.
-     */
-    @Test
-    void initiate_withoutDateOfIssue_shouldPersistNullDateOfIssue() throws IOException {
-        // Act — no dateOfIssue field in the request body
-        EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
-            .post()
-            .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
-            .bodyValue("""
-                {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234"}
-                """)
-            .exchange()
-            .expectStatus().isCreated()
-            .expectBody(DocumentUploadResponse.class)
-            .returnResult();
-
-        String uploadId = result.getResponseBody().uploadId();
-
-        // Assert MongoDB
-        AccompanyingDocument doc =
-            accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
-        assertThat(doc.getDateOfIssue()).isNull();
-    }
-
     // ---------------------------------------------------------------------------
     // Test: null numberOfRejectedFiles in scan callback → REJECTED
     // ---------------------------------------------------------------------------
@@ -773,7 +748,7 @@ class DocumentIT extends IntegrationBase {
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
             .bodyValue("""
-                {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234"}
+                {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234","dateOfIssue":"2026-01-15"}
                 """)
             .exchange()
             .expectStatus().isCreated()
