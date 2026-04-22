@@ -57,7 +57,7 @@ public class S3DocumentService {
           "Failed to stream document from S3: " + ex.awsErrorDetails().errorMessage());
     } catch (IOException ex) {
       throw new TradeImportsAnimalsBackendException(
-          "I/O error while streaming document from S3: " + ex.getMessage());
+          "I/O error while streaming document from S3: " + ex.getMessage(), ex);
     }
   }
 }

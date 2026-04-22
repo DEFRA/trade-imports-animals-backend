@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.configuration;
 import java.net.URI;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -23,6 +24,7 @@ import uk.gov.defra.trade.imports.animals.exceptions.TradeImportsAnimalsBackendE
 
 @Slf4j
 @Configuration
+@RequiredArgsConstructor
 public class AwsConfig {
 
     @Value("${aws.region}")
@@ -34,14 +36,7 @@ public class AwsConfig {
     @Value("${aws.sts.token.expiration}")
     private Integer expiration;
 
-    @Value("${app.aws.endpoint-override:}")
-    private String endpointOverride;
-
-    @Value("${app.aws.access-key-id:}")
-    private String accessKeyId;
-
-    @Value("${app.aws.secret-access-key:}")
-    private String secretAccessKey;
+    private final AppAwsConfig appAwsConfig;
 
     private StsClient stsClient() {
 
@@ -72,13 +67,16 @@ public class AwsConfig {
 
     @Bean
     public S3Client s3Client() {
-        boolean hasEndpointOverride = endpointOverride != null && !endpointOverride.isBlank();
-        boolean hasStaticCredentials = accessKeyId != null && !accessKeyId.isBlank()
-            && secretAccessKey != null && !secretAccessKey.isBlank();
+        boolean hasEndpointOverride = appAwsConfig.endpointOverride() != null
+            && !appAwsConfig.endpointOverride().isBlank();
+        boolean hasStaticCredentials = appAwsConfig.accessKeyId() != null
+            && !appAwsConfig.accessKeyId().isBlank()
+            && appAwsConfig.secretAccessKey() != null
+            && !appAwsConfig.secretAccessKey().isBlank();
 
         var credentialsProvider = hasEndpointOverride && hasStaticCredentials
             ? StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(accessKeyId, secretAccessKey))
+                AwsBasicCredentials.create(appAwsConfig.accessKeyId(), appAwsConfig.secretAccessKey()))
             : DefaultCredentialsProvider.builder().build();
 
         S3ClientBuilder builder = S3Client.builder()
@@ -90,8 +88,8 @@ public class AwsConfig {
                 .apiCallAttemptTimeout(Duration.ofSeconds(10)));
 
         if (hasEndpointOverride) {
-            log.info("Using S3 endpoint override: {}", endpointOverride);
-            builder.endpointOverride(URI.create(endpointOverride))
+            log.info("Using S3 endpoint override: {}", appAwsConfig.endpointOverride());
+            builder.endpointOverride(URI.create(appAwsConfig.endpointOverride()))
                    .serviceConfiguration(S3Configuration.builder()
                        .pathStyleAccessEnabled(true)
                        .build());

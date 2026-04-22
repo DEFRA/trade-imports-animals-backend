@@ -52,7 +52,7 @@ class NotificationServiceTest {
     private static final String TEST_USER_ID = "test-user-id";
 
     @Test
-    void shouldCreateNewNotificationWithGeneratedReferenceNumber() {
+    void saveOriginOfImport_shouldCreateNotificationWithGeneratedReferenceNumber() {
         // Given - new notification without referenceNumber
         Origin origin = new Origin("GB", "true", "REF123");
         NotificationDto notificationDto = NotificationDto.builder()
@@ -89,7 +89,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    void shouldUpdateExistingNotification() {
+    void saveOriginOfImport_shouldUpdateExistingNotification() {
         // Given - existing notification with ID and reference number
         String existingId = "507f191e810c19729de860ea";
         String referenceNumber = "DRAFT.IMP.2026." + existingId;

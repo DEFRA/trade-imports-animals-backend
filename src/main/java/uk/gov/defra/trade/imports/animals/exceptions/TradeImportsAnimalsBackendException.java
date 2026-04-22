@@ -9,4 +9,8 @@ public class TradeImportsAnimalsBackendException extends RuntimeException {
     public TradeImportsAnimalsBackendException(String message) {
         super(message);
     }
+
+    public TradeImportsAnimalsBackendException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

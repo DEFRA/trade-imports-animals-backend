@@ -103,7 +103,8 @@ class DocumentIT extends IntegrationBase {
     // ---------------------------------------------------------------------------
     // @SuppressWarnings("resource"): GenericContainer is Closeable, but this is an intentionally
     // long-lived static container — lifecycle is managed by Testcontainers' Ryuk reaper.
-    // TODO: replace CDP_UPLOADER_IMAGE with a pinned digest/tag once a stable release is tagged.
+    // Intentionally unpinned: latest catches cdp-uploader contract changes early in the absence
+    // of contract testing. Pin this if/when contract tests are introduced.
     private static final String CDP_UPLOADER_IMAGE = "defradigital/cdp-uploader:latest";
 
     @SuppressWarnings("resource")
@@ -127,7 +128,7 @@ class DocumentIT extends IntegrationBase {
                 .withStartupTimeout(Duration.ofSeconds(60)));
 
     // S3 client wired to LocalStack for test setup (pre-creating buckets / uploading objects)
-    private static S3Client localStackS3Client;
+    private static final S3Client localStackS3Client;
 
     static {
         // Start LocalStack and Redis first; cdp-uploader depends on both.

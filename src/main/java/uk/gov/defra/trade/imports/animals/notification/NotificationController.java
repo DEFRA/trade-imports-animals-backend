@@ -2,6 +2,9 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -38,6 +41,10 @@ public class NotificationController {
     @GetMapping("/{referenceNumber}")
     @Operation(summary = "Get notification by reference number",
         description = "Returns a single notification with its accompanying documents")
+    @ApiResponse(responseCode = "200", description = "Notification returned",
+        content = @Content(schema = @Schema(implementation = NotificationResponse.class)))
+    @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.getNotificationByRef.time")
     public ResponseEntity<NotificationResponse> findByRef(@PathVariable String referenceNumber) {
         log.debug("GET /notifications/{} - Fetching notification", referenceNumber);
@@ -54,6 +61,8 @@ public class NotificationController {
 
     @GetMapping("/reference-numbers")
     @Operation(summary = "List notification reference numbers", description = "Returns all notification reference numbers without loading full documents")
+    @ApiResponse(responseCode = "200", description = "Reference number list returned", content = @Content)
+    @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
     @Timed("controller.getAllReferenceNumbers.time")
     public List<String> findAllReferenceNumbers() {
         log.debug("GET /notifications/reference-numbers - Fetching all reference numbers");

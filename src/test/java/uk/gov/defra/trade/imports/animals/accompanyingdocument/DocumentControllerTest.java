@@ -26,7 +26,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 @WebMvcTest(DocumentController.class)
-@TestPropertySource(properties = "admin.secret=test-secret")
+@TestPropertySource(properties = {"admin.secret=test-secret", "cdp.tracing.header-name=x-cdp-request-id"})
 class DocumentControllerTest {
 
   @Autowired
