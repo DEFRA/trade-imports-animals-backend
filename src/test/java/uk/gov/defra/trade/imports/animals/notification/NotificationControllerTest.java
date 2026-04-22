@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -22,11 +23,13 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
@@ -238,16 +241,18 @@ class NotificationControllerTest {
     void delete_shouldReturn204_whenAllReferenceNumbersExist() throws Exception {
         // Given
         List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111", "DRAFT.IMP.2026.222");
-        doNothing().when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), any(HttpHeaders.class));
+        doNothing().when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), anyString(), anyString());
 
         // When & Then
         mockMvc.perform(delete("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
+                .header("x-cdp-request-id", "trace-abc")
+                .header("User-Id", "user-123")
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isNoContent());
 
-        verify(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), any(HttpHeaders.class));
+        verify(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), eq("trace-abc"), eq("user-123"));
     }
 
     @Test
@@ -256,13 +261,15 @@ class NotificationControllerTest {
         List<String> referenceNumbers = List.of("DRAFT.IMP.2026.MISSING");
         doThrow(new NotFoundException(
             "Cannot find notifications with reference numbers: DRAFT.IMP.2026.MISSING"))
-            .when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), any(HttpHeaders.class));
+            .when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), anyString(), anyString());
 
         // When & Then — also validates that NotFoundException resolves to 404 (not 500)
         // through the full Spring dispatch chain (GlobalExceptionHandler handler priority check)
         mockMvc.perform(delete("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
+                .header("x-cdp-request-id", "trace-abc")
+                .header("User-Id", "user-123")
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.detail").value(
@@ -275,10 +282,95 @@ class NotificationControllerTest {
         mockMvc.perform(delete("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
+                .header("x-cdp-request-id", "trace-abc")
+                .header("User-Id", "user-123")
                 .content("[]"))
             .andExpect(status().isBadRequest());
 
-        verify(notificationService, never()).deleteByReferenceNumbers(any(), any());
+        verify(notificationService, never()).deleteByReferenceNumbers(any(), any(), any());
+    }
+
+    @Test
+    void delete_shouldReturn400_whenTraceIdHeaderIsMissing() throws Exception {
+        // Given — x-cdp-request-id absent; Spring rejects with 400 before service is called
+        List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111");
+
+        // When & Then
+        mockMvc.perform(delete("/notifications")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
+                .header("User-Id", "user-123")
+                .content(objectMapper.writeValueAsString(referenceNumbers)))
+            .andExpect(status().isBadRequest());
+
+        verify(notificationService, never()).deleteByReferenceNumbers(any(), any(), any());
+    }
+
+    @Test
+    void delete_shouldReturn400_whenUserIdHeaderIsMissing() throws Exception {
+        // Given — User-Id absent; Spring rejects with 400 before service is called
+        List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111");
+
+        // When & Then
+        mockMvc.perform(delete("/notifications")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
+                .header("x-cdp-request-id", "trace-abc")
+                .content(objectMapper.writeValueAsString(referenceNumbers)))
+            .andExpect(status().isBadRequest());
+
+        verify(notificationService, never()).deleteByReferenceNumbers(any(), any(), any());
+    }
+
+    // ─── GET /{referenceNumber} ──────────────────────────────────────────────────
+
+    @Test
+    void findByRef_shouldReturn200WithHydratedNotification() throws Exception {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.abc123";
+        Origin origin = new Origin("GB", "true", "REF-001");
+
+        AccompanyingDocumentDto document = new AccompanyingDocumentDto(
+            "doc-id-001", referenceNumber, "upload-abc-123",
+            DocumentType.ITAHC, "UK/GB/2026/001",
+            null, ScanStatus.COMPLETE,
+            Collections.emptyList(), null, null);
+
+        NotificationResponse response = new NotificationResponse(
+            "notif-id-001", referenceNumber, origin,
+            Commodity.builder().name("Live bovine animals").build(),
+            "PERMANENT", null, null, null, null,
+            List.of(document));
+
+        when(notificationService.findByRef(referenceNumber)).thenReturn(response);
+
+        // When / Then
+        mockMvc.perform(get("/notifications/{referenceNumber}", referenceNumber)
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.referenceNumber").value(referenceNumber))
+            .andExpect(jsonPath("$.origin.countryCode").value("GB"))
+            .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
+            .andExpect(jsonPath("$.accompanyingDocuments").isArray())
+            .andExpect(jsonPath("$.accompanyingDocuments.length()").value(1))
+            .andExpect(jsonPath("$.accompanyingDocuments[0].uploadId").value("upload-abc-123"))
+            .andExpect(jsonPath("$.accompanyingDocuments[0].scanStatus").value("COMPLETE"));
+    }
+
+    @Test
+    void findByRef_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
+        when(notificationService.findByRef(referenceNumber))
+            .thenThrow(new NotFoundException(
+                "Cannot find notification with reference number: " + referenceNumber));
+
+        // When / Then
+        mockMvc.perform(get("/notifications/{referenceNumber}", referenceNumber)
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.detail").value(
+                "Cannot find notification with reference number: " + referenceNumber));
     }
 
     @Test

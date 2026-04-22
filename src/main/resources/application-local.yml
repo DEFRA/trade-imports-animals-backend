@@ -9,6 +9,7 @@ logging:
     org.mongodb.driver: ${LOGGING_LEVEL_ORG_MONGODB_DRIVER:WARN}
     org.springframework: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK:INFO}
     org.springframework.web: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB:INFO}
+    software.amazon.cloudwatchlogs.emf: ERROR
 
 management:
   endpoints:
@@ -23,3 +24,22 @@ spring:
     mongodb:
       ssl:
         enabled: false
+
+# SpringDoc — enable Swagger UI locally
+springdoc:
+  swagger-ui:
+    enabled: true
+
+# App-level AWS overrides for local development
+# Credentials are dummy values accepted by LocalStack — never use real keys here
+app:
+  aws:
+    endpoint-override: http://localhost:4566
+    access-key-id: test
+    secret-access-key: test
+
+# Use host.docker.internal so cdp-uploader (Docker) can POST scan callbacks back to this service
+# running on the host machine. The default (localhost:8085) is unreachable from inside Docker.
+cdp:
+  backend:
+    base-url: ${CDP_BACKEND_BASE_URL:http://host.docker.internal:8085}

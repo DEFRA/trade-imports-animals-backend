@@ -30,6 +30,8 @@ cdp:
     header-name: ${TRACING_HEADER:x-cdp-request-id}
   proxy:
     url: ${HTTP_PROXY:}
+  frontend:
+    base-url: ${CDP_FRONTEND_BASE_URL:http://localhost:3000}
 
 # AWS configuration
 aws:
@@ -49,7 +51,7 @@ logging:
     uk.gov.defra.trade.imports.animals: ${LOG_LEVEL:INFO}
     uk.gov.defra.trade.imports.animals.common.metrics: ${LOGGING_LEVEL_UK_GOV_DEFRA_CDP_TRADE_DEMO_COMMON_METRICS:INFO}
     org.springframework: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK:INFO}
-    org.springframework.web: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB:DEBUG}
+    org.springframework.web: INFO
     org.mongodb.driver: ${LOGGING_LEVEL_ORG_MONGODB_DRIVER:WARN}
 
 # Actuator endpoints
@@ -70,6 +72,11 @@ management:
   health:
     mongo:
       enabled: false
+  # Disable the EMF metrics publisher — no CloudWatch agent is available in tests
+  # and AWS_EMF_NAMESPACE resolves to blank in local dev, causing
+  # InvalidNamespaceException on every scheduler tick.
+  metrics:
+    enabled: false
 
 # Admin secret for privileged endpoints
 admin:

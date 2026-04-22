@@ -116,7 +116,6 @@
     <dependency>
       <groupId>com.fasterxml.jackson.datatype</groupId>
       <artifactId>jackson-datatype-jsr310</artifactId>
-      <version>2.15.0</version>
     </dependency>
 
     <dependency>
@@ -131,9 +130,9 @@
       <scope>compile</scope>
     </dependency>
     <dependency>
-      <groupId>io.jsonwebtoken</groupId>
-      <artifactId>jjwt</artifactId>
-      <version>${jjwt.version}</version>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>s3</artifactId>
+      <version>${amazon.awssdk.version}</version>
     </dependency>
     <dependency>
       <groupId>io.jsonwebtoken</groupId>
@@ -181,19 +180,27 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers</artifactId>
-      <version>1.20.4</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>mongodb</artifactId>
-      <version>1.20.4</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <version>1.20.4</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>localstack</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>software.amazon.awssdk</groupId>
+      <artifactId>url-connection-client</artifactId>
+      <version>${amazon.awssdk.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -207,6 +214,13 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- @{argLine} picks up JaCoCo's -javaagent via late-binding.
+               -XX:+EnableDynamicAgentLoading suppresses JDK warnings about Mockito
+               and ByteBuddy self-attaching as dynamic agents (required until those
+               libraries add native agent support for the JDK version in use). -->
+          <argLine>@{argLine} -XX:+EnableDynamicAgentLoading</argLine>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -221,6 +235,15 @@
         </executions>
         <configuration>
           <skipTests>${skipTests}</skipTests>
+          <!-- See Surefire comment above for argLine rationale. -->
+          <argLine>@{argLine} -XX:+EnableDynamicAgentLoading</argLine>
+          <systemPropertyVariables>
+            <!-- Docker Desktop 29+ requires minimum API version 1.44.
+                 Testcontainers 1.x bundles docker-java 3.4.x which defaults to 1.32.
+                 This property overrides the default so Testcontainers can connect.
+                 Fixed permanently in Testcontainers 2.0.2 (PR #11216). -->
+            <api.version>1.44</api.version>
+          </systemPropertyVariables>
         </configuration>
       </plugin>
       <!-- JaCoCo Code Coverage -->

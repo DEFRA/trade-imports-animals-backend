@@ -5,9 +5,11 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.scheduling.annotation.EnableScheduling;
+import uk.gov.defra.trade.imports.animals.configuration.AppAwsConfig;
+import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 
 @SpringBootApplication
-@EnableConfigurationProperties
+@EnableConfigurationProperties({CdpConfig.class, AppAwsConfig.class})
 @EnableScheduling
 public class Application {
 

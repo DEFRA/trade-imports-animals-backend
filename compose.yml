@@ -58,6 +58,35 @@ services:
     networks:
       - trade-imports-tenant
       
+  cdp-uploader:
+    # TODO: pin to a specific digest/tag once a stable release is tagged (currently :latest)
+    image: defradigital/cdp-uploader:latest
+    container_name: cdp-uploader
+    profiles: ['infra', 'services']
+    ports:
+      - '7337:7337'
+    depends_on:
+      localstack:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      PORT: 7337
+      NODE_ENV: development
+      REDIS_HOST: redis
+      USE_SINGLE_INSTANCE_CACHE: true
+      CONSUMER_BUCKETS: cdp-uploader-quarantine,trade-imports-animals-documents
+      MOCK_VIRUS_SCAN_ENABLED: true
+      MOCK_VIRUS_RESULT_DELAY: 3
+      SQS_ENDPOINT: http://localstack:4566
+      S3_ENDPOINT: http://localstack:4566
+      SQS_SCAN_RESULTS_CALLBACK: http://localstack:4566/000000000000/cdp-uploader-scan-results-callback.fifo
+      AWS_REGION: eu-west-2
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+    networks:
+      - trade-imports-tenant
+
   trade-imports-animals-backend:
     container_name: trade-imports-animals-backend
     profiles: [ 'services' ]
@@ -87,8 +116,12 @@ services:
       MONGO_DATABASE: trade-imports-animals-backend
 
       # AWS (via LocalStack)
-      LOCALSTACK_ENDPOINT: http://localstack:4566
+      APP_AWS_ENDPOINT_OVERRIDE: http://localstack:4566
       AWS_REGION: eu-west-2
+
+      # CDP Uploader
+      CDP_UPLOADER_BASE_URL: http://cdp-uploader:7337
+      CDP_DOCUMENTS_BUCKET: trade-imports-animals-documents
 
       # Logging
       LOG_LEVEL: DEBUG

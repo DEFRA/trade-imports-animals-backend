@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for unit tests (picked up by Logback before Spring starts).
+
+  Must use ECS JSON format because EcsLoggingIT captures System.out and parses JSON log lines.
+  Hardcoded service name/version are fine for tests — EcsLoggingIT only checks the fields exist.
+-->
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <filter class="uk.gov.defra.trade.imports.animals.filter.HealthCheckFilter"/>
+        <encoder class="co.elastic.logging.logback.EcsEncoder">
+            <serviceVersion>0.0.0-test</serviceVersion>
+            <serviceName>trade-imports-animals-backend</serviceName>
+        </encoder>
+    </appender>
+
+    <!-- Suppress WARN-level noise from the EMF library's internal service/environment
+         detection ("Unknown ServiceName", "Unknown Environment"). These are expected
+         in tests where no CloudWatch agent is present. -->
+    <logger name="software.amazon.cloudwatchlogs.emf" level="ERROR"/>
+
+    <!-- Reduce Testcontainers/Docker noise -->
+    <logger name="com.github.dockerjava" level="WARN"/>
+    <logger name="org.testcontainers" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

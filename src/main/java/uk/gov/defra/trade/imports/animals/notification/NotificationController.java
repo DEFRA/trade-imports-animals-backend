@@ -2,15 +2,18 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -35,6 +38,19 @@ public class NotificationController {
         return ResponseEntity.ok(notificationService.saveOriginOfImport(notificationDto));
     }
 
+    @GetMapping("/{referenceNumber}")
+    @Operation(summary = "Get notification by reference number",
+        description = "Returns a single notification with its accompanying documents")
+    @ApiResponse(responseCode = "200", description = "Notification returned",
+        content = @Content(schema = @Schema(implementation = NotificationResponse.class)))
+    @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
+    @Timed("controller.getNotificationByRef.time")
+    public ResponseEntity<NotificationResponse> findByRef(@PathVariable String referenceNumber) {
+        log.debug("GET /notifications/{} - Fetching notification", referenceNumber);
+        return ResponseEntity.ok(notificationService.findByRef(referenceNumber));
+    }
+
     @GetMapping
     @Operation(summary = "List notifications", description = "Returns all import notifications")
     @Timed("controller.getAllNotifications.time")
@@ -45,6 +61,8 @@ public class NotificationController {
 
     @GetMapping("/reference-numbers")
     @Operation(summary = "List notification reference numbers", description = "Returns all notification reference numbers without loading full documents")
+    @ApiResponse(responseCode = "200", description = "Reference number list returned", content = @Content)
+    @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
     @Timed("controller.getAllReferenceNumbers.time")
     public List<String> findAllReferenceNumbers() {
         log.debug("GET /notifications/reference-numbers - Fetching all reference numbers");
@@ -55,12 +73,13 @@ public class NotificationController {
     @Operation(summary = "Delete notifications", description = "Deletes notifications by reference numbers")
     @Timed("controller.deleteNotifications.time")
     public ResponseEntity<Void> delete(@RequestBody List<String> referenceNumbers,
-        @RequestHeader HttpHeaders headers) {
+        @RequestHeader(value = "x-cdp-request-id", required = true) String traceId,
+        @RequestHeader(value = "User-Id", required = true) String userId) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
         log.info("DELETE /notifications - Deleting {} notifications", referenceNumbers.size());
-        notificationService.deleteByReferenceNumbers(referenceNumbers, headers);
+        notificationService.deleteByReferenceNumbers(referenceNumbers, traceId, userId);
         return ResponseEntity.noContent().build();
     }
 }

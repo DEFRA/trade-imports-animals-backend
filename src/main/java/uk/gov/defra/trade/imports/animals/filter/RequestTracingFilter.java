@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.filter;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
@@ -19,6 +20,7 @@ import java.io.IOException;
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@Slf4j
 public class RequestTracingFilter implements Filter {
 
     
@@ -49,6 +51,8 @@ public class RequestTracingFilter implements Filter {
             // Populate request metadata
             MDC.put(MDC_HTTP_METHOD, httpRequest.getMethod());
             MDC.put(MDC_URL_FULL, httpRequest.getRequestURL().toString());
+
+            log.debug("{} {}", httpRequest.getMethod(), httpRequest.getRequestURL());
 
             // Execute filter chain
             chain.doFilter(request, response);
