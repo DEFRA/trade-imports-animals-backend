@@ -100,21 +100,6 @@ class DocumentControllerTest {
         .andExpect(jsonPath("$.errors.documentReference").exists());
   }
 
-  @Test
-  void post_shouldReturn400_whenDateOfIssueIsNull() throws Exception {
-    // Given — dateOfIssue is absent
-    String body = """
-        {"documentType":"ITAHC","documentReference":"UK/GB/2026/001"}
-        """;
-
-    // When / Then
-    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors.dateOfIssue").exists());
-  }
-
   // ---------------------------------------------------------------------------
   // GET /notifications/{ref}/document-uploads
   // ---------------------------------------------------------------------------

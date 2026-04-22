@@ -21,7 +21,7 @@ public record DocumentUploadRequest(
     @Schema(description = "Reference number printed on the document", example = "UK/GB/2026/001234")
     String documentReference,
 
-    @NotNull
+    @Nullable
     @Schema(description = "Date of issue on the physical document", example = "2026-01-15")
     LocalDate dateOfIssue,
 
