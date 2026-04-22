@@ -69,6 +69,52 @@ class DocumentControllerTest {
     assertThat(result.getResponse().getStatus()).isEqualTo(201);
   }
 
+  @Test
+  void post_shouldReturn400_whenDocumentReferenceIsBlank() throws Exception {
+    // Given — documentReference is blank
+    String body = """
+        {"documentType":"ITAHC","documentReference":"","dateOfIssue":"2026-01-15"}
+        """;
+
+    // When / Then
+    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors.documentReference").exists());
+  }
+
+  @Test
+  void post_shouldReturn400_whenDocumentReferenceExceeds100Chars() throws Exception {
+    // Given — documentReference is 101 characters
+    String longRef = "A".repeat(101);
+    String body = String.format(
+        "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
+        longRef);
+
+    // When / Then
+    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors.documentReference").exists());
+  }
+
+  @Test
+  void post_shouldReturn400_whenDateOfIssueIsNull() throws Exception {
+    // Given — dateOfIssue is absent
+    String body = """
+        {"documentType":"ITAHC","documentReference":"UK/GB/2026/001"}
+        """;
+
+    // When / Then
+    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors.dateOfIssue").exists());
+  }
+
   // ---------------------------------------------------------------------------
   // GET /notifications/{ref}/document-uploads
   // ---------------------------------------------------------------------------
@@ -197,7 +243,8 @@ class DocumentControllerTest {
     mockMvc.perform(get("/document-uploads/{uploadId}/file", uploadId))
         .andExpect(status().isOk())
         .andExpect(header().string(
-            "Content-Disposition", "attachment; filename=\"test-doc.pdf\""))
+            "Content-Disposition",
+            "attachment; filename=\"=?UTF-8?Q?test-doc.pdf?=\"; filename*=UTF-8''test-doc.pdf"))
         .andExpect(header().string("Content-Type", "application/pdf"));
   }
 }

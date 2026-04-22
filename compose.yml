@@ -80,6 +80,7 @@ services:
       MOCK_VIRUS_RESULT_DELAY: 3
       SQS_ENDPOINT: http://localstack:4566
       S3_ENDPOINT: http://localstack:4566
+      SQS_SCAN_RESULTS_CALLBACK: http://localstack:4566/000000000000/cdp-uploader-scan-results-callback.fifo
       AWS_REGION: eu-west-2
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test

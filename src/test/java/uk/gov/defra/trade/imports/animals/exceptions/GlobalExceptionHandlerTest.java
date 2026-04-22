@@ -248,6 +248,53 @@ class GlobalExceptionHandlerTest {
         }
     }
 
+    @Test
+    void handleServiceUnavailableException_shouldReturnBadGateway() {
+        // Given
+        String traceId = "test-trace-svc-unavail";
+        MDC.put("trace.id", traceId);
+        ServiceUnavailableException exception =
+            new ServiceUnavailableException("cdp-uploader returned an error response: HTTP 503");
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleServiceUnavailableException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY.value());
+        assertThat(problemDetail.getTitle()).isEqualTo("Upstream Service Error");
+        assertThat(problemDetail.getDetail())
+            .isEqualTo("cdp-uploader returned an error response: HTTP 503");
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/upstream-error"));
+        assertThat(problemDetail.getProperties()).containsKey("traceId");
+        assertThat(problemDetail.getProperties().get("traceId")).isEqualTo(traceId);
+    }
+
+    @Test
+    void handleServiceUnavailableException_shouldHandleNullTraceId() {
+        // Given - no trace ID in MDC
+        ServiceUnavailableException exception =
+            new ServiceUnavailableException("cdp-uploader returned an error response: HTTP 503");
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleServiceUnavailableException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY.value());
+        Map<String, Object> properties = problemDetail.getProperties();
+        if (properties != null) {
+            assertThat(properties).doesNotContainKey("traceId");
+        }
+    }
+
     private MethodArgumentNotValidException createValidationException(FieldError... fieldErrors) {
         try {
             // Create a real MethodParameter with an actual method to avoid NullPointerException

@@ -20,7 +20,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpHeaders;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
@@ -49,12 +48,8 @@ class NotificationServiceTest {
         notificationService = new NotificationService(notificationRepository, auditRepository, documentService);
     }
 
-    private HttpHeaders headersWithAuditFields() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("x-cdp-request-id", "test-trace-id");
-        headers.add("User-Id", "test-user-id");
-        return headers;
-    }
+    private static final String TEST_TRACE_ID = "test-trace-id";
+    private static final String TEST_USER_ID = "test-user-id";
 
     @Test
     void shouldCreateNewNotificationWithGeneratedReferenceNumber() {
@@ -208,14 +203,13 @@ class NotificationServiceTest {
         String ref2 = "DRAFT.IMP.2026.222";
         NotificationReferenceOnly n1 = () -> ref1;
         NotificationReferenceOnly n2 = () -> ref2;
-        HttpHeaders headers = headersWithAuditFields();
 
         when(notificationRepository.findAllByReferenceNumberIn(List.of(ref1, ref2)))
             .thenReturn(List.of(n1, n2));
         when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
         // When
-        notificationService.deleteByReferenceNumbers(List.of(ref1, ref2), headers);
+        notificationService.deleteByReferenceNumbers(List.of(ref1, ref2), TEST_TRACE_ID, TEST_USER_ID);
 
         // Then — deleteAllByReferenceNumberIn is called with the original reference numbers
         verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
@@ -237,7 +231,6 @@ class NotificationServiceTest {
         String existingRef = "DRAFT.IMP.2026.111";
         String missingRef  = "DRAFT.IMP.2026.MISSING";
         NotificationReferenceOnly n1 = () -> existingRef;
-        HttpHeaders headers = headersWithAuditFields();
 
         when(notificationRepository.findAllByReferenceNumberIn(List.of(existingRef, missingRef)))
             .thenReturn(List.of(n1));
@@ -245,7 +238,7 @@ class NotificationServiceTest {
 
         // When / Then
         assertThatThrownBy(() ->
-            notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef), headers))
+            notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef), TEST_TRACE_ID, TEST_USER_ID))
             .isInstanceOf(NotFoundException.class)
             .hasMessageContaining(missingRef);
 
@@ -263,7 +256,6 @@ class NotificationServiceTest {
         // Given
         String missing1 = "DRAFT.IMP.2026.AAA";
         String missing2 = "DRAFT.IMP.2026.BBB";
-        HttpHeaders headers = headersWithAuditFields();
 
         when(notificationRepository.findAllByReferenceNumberIn(List.of(missing1, missing2)))
             .thenReturn(Collections.emptyList());
@@ -271,7 +263,7 @@ class NotificationServiceTest {
 
         // When / Then
         assertThatThrownBy(() ->
-            notificationService.deleteByReferenceNumbers(List.of(missing1, missing2), headers))
+            notificationService.deleteByReferenceNumbers(List.of(missing1, missing2), TEST_TRACE_ID, TEST_USER_ID))
             .isInstanceOf(NotFoundException.class)
             .hasMessageContaining(missing1)
             .hasMessageContaining(missing2);
@@ -283,7 +275,7 @@ class NotificationServiceTest {
     @Test
     void deleteByReferenceNumbers_shouldDoNothing_whenListIsEmpty() {
         // When — empty list is passed (defensive guard; controller rejects this before reaching service)
-        notificationService.deleteByReferenceNumbers(Collections.emptyList(), new HttpHeaders());
+        notificationService.deleteByReferenceNumbers(Collections.emptyList(), TEST_TRACE_ID, TEST_USER_ID);
 
         // Then — repository is never called
         verify(notificationRepository, never()).findAllByReferenceNumberIn(anyList());
@@ -296,14 +288,13 @@ class NotificationServiceTest {
         // Given
         String referenceNumber = "DRAFT.IMP.2026.111";
         NotificationReferenceOnly notificationRef = () -> referenceNumber;
-        HttpHeaders headers = headersWithAuditFields();
 
         when(notificationRepository.findAllByReferenceNumberIn(List.of(referenceNumber)))
             .thenReturn(List.of(notificationRef));
         when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
         // When
-        notificationService.deleteByReferenceNumbers(List.of(referenceNumber), headers);
+        notificationService.deleteByReferenceNumbers(List.of(referenceNumber), TEST_TRACE_ID, TEST_USER_ID);
 
         // Then — notification deleted then documents cascade deleted
         verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(referenceNumber));

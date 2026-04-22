@@ -5,12 +5,14 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
+import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 /**
@@ -101,8 +103,8 @@ public class DocumentService {
           "Duplicate uploadId {} for notification {} — concurrent initiation race",
           response.uploadId(),
           notificationRef);
-      throw new IllegalStateException(
-          "Upload session with id " + response.uploadId() + " already exists", e);
+      throw new ConflictException(
+          "Upload session with id " + response.uploadId() + " already exists");
     }
 
     return new DocumentUploadResponse(response.uploadId(), response.uploadUrl());
@@ -195,6 +197,7 @@ public class DocumentService {
    * @param referenceNumbers the parent notification reference numbers whose documents should be deleted
    */
   public void deleteForNotificationRefs(List<String> referenceNumbers) {
+    Objects.requireNonNull(referenceNumbers, "referenceNumbers must not be null");
     log.info("Cascade deleting accompanying documents for {} notification(s)", referenceNumbers.size());
     accompanyingDocumentRepository.deleteAllByNotificationReferenceNumberIn(referenceNumbers);
   }

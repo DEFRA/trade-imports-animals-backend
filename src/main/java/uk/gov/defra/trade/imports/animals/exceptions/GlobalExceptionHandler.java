@@ -90,6 +90,31 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle upstream service errors (502 Bad Gateway).
+     */
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleServiceUnavailableException(ServiceUnavailableException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.error("Upstream service error (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_GATEWAY,
+            ex.getMessage()
+        );
+
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/upstream-error"));
+        problemDetail.setTitle("Upstream Service Error");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
      * Handle conflict errors (409 Conflict).
      */
     @ExceptionHandler(ConflictException.class)

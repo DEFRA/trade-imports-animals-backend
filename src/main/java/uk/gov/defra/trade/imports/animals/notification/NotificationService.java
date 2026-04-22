@@ -3,13 +3,11 @@ package uk.gov.defra.trade.imports.animals.notification;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
@@ -59,7 +57,7 @@ public class NotificationService {
             .toList();
     }
 
-    public void deleteByReferenceNumbers(List<String> referenceNumbers, HttpHeaders headers) {
+    public void deleteByReferenceNumbers(List<String> referenceNumbers, String traceId, String userId) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return;
         }
@@ -72,14 +70,14 @@ public class NotificationService {
             .filter(ref -> !foundRefs.contains(ref))
             .toList();
         if (!missing.isEmpty()) {
-            createNotificationAuditRecord(referenceNumbers, headers, Result.FAILURE);
+            createNotificationAuditRecord(referenceNumbers, traceId, userId, Result.FAILURE);
             throw new NotFoundException(
                 "Cannot find notifications with reference numbers: " + String.join(", ", missing));
         }
         log.info("Deleting {} notifications", found.size());
         notificationRepository.deleteAllByReferenceNumberIn(referenceNumbers);
         documentService.deleteForNotificationRefs(referenceNumbers);
-        createNotificationAuditRecord(referenceNumbers, headers, Result.SUCCESS);
+        createNotificationAuditRecord(referenceNumbers, traceId, userId, Result.SUCCESS);
     }
 
     private String createReferenceNumber(Notification notification) {
@@ -116,14 +114,14 @@ public class NotificationService {
     }
 
     private void createNotificationAuditRecord(
-        List<String> referenceNumbers, HttpHeaders headers, Result result) {
+        List<String> referenceNumbers, String traceId, String userId, Result result) {
         Audit auditRecord = Audit.builder()
             .action(Action.DELETE_NOTIFICATIONS)
             .result(result)
             .notificationReferenceNumbers(referenceNumbers)
             .numberOfNotifications(referenceNumbers.size())
-            .traceId(Objects.requireNonNull(headers.get("x-cdp-request-id")).getFirst())
-            .userId(Objects.requireNonNull(headers.get("User-Id")).getFirst())
+            .traceId(traceId)
+            .userId(userId)
             .timestamp(LocalDateTime.now())
             .build();
 

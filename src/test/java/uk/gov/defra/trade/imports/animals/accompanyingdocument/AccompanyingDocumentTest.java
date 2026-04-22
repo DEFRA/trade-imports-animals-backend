@@ -33,7 +33,6 @@ class AccompanyingDocumentTest {
         .documentType(DocumentType.ITAHC)
         .documentReference("ITAHC/2026/001")
         .dateOfIssue(now)
-        .fileStatus(FileStatus.COMPLETE)
         .scanStatus(ScanStatus.COMPLETE)
         .created(now)
         .updated(now)
@@ -46,7 +45,6 @@ class AccompanyingDocumentTest {
     assertThat(doc.getDocumentType()).isEqualTo(DocumentType.ITAHC);
     assertThat(doc.getDocumentReference()).isEqualTo("ITAHC/2026/001");
     assertThat(doc.getDateOfIssue()).isEqualTo(now);
-    assertThat(doc.getFileStatus()).isEqualTo(FileStatus.COMPLETE);
     assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
     assertThat(doc.getCreated()).isEqualTo(now);
     assertThat(doc.getUpdated()).isEqualTo(now);
@@ -58,7 +56,6 @@ class AccompanyingDocumentTest {
 
     assertThat(doc.getId()).isNull();
     assertThat(doc.getUploadId()).isNull();
-    assertThat(doc.getFileStatus()).isNull();
   }
 
   // ─── files default to empty list ─────────────────────────────────────────

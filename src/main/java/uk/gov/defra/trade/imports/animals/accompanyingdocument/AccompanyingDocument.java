@@ -63,12 +63,6 @@ public class AccompanyingDocument {
    */
   private Instant dateOfIssue;
 
-  /**
-   * Aggregate file status derived from cdp-uploader callback. Reflects the overall outcome:
-   * {@code COMPLETE} if all files passed, {@code REJECTED} if any were rejected.
-   */
-  private FileStatus fileStatus;
-
   private ScanStatus scanStatus;
 
   /** Individual file entries populated by cdp-uploader callbacks. Initialised to empty list. */

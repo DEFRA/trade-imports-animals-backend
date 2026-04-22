@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -219,7 +220,7 @@ public class DocumentController {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(contentType);
     headers.setContentDisposition(
-        ContentDisposition.attachment().filename(file.filename()).build());
+        ContentDisposition.attachment().filename(file.filename(), StandardCharsets.UTF_8).build());
 
     return ResponseEntity.ok()
         .headers(headers)

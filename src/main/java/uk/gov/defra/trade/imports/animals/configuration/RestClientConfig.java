@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.configuration;
 
 import java.net.http.HttpClient.Builder;
+import javax.net.ssl.SSLContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
@@ -39,12 +40,14 @@ public class RestClientConfig {
   private final TraceIdPropagationInterceptor traceIdInterceptor;
 
   public RestClientConfig(
-      TraceIdPropagationInterceptor traceIdInterceptor) {
+      TraceIdPropagationInterceptor traceIdInterceptor,
+      SSLContext customSslContext) {
     log.info("Configuring HTTP clients with custom SSL context and trace ID propagation");
 
     // Create Java HttpClient with custom SSL context
-
-    Builder builder = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10));
+    Builder builder = HttpClient.newBuilder()
+        .sslContext(customSslContext)
+        .connectTimeout(Duration.ofSeconds(10));
 
     HttpClient httpClient = builder.build();
 

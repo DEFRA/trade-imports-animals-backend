@@ -20,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
+import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 @ExtendWith(MockitoExtension.class)
@@ -67,7 +68,7 @@ class DocumentServiceTest {
     when(cdpConfig.uploader()).thenReturn(uploaderConfig);
     when(cdpConfig.backend()).thenReturn(backendConfig);
     when(cdpConfig.s3()).thenReturn(s3Config);
-    when(uploaderConfig.maxFileSize()).thenReturn(20971520L);
+    when(uploaderConfig.maxFileSize()).thenReturn(52428800L);
     when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
     when(backendConfig.baseUrl()).thenReturn("http://backend");
     when(s3Config.documentsBucket()).thenReturn("documents-bucket");
@@ -116,11 +117,11 @@ class DocumentServiceTest {
     verify(accompanyingDocumentRepository, never()).save(any());
   }
 
-  // ─── initiate — DuplicateKeyException → IllegalStateException ────────────
+  // ─── initiate — DuplicateKeyException → ConflictException (409) ────────────
 
   @Test
-  void initiate_shouldThrowIllegalStateException_whenSaveThrowsDuplicateKeyException() {
-    // Given — production code catches DuplicateKeyException and re-throws IllegalStateException
+  void initiate_shouldThrowConflictException_whenSaveThrowsDuplicateKeyException() {
+    // Given — production code catches DuplicateKeyException and re-throws ConflictException (→ 409)
     String notificationRef = "DRAFT.IMP.2026.concurrent";
     String redirectUrl = "";
 
@@ -129,7 +130,7 @@ class DocumentServiceTest {
     when(cdpConfig.uploader()).thenReturn(uploaderConfig);
     when(cdpConfig.backend()).thenReturn(backendConfig);
     when(cdpConfig.s3()).thenReturn(s3Config);
-    when(uploaderConfig.maxFileSize()).thenReturn(20971520L);
+    when(uploaderConfig.maxFileSize()).thenReturn(52428800L);
     when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
     when(backendConfig.baseUrl()).thenReturn("http://backend");
     when(s3Config.documentsBucket()).thenReturn("documents-bucket");
@@ -146,7 +147,7 @@ class DocumentServiceTest {
 
     // When / Then
     assertThatThrownBy(() -> documentService.initiate(notificationRef, request, redirectUrl))
-        .isInstanceOf(IllegalStateException.class)
+        .isInstanceOf(ConflictException.class)
         .hasMessageContaining("upload-id-dup");
   }
 
@@ -162,6 +163,14 @@ class DocumentServiceTest {
 
     // Then
     verify(accompanyingDocumentRepository).deleteAllByNotificationReferenceNumberIn(referenceNumbers);
+  }
+
+  @Test
+  void deleteForNotificationRefs_shouldThrowNullPointerException_whenReferenceNumbersIsNull() {
+    // When / Then
+    assertThatThrownBy(() -> documentService.deleteForNotificationRefs(null))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessageContaining("referenceNumbers must not be null");
   }
 
   // ─── findFile ────────────────────────────────────────────────────────────────

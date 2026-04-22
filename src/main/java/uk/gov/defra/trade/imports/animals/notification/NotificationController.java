@@ -7,7 +7,6 @@ import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -65,12 +64,13 @@ public class NotificationController {
     @Operation(summary = "Delete notifications", description = "Deletes notifications by reference numbers")
     @Timed("controller.deleteNotifications.time")
     public ResponseEntity<Void> delete(@RequestBody List<String> referenceNumbers,
-        @RequestHeader HttpHeaders headers) {
+        @RequestHeader(value = "x-cdp-request-id", required = true) String traceId,
+        @RequestHeader(value = "User-Id", required = true) String userId) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
         log.info("DELETE /notifications - Deleting {} notifications", referenceNumbers.size());
-        notificationService.deleteByReferenceNumbers(referenceNumbers, headers);
+        notificationService.deleteByReferenceNumbers(referenceNumbers, traceId, userId);
         return ResponseEntity.noContent().build();
     }
 }
