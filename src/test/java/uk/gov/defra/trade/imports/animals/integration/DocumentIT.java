@@ -431,7 +431,7 @@ class DocumentIT extends IntegrationBase {
             .expectHeader().contentType(MediaType.APPLICATION_PDF)
             .expectHeader().valueMatches(
                 HttpHeaders.CONTENT_DISPOSITION,
-                ".*filename=\"test.pdf\".*")
+                ".*filename\\*=UTF-8''test\\.pdf.*")
             .expectBody(byte[].class)
             .returnResult();
 
