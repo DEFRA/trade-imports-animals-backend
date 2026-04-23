@@ -32,6 +32,8 @@ public class Notification {
     private Consignor consignor;
     
     private String cphNumber;
+    
+    private Transport transport;
 
     private LocalDateTime created;
 

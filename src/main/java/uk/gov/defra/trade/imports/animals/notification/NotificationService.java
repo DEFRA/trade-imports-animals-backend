@@ -101,6 +101,7 @@ public class NotificationService {
         notification.setAdditionalDetails(dto.getAdditionalDetails());
         notification.setConsignor(dto.getConsignor());
         notification.setCphNumber(dto.getCphNumber());
+        notification.setTransport(dto.getTransport());
         notification.setUpdated(LocalDateTime.now());
     }
 
