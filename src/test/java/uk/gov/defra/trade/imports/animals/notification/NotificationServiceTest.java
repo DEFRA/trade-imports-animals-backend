@@ -9,6 +9,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
 import java.time.LocalDate;
@@ -120,6 +121,7 @@ class NotificationServiceTest {
             .origin(origin)
             .commodity(commodity)
             .consignor(consignors().getFirst())
+            .destination(destinations().getFirst())
             .additionalDetails(additionalDetails)
             .reasonForImport("PERMANENT")
             .cphNumber(cphNumber)
@@ -132,6 +134,7 @@ class NotificationServiceTest {
             .origin(origin)
             .commodity(commodity)
             .consignor(consignors().getFirst())
+            .destination(destinations().getFirst())
             .additionalDetails(additionalDetails)
             .reasonForImport("PERMANENT")
             .cphNumber(cphNumber)
@@ -160,6 +163,9 @@ class NotificationServiceTest {
         assertThat(result.getConsignor().getName()).isEqualTo("Astra Rosales");
         assertThat(result.getConsignor().getAddress().getAddressLine1()).isEqualTo("43 East Hague Extension");
         assertThat(result.getConsignor().getAddress().getCountry()).isEqualTo("Switzerland");
+        assertThat(result.getDestination().getName()).isEqualTo("United Commerce");
+        assertThat(result.getDestination().getAddress().getAddressLine1()).isEqualTo("446 Church Lane");
+        assertThat(result.getDestination().getAddress().getCountry()).isEqualTo("United Kingdom");
         assertThat(result.getCphNumber()).isEqualTo("123456789");
         assertThat(result.getTransport()).isEqualTo(transport);
         verify(notificationRepository, times(1)).save(any(Notification.class));
