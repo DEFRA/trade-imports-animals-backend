@@ -31,6 +31,8 @@ public class Notification {
     
     private Consignor consignor;
     
+    private Destination destination;
+    
     private String cphNumber;
     
     private Transport transport;
