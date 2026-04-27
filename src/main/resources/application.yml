@@ -42,7 +42,7 @@ cdp:
     max-file-size: ${CDP_UPLOADER_MAX_FILE_SIZE:52428800}
     mime-types: ${CDP_UPLOADER_MIME_TYPES:application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
   backend:
-    base-url: ${CDP_BACKEND_BASE_URL:http://localhost:8085}
+    base-url: ${BACKEND_BASE_URL:http://localhost:8085}
   frontend:
     base-url: ${CDP_FRONTEND_BASE_URL:http://localhost:3000}
   s3:

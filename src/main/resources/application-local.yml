@@ -42,4 +42,4 @@ app:
 # running on the host machine. The default (localhost:8085) is unreachable from inside Docker.
 cdp:
   backend:
-    base-url: ${CDP_BACKEND_BASE_URL:http://host.docker.internal:8085}
+    base-url: ${BACKEND_BASE_URL:http://host.docker.internal:8085}
