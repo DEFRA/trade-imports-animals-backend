@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,6 +59,7 @@ class NotificationControllerTest {
             .commodity(commodity)
             .reasonForImport("PERMANENT")
             .consignor(consignors().getFirst())
+            .destination(destinations().getFirst())
             .build();
 
         String expectedReferenceNumber = "DRAFT.IMP.2026.00000001";
@@ -68,6 +70,7 @@ class NotificationControllerTest {
         savedNotification.setCommodity(commodity);
         savedNotification.setReasonForImport("PERMANENT");
         savedNotification.setConsignor(consignors().getFirst());
+        savedNotification.setDestination(destinations().getFirst());
 
         when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
             .thenReturn(savedNotification);
@@ -90,7 +93,9 @@ class NotificationControllerTest {
                 "UK0123456700999"))
             .andExpect(jsonPath("$.reasonForImport").value("PERMANENT"))
             .andExpect(jsonPath("$.consignor.name").value(consignors().getFirst().getName()))
-            .andExpect(jsonPath("$.consignor.address").value(consignors().getFirst().getAddress()));
+            .andExpect(jsonPath("$.consignor.address").value(consignors().getFirst().getAddress()))
+            .andExpect(jsonPath("$.destination.name").value(destinations().getFirst().getName()))
+            .andExpect(jsonPath("$.destination.address").value(destinations().getFirst().getAddress()));
     }
 
     @Test
@@ -174,6 +179,7 @@ class NotificationControllerTest {
         notification1.setOrigin(origin1);
         notification1.setCommodity(Commodity.builder().name("Live cattle").build());
         notification1.setConsignor(consignors().getFirst());
+        notification1.setDestination(destinations().getFirst());
 
         Origin origin2 = new Origin("FR", "false", "REF-FR-002");
         Notification notification2 = new Notification();
@@ -182,6 +188,7 @@ class NotificationControllerTest {
         notification2.setOrigin(origin2);
         notification2.setCommodity(Commodity.builder().name("Live sheep").build());
         notification2.setConsignor(consignors().getLast());
+        notification2.setDestination(destinations().getLast());
 
         List<Notification> notifications = Arrays.asList(notification1, notification2);
         when(notificationService.findAll()).thenReturn(notifications);
@@ -198,12 +205,16 @@ class NotificationControllerTest {
             .andExpect(jsonPath("$[0].commodity.name").value("Live cattle"))
             .andExpect(jsonPath("$[0].consignor.name").value(consignors().getFirst().getName()))
             .andExpect(jsonPath("$[0].consignor.address").value(consignors().getFirst().getAddress()))
+            .andExpect(jsonPath("$[0].destination.name").value(destinations().getFirst().getName()))
+            .andExpect(jsonPath("$[0].destination.address").value(destinations().getFirst().getAddress()))
             .andExpect(jsonPath("$[1].id").value("507f1f77bcf86cd799439012"))
             .andExpect(jsonPath("$[1].referenceNumber").value("DRAFT.IMP.2026.507f1f77bcf86cd799439012"))
             .andExpect(jsonPath("$[1].origin.countryCode").value("FR"))
             .andExpect(jsonPath("$[1].commodity.name").value("Live sheep"))
             .andExpect(jsonPath("$[1].consignor.name").value(consignors().getLast().getName()))
-            .andExpect(jsonPath("$[1].consignor.address").value(consignors().getLast().getAddress()));
+            .andExpect(jsonPath("$[1].consignor.address").value(consignors().getLast().getAddress()))
+            .andExpect(jsonPath("$[1].destination.name").value(destinations().getLast().getName()))
+            .andExpect(jsonPath("$[1].destination.address").value(destinations().getLast().getAddress()));
     }
 
     @Test
@@ -216,6 +227,7 @@ class NotificationControllerTest {
         notification.setOrigin(origin);
         notification.setCommodity(Commodity.builder().name("Live pigs").build());
         notification.setConsignor(consignors().getFirst());
+        notification.setDestination(destinations().getFirst());
 
         List<Notification> notifications = Collections.singletonList(notification);
         when(notificationService.findAll()).thenReturn(notifications);
@@ -231,7 +243,9 @@ class NotificationControllerTest {
             .andExpect(jsonPath("$[0].origin.countryCode").value("IE"))
             .andExpect(jsonPath("$[0].commodity.name").value("Live pigs"))
             .andExpect(jsonPath("$[0].consignor.name").value(consignors().getFirst().getName()))
-            .andExpect(jsonPath("$[0].consignor.address").value(consignors().getFirst().getAddress()));
+            .andExpect(jsonPath("$[0].consignor.address").value(consignors().getFirst().getAddress()))
+            .andExpect(jsonPath("$[0].destination.name").value(destinations().getFirst().getName()))
+            .andExpect(jsonPath("$[0].destination.address").value(destinations().getFirst().getAddress()));
     }
 
     @Test

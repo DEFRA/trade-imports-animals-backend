@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.utils;
 import java.util.List;
 import uk.gov.defra.trade.imports.animals.notification.Address;
 import uk.gov.defra.trade.imports.animals.notification.Consignor;
+import uk.gov.defra.trade.imports.animals.notification.Destination;
 import uk.gov.defra.trade.imports.animals.notification.Species;
 
 public final class NotificationTestData {
@@ -38,5 +39,26 @@ public final class NotificationTestData {
                     .country("Belgium")
                     .build())
                 .build());
+    }
+    
+    public static List<Destination> destinations() {
+        return List.of(
+            Destination.builder()
+                .name("United Commerce")
+                .address(Address.builder()
+                    .addressLine1("446 Church Lane")
+                    .addressLine2("Manchester S1 2JE")
+                    .country("United Kingdom")
+                    .build())
+                .build(),
+            Destination.builder()
+                .name("Global Trading Co")
+                .address(Address.builder()
+                    .addressLine1("945 Main Street")
+                    .addressLine2("London LS1 5AB")
+                    .country("United Kingdom")
+                    .build())
+                .build()
+        );
     }
 }
