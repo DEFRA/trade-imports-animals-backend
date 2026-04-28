@@ -320,13 +320,14 @@ class NotificationControllerTest {
         AccompanyingDocumentDto document = new AccompanyingDocumentDto(
             "doc-id-001", referenceNumber, "upload-abc-123",
             DocumentType.ITAHC, "UKGB2026001",
-            null, ScanStatus.COMPLETE,
-            Collections.emptyList(), null, null);
+            /* dateOfIssue */ null, ScanStatus.COMPLETE,
+            /* files */ Collections.emptyList(), /* created */ null, /* updated */ null);
 
         NotificationResponse response = new NotificationResponse(
             "notif-id-001", referenceNumber, origin,
             Commodity.builder().name("Live bovine animals").build(),
-            "PERMANENT", null, null, null, null,
+            "PERMANENT", /* additionalDetails */ null, /* cphNumber */ null,
+            /* created */ null, /* updated */ null,
             List.of(document));
 
         when(notificationService.findByRef(referenceNumber)).thenReturn(response);
@@ -342,6 +343,30 @@ class NotificationControllerTest {
             .andExpect(jsonPath("$.accompanyingDocuments.length()").value(1))
             .andExpect(jsonPath("$.accompanyingDocuments[0].uploadId").value("upload-abc-123"))
             .andExpect(jsonPath("$.accompanyingDocuments[0].scanStatus").value("COMPLETE"));
+    }
+
+    @Test
+    void findByRef_shouldReturn200WithEmptyDocumentsList() throws Exception {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.nodocs";
+        Origin origin = new Origin("GB", "true", "REF-002");
+
+        NotificationResponse response = new NotificationResponse(
+            "notif-id-002", referenceNumber, origin,
+            Commodity.builder().name("Live sheep").build(),
+            "PERMANENT", /* additionalDetails */ null, /* cphNumber */ null,
+            /* created */ null, /* updated */ null,
+            Collections.emptyList());
+
+        when(notificationService.findByRef(referenceNumber)).thenReturn(response);
+
+        // When / Then
+        mockMvc.perform(get("/notifications/{referenceNumber}", referenceNumber)
+                .contentType(MediaType.APPLICATION_JSON))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.referenceNumber").value(referenceNumber))
+            .andExpect(jsonPath("$.accompanyingDocuments").isArray())
+            .andExpect(jsonPath("$.accompanyingDocuments").isEmpty());
     }
 
     @Test
