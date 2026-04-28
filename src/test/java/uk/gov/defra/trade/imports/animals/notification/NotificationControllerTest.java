@@ -16,6 +16,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_TRACE_ID;
+import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_USER_ID;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -233,8 +235,8 @@ class NotificationControllerTest {
         mockMvc.perform(delete("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
-                .header("x-cdp-request-id", "trace-abc")
-                .header("User-Id", "user-123")
+                .header(HEADER_TRACE_ID, "trace-abc")
+                .header(HEADER_USER_ID, "user-123")
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isNoContent());
 
@@ -254,8 +256,8 @@ class NotificationControllerTest {
         mockMvc.perform(delete("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
-                .header("x-cdp-request-id", "trace-abc")
-                .header("User-Id", "user-123")
+                .header(HEADER_TRACE_ID, "trace-abc")
+                .header(HEADER_USER_ID, "user-123")
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.detail").value(
@@ -268,8 +270,8 @@ class NotificationControllerTest {
         mockMvc.perform(delete("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
-                .header("x-cdp-request-id", "trace-abc")
-                .header("User-Id", "user-123")
+                .header(HEADER_TRACE_ID, "trace-abc")
+                .header(HEADER_USER_ID, "user-123")
                 .content("[]"))
             .andExpect(status().isBadRequest());
 
@@ -285,7 +287,7 @@ class NotificationControllerTest {
         mockMvc.perform(delete("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
-                .header("User-Id", "user-123")
+                .header(HEADER_USER_ID, "user-123")
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isBadRequest());
 
@@ -301,7 +303,7 @@ class NotificationControllerTest {
         mockMvc.perform(delete("/notifications")
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
-                .header("x-cdp-request-id", "trace-abc")
+                .header(HEADER_TRACE_ID, "trace-abc")
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isBadRequest());
 

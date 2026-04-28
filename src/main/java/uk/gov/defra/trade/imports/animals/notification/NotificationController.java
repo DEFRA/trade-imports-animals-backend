@@ -7,10 +7,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,7 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Notification API", description = "CRUD operations for the notification in the animals journey")
 @Slf4j
 @RequiredArgsConstructor
+@Validated
 public class NotificationController {
+
+    public static final String HEADER_TRACE_ID = "x-cdp-request-id";
+    public static final String HEADER_USER_ID = "User-Id";
 
     private final NotificationService notificationService;
 
@@ -46,8 +52,9 @@ public class NotificationController {
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.getNotificationByRef.time")
-    public ResponseEntity<NotificationResponse> findByRef(@PathVariable String referenceNumber) {
-        log.debug("GET /notifications/{} - Fetching notification", referenceNumber);
+    public ResponseEntity<NotificationResponse> findByRef(
+        @Pattern(regexp = "^[A-Za-z0-9.]{1,50}$") @PathVariable String referenceNumber) {
+        log.info("Fetching notification {}", referenceNumber);
         return ResponseEntity.ok(notificationService.findByRef(referenceNumber));
     }
 
@@ -73,8 +80,8 @@ public class NotificationController {
     @Operation(summary = "Delete notifications", description = "Deletes notifications by reference numbers")
     @Timed("controller.deleteNotifications.time")
     public ResponseEntity<Void> delete(@RequestBody List<String> referenceNumbers,
-        @RequestHeader(value = "x-cdp-request-id", required = true) String traceId,
-        @RequestHeader(value = "User-Id", required = true) String userId) {
+        @RequestHeader(value = NotificationController.HEADER_TRACE_ID, required = true) String traceId,
+        @RequestHeader(value = NotificationController.HEADER_USER_ID, required = true) String userId) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
