@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.configuration;
 
-import java.net.http.HttpClient.Builder;
+import java.net.http.HttpClient;
+import java.time.Duration;
 import javax.net.ssl.SSLContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.web.client.RestTemplateBuilder;
@@ -11,10 +12,6 @@ import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestTemplate;
 import uk.gov.defra.trade.imports.animals.interceptor.TraceIdPropagationInterceptor;
-
-import java.net.http.HttpClient;
-import java.time.Duration;
-import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 
 /**
  * Configuration for HTTP clients with custom SSL/TLS certificates and trace ID propagation.
@@ -45,7 +42,7 @@ public class RestClientConfig {
     log.info("Configuring HTTP clients with custom SSL context and trace ID propagation");
 
     // Create Java HttpClient with custom SSL context
-    Builder builder = HttpClient.newBuilder()
+    HttpClient.Builder builder = HttpClient.newBuilder()
         .sslContext(customSslContext)
         .connectTimeout(Duration.ofSeconds(10));
 
@@ -57,7 +54,6 @@ public class RestClientConfig {
 
     this.customRequestFactory = factory;
     this.traceIdInterceptor = traceIdInterceptor;
-    log.info("HTTP clients configured with custom SSL context and trace ID propagation");
   }
 
   /**
@@ -124,7 +120,8 @@ public class RestClientConfig {
    * RestClient pre-configured with the cdp-uploader base URL.
    *
    * <p>Uses the shared {@link RestClient.Builder} so it inherits custom SSL context and trace ID
-   * propagation. The builder is cloned — the shared bean is not mutated.
+   * propagation. Spring injects a fresh prototype-scoped builder per injection point, so
+   * calling {@code baseUrl} here does not affect other consumers of the shared builder bean.
    */
   @Bean
   public RestClient cdpUploaderRestClient(RestClient.Builder builder, CdpConfig cdpConfig) {

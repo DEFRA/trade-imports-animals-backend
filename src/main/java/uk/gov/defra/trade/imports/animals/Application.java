@@ -9,7 +9,7 @@ import uk.gov.defra.trade.imports.animals.configuration.AppAwsConfig;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 
 @SpringBootApplication
-@EnableConfigurationProperties({CdpConfig.class, AppAwsConfig.class})
+@EnableConfigurationProperties({AppAwsConfig.class, CdpConfig.class})
 @EnableScheduling
 public class Application {
 

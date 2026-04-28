@@ -21,7 +21,7 @@ public record CdpConfig(
     TracingConfig tracing,
     CloudwatchConfig cloudwatch,
     String proxyUrl,
-    UploaderConfig uploader,
+    @NotNull UploaderConfig uploader,
     BackendConfig backend,
     FrontendConfig frontend,
     S3Config s3) {
