@@ -107,6 +107,11 @@ class DocumentIT extends IntegrationBase {
     // of contract testing. Pin this if/when contract tests are introduced.
     private static final String CDP_UPLOADER_IMAGE = "defradigital/cdp-uploader:latest";
 
+    // @SuppressWarnings("resource"): GenericContainer is Closeable, but this is an intentionally
+    // long-lived static container — lifecycle is managed by Testcontainers' Ryuk reaper.
+    // Note: SQS_ENDPOINT is NOT set here — it must be added in the static initialiser block below,
+    // after LocalStack has started, because the endpoint URL is only resolvable at runtime.
+    // All other environment variables that are known up-front are configured inline here.
     @SuppressWarnings("resource")
     static final GenericContainer<?> CDP_UPLOADER_CONTAINER =
         new GenericContainer<>(DockerImageName.parse(CDP_UPLOADER_IMAGE))
