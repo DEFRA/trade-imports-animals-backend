@@ -216,6 +216,20 @@ class DocumentControllerTest {
         .andExpect(jsonPath("$.items[0].scanStatus").value("COMPLETE"));
   }
 
+  @Test
+  void list_shouldReturn200WithEmptyList() throws Exception {
+    // Given — no documents exist for this notification
+    String ref = "DRAFT.IMP.2026.00000001";
+    when(documentService.findByNotificationRef(ref)).thenReturn(List.of());
+
+    // When / Then
+    mockMvc.perform(get("/notifications/{ref}/document-uploads", ref)
+            .contentType(MediaType.APPLICATION_JSON))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.items").isArray())
+        .andExpect(jsonPath("$.items.length()").value(0));
+  }
+
   // ---------------------------------------------------------------------------
   // GET /document-uploads/{upload-id}
   // ---------------------------------------------------------------------------
