@@ -32,6 +32,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocum
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentListResponse;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentUploadResponse;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.FileStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
@@ -243,7 +244,7 @@ class DocumentIT extends IntegrationBase {
         assertThat(doc.getUploadId()).isEqualTo(uploadId);
         assertThat(doc.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
         assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.PENDING);
-        assertThat(doc.getDocumentType()).isNotNull();
+        assertThat(doc.getDocumentType()).isEqualTo(DocumentType.ITAHC);
         assertThat(doc.getDocumentReference()).isEqualTo("UK/GB/2026/001234");
         assertThat(doc.getFiles()).isEmpty();
         assertThat(doc.getId()).isNotNull();
@@ -361,6 +362,9 @@ class DocumentIT extends IntegrationBase {
         assertThat(item.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
         assertThat(item.scanStatus()).isEqualTo(ScanStatus.PENDING);
         assertThat(item.id()).isNotNull();
+        assertThat(item.documentType()).isEqualTo(DocumentType.ITAHC);
+        assertThat(item.documentReference()).isEqualTo("UK/GB/2026/001234");
+        assertThat(item.dateOfIssue()).isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
     }
 
     // ---------------------------------------------------------------------------
@@ -510,7 +514,9 @@ class DocumentIT extends IntegrationBase {
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
-            .jsonPath("$.status").isEqualTo(404);
+            .jsonPath("$.status").isEqualTo(404)
+            .jsonPath("$.detail").value((String detail) ->
+                assertThat(detail).contains(unknownUploadId));
     }
 
     // ---------------------------------------------------------------------------
@@ -792,7 +798,9 @@ class DocumentIT extends IntegrationBase {
             .get()
             .uri("/document-uploads/" + uploadId + "/file")
             .exchange()
-            .expectStatus().is5xxServerError();
+            .expectStatus().is5xxServerError()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(500);
     }
 
     // ---------------------------------------------------------------------------
