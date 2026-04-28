@@ -7,8 +7,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(description = "Upload session details returned after initiation")
 public record DocumentUploadResponse(
-    @Schema(description = "Unique identifier for the upload session assigned by cdp-uploader")
+    @Schema(description = "Unique identifier for the upload session assigned by cdp-uploader", requiredMode = Schema.RequiredMode.REQUIRED)
     String uploadId,
 
-    @Schema(description = "URL of the cdp-uploader form to which the user should be redirected")
+    @Schema(description = "URL of the cdp-uploader form to which the user should be redirected", requiredMode = Schema.RequiredMode.REQUIRED)
     String uploadUrl) {}
