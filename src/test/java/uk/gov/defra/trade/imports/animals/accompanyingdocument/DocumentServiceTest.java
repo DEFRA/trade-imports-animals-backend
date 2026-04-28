@@ -61,6 +61,16 @@ class DocumentServiceTest {
 
   // ─── initiate ────────────────────────────────────────────────────────────────
 
+  private void stubCdpConfig() {
+    when(cdpConfig.uploader()).thenReturn(uploaderConfig);
+    when(cdpConfig.backend()).thenReturn(backendConfig);
+    when(cdpConfig.s3()).thenReturn(s3Config);
+    when(uploaderConfig.maxFileSize()).thenReturn(52428800L);
+    when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
+    when(backendConfig.baseUrl()).thenReturn("http://backend");
+    when(s3Config.documentsBucket()).thenReturn("documents-bucket");
+  }
+
   @Test
   void initiate_shouldCallCdpUploaderAndSaveWithPendingStatus() {
     // Given
@@ -70,13 +80,7 @@ class DocumentServiceTest {
     DocumentUploadRequest request = new DocumentUploadRequest(
         DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15), redirectUrl);
 
-    when(cdpConfig.uploader()).thenReturn(uploaderConfig);
-    when(cdpConfig.backend()).thenReturn(backendConfig);
-    when(cdpConfig.s3()).thenReturn(s3Config);
-    when(uploaderConfig.maxFileSize()).thenReturn(52428800L);
-    when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
-    when(backendConfig.baseUrl()).thenReturn("http://backend");
-    when(s3Config.documentsBucket()).thenReturn("documents-bucket");
+    stubCdpConfig();
 
     CdpUploaderInitiateResponse uploaderResponse =
         new CdpUploaderInitiateResponse("upload-id-001", "https://cdp-uploader/form/upload-id-001", "https://cdp-uploader/status/upload-id-001");
@@ -163,17 +167,11 @@ class DocumentServiceTest {
   void initiate_shouldThrowConflictException_whenSaveThrowsDuplicateKeyException() {
     // Given — production code catches DuplicateKeyException and re-throws ConflictException (→ 409)
     String notificationRef = "DRAFT.IMP.2026.concurrent";
-    String redirectUrl = "";
+    String redirectUrl = null;
 
     DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", null, null);
 
-    when(cdpConfig.uploader()).thenReturn(uploaderConfig);
-    when(cdpConfig.backend()).thenReturn(backendConfig);
-    when(cdpConfig.s3()).thenReturn(s3Config);
-    when(uploaderConfig.maxFileSize()).thenReturn(52428800L);
-    when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
-    when(backendConfig.baseUrl()).thenReturn("http://backend");
-    when(s3Config.documentsBucket()).thenReturn("documents-bucket");
+    stubCdpConfig();
 
     CdpUploaderInitiateResponse uploaderResponse =
         new CdpUploaderInitiateResponse("upload-id-dup",
