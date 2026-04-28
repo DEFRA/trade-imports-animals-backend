@@ -23,7 +23,6 @@ import java.io.IOException;
 @Slf4j
 public class RequestTracingFilter implements Filter {
 
-    
     private static final String MDC_TRACE_ID = "trace.id";
     private static final String MDC_HTTP_METHOD = "http.request.method";
     private static final String MDC_HTTP_STATUS = "http.response.status_code";
@@ -52,7 +51,7 @@ public class RequestTracingFilter implements Filter {
             MDC.put(MDC_HTTP_METHOD, httpRequest.getMethod());
             MDC.put(MDC_URL_FULL, httpRequest.getRequestURL().toString());
 
-            log.debug("{} {}", httpRequest.getMethod(), httpRequest.getRequestURL());
+            log.debug("{} {}", httpRequest.getMethod(), httpRequest.getRequestURL().toString());
 
             // Execute filter chain
             chain.doFilter(request, response);
@@ -60,6 +59,7 @@ public class RequestTracingFilter implements Filter {
             // Capture response status after chain completes
             if (response instanceof HttpServletResponse httpResponse) {
                 MDC.put(MDC_HTTP_STATUS, String.valueOf(httpResponse.getStatus()));
+                log.debug("Response status {} for {}", httpResponse.getStatus(), httpRequest.getRequestURI());
             }
 
         } finally {
