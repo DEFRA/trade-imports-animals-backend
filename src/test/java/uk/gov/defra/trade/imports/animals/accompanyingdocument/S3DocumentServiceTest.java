@@ -125,6 +125,7 @@ class S3DocumentServiceTest {
     // When / Then
     assertThatThrownBy(() -> s3DocumentService.streamToOutput(s3Key, outputStream))
         .isInstanceOf(TradeImportsAnimalsBackendException.class)
-        .hasMessageContaining("I/O error while streaming document from S3");
+        .hasMessageContaining("I/O error while streaming document from S3")
+        .hasCauseInstanceOf(IOException.class);
   }
 }
