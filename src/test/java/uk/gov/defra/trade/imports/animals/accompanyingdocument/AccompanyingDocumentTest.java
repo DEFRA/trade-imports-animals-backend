@@ -1,11 +1,14 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -51,7 +54,7 @@ class AccompanyingDocumentTest {
   }
 
   @Test
-  void noArgsConstructor_shouldProduceDocumentWithNullFields() {
+  void noArgsConstructor_shouldProduceEmptyDocument() {
     AccompanyingDocument doc = new AccompanyingDocument();
 
     assertThat(doc.getId()).isNull();
@@ -76,7 +79,7 @@ class AccompanyingDocumentTest {
         "sha256hash", "application/pdf", false, null);
 
     AccompanyingDocument doc = AccompanyingDocument.builder()
-        .files(java.util.List.of(file))
+        .files(List.of(file))
         .build();
 
     assertThat(doc.getFiles()).hasSize(1);
@@ -158,5 +161,29 @@ class AccompanyingDocumentTest {
   void scanStatus_rejected_serialisesToUppercaseString() throws JsonProcessingException {
     String json = objectMapper.writeValueAsString(ScanStatus.REJECTED);
     assertThat(json).isEqualTo("\"REJECTED\"");
+  }
+
+  @Test
+  void scanStatus_pending_deserialisesFromUppercaseString() throws JsonProcessingException {
+    ScanStatus status = objectMapper.readValue("\"PENDING\"", ScanStatus.class);
+    assertThat(status).isEqualTo(ScanStatus.PENDING);
+  }
+
+  @Test
+  void scanStatus_complete_deserialisesFromUppercaseString() throws JsonProcessingException {
+    ScanStatus status = objectMapper.readValue("\"COMPLETE\"", ScanStatus.class);
+    assertThat(status).isEqualTo(ScanStatus.COMPLETE);
+  }
+
+  @Test
+  void scanStatus_rejected_deserialisesFromUppercaseString() throws JsonProcessingException {
+    ScanStatus status = objectMapper.readValue("\"REJECTED\"", ScanStatus.class);
+    assertThat(status).isEqualTo(ScanStatus.REJECTED);
+  }
+
+  @Test
+  void scanStatus_unknownValue_throwsInvalidFormatException() {
+    assertThatThrownBy(() -> objectMapper.readValue("\"UNKNOWN\"", ScanStatus.class))
+        .isInstanceOf(InvalidFormatException.class);
   }
 }
