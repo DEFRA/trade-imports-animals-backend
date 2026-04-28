@@ -145,18 +145,7 @@ public class DocumentService {
     List<UploadedFile> uploadedFiles = new ArrayList<>();
     if (payload.form() != null) {
       for (Map.Entry<String, CdpScanResultFile> entry : payload.form().getFiles().entrySet()) {
-        CdpScanResultFile f = entry.getValue();
-        uploadedFiles.add(new UploadedFile(
-            f.filename(),
-            f.contentType(),
-            f.contentLength(),
-            f.s3Key(),
-            f.s3Bucket(),
-            f.fileStatus(),
-            f.checksumSha256(),
-            f.detectedContentType(),
-            f.hasError(),
-            f.errorMessage()));
+        uploadedFiles.add(UploadedFile.from(entry.getValue()));
       }
     }
 
