@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -293,6 +295,37 @@ class DocumentControllerTest {
 
     // When / Then
     mockMvc.perform(get("/document-uploads/{uploadId}/file", unknownId))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.detail").value(
+            "No accompanying document found with uploadId: " + unknownId));
+  }
+
+  // ---------------------------------------------------------------------------
+  // DELETE /document-uploads/{upload-id}
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void delete_shouldReturn204() throws Exception {
+    // Given
+    String uploadId = "upload-abc-123";
+    doNothing().when(documentService).deleteByUploadId(uploadId);
+
+    // When / Then
+    mockMvc.perform(delete("/document-uploads/{id}", uploadId)
+            .header("Trade-Imports-Animals-Admin-Secret", "test-secret"))
+        .andExpect(status().isNoContent());
+  }
+
+  @Test
+  void delete_shouldReturn404_whenUnknown() throws Exception {
+    // Given
+    String unknownId = "unknown-upload-id";
+    doThrow(new NotFoundException("No accompanying document found with uploadId: " + unknownId))
+        .when(documentService).deleteByUploadId(unknownId);
+
+    // When / Then
+    mockMvc.perform(delete("/document-uploads/{id}", unknownId)
+            .header("Trade-Imports-Animals-Admin-Secret", "test-secret"))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.detail").value(
             "No accompanying document found with uploadId: " + unknownId));
