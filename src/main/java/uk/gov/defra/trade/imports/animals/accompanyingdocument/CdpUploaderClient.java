@@ -31,7 +31,7 @@ public class CdpUploaderClient {
    * @throws ServiceUnavailableException if cdp-uploader returns a non-2xx response
    */
   public CdpUploaderInitiateResponse initiate(CdpUploaderInitiateRequest request) {
-    log.debug("Initiating cdp-uploader session");
+    log.debug("Initiating cdp-uploader session: s3Path={}", request.s3Path());
     return cdpUploaderRestClient
         .post()
         .uri("/initiate")
