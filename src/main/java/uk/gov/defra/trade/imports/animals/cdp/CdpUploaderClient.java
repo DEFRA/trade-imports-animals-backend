@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.accompanyingdocument;
+package uk.gov.defra.trade.imports.animals.cdp;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 
@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.CdpUploaderInitiateRequest;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
 
 /**
