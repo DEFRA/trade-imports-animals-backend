@@ -26,7 +26,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 @WebMvcTest(DocumentController.class)
-@TestPropertySource(properties = {"admin.secret=test-secret", "cdp.tracing.header-name=x-cdp-request-id"})
+@TestPropertySource(properties = {"admin.secret=test-secret", "cdp.tracing.header-name=x-cdp-request-id", "cdp.backend.base-url=http://localhost:8085"})
 class DocumentControllerTest {
 
   @Autowired
@@ -61,7 +61,7 @@ class DocumentControllerTest {
             .content(objectMapper.writeValueAsString(request)))
         // Then
         .andExpect(status().isCreated())
-        .andExpect(header().string("Location", "/document-uploads/upload-abc-123"))
+        .andExpect(header().string("Location", "http://localhost:8085/document-uploads/upload-abc-123"))
         .andExpect(jsonPath("$.uploadId").value("upload-abc-123"))
         .andExpect(jsonPath("$.uploadUrl").value("https://cdp-uploader.example/upload/abc"))
         .andReturn();
