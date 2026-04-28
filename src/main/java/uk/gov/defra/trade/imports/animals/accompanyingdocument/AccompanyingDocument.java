@@ -12,6 +12,7 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -29,7 +30,13 @@ import org.springframework.data.mongodb.core.mapping.Document;
  * native {@code Instant} codec support via its {@code InstantCodec} registered in the
  * {@code MongoMappingContext}.
  */
-@CompoundIndex(def = "{'notificationReferenceNumber': 1, 'scanStatus': 1}")
+@CompoundIndexes({
+  @CompoundIndex(def = "{'notificationReferenceNumber': 1, 'scanStatus': 1}"),
+  @CompoundIndex(
+      def = "{'notificationReferenceNumber': 1}",
+      unique = true,
+      partialFilter = "{scanStatus: {$eq: 'PENDING'}}")
+})
 @Document(collection = "accompanying_documents")
 @Data
 @Builder
