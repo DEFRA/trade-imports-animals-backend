@@ -180,18 +180,17 @@ abstract class IntegrationBase {
      * Loads a classpath fixture file as a UTF-8 String.
      */
     protected String loadFixtureAsString(String classpathResource) throws IOException {
-        try (var stream = getClass().getClassLoader().getResourceAsStream(classpathResource)) {
-            if (stream == null) {
-                throw new IllegalArgumentException("Fixture not found: " + classpathResource);
-            }
-            return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
-        }
+        return new String(readResourceBytes(classpathResource), StandardCharsets.UTF_8);
     }
 
     /**
      * Loads a classpath fixture file as raw bytes.
      */
     protected byte[] loadFixtureAsBytes(String classpathResource) throws IOException {
+        return readResourceBytes(classpathResource);
+    }
+
+    private byte[] readResourceBytes(String classpathResource) throws IOException {
         try (var stream = getClass().getClassLoader().getResourceAsStream(classpathResource)) {
             if (stream == null) {
                 throw new IllegalArgumentException("Fixture not found: " + classpathResource);
