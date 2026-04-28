@@ -26,7 +26,12 @@ import org.springframework.test.web.servlet.MvcResult;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 @WebMvcTest(DocumentController.class)
-@TestPropertySource(properties = {"admin.secret=test-secret", "cdp.tracing.header-name=x-cdp-request-id", "cdp.backend.base-url=http://localhost:8085"})
+@TestPropertySource(properties = {
+    "admin.secret=test-secret",
+    "cdp.tracing.header-name=x-cdp-request-id",
+    "cdp.backend.base-url=http://localhost:8085",
+    "cdp.frontend.base-url=http://localhost:3000"
+})
 class DocumentControllerTest {
 
   @Autowired
@@ -113,6 +118,37 @@ class DocumentControllerTest {
             .content(body))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors.dateOfIssue").exists());
+  }
+
+  @Test
+  void post_shouldReturn400_whenRedirectUrlIsOutsideFrontendBaseUrl() throws Exception {
+    // Given — redirectUrl points to an external host (open-redirect vector)
+    String body = """
+        {"documentType":"ITAHC","documentReference":"UK/GB/2026/001","dateOfIssue":"2026-01-15","redirectUrl":"https://evil.example.com/steal"}
+        """;
+
+    // When / Then
+    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void post_shouldReturn201_whenRedirectUrlIsWithinFrontendBaseUrl() throws Exception {
+    // Given — redirectUrl is under the configured frontend base URL
+    String ref = "DRAFT.IMP.2026.00000001";
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15), "http://localhost:3000/notifications/DRAFT.IMP.2026.00000001/upload-complete");
+    DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "https://cdp-uploader.example/upload/abc");
+
+    when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class), any(String.class)))
+        .thenReturn(serviceResponse);
+
+    // When / Then
+    mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+        .andExpect(status().isCreated());
   }
 
   // ---------------------------------------------------------------------------

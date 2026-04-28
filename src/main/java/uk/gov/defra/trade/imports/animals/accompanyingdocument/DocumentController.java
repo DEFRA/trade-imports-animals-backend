@@ -48,7 +48,8 @@ public class DocumentController {
    *
    * @param ref     the notification reference number
    * @param request the document metadata
-   * @return 201 Created with the upload session details and a Location header
+   * @return 201 Created with the upload session details and a Location header,
+   *         or 400 Bad Request if redirectUrl does not start with the configured frontend base URL
    */
   @PostMapping("/notifications/{ref}/document-uploads")
   @Operation(
@@ -56,6 +57,7 @@ public class DocumentController {
       description = "Creates a new upload session via cdp-uploader and returns the upload URL")
   @ApiResponse(responseCode = "201", description = "Upload session created",
       content = @Content(schema = @Schema(implementation = DocumentUploadResponse.class)))
+  @ApiResponse(responseCode = "400", description = "Invalid redirectUrl", content = @Content)
   @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
   @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
   @Timed("document.initiate")
@@ -66,9 +68,16 @@ public class DocumentController {
     log.info("POST /notifications/{}/document-uploads", ref);
 
     // The redirectUrl is where the user's browser is sent after the file upload form is submitted.
+    // Validate it against the configured frontend base URL to prevent open-redirect attacks.
+    String frontendBaseUrl = cdpConfig.frontend().baseUrl();
+    if (request.redirectUrl() != null && !request.redirectUrl().isBlank()
+        && !request.redirectUrl().startsWith(frontendBaseUrl)) {
+      log.warn("POST /notifications/{}/document-uploads rejected: redirectUrl not within frontend base URL", ref);
+      return ResponseEntity.badRequest().build();
+    }
     String redirectUrl = (request.redirectUrl() != null && !request.redirectUrl().isBlank())
         ? request.redirectUrl()
-        : cdpConfig.frontend().baseUrl();
+        : frontendBaseUrl;
     DocumentUploadResponse response = documentService.initiate(ref, request, redirectUrl);
 
     URI location = URI.create(cdpConfig.backend().baseUrl() + "/document-uploads/" + response.uploadId());
