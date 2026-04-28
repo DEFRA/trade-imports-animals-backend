@@ -10,6 +10,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,7 +50,7 @@ class S3DocumentServiceTest {
     // Given
     String s3Key = "upload-id-001/file-id-001";
     String bucket = "trade-imports-animals-documents";
-    byte[] expectedBytes = "test content".getBytes();
+    byte[] expectedBytes = "test content".getBytes(StandardCharsets.UTF_8);
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
     when(cdpConfig.s3()).thenReturn(s3Config);
