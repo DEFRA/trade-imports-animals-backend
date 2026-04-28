@@ -3,6 +3,8 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -109,12 +111,9 @@ class S3DocumentServiceTest {
     when(cdpConfig.s3()).thenReturn(s3Config);
     when(s3Config.documentsBucket()).thenReturn("trade-imports-animals-documents");
 
-    InputStream failingStream = new InputStream() {
-      @Override
-      public int read() throws IOException {
-        throw new IOException("Simulated I/O failure");
-      }
-    };
+    InputStream failingStream = mock(InputStream.class);
+    when(failingStream.read(any(byte[].class), anyInt(), anyInt()))
+        .thenThrow(new IOException("Simulated I/O failure"));
 
     ResponseInputStream<GetObjectResponse> responseInputStream =
         new ResponseInputStream<>(
