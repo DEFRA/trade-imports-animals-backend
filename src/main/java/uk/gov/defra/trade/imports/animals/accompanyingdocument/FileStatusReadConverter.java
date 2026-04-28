@@ -15,7 +15,7 @@ public class FileStatusReadConverter implements Converter<String, FileStatus> {
     return switch (source) {
       case "complete" -> FileStatus.COMPLETE;
       case "rejected" -> FileStatus.REJECTED;
-      default -> throw new IllegalArgumentException("Unknown FileStatus value: " + source);
+      default -> throw new IllegalArgumentException("Unrecognised FileStatus in MongoDB: " + source);
     };
   }
 }
