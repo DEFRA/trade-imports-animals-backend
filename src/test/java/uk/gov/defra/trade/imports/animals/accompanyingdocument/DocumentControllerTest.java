@@ -25,7 +25,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.MvcResult;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 @WebMvcTest(DocumentController.class)
@@ -63,18 +62,14 @@ class DocumentControllerTest {
     when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class), any(String.class)))
         .thenReturn(serviceResponse);
 
-    // When
-    MvcResult result = mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
+    // When / Then
+    mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request)))
-        // Then
         .andExpect(status().isCreated())
         .andExpect(header().string("Location", "http://localhost:8085/document-uploads/upload-abc-123"))
         .andExpect(jsonPath("$.uploadId").value("upload-abc-123"))
-        .andExpect(jsonPath("$.uploadUrl").value("https://cdp-uploader.example/upload/abc"))
-        .andReturn();
-
-    assertThat(result.getResponse().getStatus()).isEqualTo(201);
+        .andExpect(jsonPath("$.uploadUrl").value("https://cdp-uploader.example/upload/abc"));
   }
 
   @Test
