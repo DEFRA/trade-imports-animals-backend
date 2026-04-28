@@ -74,10 +74,10 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail.getProperties().get("traceId")).isEqualTo(traceId);
 
         @SuppressWarnings("unchecked")
-        Map<String, String> errors = (Map<String, String>) problemDetail.getProperties().get("errors");
+        Map<String, List<String>> errors = (Map<String, List<String>>) problemDetail.getProperties().get("errors");
         assertThat(errors).hasSize(2);
-        assertThat(errors.get("origin")).isEqualTo("must not be null");
-        assertThat(errors.get("commodity")).isEqualTo("must not be blank");
+        assertThat(errors.get("origin")).containsExactly("must not be null");
+        assertThat(errors.get("commodity")).containsExactly("must not be blank");
     }
 
     @Test

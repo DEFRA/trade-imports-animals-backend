@@ -1,6 +1,11 @@
 package uk.gov.defra.trade.imports.animals.exceptions;
 
-import lombok.extern.slf4j.Slf4j;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -11,9 +16,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.net.URI;
-import java.util.HashMap;
-import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Global exception handler for REST API error responses.
@@ -53,9 +56,9 @@ public class GlobalExceptionHandler {
             problemDetail.setProperty("traceId", traceId);
         }
 
-        Map<String, String> errors = new HashMap<>();
+        Map<String, List<String>> errors = new LinkedHashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
-            errors.put(error.getField(), error.getDefaultMessage());
+            errors.computeIfAbsent(error.getField(), k -> new ArrayList<>()).add(error.getDefaultMessage());
         }
         problemDetail.setProperty("errors", errors);
 
@@ -147,11 +150,7 @@ public class GlobalExceptionHandler {
      * This allows Spring to handle its own exceptions appropriately (e.g., 404 for
      * missing endpoints).
      */
-    @ExceptionHandler({
-        RuntimeException.class,
-        IllegalStateException.class,
-        IllegalArgumentException.class
-    })
+    @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ProblemDetail> handleException(Exception ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.error("Unexpected error (trace: {}): {}", traceId, ex.getMessage(), ex);
