@@ -7,11 +7,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.mockito.ArgumentCaptor;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -92,6 +95,15 @@ class DocumentServiceTest {
     assertThat(response).isNotNull();
     assertThat(response.uploadId()).isEqualTo("upload-id-001");
     assertThat(response.uploadUrl()).isEqualTo("https://cdp-uploader/form/upload-id-001");
+
+    // Then — assert on the entity persisted to the repository
+    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
+    verify(accompanyingDocumentRepository).save(captor.capture());
+    AccompanyingDocument saved = captor.getValue();
+    assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.PENDING);
+    assertThat(saved.getNotificationReferenceNumber()).isEqualTo(notificationRef);
+    Instant expectedDateOfIssue = LocalDate.of(2026, 1, 15).atStartOfDay(ZoneOffset.UTC).toInstant();
+    assertThat(saved.getDateOfIssue()).isEqualTo(expectedDateOfIssue);
   }
 
   // ─── handleScanResult ────────────────────────────────────────────────────────
