@@ -283,4 +283,18 @@ class DocumentControllerTest {
             "attachment; filename=\"=?UTF-8?Q?test-doc.pdf?=\"; filename*=UTF-8''test-doc.pdf"))
         .andExpect(header().string("Content-Type", "application/pdf"));
   }
+
+  @Test
+  void downloadFile_shouldReturn404_whenUploadIdUnknown() throws Exception {
+    // Given
+    String unknownId = "unknown-upload-id";
+    when(documentService.findFile(unknownId))
+        .thenThrow(new NotFoundException("No accompanying document found with uploadId: " + unknownId));
+
+    // When / Then
+    mockMvc.perform(get("/document-uploads/{uploadId}/file", unknownId))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.detail").value(
+            "No accompanying document found with uploadId: " + unknownId));
+  }
 }
