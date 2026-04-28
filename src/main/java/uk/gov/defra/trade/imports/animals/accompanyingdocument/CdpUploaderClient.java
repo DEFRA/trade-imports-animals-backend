@@ -42,7 +42,10 @@ public class CdpUploaderClient {
             status -> !status.is2xxSuccessful(),
             (req, resp) -> {
               int statusCode = resp.getStatusCode().value();
-              String body = new String(resp.getBody().readAllBytes(), StandardCharsets.UTF_8);
+              String body;
+              try (var is = resp.getBody()) {
+                body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+              }
               log.error(
                   "cdp-uploader returned non-2xx response: status={}, body={}", statusCode, body);
               throw new ServiceUnavailableException(
