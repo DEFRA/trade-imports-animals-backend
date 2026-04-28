@@ -77,6 +77,10 @@ public class AwsConfig {
             && appAwsConfig.secretAccessKey() != null
             && !appAwsConfig.secretAccessKey().isBlank();
 
+        if (hasEndpointOverride && !hasStaticCredentials) {
+            log.warn("APP_AWS_ENDPOINT_OVERRIDE is set but static credentials are absent — falling back to DefaultCredentialsProvider");
+        }
+
         var credentialsProvider = hasEndpointOverride && hasStaticCredentials
             ? StaticCredentialsProvider.create(
                 AwsBasicCredentials.create(appAwsConfig.accessKeyId(), appAwsConfig.secretAccessKey()))
@@ -87,8 +91,8 @@ public class AwsConfig {
             .credentialsProvider(credentialsProvider)
             .overrideConfiguration(c -> c
                 .retryStrategy(RetryMode.ADAPTIVE)
-                .apiCallTimeout(Duration.ofSeconds(30))
-                .apiCallAttemptTimeout(Duration.ofSeconds(10)));
+                .apiCallTimeout(Duration.ofSeconds(30)) // 30s total call budget
+                .apiCallAttemptTimeout(Duration.ofSeconds(10))); // 10s per attempt; with ADAPTIVE retry, multiple attempts may occur within the 30s budget
 
         if (hasEndpointOverride) {
             log.info("Using S3 endpoint override: {}", appAwsConfig.endpointOverride());
