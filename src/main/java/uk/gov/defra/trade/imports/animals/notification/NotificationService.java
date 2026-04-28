@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.audit.Action;
@@ -57,6 +58,7 @@ public class NotificationService {
             .toList();
     }
 
+    @Transactional
     public void deleteByReferenceNumbers(List<String> referenceNumbers, String traceId, String userId) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return;
