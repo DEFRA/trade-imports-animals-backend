@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -128,6 +129,32 @@ class DocumentServiceTest {
         .hasMessageContaining(uploadId);
 
     verify(accompanyingDocumentRepository, never()).save(any());
+  }
+
+  @Test
+  void handleScanResult_shouldSetStatusToRejected_whenNumberOfRejectedFilesIsNull() {
+    // Given — null numberOfRejectedFiles must fail-closed to REJECTED (not silently COMPLETE)
+    String uploadId = "upload-id-null-rejected";
+
+    AccompanyingDocument document = AccompanyingDocument.builder()
+        .uploadId(uploadId)
+        .scanStatus(ScanStatus.PENDING)
+        .files(new ArrayList<>())
+        .build();
+    when(accompanyingDocumentRepository.findByUploadId(uploadId))
+        .thenReturn(Optional.of(document));
+
+    CdpScanResultForm form = new CdpScanResultForm();
+    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, null);
+
+    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
+
+    // When
+    documentService.handleScanResult(uploadId, payload);
+
+    // Then — fail-closed: null count → REJECTED, never COMPLETE
+    verify(accompanyingDocumentRepository).save(captor.capture());
+    assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.REJECTED);
   }
 
   // ─── initiate — DuplicateKeyException → ConflictException (409) ────────────
