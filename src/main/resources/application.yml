@@ -40,6 +40,14 @@ cdp:
   uploader:
     base-url: ${CDP_UPLOADER_BASE_URL:http://localhost:7337}
     max-file-size: ${CDP_UPLOADER_MAX_FILE_SIZE:52428800}
+    # Accepted MIME types (comma-separated list supplied via CDP_UPLOADER_MIME_TYPES env var):
+    #   application/pdf
+    #   application/msword
+    #   application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    #   image/jpeg
+    #   image/png
+    #   application/vnd.ms-excel
+    #   application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
     mime-types: ${CDP_UPLOADER_MIME_TYPES:application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
   backend:
     base-url: ${BACKEND_BASE_URL:http://localhost:8085}
@@ -52,6 +60,10 @@ cdp:
 app:
   aws:
     endpoint-override: ${APP_AWS_ENDPOINT_OVERRIDE:}
+    # Local development only — set via environment variables or application-local.yml.
+    # Do NOT set real credentials here; these keys are ignored in deployed environments.
+    # access-key-id: ${APP_AWS_ACCESS_KEY_ID:}
+    # secret-access-key: ${APP_AWS_SECRET_ACCESS_KEY:}
 
 # AWS configuration
 aws:
