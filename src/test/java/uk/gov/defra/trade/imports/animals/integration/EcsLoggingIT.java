@@ -29,7 +29,7 @@ class EcsLoggingIT extends IntegrationBase {
 
     private final ByteArrayOutputStream outputStreamCaptor = new ByteArrayOutputStream();
     private final PrintStream originalOut = System.out;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
@@ -116,16 +116,21 @@ class EcsLoggingIT extends IntegrationBase {
 
         // Parse log output
         String[] lines = logOutput.split("\n");
+        JsonNode logJson = null;
         for (String line : lines) {
             if (line.trim().startsWith("{")) {
-                JsonNode logJson = objectMapper.readTree(line);
+                JsonNode candidate = objectMapper.readTree(line);
 
-                if (logJson.has("url.full")) {
-                    // trace.id should not be present when header is missing
-                    assertThat(logJson.has("trace.id")).isFalse();
+                if (candidate.has("url.full")) {
+                    logJson = candidate;
                     break;
                 }
             }
         }
+
+        assertThat(logJson).as("Expected a log line with url.full field").isNotNull();
+
+        // trace.id should not be present when header is missing
+        assertThat(logJson.has("trace.id")).isFalse();
     }
 }
