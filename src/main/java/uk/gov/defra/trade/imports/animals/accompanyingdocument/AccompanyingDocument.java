@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -40,7 +41,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @Document(collection = "accompanying_documents")
 @Data
 @Builder
-@AllArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @NoArgsConstructor
 public class AccompanyingDocument {
 
