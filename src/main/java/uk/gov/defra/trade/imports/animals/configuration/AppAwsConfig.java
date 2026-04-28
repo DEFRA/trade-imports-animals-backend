@@ -1,6 +1,9 @@
 package uk.gov.defra.trade.imports.animals.configuration;
 
+import jakarta.annotation.Nullable;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 /**
  * Configuration properties for application-level AWS overrides.
@@ -15,8 +18,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param accessKeyId optional static AWS access key ID
  * @param secretAccessKey optional static AWS secret access key
  */
+@Validated
 @ConfigurationProperties(prefix = "app.aws")
 public record AppAwsConfig(
-    String endpointOverride,
-    String accessKeyId,
-    String secretAccessKey) { }
+    @Nullable @Pattern(regexp = "^(https?://.*)?$") String endpointOverride,
+    @Nullable String accessKeyId,
+    @Nullable String secretAccessKey) { }
