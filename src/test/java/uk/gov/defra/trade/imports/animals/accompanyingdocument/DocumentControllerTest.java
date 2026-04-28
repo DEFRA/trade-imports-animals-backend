@@ -104,6 +104,21 @@ class DocumentControllerTest {
   }
 
   @Test
+  void post_shouldReturn400_whenDocumentTypeIsNull() throws Exception {
+    // Given — documentType is absent
+    String body = """
+        {"documentReference":"UK/GB/2026/001","dateOfIssue":"2026-01-15"}
+        """;
+
+    // When / Then
+    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors.documentType").exists());
+  }
+
+  @Test
   void post_shouldReturn400_whenDateOfIssueIsNull() throws Exception {
     // Given — dateOfIssue is absent
     String body = """
