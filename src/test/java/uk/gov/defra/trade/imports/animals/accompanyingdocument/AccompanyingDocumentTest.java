@@ -126,6 +126,20 @@ class AccompanyingDocumentTest {
     assertThat(deserialised.getDateOfIssue()).isEqualTo(original);
   }
 
+  // ─── DocumentType JSON serialisation ─────────────────────────────────────
+
+  @Test
+  void documentType_itahc_serialisesToUppercaseString() throws JsonProcessingException {
+    String json = objectMapper.writeValueAsString(DocumentType.ITAHC);
+    assertThat(json).isEqualTo("\"ITAHC\"");
+  }
+
+  @Test
+  void documentType_itahc_deserialisesFromUppercaseString() throws JsonProcessingException {
+    DocumentType type = objectMapper.readValue("\"ITAHC\"", DocumentType.class);
+    assertThat(type).isEqualTo(DocumentType.ITAHC);
+  }
+
   // ─── ScanStatus JSON serialisation ───────────────────────────────────────
 
   @Test
