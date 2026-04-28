@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
 
 /**
@@ -16,15 +17,34 @@ import lombok.Builder;
  */
 @Builder
 public record UploadedFile(
+    @Schema(description = "Original filename as provided by the uploader")
     String filename,
+
+    @Schema(description = "MIME content type declared by the uploader")
     String contentType,
+
+    @Schema(description = "File size in bytes")
     Long contentLength,
+
+    @Schema(description = "S3 object key in the format \"{uploadId}/{fileId}\"; null for rejected files")
     String s3Key,
+
+    @Schema(description = "S3 bucket in which the file is stored")
     String s3Bucket,
+
+    @Schema(description = "Current status of the file within the upload lifecycle")
     FileStatus fileStatus,
+
+    @Schema(description = "SHA-256 checksum of the uploaded file content")
     String checksumSha256,
+
+    @Schema(description = "Content type detected by the virus/content scanner, may differ from contentType")
     String detectedContentType,
+
+    @Schema(description = "Whether the file was rejected due to a scan or validation error")
     Boolean hasError,
+
+    @Schema(description = "Human-readable error message if hasError is true; null otherwise")
     String errorMessage) {
 
   /**
