@@ -71,8 +71,10 @@ public class AccompanyingDocument {
   private String documentReference;
 
   /**
-   * Date of issue on the physical document. Stored as UTC {@link Instant}; see class-level Javadoc
-   * for the rationale for choosing {@code Instant} over {@code LocalDate}.
+   * Date of issue on the physical document. Stored as a UTC {@link Instant} at midnight
+   * (start-of-day, {@code 00:00:00Z}) to represent a date-only value — e.g. 2024-06-15 is stored
+   * as {@code 2024-06-15T00:00:00Z}. See class-level Javadoc for the rationale for choosing
+   * {@code Instant} over {@code LocalDate}.
    */
   private Instant dateOfIssue;
 
