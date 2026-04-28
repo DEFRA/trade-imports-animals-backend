@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 
@@ -31,11 +32,14 @@ public record NotificationResponse(
    * {@link AccompanyingDocument} list.
    *
    * @param notification the notification entity; must not be {@code null}
-   * @param documents    the accompanying documents for this notification; may be empty
+   * @param documents    the accompanying documents for this notification; must not be {@code null},
+   *                     may be empty
    * @return a fully populated response record
    */
   public static NotificationResponse from(
       Notification notification, List<AccompanyingDocument> documents) {
+    Objects.requireNonNull(notification, "notification");
+    Objects.requireNonNull(documents, "documents");
     return new NotificationResponse(
         notification.getId(),
         notification.getReferenceNumber(),
