@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Read-only projection of an {@link AccompanyingDocument} for API responses.
@@ -29,6 +30,7 @@ public record AccompanyingDocumentDto(
    * @return a new {@code AccompanyingDocumentDto} populated from the entity
    */
   public static AccompanyingDocumentDto from(AccompanyingDocument entity) {
+    Objects.requireNonNull(entity, "entity must not be null");
     return new AccompanyingDocumentDto(
         entity.getId(),
         entity.getNotificationReferenceNumber(),
