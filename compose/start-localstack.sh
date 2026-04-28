@@ -1,4 +1,9 @@
 #!/bin/bash
+if ! command -v awslocal &> /dev/null; then
+  echo "ERROR: awslocal is not installed or not in PATH" >&2
+  exit 1
+fi
+
 export AWS_REGION=eu-west-2
 export AWS_DEFAULT_REGION=eu-west-2
 export AWS_ACCESS_KEY_ID=test

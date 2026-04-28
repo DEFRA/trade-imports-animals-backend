@@ -84,6 +84,12 @@ services:
       AWS_REGION: eu-west-2
       AWS_ACCESS_KEY_ID: test
       AWS_SECRET_ACCESS_KEY: test
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:7337/health']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     networks:
       - trade-imports-tenant
 
@@ -97,6 +103,8 @@ services:
       localstack:
         condition: service_healthy
       mongodb:
+        condition: service_healthy
+      cdp-uploader:
         condition: service_healthy
     env_file:
       - './compose/aws.env'  
@@ -116,6 +124,7 @@ services:
       MONGO_DATABASE: trade-imports-animals-backend
 
       # AWS (via LocalStack)
+      # Renamed from LOCALSTACK_ENDPOINT to APP_AWS_ENDPOINT_OVERRIDE
       APP_AWS_ENDPOINT_OVERRIDE: http://localstack:4566
       AWS_REGION: eu-west-2
 
