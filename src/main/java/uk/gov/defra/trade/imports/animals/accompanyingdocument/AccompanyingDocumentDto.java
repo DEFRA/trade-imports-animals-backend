@@ -37,7 +37,7 @@ public record AccompanyingDocumentDto(
         entity.getDocumentReference(),
         entity.getDateOfIssue(),
         entity.getScanStatus(),
-        entity.getFiles(),
+        List.copyOf(entity.getFiles()),
         entity.getCreated() != null ? LocalDateTime.ofInstant(entity.getCreated(), ZoneOffset.UTC) : null,
         entity.getUpdated() != null ? LocalDateTime.ofInstant(entity.getUpdated(), ZoneOffset.UTC) : null);
   }
