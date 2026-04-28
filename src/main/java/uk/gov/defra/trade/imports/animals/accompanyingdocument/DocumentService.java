@@ -171,7 +171,7 @@ public class DocumentService {
     document.setScanStatus(scanStatus);
 
     accompanyingDocumentRepository.save(document);
-    log.info("Updated uploadId {} scanStatus to {}", uploadId, scanStatus);
+    log.info("Updated uploadId {} scanStatus to {}", document.getUploadId(), scanStatus);
   }
 
   /**
