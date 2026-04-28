@@ -6,8 +6,6 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
-import org.springframework.lang.Nullable;
-
 /**
  * Request body for initiating an accompanying document upload.
  */
@@ -27,7 +25,6 @@ public record DocumentUploadRequest(
     @Schema(description = "Date of issue on the physical document", example = "2026-01-15")
     LocalDate dateOfIssue,
 
-    @Nullable
     @Schema(description = "URL to redirect the user to after the upload form is submitted",
         example = "http://localhost:3000/accompanying-documents/upload-received")
     String redirectUrl) {}
