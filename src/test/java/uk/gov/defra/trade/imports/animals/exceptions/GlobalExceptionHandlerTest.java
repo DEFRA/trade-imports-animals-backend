@@ -31,6 +31,10 @@ class GlobalExceptionHandlerTest {
     // The handler logs WARN/ERROR for every exception it handles — that's correct production
     // behaviour. In this unit test we only care about return values, so silence the logger to
     // avoid flooding the test output with expected error logs.
+    //
+    // NOTE: Mutating a static logger level in @BeforeEach/@AfterEach is intentional here.
+    // These tests must run sequentially (JUnit 5 default) for the level mutation to be safe;
+    // parallel execution would cause races between setUp/tearDown and test body logging.
     private static final Logger HANDLER_LOGGER =
         (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -95,9 +99,8 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         Map<String, Object> properties = problemDetail.getProperties();
-        if (properties != null) {
-            assertThat(properties).doesNotContainKey("traceId");
-        }
+        assertThat(properties).isNotNull();
+        assertThat(properties).doesNotContainKey("traceId");
     }
 
     @Test
@@ -113,6 +116,7 @@ class GlobalExceptionHandlerTest {
 
         // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Resource Not Found");
@@ -153,6 +157,7 @@ class GlobalExceptionHandlerTest {
 
         // Then
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Resource Conflict");
