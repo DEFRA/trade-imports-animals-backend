@@ -3,7 +3,6 @@ package uk.gov.defra.trade.imports.animals.cdp;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -12,17 +11,22 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClient.RequestBodySpec;
 import org.springframework.web.client.RestClient.RequestBodyUriSpec;
 import org.springframework.web.client.RestClient.ResponseSpec;
+import org.springframework.web.client.RestClient.ResponseSpec.ErrorHandler;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.CdpUploaderInitiateRequest;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
@@ -102,28 +106,8 @@ class CdpUploaderClientTest {
 
     // onStatus registers a handler and returns the responseSpec for chaining;
     // we capture and invoke the handler ourselves to simulate a 503 response.
-    when(responseSpec.onStatus(any(), any())).thenAnswer(invocation -> {
-      java.util.function.Predicate<org.springframework.http.HttpStatusCode> predicate =
-          invocation.getArgument(0);
-      org.springframework.web.client.RestClient.ResponseSpec.ErrorHandler handler =
-          invocation.getArgument(1);
-
-      org.springframework.http.HttpStatusCode status503 = HttpStatus.SERVICE_UNAVAILABLE;
-      if (predicate.test(status503)) {
-        org.springframework.http.client.ClientHttpResponse mockResponse =
-            mock(org.springframework.http.client.ClientHttpResponse.class);
-        try {
-          when(mockResponse.getStatusCode()).thenReturn(status503);
-          when(mockResponse.getBody())
-              .thenReturn(new ByteArrayInputStream(
-                  "Service unavailable".getBytes(StandardCharsets.UTF_8)));
-          handler.handle(null, mockResponse);
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      }
-      return responseSpec;
-    });
+    when(responseSpec.onStatus(any(), any())).thenAnswer(
+        simulateErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, "Service unavailable"));
 
     // When / Then
     assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
@@ -143,28 +127,8 @@ class CdpUploaderClientTest {
         List.of("application/pdf"),
         null);
 
-    when(responseSpec.onStatus(any(), any())).thenAnswer(invocation -> {
-      java.util.function.Predicate<org.springframework.http.HttpStatusCode> predicate =
-          invocation.getArgument(0);
-      org.springframework.web.client.RestClient.ResponseSpec.ErrorHandler handler =
-          invocation.getArgument(1);
-
-      org.springframework.http.HttpStatusCode status422 = HttpStatus.UNPROCESSABLE_ENTITY;
-      if (predicate.test(status422)) {
-        org.springframework.http.client.ClientHttpResponse mockResponse =
-            mock(org.springframework.http.client.ClientHttpResponse.class);
-        try {
-          when(mockResponse.getStatusCode()).thenReturn(status422);
-          when(mockResponse.getBody())
-              .thenReturn(new ByteArrayInputStream(
-                  "{\"error\":\"invalid request\"}".getBytes(StandardCharsets.UTF_8)));
-          handler.handle(null, mockResponse);
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      }
-      return responseSpec;
-    });
+    when(responseSpec.onStatus(any(), any())).thenAnswer(
+        simulateErrorResponse(HttpStatus.UNPROCESSABLE_ENTITY, "{\"error\":\"invalid request\"}"));
 
     // When / Then
     assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
@@ -185,10 +149,9 @@ class CdpUploaderClientTest {
         null);
 
     // Capture the predicate without triggering the handler
-    java.util.function.Predicate<org.springframework.http.HttpStatusCode>[] capturedPredicate =
-        new java.util.function.Predicate[1];
+    AtomicReference<Predicate<HttpStatusCode>> capturedPredicate = new AtomicReference<>();
     when(responseSpec.onStatus(any(), any())).thenAnswer(invocation -> {
-      capturedPredicate[0] = invocation.getArgument(0);
+      capturedPredicate.set(invocation.getArgument(0));
       return responseSpec;
     });
     when(responseSpec.body(CdpUploaderInitiateResponse.class)).thenReturn(null);
@@ -196,11 +159,34 @@ class CdpUploaderClientTest {
     cdpUploaderClient.initiate(request);
 
     // Then — predicate should match non-2xx codes but not 2xx
-    assertThat(capturedPredicate[0]).isNotNull();
-    assertThat(capturedPredicate[0].test(HttpStatus.OK)).isFalse();
-    assertThat(capturedPredicate[0].test(HttpStatus.CREATED)).isFalse();
-    assertThat(capturedPredicate[0].test(HttpStatus.BAD_REQUEST)).isTrue();
-    assertThat(capturedPredicate[0].test(HttpStatus.SERVICE_UNAVAILABLE)).isTrue();
-    assertThat(capturedPredicate[0].test(HttpStatus.INTERNAL_SERVER_ERROR)).isTrue();
+    assertThat(capturedPredicate.get()).isNotNull();
+    assertThat(capturedPredicate.get().test(HttpStatus.OK)).isFalse();
+    assertThat(capturedPredicate.get().test(HttpStatus.CREATED)).isFalse();
+    assertThat(capturedPredicate.get().test(HttpStatus.BAD_REQUEST)).isTrue();
+    assertThat(capturedPredicate.get().test(HttpStatus.SERVICE_UNAVAILABLE)).isTrue();
+    assertThat(capturedPredicate.get().test(HttpStatus.INTERNAL_SERVER_ERROR)).isTrue();
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+  private org.mockito.stubbing.Answer<ResponseSpec> simulateErrorResponse(
+      HttpStatus status, String body) {
+    return invocation -> {
+      Predicate<HttpStatusCode> predicate = invocation.getArgument(0);
+      ErrorHandler handler = invocation.getArgument(1);
+
+      if (predicate.test(status)) {
+        ClientHttpResponse mockResponse = mock(ClientHttpResponse.class);
+        try {
+          when(mockResponse.getStatusCode()).thenReturn(status);
+          when(mockResponse.getBody())
+              .thenReturn(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
+          handler.handle(null, mockResponse);
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      }
+      return responseSpec;
+    };
   }
 }
