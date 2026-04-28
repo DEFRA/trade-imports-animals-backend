@@ -213,8 +213,10 @@ public class DocumentService {
   /**
    * Returns the uploaded file for the given upload session.
    *
-   * <p>Each upload session contains exactly one file. Throws {@link NotFoundException} if the
-   * session has no file or if the file was rejected (s3Key is null).
+   * <p>The upload workflow enforces a one-file-per-session invariant, so {@code findFirst()} is
+   * safe here. This method does not enforce that invariant structurally — it relies on the workflow
+   * contract. Throws {@link NotFoundException} if the session has no file or if the file was
+   * rejected (s3Key is null).
    *
    * @param uploadId the upload session identifier
    * @return the uploaded file record
