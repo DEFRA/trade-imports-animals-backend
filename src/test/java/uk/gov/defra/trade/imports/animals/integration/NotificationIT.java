@@ -699,6 +699,11 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void findByRef_shouldReturn404_whenReferenceNumberDoesNotExist() {
+        // Given
+        // No notification exists for DRAFT.IMP.2026.DOESNOTEXIST
+
+        // When
+        // Then
         webClient("NoAuth")
             .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", "DRAFT.IMP.2026.DOESNOTEXIST")
             .exchange()
@@ -706,7 +711,7 @@ class NotificationIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value(
-                org.hamcrest.Matchers.containsString("DRAFT.IMP.2026.DOESNOTEXIST"));
+                Matchers.containsString("DRAFT.IMP.2026.DOESNOTEXIST"));
     }
 
     @Test
@@ -732,7 +737,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — delete the notification
         webClient("NoAuth")
-            .method(org.springframework.http.HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
+            .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
             .header("x-cdp-request-id", "trace-cascade-001")
             .header("User-Id", "user-cascade-001")
