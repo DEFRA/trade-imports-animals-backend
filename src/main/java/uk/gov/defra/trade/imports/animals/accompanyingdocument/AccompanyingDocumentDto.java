@@ -19,7 +19,7 @@ public record AccompanyingDocumentDto(
     String documentReference,
     Instant dateOfIssue,
     ScanStatus scanStatus,
-    List<UploadedFile> files,
+    List<UploadedFileDto> files,
     LocalDateTime created,
     LocalDateTime updated) {
 
@@ -39,7 +39,7 @@ public record AccompanyingDocumentDto(
         entity.getDocumentReference(),
         entity.getDateOfIssue(),
         entity.getScanStatus(),
-        List.copyOf(entity.getFiles()),
+        entity.getFiles().stream().map(UploadedFileDto::from).toList(),
         entity.getCreated() != null ? LocalDateTime.ofInstant(entity.getCreated(), ZoneOffset.UTC) : null,
         entity.getUpdated() != null ? LocalDateTime.ofInstant(entity.getUpdated(), ZoneOffset.UTC) : null);
   }
