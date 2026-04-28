@@ -204,4 +204,34 @@ class DocumentServiceTest {
         .isInstanceOf(NotFoundException.class)
         .hasMessageContaining(uploadId);
   }
+
+  @Test
+  void findFile_shouldThrowNotFoundException_whenFileIsRejected() {
+    // Given — a file whose s3Key is null indicates it was rejected by the virus scanner
+    String uploadId = "upload-id-rejected";
+
+    UploadedFile rejectedFile = new UploadedFile(
+        "document.pdf",
+        "application/pdf",
+        1024L,
+        null, // s3Key is null for rejected files
+        "documents-bucket",
+        FileStatus.REJECTED,
+        null,
+        null,
+        true,
+        "File rejected by virus scanner");
+
+    AccompanyingDocument document = AccompanyingDocument.builder()
+        .uploadId(uploadId)
+        .files(List.of(rejectedFile))
+        .build();
+    when(accompanyingDocumentRepository.findByUploadId(uploadId))
+        .thenReturn(Optional.of(document));
+
+    // When / Then
+    assertThatThrownBy(() -> documentService.findFile(uploadId))
+        .isInstanceOf(NotFoundException.class)
+        .hasMessageContaining(uploadId);
+  }
 }
