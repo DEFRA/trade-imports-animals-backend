@@ -86,7 +86,7 @@ public class NotificationController {
             return ResponseEntity.badRequest().build();
         }
         log.info("DELETE /notifications - Deleting {} notifications", referenceNumbers.size());
-        notificationService.deleteByReferenceNumbers(referenceNumbers, traceId, userId);
+        notificationService.deleteByReferenceNumbers(referenceNumbers, new AuditContext(traceId, userId));
         return ResponseEntity.noContent().build();
     }
 }

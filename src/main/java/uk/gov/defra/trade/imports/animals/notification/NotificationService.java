@@ -36,6 +36,7 @@ public class NotificationService {
     }
 
     public NotificationResponse findByRef(String referenceNumber) {
+        log.debug("Fetching notification for reference {}", referenceNumber);
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 "Cannot find notification with reference number: " + referenceNumber));
@@ -59,7 +60,7 @@ public class NotificationService {
     }
 
     @Transactional
-    public void deleteByReferenceNumbers(List<String> referenceNumbers, String traceId, String userId) {
+    public void deleteByReferenceNumbers(List<String> referenceNumbers, AuditContext auditContext) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return;
         }
@@ -72,14 +73,14 @@ public class NotificationService {
             .filter(ref -> !foundRefs.contains(ref))
             .toList();
         if (!missing.isEmpty()) {
-            createNotificationAuditRecord(referenceNumbers, traceId, userId, Result.FAILURE);
+            createNotificationAuditRecord(referenceNumbers, auditContext, Result.FAILURE);
             throw new NotFoundException(
                 "Cannot find notifications with reference numbers: " + String.join(", ", missing));
         }
         log.info("Deleting {} notifications", found.size());
         notificationRepository.deleteAllByReferenceNumberIn(referenceNumbers);
         documentService.deleteForNotificationRefs(referenceNumbers);
-        createNotificationAuditRecord(referenceNumbers, traceId, userId, Result.SUCCESS);
+        createNotificationAuditRecord(referenceNumbers, auditContext, Result.SUCCESS);
     }
 
     private String createReferenceNumber(Notification notification) {
@@ -116,14 +117,14 @@ public class NotificationService {
     }
 
     private void createNotificationAuditRecord(
-        List<String> referenceNumbers, String traceId, String userId, Result result) {
+        List<String> referenceNumbers, AuditContext auditContext, Result result) {
         Audit auditRecord = Audit.builder()
             .action(Action.DELETE_NOTIFICATIONS)
             .result(result)
             .notificationReferenceNumbers(referenceNumbers)
             .numberOfNotifications(referenceNumbers.size())
-            .traceId(traceId)
-            .userId(userId)
+            .traceId(auditContext.traceId())
+            .userId(auditContext.userId())
             .timestamp(LocalDateTime.now())
             .build();
 

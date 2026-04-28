@@ -209,7 +209,7 @@ class NotificationServiceTest {
         when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
         // When
-        notificationService.deleteByReferenceNumbers(List.of(ref1, ref2), TEST_TRACE_ID, TEST_USER_ID);
+        notificationService.deleteByReferenceNumbers(List.of(ref1, ref2), new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
         // Then — deleteAllByReferenceNumberIn is called with the original reference numbers
         verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
@@ -238,7 +238,7 @@ class NotificationServiceTest {
 
         // When / Then
         assertThatThrownBy(() ->
-            notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef), TEST_TRACE_ID, TEST_USER_ID))
+            notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef), new AuditContext(TEST_TRACE_ID, TEST_USER_ID)))
             .isInstanceOf(NotFoundException.class)
             .hasMessageContaining(missingRef);
 
@@ -263,7 +263,7 @@ class NotificationServiceTest {
 
         // When / Then
         assertThatThrownBy(() ->
-            notificationService.deleteByReferenceNumbers(List.of(missing1, missing2), TEST_TRACE_ID, TEST_USER_ID))
+            notificationService.deleteByReferenceNumbers(List.of(missing1, missing2), new AuditContext(TEST_TRACE_ID, TEST_USER_ID)))
             .isInstanceOf(NotFoundException.class)
             .hasMessageContaining(missing1)
             .hasMessageContaining(missing2);
@@ -275,7 +275,7 @@ class NotificationServiceTest {
     @Test
     void deleteByReferenceNumbers_shouldDoNothing_whenListIsEmpty() {
         // When — empty list is passed (defensive guard; controller rejects this before reaching service)
-        notificationService.deleteByReferenceNumbers(Collections.emptyList(), TEST_TRACE_ID, TEST_USER_ID);
+        notificationService.deleteByReferenceNumbers(Collections.emptyList(), new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
         // Then — repository is never called
         verify(notificationRepository, never()).findAllByReferenceNumberIn(anyList());
@@ -294,7 +294,7 @@ class NotificationServiceTest {
         when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
         // When
-        notificationService.deleteByReferenceNumbers(List.of(referenceNumber), TEST_TRACE_ID, TEST_USER_ID);
+        notificationService.deleteByReferenceNumbers(List.of(referenceNumber), new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
         // Then — notification deleted then documents cascade deleted
         verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(referenceNumber));

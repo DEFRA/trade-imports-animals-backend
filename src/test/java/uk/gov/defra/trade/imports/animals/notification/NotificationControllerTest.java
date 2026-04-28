@@ -1,7 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -229,7 +228,7 @@ class NotificationControllerTest {
     void delete_shouldReturn204_whenAllReferenceNumbersExist() throws Exception {
         // Given
         List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111", "DRAFT.IMP.2026.222");
-        doNothing().when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), anyString(), anyString());
+        doNothing().when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), any(AuditContext.class));
 
         // When & Then
         mockMvc.perform(delete("/notifications")
@@ -240,7 +239,7 @@ class NotificationControllerTest {
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isNoContent());
 
-        verify(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), eq("trace-abc"), eq("user-123"));
+        verify(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), eq(new AuditContext("trace-abc", "user-123")));
     }
 
     @Test
@@ -249,7 +248,7 @@ class NotificationControllerTest {
         List<String> referenceNumbers = List.of("DRAFT.IMP.2026.MISSING");
         doThrow(new NotFoundException(
             "Cannot find notifications with reference numbers: DRAFT.IMP.2026.MISSING"))
-            .when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), anyString(), anyString());
+            .when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), any(AuditContext.class));
 
         // When & Then — also validates that NotFoundException resolves to 404 (not 500)
         // through the full Spring dispatch chain (GlobalExceptionHandler handler priority check)
@@ -275,7 +274,7 @@ class NotificationControllerTest {
                 .content("[]"))
             .andExpect(status().isBadRequest());
 
-        verify(notificationService, never()).deleteByReferenceNumbers(any(), any(), any());
+        verify(notificationService, never()).deleteByReferenceNumbers(any(), any());
     }
 
     @Test
@@ -291,7 +290,7 @@ class NotificationControllerTest {
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isBadRequest());
 
-        verify(notificationService, never()).deleteByReferenceNumbers(any(), any(), any());
+        verify(notificationService, never()).deleteByReferenceNumbers(any(), any());
     }
 
     @Test
@@ -307,7 +306,7 @@ class NotificationControllerTest {
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isBadRequest());
 
-        verify(notificationService, never()).deleteByReferenceNumbers(any(), any(), any());
+        verify(notificationService, never()).deleteByReferenceNumbers(any(), any());
     }
 
     // ─── GET /{referenceNumber} ──────────────────────────────────────────────────
