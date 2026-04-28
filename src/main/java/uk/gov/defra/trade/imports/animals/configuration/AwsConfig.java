@@ -3,7 +3,6 @@ package uk.gov.defra.trade.imports.animals.configuration;
 import java.net.URI;
 import java.time.Duration;
 import java.time.LocalDateTime;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -24,19 +23,23 @@ import uk.gov.defra.trade.imports.animals.exceptions.TradeImportsAnimalsBackendE
 
 @Slf4j
 @Configuration
-@RequiredArgsConstructor
 public class AwsConfig {
 
-    @Value("${aws.region}")
-    private String region;
-
-    @Value("${aws.sts.token.audience}")
-    private String audience;
-
-    @Value("${aws.sts.token.expiration}")
-    private Integer expiration;
-
+    private final String region;
+    private final String audience;
+    private final Integer expiration;
     private final AppAwsConfig appAwsConfig;
+
+    public AwsConfig(
+        @Value("${aws.region}") String region,
+        @Value("${aws.sts.token.audience}") String audience,
+        @Value("${aws.sts.token.expiration}") Integer expiration,
+        AppAwsConfig appAwsConfig) {
+        this.region = region;
+        this.audience = audience;
+        this.expiration = expiration;
+        this.appAwsConfig = appAwsConfig;
+    }
 
     private StsClient stsClient() {
 
