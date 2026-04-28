@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
@@ -214,6 +216,9 @@ class NotificationServiceTest {
         // Then — deleteAllByReferenceNumberIn is called with the original reference numbers
         verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
 
+        // And cascade document deletion is triggered for the same refs
+        verify(documentService).deleteForNotificationRefs(List.of(ref1, ref2));
+
         // And an audit record is saved with SUCCESS
         ArgumentCaptor<Audit> auditCaptor = ArgumentCaptor.forClass(Audit.class);
         verify(auditRepository).save(auditCaptor.capture());
@@ -296,9 +301,10 @@ class NotificationServiceTest {
         // When
         notificationService.deleteByReferenceNumbers(List.of(referenceNumber), new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
-        // Then — notification deleted then documents cascade deleted
-        verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(referenceNumber));
-        verify(documentService).deleteForNotificationRefs(List.of(referenceNumber));
+        // Then — notifications deleted first, then documents cascade deleted (order matters)
+        InOrder inOrder = inOrder(notificationRepository, documentService);
+        inOrder.verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(referenceNumber));
+        inOrder.verify(documentService).deleteForNotificationRefs(List.of(referenceNumber));
     }
 
     // ─── findByRef ───────────────────────────────────────────────────────────────
@@ -337,6 +343,7 @@ class NotificationServiceTest {
         assertThat(response).isNotNull();
         assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
         assertThat(response.origin().getCountryCode()).isEqualTo("GB");
+        assertThat(response.commodity().getName()).isEqualTo("Live bovine animals");
         assertThat(response.accompanyingDocuments()).hasSize(1);
         assertThat(response.accompanyingDocuments().getFirst().uploadId()).isEqualTo("upload-abc-123");
         assertThat(response.accompanyingDocuments().getFirst().scanStatus()).isEqualTo(ScanStatus.COMPLETE);
