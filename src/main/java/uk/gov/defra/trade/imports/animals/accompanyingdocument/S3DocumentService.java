@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,6 +37,7 @@ public class S3DocumentService {
    * @throws TradeImportsAnimalsBackendException if the S3 request fails or an I/O error occurs
    */
   public void streamToOutput(String s3Key, OutputStream outputStream) {
+    Objects.requireNonNull(s3Key, "s3Key must not be null");
     String bucket = cdpConfig.s3().documentsBucket();
 
     GetObjectRequest request = GetObjectRequest.builder()
