@@ -735,6 +735,66 @@ class DocumentIT extends IntegrationBase {
     }
 
     // ---------------------------------------------------------------------------
+    // Tests: DELETE /document-uploads/{upload-id} — admin secret protection
+    // ---------------------------------------------------------------------------
+
+    private static final String ADMIN_SECRET_HEADER = "Trade-Imports-Animals-Admin-Secret";
+    private static final String VALID_ADMIN_SECRET = "test-admin-secret";
+
+    /**
+     * DELETE /document-uploads/{id} without the admin secret header must return 401.
+     */
+    @Test
+    void delete_shouldReturn401_whenAdminSecretHeaderIsMissing() throws IOException {
+        String uploadId = initiateAndGetUploadId();
+
+        webClient("NoAuth")
+            .delete()
+            .uri("/document-uploads/" + uploadId)
+            .exchange()
+            .expectStatus().isUnauthorized();
+
+        // Document must not have been deleted
+        assertThat(accompanyingDocumentRepository.findByUploadId(uploadId)).isPresent();
+    }
+
+    /**
+     * DELETE /document-uploads/{id} with a wrong admin secret must return 401.
+     */
+    @Test
+    void delete_shouldReturn401_whenAdminSecretHeaderIsIncorrect() throws IOException {
+        String uploadId = initiateAndGetUploadId();
+
+        webClient("NoAuth")
+            .delete()
+            .uri("/document-uploads/" + uploadId)
+            .header(ADMIN_SECRET_HEADER, "wrong-secret")
+            .exchange()
+            .expectStatus().isUnauthorized();
+
+        // Document must not have been deleted
+        assertThat(accompanyingDocumentRepository.findByUploadId(uploadId)).isPresent();
+    }
+
+    /**
+     * DELETE /document-uploads/{id} with the correct admin secret must return 204 and remove the
+     * document from MongoDB.
+     */
+    @Test
+    void delete_shouldReturn204AndRemoveDocument_whenAdminSecretIsCorrect() throws IOException {
+        String uploadId = initiateAndGetUploadId();
+
+        webClient("NoAuth")
+            .delete()
+            .uri("/document-uploads/" + uploadId)
+            .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .exchange()
+            .expectStatus().isNoContent();
+
+        assertThat(accompanyingDocumentRepository.findByUploadId(uploadId)).isEmpty();
+    }
+
+    // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
 
