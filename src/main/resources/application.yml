@@ -7,6 +7,11 @@ spring:
     name: trade-imports-animals-backend
   threads:
     virtual:
+      # Enable JDK 21 virtual threads (Project Loom) for improved throughput under I/O-bound workloads.
+      # Caveat: virtual threads can be pinned to platform threads when holding a synchronized monitor
+      # (e.g. some legacy JDBC drivers or third-party libraries). Pinning degrades throughput back to
+      # platform-thread behaviour for the affected code path; audit with -Djdk.tracePinnedThreads=full
+      # if you suspect pinning under load.
       enabled: true
   data:
     mongodb:
