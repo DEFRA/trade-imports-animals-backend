@@ -320,7 +320,7 @@ class NotificationServiceTest {
             .notificationReferenceNumber(referenceNumber)
             .uploadId("upload-abc-123")
             .documentType(DocumentType.ITAHC)
-            .documentReference("UK/GB/2026/001")
+            .documentReference("UKGB2026001")
             .scanStatus(ScanStatus.COMPLETE)
             .files(Collections.emptyList())
             .build();

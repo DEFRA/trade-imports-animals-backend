@@ -78,7 +78,7 @@ class DocumentServiceTest {
     String redirectUrl = "https://frontend.example.com/documents";
 
     DocumentUploadRequest request = new DocumentUploadRequest(
-        DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15), redirectUrl);
+        DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15), redirectUrl);
 
     stubCdpConfig();
 
@@ -169,7 +169,7 @@ class DocumentServiceTest {
     String notificationRef = "DRAFT.IMP.2026.concurrent";
     String redirectUrl = null;
 
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", null, null);
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", null, null);
 
     stubCdpConfig();
 

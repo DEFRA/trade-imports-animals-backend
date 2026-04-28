@@ -216,7 +216,7 @@ class DocumentIT extends IntegrationBase {
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
             .bodyValue("""
-                {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234","dateOfIssue":"2026-01-15"}
+                {"documentType":"ITAHC","documentReference":"UKGB2026001234","dateOfIssue":"2026-01-15"}
                 """)
             .exchange()
             .expectStatus().isCreated()
@@ -245,7 +245,7 @@ class DocumentIT extends IntegrationBase {
         assertThat(doc.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
         assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.PENDING);
         assertThat(doc.getDocumentType()).isEqualTo(DocumentType.ITAHC);
-        assertThat(doc.getDocumentReference()).isEqualTo("UK/GB/2026/001234");
+        assertThat(doc.getDocumentReference()).isEqualTo("UKGB2026001234");
         assertThat(doc.getFiles()).isEmpty();
         assertThat(doc.getId()).isNotNull();
         assertThat(doc.getCreated()).isNotNull();
@@ -363,7 +363,7 @@ class DocumentIT extends IntegrationBase {
         assertThat(item.scanStatus()).isEqualTo(ScanStatus.PENDING);
         assertThat(item.id()).isNotNull();
         assertThat(item.documentType()).isEqualTo(DocumentType.ITAHC);
-        assertThat(item.documentReference()).isEqualTo("UK/GB/2026/001234");
+        assertThat(item.documentReference()).isEqualTo("UKGB2026001234");
         assertThat(item.dateOfIssue()).isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
     }
 
@@ -669,7 +669,7 @@ class DocumentIT extends IntegrationBase {
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
             .bodyValue("""
-                {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234","dateOfIssue":"2026-01-15"}
+                {"documentType":"ITAHC","documentReference":"UKGB2026001234","dateOfIssue":"2026-01-15"}
                 """)
             .exchange()
             .expectStatus().isCreated()
@@ -877,7 +877,7 @@ class DocumentIT extends IntegrationBase {
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
             .bodyValue("""
-                {"documentType":"ITAHC","documentReference":"UK/GB/2026/001234","dateOfIssue":"2026-01-15"}
+                {"documentType":"ITAHC","documentReference":"UKGB2026001234","dateOfIssue":"2026-01-15"}
                 """)
             .exchange()
             .expectStatus().isCreated()

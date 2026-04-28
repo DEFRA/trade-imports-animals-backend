@@ -56,7 +56,7 @@ class DocumentControllerTest {
   void post_shouldReturn201WithLocationHeader() throws Exception {
     // Given
     String ref = "DRAFT.IMP.2026.00000001";
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15), null);
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15), null);
     DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "https://cdp-uploader.example/upload/abc");
 
     when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class), any(String.class)))
@@ -107,7 +107,7 @@ class DocumentControllerTest {
   void post_shouldReturn400_whenDocumentTypeIsNull() throws Exception {
     // Given — documentType is absent
     String body = """
-        {"documentReference":"UK/GB/2026/001","dateOfIssue":"2026-01-15"}
+        {"documentReference":"UKGB2026001","dateOfIssue":"2026-01-15"}
         """;
 
     // When / Then
@@ -122,7 +122,7 @@ class DocumentControllerTest {
   void post_shouldReturn400_whenDateOfIssueIsNull() throws Exception {
     // Given — dateOfIssue is absent
     String body = """
-        {"documentType":"ITAHC","documentReference":"UK/GB/2026/001"}
+        {"documentType":"ITAHC","documentReference":"UKGB2026001"}
         """;
 
     // When / Then
@@ -137,7 +137,7 @@ class DocumentControllerTest {
   void post_shouldReturn400_whenRedirectUrlIsOutsideFrontendBaseUrl() throws Exception {
     // Given — redirectUrl points to an external host (open-redirect vector)
     String body = """
-        {"documentType":"ITAHC","documentReference":"UK/GB/2026/001","dateOfIssue":"2026-01-15","redirectUrl":"https://evil.example.com/steal"}
+        {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"https://evil.example.com/steal"}
         """;
 
     // When / Then
@@ -151,7 +151,7 @@ class DocumentControllerTest {
   void post_shouldReturn201_whenRedirectUrlIsWithinFrontendBaseUrl() throws Exception {
     // Given — redirectUrl is under the configured frontend base URL
     String ref = "DRAFT.IMP.2026.00000001";
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15), "http://localhost:3000/notifications/DRAFT.IMP.2026.00000001/upload-complete");
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15), "http://localhost:3000/notifications/DRAFT.IMP.2026.00000001/upload-complete");
     DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "https://cdp-uploader.example/upload/abc");
 
     when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class), any(String.class)))
@@ -169,7 +169,7 @@ class DocumentControllerTest {
     // Given — redirectUrl is absent; controller should pass cdpConfig.frontend().baseUrl() to the service
     String ref = "DRAFT.IMP.2026.00000001";
     String frontendBaseUrl = "http://localhost:3000";
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15), null);
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15), null);
     DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "https://cdp-uploader.example/upload/abc");
 
     when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class), eq(frontendBaseUrl)))
@@ -199,7 +199,7 @@ class DocumentControllerTest {
         .notificationReferenceNumber(ref)
         .uploadId("upload-abc-123")
         .documentType(DocumentType.ITAHC)
-        .documentReference("UK/GB/2026/001")
+        .documentReference("UKGB2026001")
         .scanStatus(ScanStatus.COMPLETE)
         .files(List.of())
         .build();
@@ -244,7 +244,7 @@ class DocumentControllerTest {
         .notificationReferenceNumber("DRAFT.IMP.2026.00000001")
         .uploadId(uploadId)
         .documentType(DocumentType.ITAHC)
-        .documentReference("UK/GB/2026/001")
+        .documentReference("UKGB2026001")
         .scanStatus(ScanStatus.PENDING)
         .files(List.of())
         .build();

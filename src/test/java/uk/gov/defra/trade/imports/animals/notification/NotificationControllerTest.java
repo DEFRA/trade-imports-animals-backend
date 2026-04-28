@@ -318,7 +318,7 @@ class NotificationControllerTest {
 
         AccompanyingDocumentDto document = new AccompanyingDocumentDto(
             "doc-id-001", referenceNumber, "upload-abc-123",
-            DocumentType.ITAHC, "UK/GB/2026/001",
+            DocumentType.ITAHC, "UKGB2026001",
             null, ScanStatus.COMPLETE,
             Collections.emptyList(), null, null);
 

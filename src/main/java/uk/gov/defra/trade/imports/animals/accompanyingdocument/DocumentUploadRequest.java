@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import org.springframework.lang.Nullable;
@@ -18,6 +19,7 @@ public record DocumentUploadRequest(
 
     @NotBlank
     @Size(max = 100)
+    @Pattern(regexp = "^[a-zA-Z0-9]*$")
     @Schema(description = "Reference number printed on the document", example = "UK/GB/2026/001234")
     String documentReference,
 
