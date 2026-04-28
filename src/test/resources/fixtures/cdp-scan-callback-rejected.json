@@ -2,7 +2,7 @@
   "uploadStatus": "ready",
   "numberOfRejectedFiles": 1,
   "metadata": {
-    "reference": "DRAFT.IMP.2025.TEST"
+    "notificationReferenceNumber": "DRAFT.IMP.2025.TEST"
   },
   "form": {
     "file": {
