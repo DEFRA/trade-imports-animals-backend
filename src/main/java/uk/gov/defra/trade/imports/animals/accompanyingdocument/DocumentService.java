@@ -35,8 +35,13 @@ public class DocumentService {
    * Initiates a new document upload session via cdp-uploader and persists a pending
    * {@link AccompanyingDocument}.
    *
-   * <p>Idempotent: if a PENDING upload already exists for the same notification reference, the
-   * existing upload details are returned without calling cdp-uploader again.
+   * <p>This method is <strong>not idempotent</strong>. cdp-uploader is always called to create a
+   * new upload session. The returned upload ID is then persisted; if a record with the same upload
+   * ID already exists (e.g. due to a concurrent retry), the unique-index constraint causes a
+   * {@link org.springframework.dao.DuplicateKeyException} which is re-thrown as a
+   * {@link uk.gov.defra.trade.imports.animals.exceptions.ConflictException}. In that scenario the
+   * cdp-uploader session that was just created becomes orphaned — no corresponding database record
+   * is saved for it.
    *
    * @param notificationRef the parent notification reference number
    * @param request         the document metadata supplied by the user
