@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -151,6 +152,27 @@ class DocumentControllerTest {
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request)))
         .andExpect(status().isCreated());
+  }
+
+  @Test
+  void post_shouldFallBackToFrontendBaseUrl_whenRedirectUrlIsNull() throws Exception {
+    // Given — redirectUrl is absent; controller should pass cdpConfig.frontend().baseUrl() to the service
+    String ref = "DRAFT.IMP.2026.00000001";
+    String frontendBaseUrl = "http://localhost:3000";
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UK/GB/2026/001", LocalDate.of(2026, 1, 15), null);
+    DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "https://cdp-uploader.example/upload/abc");
+
+    when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class), eq(frontendBaseUrl)))
+        .thenReturn(serviceResponse);
+
+    // When
+    mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(request)))
+        // Then
+        .andExpect(status().isCreated());
+
+    verify(documentService).initiate(eq(ref), any(DocumentUploadRequest.class), eq(frontendBaseUrl));
   }
 
   // ---------------------------------------------------------------------------
