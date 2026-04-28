@@ -509,6 +509,62 @@ class DocumentIT extends IntegrationBase {
     }
 
     // ---------------------------------------------------------------------------
+    // Test: scan callback via "pending" alias path — resolves by notificationReferenceNumber
+    // ---------------------------------------------------------------------------
+
+    /**
+     * POST to /document-uploads/pending/scan-results with notificationReferenceNumber in metadata:
+     * the production route used by cdp-uploader. The service must resolve the PENDING document by
+     * notification reference and update its scan status to COMPLETE.
+     */
+    @Test
+    void scanResult_viaPendingAlias_shouldResolveByNotificationRef() throws IOException {
+        // Arrange — initiate to create a PENDING record with the known notification ref
+        initiateAndGetUploadId();
+
+        String pendingPayload = """
+            {
+              "uploadStatus": "ready",
+              "numberOfRejectedFiles": 0,
+              "metadata": {
+                "notificationReferenceNumber": "%s"
+              },
+              "form": {
+                "file": {
+                  "fileId": "%s",
+                  "filename": "test.pdf",
+                  "contentType": "application/pdf",
+                  "fileStatus": "complete",
+                  "contentLength": 22,
+                  "checksumSha256": "/SxqL+N296KUYPUFOkjpBtHEck5oMdfvh/HDZDEetbA=",
+                  "detectedContentType": "application/pdf",
+                  "s3Key": "%s"
+                }
+              }
+            }
+            """.formatted(NOTIFICATION_REF, FILE_ID_FROM_FIXTURE, S3_KEY_FROM_FIXTURE);
+
+        // Act — post to the "pending" alias path, as cdp-uploader does in production
+        webClient("NoAuth")
+            .post()
+            .uri("/document-uploads/pending/scan-results")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(pendingPayload)
+            .exchange()
+            .expectStatus().isNoContent();
+
+        // Assert MongoDB updated via the alias lookup
+        List<AccompanyingDocument> docs =
+            accompanyingDocumentRepository.findAllByNotificationReferenceNumber(NOTIFICATION_REF);
+        assertThat(docs).hasSize(1);
+        AccompanyingDocument persisted = docs.get(0);
+        assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+        assertThat(persisted.getFiles()).hasSize(1);
+        assertThat(persisted.getFiles().get(0).filename()).isEqualTo("test.pdf");
+        assertThat(persisted.getFiles().get(0).s3Key()).isEqualTo(S3_KEY_FROM_FIXTURE);
+    }
+
+    // ---------------------------------------------------------------------------
     // Test: multi-file scan callback with mixed COMPLETE + REJECTED
     // ---------------------------------------------------------------------------
 
