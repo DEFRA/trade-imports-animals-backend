@@ -85,7 +85,11 @@ public class DocumentController {
         : frontendBaseUrl;
     DocumentUploadResponse response = documentService.initiate(ref, request, redirectUrl);
 
-    URI location = URI.create(cdpConfig.backend().baseUrl() + "/document-uploads/" + response.uploadId());
+    String backendBaseUrl = cdpConfig.backend().baseUrl();
+    if (backendBaseUrl.endsWith("/")) {
+      backendBaseUrl = backendBaseUrl.substring(0, backendBaseUrl.length() - 1);
+    }
+    URI location = URI.create(backendBaseUrl + "/document-uploads/" + response.uploadId());
     return ResponseEntity.created(location).body(response);
   }
 
