@@ -143,6 +143,12 @@ class AccompanyingDocumentTest {
     assertThat(type).isEqualTo(DocumentType.ITAHC);
   }
 
+  @Test
+  void documentType_unknownValue_throwsInvalidFormatException() {
+    assertThatThrownBy(() -> objectMapper.readValue("\"UNKNOWN\"", DocumentType.class))
+        .isInstanceOf(InvalidFormatException.class);
+  }
+
   // ─── ScanStatus JSON serialisation ───────────────────────────────────────
 
   @Test
