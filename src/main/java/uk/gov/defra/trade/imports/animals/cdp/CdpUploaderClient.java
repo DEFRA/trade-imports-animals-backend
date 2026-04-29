@@ -24,6 +24,8 @@ import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException
 @RequiredArgsConstructor
 public class CdpUploaderClient {
 
+  private static final int MAX_LOG_BODY_LENGTH = 500;
+
   private final RestClient cdpUploaderRestClient;
 
   /**
@@ -52,8 +54,14 @@ public class CdpUploaderClient {
                 try (var is = resp.getBody()) {
                   body = new String(is.readAllBytes(), StandardCharsets.UTF_8);
                 }
+                String safeBody =
+                    body.length() > MAX_LOG_BODY_LENGTH
+                        ? body.substring(0, MAX_LOG_BODY_LENGTH) + "..."
+                        : body;
                 log.error(
-                    "cdp-uploader returned non-2xx response: status={}, body={}", statusCode, body);
+                    "cdp-uploader returned non-2xx response: status={}, body={}",
+                    statusCode,
+                    safeBody);
                 throw new ServiceUnavailableException(
                     "cdp-uploader returned an error response: HTTP " + statusCode);
               })
