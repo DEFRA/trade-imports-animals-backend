@@ -54,7 +54,7 @@ public class NotificationController {
     @Timed("controller.getNotificationByRef.time")
     public ResponseEntity<NotificationResponse> findByRef(
         @Pattern(regexp = "^[A-Za-z0-9.]{1,50}$") @PathVariable String referenceNumber) {
-        log.info("Fetching notification {}", referenceNumber);
+        log.debug("Fetching notification {}", referenceNumber);
         return ResponseEntity.ok(notificationService.findByRef(referenceNumber));
     }
 
