@@ -8,20 +8,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * additional document types.
  */
 public enum DocumentType {
-
   @Schema(description = "Intra-Trade Animal Health Certificate (ITAHC)")
-  ITAHC("ITAHC"),
+  ITAHC,
 
   @Schema(description = "Veterinary health certificate issued by the country of origin")
-  VETERINARY_HEALTH_CERTIFICATE("Veterinary health certificate");
-
-  private final String label;
-
-  DocumentType(String label) {
-    this.label = label;
-  }
-
-  public String getDisplayName() {
-    return label;
-  }
+  VETERINARY_HEALTH_CERTIFICATE
 }
