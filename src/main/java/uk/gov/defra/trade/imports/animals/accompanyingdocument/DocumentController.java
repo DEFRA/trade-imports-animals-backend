@@ -8,9 +8,11 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -50,7 +52,7 @@ public class DocumentController {
    * @param ref     the notification reference number
    * @param request the document metadata
    * @return 201 Created with the upload session details and a Location header,
-   *         or 400 Bad Request if redirectUrl does not start with the configured frontend base URL
+   *         or 400 Bad Request if redirectUrl is not on the same origin as the configured frontend base URL
    */
   @PostMapping("/notifications/{ref}/document-uploads")
   @Operation(
@@ -70,9 +72,11 @@ public class DocumentController {
 
     // The redirectUrl is where the user's browser is sent after the file upload form is submitted.
     // Validate it against the configured frontend base URL to prevent open-redirect attacks.
+    // Compare scheme, host, and port explicitly — string-prefix matching is bypassable
+    // (e.g. "http://localhost:3000.evil.com" starts with "http://localhost:3000").
     String frontendBaseUrl = cdpConfig.frontend().baseUrl();
     if (request.redirectUrl() != null && !request.redirectUrl().isBlank()
-        && !request.redirectUrl().startsWith(frontendBaseUrl)) {
+        && !isSameOrigin(request.redirectUrl(), frontendBaseUrl)) {
       log.warn("POST /notifications/{}/document-uploads rejected: redirectUrl not within frontend base URL", ref);
       return ResponseEntity.badRequest().build();
     }
@@ -83,6 +87,45 @@ public class DocumentController {
 
     URI location = URI.create(cdpConfig.backend().baseUrl() + "/document-uploads/" + response.uploadId());
     return ResponseEntity.created(location).body(response);
+  }
+
+  /**
+   * Check whether {@code candidateUrl} shares the same origin (scheme, host, port) as
+   * {@code expectedBaseUrl}. Both inputs must be absolute URIs with a scheme and host.
+   *
+   * <p>Comparison is case-insensitive for scheme and host. Ports are normalised to their
+   * scheme defaults (80 for http, 443 for https) before comparison so that, for example,
+   * "http://example.com" and "http://example.com:80" match.
+   */
+  private static boolean isSameOrigin(String candidateUrl, String expectedBaseUrl) {
+    try {
+      URI candidate = new URI(candidateUrl);
+      URI expected = new URI(expectedBaseUrl);
+      if (candidate.getScheme() == null || candidate.getHost() == null
+          || expected.getScheme() == null || expected.getHost() == null) {
+        return false;
+      }
+      return candidate.getScheme().equalsIgnoreCase(expected.getScheme())
+          && candidate.getHost().equalsIgnoreCase(expected.getHost())
+          && Objects.equals(normalisePort(candidate), normalisePort(expected));
+    } catch (URISyntaxException e) {
+      return false;
+    }
+  }
+
+  private static int normalisePort(URI uri) {
+    int port = uri.getPort();
+    if (port != -1) {
+      return port;
+    }
+    String scheme = uri.getScheme();
+    if ("https".equalsIgnoreCase(scheme)) {
+      return 443;
+    }
+    if ("http".equalsIgnoreCase(scheme)) {
+      return 80;
+    }
+    return -1;
   }
 
   /**
