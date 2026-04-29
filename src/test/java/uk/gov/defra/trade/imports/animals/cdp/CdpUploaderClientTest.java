@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -184,7 +185,7 @@ class CdpUploaderClientTest {
               .thenReturn(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
           handler.handle(mock(ClientHttpRequest.class), mockResponse);
         } catch (IOException e) {
-          throw new RuntimeException(e);
+          throw new UncheckedIOException(e);
         }
       }
       return responseSpec;
