@@ -160,7 +160,10 @@ class DocumentControllerTest {
     mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isCreated());
+        .andExpect(status().isCreated())
+        .andExpect(header().string("Location", "http://localhost:8085/document-uploads/upload-abc-123"))
+        .andExpect(jsonPath("$.uploadId").value("upload-abc-123"))
+        .andExpect(jsonPath("$.uploadUrl").value("https://cdp-uploader.example/upload/abc"));
   }
 
   @Test
