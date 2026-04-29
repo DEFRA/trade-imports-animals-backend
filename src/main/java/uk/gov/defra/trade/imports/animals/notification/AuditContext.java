@@ -1,5 +1,7 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import java.util.Objects;
+
 /**
  * Carries audit metadata across service-call boundaries so that downstream
  * operations (such as creating an {@link uk.gov.defra.trade.imports.animals.audit.Audit}
@@ -19,4 +21,9 @@ package uk.gov.defra.trade.imports.animals.notification;
  *                (see {@code NotificationController.HEADER_USER_ID}).
  *                Required, non-null.
  */
-public record AuditContext(String traceId, String userId) {}
+public record AuditContext(String traceId, String userId) {
+  public AuditContext {
+    Objects.requireNonNull(traceId, "traceId");
+    Objects.requireNonNull(userId, "userId");
+  }
+}
