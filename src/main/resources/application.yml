@@ -54,10 +54,14 @@ cdp:
     #   application/vnd.ms-excel
     #   application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
     mime-types: ${CDP_UPLOADER_MIME_TYPES:application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
+  # backend.base-url and frontend.base-url are this service's own URLs (not CDP-platform
+  # services), so they intentionally drop the CDP_ prefix. They have no defaults here so
+  # Spring fails fast at startup in deployed environments if the env vars are unset.
+  # Local defaults live in application-local.yml (loaded via SPRING_PROFILES_ACTIVE=local).
   backend:
-    base-url: ${BACKEND_BASE_URL:http://localhost:8085}
+    base-url: ${BACKEND_BASE_URL}
   frontend:
-    base-url: ${CDP_FRONTEND_BASE_URL:http://localhost:3000}
+    base-url: ${FRONTEND_BASE_URL}
   s3:
     documents-bucket: ${CDP_DOCUMENTS_BUCKET:trade-imports-animals-documents}
 
