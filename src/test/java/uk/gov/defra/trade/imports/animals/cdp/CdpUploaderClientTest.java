@@ -156,6 +156,7 @@ class CdpUploaderClientTest {
       capturedPredicate.set(invocation.getArgument(0));
       return responseSpec;
     });
+    // initiate() return value not asserted in this test — only the captured predicate matters
     when(responseSpec.body(CdpUploaderInitiateResponse.class)).thenReturn(null);
 
     cdpUploaderClient.initiate(request);
