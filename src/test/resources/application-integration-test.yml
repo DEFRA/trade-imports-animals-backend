@@ -31,7 +31,6 @@ cdp:
   proxy:
     url: ${HTTP_PROXY:}
   uploader:
-    base-url: http://localhost:7337
     max-file-size: 52428800
     mime-types: application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
   backend:
