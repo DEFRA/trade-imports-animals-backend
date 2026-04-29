@@ -18,7 +18,7 @@ public record DocumentUploadRequest(
     @NotBlank
     @Size(max = 100)
     @Pattern(regexp = "^[a-zA-Z0-9]*$")
-    @Schema(description = "Reference number printed on the document", example = "UK/GB/2026/001234")
+    @Schema(description = "Reference number printed on the document", example = "UKGB2026001234")
     String documentReference,
 
     @NotNull
