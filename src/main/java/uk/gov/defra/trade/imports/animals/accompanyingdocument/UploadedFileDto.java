@@ -30,11 +30,22 @@ public record UploadedFileDto(
     @Schema(description = "Content type detected by the virus/content scanner, may differ from contentType")
     String detectedContentType,
 
-    @Schema(description = "Whether the file was rejected due to a scan or validation error")
+    @Schema(description = "Whether the file was rejected due to a scan or validation error; "
+        + "always non-null (defaults to false when unknown)")
     Boolean hasError,
 
     @Schema(description = "Human-readable error message if hasError is true; null otherwise")
     String errorMessage) {
+
+  /**
+   * Compact constructor that normalises {@code hasError} so API consumers see a non-null value.
+   *
+   * <p>A {@code null} {@code hasError} is treated as {@code false} — i.e. no error. This keeps the
+   * API contract simple: {@code hasError} is always either {@code true} or {@code false}.
+   */
+  public UploadedFileDto {
+    hasError = hasError != null && hasError;
+  }
 
   /**
    * Maps an {@link UploadedFile} to a DTO, omitting {@code s3Key} and {@code s3Bucket}.
