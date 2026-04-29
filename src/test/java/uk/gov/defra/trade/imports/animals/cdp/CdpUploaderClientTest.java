@@ -21,6 +21,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpRequest;
 import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClient.RequestBodySpec;
@@ -181,7 +182,7 @@ class CdpUploaderClientTest {
           when(mockResponse.getStatusCode()).thenReturn(status);
           when(mockResponse.getBody())
               .thenReturn(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
-          handler.handle(null, mockResponse);
+          handler.handle(mock(ClientHttpRequest.class), mockResponse);
         } catch (IOException e) {
           throw new RuntimeException(e);
         }
