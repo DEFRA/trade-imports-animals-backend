@@ -24,6 +24,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpRequest;
 import org.springframework.http.client.ClientHttpResponse;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClient.RequestBodySpec;
 import org.springframework.web.client.RestClient.RequestBodyUriSpec;
@@ -136,6 +137,34 @@ class CdpUploaderClientTest {
     assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
         .isInstanceOf(ServiceUnavailableException.class)
         .hasMessageContaining("cdp-uploader returned an error response: HTTP 422");
+  }
+
+  @Test
+  void initiate_shouldWrapResourceAccessExceptionAsServiceUnavailable_whenConnectionRefused() {
+    // Given — simulate a transport-level failure (e.g. connection refused) by having the
+    // RestClient's onStatus chain throw a ResourceAccessException (a RestClientException subtype).
+    // This mirrors what Spring's RestClient does when the underlying HTTP client cannot reach
+    // the upstream service.
+    CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
+        "https://frontend/redirect",
+        "https://backend/callback",
+        "my-bucket",
+        "DRAFT.IMP.2026.abc",
+        20971520L,
+        List.of("application/pdf"),
+        null);
+
+    ResourceAccessException transportFailure =
+        new ResourceAccessException("I/O error: Connection refused");
+    when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
+    when(responseSpec.body(CdpUploaderInitiateResponse.class)).thenThrow(transportFailure);
+
+    // When / Then — caller sees the same exception type as for HTTP errors, with the
+    // original RestClientException preserved on the cause chain.
+    assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
+        .isInstanceOf(ServiceUnavailableException.class)
+        .hasMessageContaining("cdp-uploader is unreachable")
+        .hasCause(transportFailure);
   }
 
   @Test
