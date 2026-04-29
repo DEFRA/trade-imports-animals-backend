@@ -1,12 +1,14 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
@@ -22,6 +24,8 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
  *   <li>{@code findByUploadId} — unique index lookup by upload ID
  *   <li>{@code findFirstByNotificationReferenceNumberAndScanStatus} — compound field query
  *   <li>{@code deleteAllByNotificationReferenceNumberIn} — bulk delete by reference number list
+ *   <li>Unique-index enforcement on {@code uploadId} — guards against accidental removal of
+ *       {@code @Indexed(unique = true)} on the field
  * </ul>
  */
 class AccompanyingDocumentRepositoryIT extends IntegrationBase {
@@ -243,5 +247,50 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
 
     // Assert — document untouched
     assertThat(repository.findAll()).hasSize(1);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Unique index on uploadId
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Saving two documents with the same {@code uploadId} must fail with
+   * {@link DuplicateKeyException}, proving the {@code @Indexed(unique = true)} declaration on
+   * {@link AccompanyingDocument#uploadId} is materialised in MongoDB. This guards against
+   * accidental removal of the annotation: without the unique index, two records for the same
+   * cdp-uploader upload could coexist and corrupt downstream lookups via
+   * {@link AccompanyingDocumentRepository#findByUploadId(String)}.
+   *
+   * <p>The two documents use different {@code notificationReferenceNumber}s and {@code COMPLETE}
+   * scan status to avoid colliding with the partial unique compound index on
+   * {@code (notificationReferenceNumber, scanStatus=PENDING)} — that way the only constraint
+   * either record can violate is the {@code uploadId} unique index.
+   */
+  @Test
+  void save_shouldThrowDuplicateKeyException_whenUploadIdAlreadyExists() {
+    // Arrange — first save succeeds
+    AccompanyingDocument first = AccompanyingDocument.builder()
+        .uploadId("repo-test-duplicate-upload")
+        .notificationReferenceNumber("DRAFT.IMP.2026.UNIQ001")
+        .scanStatus(ScanStatus.COMPLETE)
+        .build();
+    repository.save(first);
+
+    AccompanyingDocument duplicate = AccompanyingDocument.builder()
+        .uploadId("repo-test-duplicate-upload")
+        .notificationReferenceNumber("DRAFT.IMP.2026.UNIQ002")
+        .scanStatus(ScanStatus.COMPLETE)
+        .build();
+
+    // Act + Assert — second save with the same uploadId must violate the unique index
+    assertThatThrownBy(() -> repository.save(duplicate))
+        .isInstanceOf(DuplicateKeyException.class);
+
+    // And the original document must still be the only one stored for that uploadId
+    assertThat(repository.findByUploadId("repo-test-duplicate-upload"))
+        .isPresent()
+        .get()
+        .satisfies(stored -> assertThat(stored.getNotificationReferenceNumber())
+            .isEqualTo("DRAFT.IMP.2026.UNIQ001"));
   }
 }
