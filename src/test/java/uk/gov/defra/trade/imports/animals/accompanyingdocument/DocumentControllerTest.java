@@ -29,7 +29,6 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 @WebMvcTest(DocumentController.class)
 @TestPropertySource(properties = {
-    "admin.secret=test-secret",
     "cdp.tracing.header-name=x-cdp-request-id",
     "cdp.backend.base-url=http://localhost:8085",
     "cdp.frontend.base-url=http://localhost:3000"
@@ -376,8 +375,7 @@ class DocumentControllerTest {
     doNothing().when(documentService).deleteByUploadId(uploadId);
 
     // When / Then
-    mockMvc.perform(delete("/document-uploads/{id}", uploadId)
-            .header("Trade-Imports-Animals-Admin-Secret", "test-secret"))
+    mockMvc.perform(delete("/document-uploads/{id}", uploadId))
         .andExpect(status().isNoContent());
   }
 
@@ -389,8 +387,7 @@ class DocumentControllerTest {
         .when(documentService).deleteByUploadId(unknownId);
 
     // When / Then
-    mockMvc.perform(delete("/document-uploads/{id}", unknownId)
-            .header("Trade-Imports-Animals-Admin-Secret", "test-secret"))
+    mockMvc.perform(delete("/document-uploads/{id}", unknownId))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.detail").value(
             "No accompanying document found with uploadId: " + unknownId));

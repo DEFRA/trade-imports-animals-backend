@@ -61,7 +61,6 @@ public class DocumentController {
   @ApiResponse(responseCode = "201", description = "Upload session created",
       content = @Content(schema = @Schema(implementation = DocumentUploadResponse.class)))
   @ApiResponse(responseCode = "400", description = "Invalid redirectUrl", content = @Content)
-  @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
   @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
   @Timed("document.initiate")
   public ResponseEntity<DocumentUploadResponse> initiate(
@@ -144,7 +143,6 @@ public class DocumentController {
       description = "Returns all accompanying documents for a notification reference")
   @ApiResponse(responseCode = "200", description = "Document list returned",
       content = @Content(schema = @Schema(implementation = DocumentListResponse.class)))
-  @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
   @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
   @Timed("document.list")
   public ResponseEntity<DocumentListResponse> list(@PathVariable String ref) {
@@ -168,7 +166,6 @@ public class DocumentController {
       description = "Returns an accompanying document by upload ID")
   @ApiResponse(responseCode = "200", description = "Document returned",
       content = @Content(schema = @Schema(implementation = AccompanyingDocumentDto.class)))
-  @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
   @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
   @Timed("document.get")
   public ResponseEntity<AccompanyingDocumentDto> get(
@@ -190,7 +187,6 @@ public class DocumentController {
       summary = "Delete document upload",
       description = "Removes an accompanying document upload session from the notification")
   @ApiResponse(responseCode = "204", description = "Document deleted", content = @Content)
-  @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
   @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
   @Timed("document.delete")
   public ResponseEntity<Void> delete(@PathVariable("upload-id") String uploadId) {
@@ -213,7 +209,6 @@ public class DocumentController {
       summary = "Handle scan result",
       description = "Receives the cdp-uploader antivirus scan result callback")
   @ApiResponse(responseCode = "204", description = "Scan result processed", content = @Content)
-  @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
   @Timed("document.scanResult")
   public ResponseEntity<Void> scanResult(
       @PathVariable("upload-id") String uploadId,
@@ -241,7 +236,6 @@ public class DocumentController {
       description = "Streams the scanned file for an upload session from S3")
   @ApiResponse(responseCode = "200", description = "File streamed",
       content = @Content(mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE))
-  @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
   @ApiResponse(responseCode = "404", description = "File not found", content = @Content)
   @Timed("document.downloadFile")
   public ResponseEntity<StreamingResponseBody> downloadFile(
