@@ -133,8 +133,8 @@ services:
 
       # This service's own URLs (no defaults in application.yml,
       # so these must be set explicitly in every environment).
-      BACKEND_BASE_URL: ${BACKEND_BASE_URL:-http://host.docker.internal:8085}
-      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
+      BACKEND_BASE_URL: ${BACKEND_BASE_URL}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
 
       # Logging
       LOG_LEVEL: DEBUG

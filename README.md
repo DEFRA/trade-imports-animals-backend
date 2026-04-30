@@ -27,6 +27,25 @@ docker compose --profile services up --build -d
 
 A more extensive setup is available in [github.com/DEFRA/cdp-local-environment](https://github.com/DEFRA/cdp-local-environment)
 
+#### Required environment variables
+
+The compose file deliberately has no defaults for the following variables —
+they must be set in every environment (e.g. via a `.env` file or shell export)
+or `docker compose` will surface a missing-var warning and the service will
+fail fast at startup:
+
+- `BACKEND_BASE_URL` — externally reachable base URL for this service
+  (typical local value: `http://host.docker.internal:8085`)
+- `FRONTEND_BASE_URL` — externally reachable base URL for the frontend
+  (typical local value: `http://localhost:3000`)
+
+Example `.env`:
+
+```
+BACKEND_BASE_URL=http://host.docker.internal:8085
+FRONTEND_BASE_URL=http://localhost:3000
+```
+
 ### MongoDB
 
 #### MongoDB via Docker
