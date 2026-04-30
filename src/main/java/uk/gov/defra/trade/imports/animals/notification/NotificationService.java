@@ -112,7 +112,10 @@ public class NotificationService {
         notification.setCommodity(dto.getCommodity());
         notification.setReasonForImport(dto.getReasonForImport());
         notification.setAdditionalDetails(dto.getAdditionalDetails());
+        notification.setConsignor(dto.getConsignor());
+        notification.setDestination(dto.getDestination());
         notification.setCphNumber(dto.getCphNumber());
+        notification.setTransport(dto.getTransport());
         notification.setUpdated(LocalDateTime.now());
     }
 

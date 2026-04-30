@@ -21,6 +21,12 @@ public class NotificationDto {
 
     private AdditionalDetails additionalDetails;
     
+    private Consignor consignor;
+    
+    private Destination destination;
+    
     private String cphNumber;
+    
+    private Transport transport;
 
 }

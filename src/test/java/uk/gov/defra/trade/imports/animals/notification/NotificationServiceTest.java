@@ -9,6 +9,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
 import java.time.LocalDate;
@@ -104,6 +106,11 @@ class NotificationServiceTest {
             .commodityComplement(List.of(complement))
             .build();
         String cphNumber = "123456789";
+        
+        Transport transport = Transport.builder()
+            .portOfEntry("ABERDEEN")
+            .arrivalDate(LocalDate.of(2026, 1, 1))
+            .build();
 
         Notification existingNotification = new Notification();
         existingNotification.setId(existingId);
@@ -117,9 +124,12 @@ class NotificationServiceTest {
             .referenceNumber(referenceNumber)
             .origin(origin)
             .commodity(commodity)
+            .consignor(consignors().getFirst())
+            .destination(destinations().getFirst())
             .additionalDetails(additionalDetails)
             .reasonForImport("PERMANENT")
             .cphNumber(cphNumber)
+            .transport(transport)
             .build();
 
         Notification updatedNotification = Notification.builder()
@@ -127,9 +137,12 @@ class NotificationServiceTest {
             .referenceNumber(referenceNumber)
             .origin(origin)
             .commodity(commodity)
+            .consignor(consignors().getFirst())
+            .destination(destinations().getFirst())
             .additionalDetails(additionalDetails)
             .reasonForImport("PERMANENT")
             .cphNumber(cphNumber)
+            .transport(transport)
             .build();
 
         when(notificationRepository.save(any(Notification.class))).thenReturn(updatedNotification);
@@ -151,7 +164,14 @@ class NotificationServiceTest {
         assertThat(result.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
         assertThat(result.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
         assertThat(result.getReasonForImport()).isEqualTo("PERMANENT");
+        assertThat(result.getConsignor().getName()).isEqualTo("Astra Rosales");
+        assertThat(result.getConsignor().getAddress().getAddressLine1()).isEqualTo("43 East Hague Extension");
+        assertThat(result.getConsignor().getAddress().getCountry()).isEqualTo("Switzerland");
+        assertThat(result.getDestination().getName()).isEqualTo("United Commerce");
+        assertThat(result.getDestination().getAddress().getAddressLine1()).isEqualTo("446 Church Lane");
+        assertThat(result.getDestination().getAddress().getCountry()).isEqualTo("United Kingdom");
         assertThat(result.getCphNumber()).isEqualTo("123456789");
+        assertThat(result.getTransport()).isEqualTo(transport);
         verify(notificationRepository, times(1)).save(any(Notification.class));
     }
 
