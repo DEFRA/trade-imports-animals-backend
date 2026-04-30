@@ -1,8 +1,3 @@
-# Migration notes (env var renames — update any local .env or shell exports):
-#   CDP_BACKEND_BASE_URL  -> BACKEND_BASE_URL   (this service's own URL, not a CDP-platform service)
-#   CDP_FRONTEND_BASE_URL -> FRONTEND_BASE_URL  (this service's own URL, not a CDP-platform service)
-# The CDP_ prefix is reserved for CDP-platform services (e.g. cdp-uploader).
-
 services:
 
   localstack:
@@ -129,7 +124,6 @@ services:
       MONGO_DATABASE: trade-imports-animals-backend
 
       # AWS (via LocalStack)
-      # Renamed from LOCALSTACK_ENDPOINT to APP_AWS_ENDPOINT_OVERRIDE
       APP_AWS_ENDPOINT_OVERRIDE: http://localstack:4566
       AWS_REGION: eu-west-2
 
@@ -137,9 +131,8 @@ services:
       CDP_UPLOADER_BASE_URL: http://cdp-uploader:7337
       CDP_DOCUMENTS_BUCKET: trade-imports-animals-documents
 
-      # This service's own URLs (renamed from CDP_BACKEND_BASE_URL / CDP_FRONTEND_BASE_URL —
-      # the CDP_ prefix is reserved for CDP-platform services). No defaults in application.yml,
-      # so these must be set explicitly in every environment.
+      # This service's own URLs (no defaults in application.yml,
+      # so these must be set explicitly in every environment).
       BACKEND_BASE_URL: ${BACKEND_BASE_URL:-http://host.docker.internal:8085}
       FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
 
