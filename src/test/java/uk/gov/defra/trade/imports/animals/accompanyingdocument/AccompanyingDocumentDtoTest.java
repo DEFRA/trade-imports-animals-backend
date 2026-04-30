@@ -133,6 +133,25 @@ class AccompanyingDocumentDtoTest {
   }
 
   @Test
+  void from_shouldNormaliseNullHasErrorToFalse() {
+    UploadedFile file = UploadedFile.builder()
+        .filename("scan-pending.pdf")
+        .fileStatus(FileStatus.COMPLETE)
+        .hasError(null)
+        .build();
+
+    AccompanyingDocument entity = AccompanyingDocument.builder()
+        .uploadId("upload-uuid-null-haserror")
+        .files(List.of(file))
+        .build();
+
+    AccompanyingDocumentDto dto = AccompanyingDocumentDto.from(entity);
+
+    UploadedFileDto fileDto = dto.files().get(0);
+    assertThat(fileDto.hasError()).isFalse();
+  }
+
+  @Test
   void from_shouldMapFilesToEmptyList_whenEntityFilesIsEmpty() {
     AccompanyingDocument entity = AccompanyingDocument.builder()
         .uploadId("upload-uuid-5")
