@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.configuration;
 
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import java.util.List;
@@ -57,7 +58,7 @@ public record CdpConfig(
    *
    * @param baseUrl the public base URL of the backend service, used for callback construction
    */
-  public record BackendConfig(String baseUrl) {}
+  public record BackendConfig(@NotBlank String baseUrl) {}
 
   /**
    * Frontend service base URL configuration.
@@ -67,7 +68,7 @@ public record CdpConfig(
    *
    * @param baseUrl the public base URL of the frontend service
    */
-  public record FrontendConfig(String baseUrl) {}
+  public record FrontendConfig(@NotBlank String baseUrl) {}
 
   /**
    * S3 document storage configuration.
