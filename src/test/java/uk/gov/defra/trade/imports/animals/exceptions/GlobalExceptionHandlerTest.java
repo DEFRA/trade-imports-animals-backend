@@ -298,9 +298,10 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY.value());
         Map<String, Object> properties = problemDetail.getProperties();
-        if (properties != null) {
-            assertThat(properties).doesNotContainKey("traceId");
-        }
+        assertThat(properties).satisfiesAnyOf(
+            p -> assertThat(p).isNull(),
+            p -> assertThat(p).doesNotContainKey("traceId")
+        );
     }
 
     private MethodArgumentNotValidException createValidationException(FieldError... fieldErrors) {
