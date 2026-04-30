@@ -147,6 +147,23 @@ class DocumentControllerTest {
   }
 
   @Test
+  void post_shouldReturn400_whenRedirectUrlIsHostnameSuffixAttack() throws Exception {
+    // Given — redirectUrl host has the configured frontend hostname as a string prefix
+    // ("http://localhost:3000.evil.com" starts with "http://localhost:3000" but resolves to a
+    // different host). This is the bypass that motivated switching from startsWith to origin
+    // comparison.
+    String body = """
+        {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"http://localhost:3000.evil.com/steal"}
+        """;
+
+    // When / Then
+    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void post_shouldReturn201_whenRedirectUrlIsWithinFrontendBaseUrl() throws Exception {
     // Given — redirectUrl is under the configured frontend base URL
     String ref = "DRAFT.IMP.2026.00000001";
