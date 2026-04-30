@@ -72,7 +72,7 @@ public class CdpUploaderClient {
     } catch (RestClientException e) {
       // Transport-level failure (connection refused, timeout, DNS, etc.). Wrap so callers
       // see a single exception type for both upstream HTTP errors and unreachability.
-      log.error("cdp-uploader request failed at transport level: {}", e.getMessage());
+      log.error("cdp-uploader request failed at transport level", e);
       throw new ServiceUnavailableException("cdp-uploader is unreachable: " + e.getMessage(), e);
     }
   }
