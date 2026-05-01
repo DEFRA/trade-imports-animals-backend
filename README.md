@@ -2,7 +2,7 @@
 
 Core delivery Java Spring Boot backend template.
 
-* [Install MongoDB](#install-mongodb)
+* [MongoDB](#mongodb)
 * [Inspect MongoDB](#inspect-mongodb)
 * [Testing](#testing)
 * [Running](#running)
