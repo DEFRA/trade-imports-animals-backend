@@ -25,6 +25,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 @WebMvcTest(DocumentController.class)
@@ -334,6 +335,27 @@ class DocumentControllerTest {
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.detail").value(
             "No accompanying document found with correlationId: " + unknownCorrelationId));
+  }
+
+  @Test
+  void scanResult_shouldReturn400_whenCorrelationIdMissing() throws Exception {
+    // Given — service rejects payload because metadata.correlationId is missing/blank.
+    // This test pins the BadRequestException → 400 mapping at the @ControllerAdvice boundary.
+    String pathSegment = "pending";
+    CdpScanResultForm form = new CdpScanResultForm(Map.of());
+    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
+
+    doThrow(new BadRequestException(
+        "Scan callback missing required correlationId in metadata"))
+        .when(documentService).handleScanResult(eq(pathSegment), any(CdpScanResultPayload.class));
+
+    // When / Then
+    mockMvc.perform(post("/document-uploads/{id}/scan-results", pathSegment)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(objectMapper.writeValueAsString(payload)))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.detail").value(
+            "Scan callback missing required correlationId in metadata"));
   }
 
   // ---------------------------------------------------------------------------
