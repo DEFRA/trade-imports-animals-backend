@@ -35,9 +35,9 @@ jobs:
           docker build --no-cache --tag trade-imports-animals-backend .
           exit $?
 
-#      - name: SonarCloud Scan
-#        if: github.actor != 'dependabot[bot]'
-#        uses: SonarSource/sonarqube-scan-action@v5
-#        env:
-#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+  sonarcloud:
+    name: SonarCloud Scan
+    needs: pr-validator
+    if: github.actor != 'dependabot[bot]'
+    uses: ./.github/workflows/sonarcloud.yml
+    secrets: inherit
