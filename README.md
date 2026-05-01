@@ -18,8 +18,8 @@ A local environment with:
 - Localstack for AWS services (S3, SQS)
 - Redis
 - MongoDB
+- `cdp-uploader` — virus-scanning upload service used by accompanying-documents
 - This service.
-- A commented out frontend example.
 
 ```bash
 docker compose --profile services up --build -d
