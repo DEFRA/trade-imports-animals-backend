@@ -41,4 +41,4 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
         run: |
-          mvn -B -e clean verify sonar:sonar -Dsonar.token="${SONAR_TOKEN}" -Dsonar.host.url="${SONAR_HOST_URL}" -Dsonar.organization=defra -Dsonar.projectKey=DEFRA_trade-imports-animals-backend
+          mvn -B -e clean verify sonar:sonar -Dsonar.token="${SONAR_TOKEN}" -Dsonar.host.url="${SONAR_HOST_URL}" -Dsonar.organization=defra -Dsonar.projectKey=DEFRA_trade-imports-animals-backend -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
