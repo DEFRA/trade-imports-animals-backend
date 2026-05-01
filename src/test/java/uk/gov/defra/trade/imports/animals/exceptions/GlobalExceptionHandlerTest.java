@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.util.List;
@@ -11,10 +13,13 @@ import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -23,15 +28,27 @@ class GlobalExceptionHandlerTest {
 
     private GlobalExceptionHandler exceptionHandler;
 
+    // The handler logs WARN/ERROR for every exception it handles — that's correct production
+    // behaviour. In this unit test we only care about return values, so silence the logger to
+    // avoid flooding the test output with expected error logs.
+    //
+    // NOTE: Mutating a static logger level in @BeforeEach/@AfterEach is intentional here.
+    // These tests must run sequentially (JUnit 5 default) for the level mutation to be safe;
+    // parallel execution would cause races between setUp/tearDown and test body logging.
+    private static final Logger HANDLER_LOGGER =
+        (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
     @BeforeEach
     void setUp() {
         exceptionHandler = new GlobalExceptionHandler();
         MDC.clear();
+        HANDLER_LOGGER.setLevel(Level.OFF);
     }
 
     @AfterEach
     void tearDown() {
         MDC.clear();
+        HANDLER_LOGGER.setLevel(null); // restore — inherit from root
     }
 
     @Test
@@ -46,9 +63,12 @@ class GlobalExceptionHandlerTest {
         );
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleValidationException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleValidationException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Validation Error");
@@ -58,10 +78,10 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail.getProperties().get("traceId")).isEqualTo(traceId);
 
         @SuppressWarnings("unchecked")
-        Map<String, String> errors = (Map<String, String>) problemDetail.getProperties().get("errors");
+        Map<String, List<String>> errors = (Map<String, List<String>>) problemDetail.getProperties().get("errors");
         assertThat(errors).hasSize(2);
-        assertThat(errors.get("origin")).isEqualTo("must not be null");
-        assertThat(errors.get("commodity")).isEqualTo("must not be blank");
+        assertThat(errors.get("origin")).containsExactly("must not be null");
+        assertThat(errors.get("commodity")).containsExactly("must not be blank");
     }
 
     @Test
@@ -72,16 +92,15 @@ class GlobalExceptionHandlerTest {
         );
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleValidationException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleValidationException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-        // When traceId is null, the property is never set, so properties may be null or not contain traceId
         Map<String, Object> properties = problemDetail.getProperties();
-        if (properties != null) {
-            assertThat(properties).doesNotContainKey("traceId");
-        }
+        assertThat(properties).isNotNull();
+        assertThat(properties).doesNotContainKey("traceId");
     }
 
     @Test
@@ -92,9 +111,12 @@ class GlobalExceptionHandlerTest {
         NotFoundException exception = new NotFoundException("Notification with id 12345 not found");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleNotFoundException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleNotFoundException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Resource Not Found");
@@ -110,16 +132,17 @@ class GlobalExceptionHandlerTest {
         NotFoundException exception = new NotFoundException("Resource not found");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleNotFoundException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleNotFoundException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
-        // When traceId is null, the property is never set, so properties may be null or not contain traceId
         Map<String, Object> properties = problemDetail.getProperties();
-        if (properties != null) {
-            assertThat(properties).doesNotContainKey("traceId");
-        }
+        assertThat(properties).satisfiesAnyOf(
+            p -> assertThat(p).isNull(),
+            p -> assertThat(p).doesNotContainKey("traceId")
+        );
     }
 
     @Test
@@ -130,9 +153,12 @@ class GlobalExceptionHandlerTest {
         ConflictException exception = new ConflictException("Notification with reference DRAFT.IMP.2026.001 already exists");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleConflictException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleConflictException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Resource Conflict");
@@ -148,16 +174,62 @@ class GlobalExceptionHandlerTest {
         ConflictException exception = new ConflictException("Resource conflict");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleConflictException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleConflictException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
-        // When traceId is null, the property is never set, so properties may be null or not contain traceId
         Map<String, Object> properties = problemDetail.getProperties();
-        if (properties != null) {
-            assertThat(properties).doesNotContainKey("traceId");
-        }
+        assertThat(properties).satisfiesAnyOf(
+            p -> assertThat(p).isNull(),
+            p -> assertThat(p).doesNotContainKey("traceId")
+        );
+    }
+
+    @Test
+    void handleBadRequestException_shouldReturnBadRequestWithDetail() {
+        // Given
+        String traceId = "test-trace-bad-1";
+        MDC.put("trace.id", traceId);
+        BadRequestException exception =
+            new BadRequestException("Scan callback missing required correlationId in metadata");
+
+        // When
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleBadRequestException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problemDetail.getTitle()).isEqualTo("Bad Request");
+        assertThat(problemDetail.getDetail())
+            .isEqualTo("Scan callback missing required correlationId in metadata");
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/bad-request"));
+        assertThat(problemDetail.getProperties()).containsKey("traceId");
+        assertThat(problemDetail.getProperties().get("traceId")).isEqualTo(traceId);
+    }
+
+    @Test
+    void handleBadRequestException_shouldHandleNullTraceId() {
+        // Given - no trace ID in MDC
+        BadRequestException exception = new BadRequestException("Bad request");
+
+        // When
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleBadRequestException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        Map<String, Object> properties = problemDetail.getProperties();
+        assertThat(properties).satisfiesAnyOf(
+            p -> assertThat(p).isNull(),
+            p -> assertThat(p).doesNotContainKey("traceId")
+        );
     }
 
     @Test
@@ -168,9 +240,11 @@ class GlobalExceptionHandlerTest {
         RuntimeException exception = new RuntimeException("Unexpected database error");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Internal Server Error");
@@ -186,7 +260,8 @@ class GlobalExceptionHandlerTest {
         IllegalStateException exception = new IllegalStateException("Invalid state");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
         assertThat(problemDetail).isNotNull();
@@ -199,7 +274,8 @@ class GlobalExceptionHandlerTest {
         IllegalArgumentException exception = new IllegalArgumentException("Invalid argument");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
         assertThat(problemDetail).isNotNull();
@@ -212,16 +288,65 @@ class GlobalExceptionHandlerTest {
         RuntimeException exception = new RuntimeException("Error");
 
         // When
-        ProblemDetail problemDetail = exceptionHandler.handleException(exception);
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleException(exception);
+        ProblemDetail problemDetail = response.getBody();
 
         // Then
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
-        // When traceId is null, the property is never set, so properties may be null or not contain traceId
         Map<String, Object> properties = problemDetail.getProperties();
-        if (properties != null) {
-            assertThat(properties).doesNotContainKey("traceId");
-        }
+        assertThat(properties).satisfiesAnyOf(
+            p -> assertThat(p).isNull(),
+            p -> assertThat(p).doesNotContainKey("traceId")
+        );
+    }
+
+    @Test
+    void handleServiceUnavailableException_shouldReturnBadGateway() {
+        // Given
+        String traceId = "test-trace-svc-unavail";
+        MDC.put("trace.id", traceId);
+        ServiceUnavailableException exception =
+            new ServiceUnavailableException("cdp-uploader returned an error response: HTTP 503");
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleServiceUnavailableException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY.value());
+        assertThat(problemDetail.getTitle()).isEqualTo("Upstream Service Error");
+        assertThat(problemDetail.getDetail())
+            .isEqualTo("cdp-uploader returned an error response: HTTP 503");
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/upstream-error"));
+        assertThat(problemDetail.getProperties()).containsKey("traceId");
+        assertThat(problemDetail.getProperties().get("traceId")).isEqualTo(traceId);
+    }
+
+    @Test
+    void handleServiceUnavailableException_shouldHandleNullTraceId() {
+        // Given - no trace ID in MDC
+        ServiceUnavailableException exception =
+            new ServiceUnavailableException("cdp-uploader returned an error response: HTTP 503");
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleServiceUnavailableException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY.value());
+        Map<String, Object> properties = problemDetail.getProperties();
+        assertThat(properties).satisfiesAnyOf(
+            p -> assertThat(p).isNull(),
+            p -> assertThat(p).doesNotContainKey("traceId")
+        );
     }
 
     private MethodArgumentNotValidException createValidationException(FieldError... fieldErrors) {

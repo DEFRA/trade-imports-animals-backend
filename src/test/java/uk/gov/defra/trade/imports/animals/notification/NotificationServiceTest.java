@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -20,9 +21,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpHeaders;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
@@ -37,22 +42,21 @@ class NotificationServiceTest {
     @Mock
     private AuditRepository auditRepository;
 
+    @Mock
+    private DocumentService documentService;
+
     private NotificationService notificationService;
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationService(notificationRepository, auditRepository);
+        notificationService = new NotificationService(notificationRepository, auditRepository, documentService);
     }
 
-    private HttpHeaders headersWithAuditFields() {
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("x-cdp-request-id", "test-trace-id");
-        headers.add("User-Id", "test-user-id");
-        return headers;
-    }
+    private static final String TEST_TRACE_ID = "test-trace-id";
+    private static final String TEST_USER_ID = "test-user-id";
 
     @Test
-    void shouldCreateNewNotificationWithGeneratedReferenceNumber() {
+    void saveOriginOfImport_shouldCreateNotificationWithGeneratedReferenceNumber() {
         // Given - new notification without referenceNumber
         Origin origin = new Origin("GB", "true", "REF123");
         NotificationDto notificationDto = NotificationDto.builder()
@@ -89,7 +93,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    void shouldUpdateExistingNotification() {
+    void saveOriginOfImport_shouldUpdateExistingNotification() {
         // Given - existing notification with ID and reference number
         String existingId = "507f191e810c19729de860ea";
         String referenceNumber = "DRAFT.IMP.2026." + existingId;
@@ -221,17 +225,19 @@ class NotificationServiceTest {
         String ref2 = "DRAFT.IMP.2026.222";
         NotificationReferenceOnly n1 = () -> ref1;
         NotificationReferenceOnly n2 = () -> ref2;
-        HttpHeaders headers = headersWithAuditFields();
 
         when(notificationRepository.findAllByReferenceNumberIn(List.of(ref1, ref2)))
             .thenReturn(List.of(n1, n2));
         when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
         // When
-        notificationService.deleteByReferenceNumbers(List.of(ref1, ref2), headers);
+        notificationService.deleteByReferenceNumbers(List.of(ref1, ref2), new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
         // Then — deleteAllByReferenceNumberIn is called with the original reference numbers
         verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
+
+        // And cascade document deletion is triggered for the same refs
+        verify(documentService).deleteForNotificationRefs(List.of(ref1, ref2));
 
         // And an audit record is saved with SUCCESS
         ArgumentCaptor<Audit> auditCaptor = ArgumentCaptor.forClass(Audit.class);
@@ -250,7 +256,6 @@ class NotificationServiceTest {
         String existingRef = "DRAFT.IMP.2026.111";
         String missingRef  = "DRAFT.IMP.2026.MISSING";
         NotificationReferenceOnly n1 = () -> existingRef;
-        HttpHeaders headers = headersWithAuditFields();
 
         when(notificationRepository.findAllByReferenceNumberIn(List.of(existingRef, missingRef)))
             .thenReturn(List.of(n1));
@@ -258,7 +263,7 @@ class NotificationServiceTest {
 
         // When / Then
         assertThatThrownBy(() ->
-            notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef), headers))
+            notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef), new AuditContext(TEST_TRACE_ID, TEST_USER_ID)))
             .isInstanceOf(NotFoundException.class)
             .hasMessageContaining(missingRef);
 
@@ -276,7 +281,6 @@ class NotificationServiceTest {
         // Given
         String missing1 = "DRAFT.IMP.2026.AAA";
         String missing2 = "DRAFT.IMP.2026.BBB";
-        HttpHeaders headers = headersWithAuditFields();
 
         when(notificationRepository.findAllByReferenceNumberIn(List.of(missing1, missing2)))
             .thenReturn(Collections.emptyList());
@@ -284,7 +288,7 @@ class NotificationServiceTest {
 
         // When / Then
         assertThatThrownBy(() ->
-            notificationService.deleteByReferenceNumbers(List.of(missing1, missing2), headers))
+            notificationService.deleteByReferenceNumbers(List.of(missing1, missing2), new AuditContext(TEST_TRACE_ID, TEST_USER_ID)))
             .isInstanceOf(NotFoundException.class)
             .hasMessageContaining(missing1)
             .hasMessageContaining(missing2);
@@ -296,11 +300,110 @@ class NotificationServiceTest {
     @Test
     void deleteByReferenceNumbers_shouldDoNothing_whenListIsEmpty() {
         // When — empty list is passed (defensive guard; controller rejects this before reaching service)
-        notificationService.deleteByReferenceNumbers(Collections.emptyList(), new HttpHeaders());
+        notificationService.deleteByReferenceNumbers(Collections.emptyList(), new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
         // Then — repository is never called
         verify(notificationRepository, never()).findAllByReferenceNumberIn(anyList());
         verify(notificationRepository, never()).deleteAllByReferenceNumberIn(anyList());
         verify(auditRepository, never()).save(any(Audit.class));
+    }
+
+    @Test
+    void deleteByReferenceNumbers_shouldCascadeDeleteDocuments_whenNotificationsDeleted() {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.111";
+        NotificationReferenceOnly notificationRef = () -> referenceNumber;
+
+        when(notificationRepository.findAllByReferenceNumberIn(List.of(referenceNumber)))
+            .thenReturn(List.of(notificationRef));
+        when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
+
+        // When
+        notificationService.deleteByReferenceNumbers(List.of(referenceNumber), new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
+
+        // Then — notifications deleted first, then documents cascade deleted (order matters)
+        InOrder inOrder = inOrder(notificationRepository, documentService);
+        inOrder.verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(referenceNumber));
+        inOrder.verify(documentService).deleteForNotificationRefs(List.of(referenceNumber));
+    }
+
+    // ─── findByRef ───────────────────────────────────────────────────────────────
+
+    @Test
+    void findByRef_shouldReturnHydratedNotification_withDocuments() {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.abc123";
+        Origin origin = new Origin("GB", "true", "REF-001");
+        Notification notification = Notification.builder()
+            .id("notif-id-001")
+            .referenceNumber(referenceNumber)
+            .origin(origin)
+            .commodity(Commodity.builder().name("Live bovine animals").build())
+            .build();
+
+        AccompanyingDocument document = AccompanyingDocument.builder()
+            .id("doc-id-001")
+            .notificationReferenceNumber(referenceNumber)
+            .uploadId("upload-abc-123")
+            .documentType(DocumentType.ITAHC)
+            .documentReference("UKGB2026001")
+            .scanStatus(ScanStatus.COMPLETE)
+            .files(Collections.emptyList())
+            .build();
+
+        when(notificationRepository.findByReferenceNumber(referenceNumber))
+            .thenReturn(Optional.of(notification));
+        when(documentService.findByNotificationRef(referenceNumber))
+            .thenReturn(List.of(document));
+
+        // When
+        NotificationResponse response = notificationService.findByRef(referenceNumber);
+
+        // Then
+        assertThat(response).isNotNull();
+        assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
+        assertThat(response.origin().getCountryCode()).isEqualTo("GB");
+        assertThat(response.commodity().getName()).isEqualTo("Live bovine animals");
+        assertThat(response.accompanyingDocuments()).hasSize(1);
+        assertThat(response.accompanyingDocuments().getFirst().uploadId()).isEqualTo("upload-abc-123");
+        assertThat(response.accompanyingDocuments().getFirst().scanStatus()).isEqualTo(ScanStatus.COMPLETE);
+    }
+
+    @Test
+    void findByRef_shouldReturnNotificationWithEmptyDocuments_whenNoneUploaded() {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.xyz456";
+        Notification notification = Notification.builder()
+            .id("notif-id-002")
+            .referenceNumber(referenceNumber)
+            .origin(new Origin("IE", "false", null))
+            .build();
+
+        when(notificationRepository.findByReferenceNumber(referenceNumber))
+            .thenReturn(Optional.of(notification));
+        when(documentService.findByNotificationRef(referenceNumber))
+            .thenReturn(Collections.emptyList());
+
+        // When
+        NotificationResponse response = notificationService.findByRef(referenceNumber);
+
+        // Then
+        assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
+        assertThat(response.accompanyingDocuments()).isEmpty();
+    }
+
+    @Test
+    void findByRef_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
+        // Given
+        String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
+        when(notificationRepository.findByReferenceNumber(referenceNumber))
+            .thenReturn(Optional.empty());
+
+        // When / Then
+        assertThatThrownBy(() -> notificationService.findByRef(referenceNumber))
+            .isInstanceOf(NotFoundException.class)
+            .hasMessageContaining(referenceNumber);
+
+        verify(documentService, never()).findByNotificationRef(any());
     }
 }

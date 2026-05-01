@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.filter;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
@@ -19,9 +20,9 @@ import java.io.IOException;
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
+@Slf4j
 public class RequestTracingFilter implements Filter {
 
-    
     private static final String MDC_TRACE_ID = "trace.id";
     private static final String MDC_HTTP_METHOD = "http.request.method";
     private static final String MDC_HTTP_STATUS = "http.response.status_code";
@@ -50,12 +51,15 @@ public class RequestTracingFilter implements Filter {
             MDC.put(MDC_HTTP_METHOD, httpRequest.getMethod());
             MDC.put(MDC_URL_FULL, httpRequest.getRequestURL().toString());
 
+            log.debug("{} {}", httpRequest.getMethod(), httpRequest.getRequestURL().toString());
+
             // Execute filter chain
             chain.doFilter(request, response);
 
             // Capture response status after chain completes
             if (response instanceof HttpServletResponse httpResponse) {
                 MDC.put(MDC_HTTP_STATUS, String.valueOf(httpResponse.getStatus()));
+                log.debug("Response status {} for {}", httpResponse.getStatus(), httpRequest.getRequestURI());
             }
 
         } finally {

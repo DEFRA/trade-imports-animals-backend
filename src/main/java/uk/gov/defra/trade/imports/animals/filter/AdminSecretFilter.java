@@ -15,7 +15,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
  * Servlet filter that protects privileged endpoints by requiring a shared secret header.
- * Applied only to DELETE /notifications requests.
+ * Applied to DELETE /notifications requests only.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 1)
@@ -46,7 +46,10 @@ public class AdminSecretFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !("DELETE".equalsIgnoreCase(request.getMethod())
-            && request.getRequestURI().startsWith("/notifications"));
+        if (!"DELETE".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+        String uri = request.getRequestURI();
+        return !uri.startsWith("/notifications");
     }
 }

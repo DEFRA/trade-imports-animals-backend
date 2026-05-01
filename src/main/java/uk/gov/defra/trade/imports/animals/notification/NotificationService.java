@@ -3,14 +3,15 @@ package uk.gov.defra.trade.imports.animals.notification;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import org.springframework.http.HttpHeaders;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
@@ -24,6 +25,7 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
+    private final DocumentService documentService;
 
     public Notification saveOriginOfImport(NotificationDto notificationDto) {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
@@ -31,6 +33,15 @@ public class NotificationService {
         } else {
             return updateNotification(notificationDto);
         }
+    }
+
+    public NotificationResponse findByRef(String referenceNumber) {
+        log.debug("Fetching notification for reference {}", referenceNumber);
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                "Cannot find notification with reference number: " + referenceNumber));
+        List<AccompanyingDocument> documents = documentService.findByNotificationRef(referenceNumber);
+        return NotificationResponse.from(notification, documents);
     }
 
     public List<Notification> findAll() {
@@ -48,7 +59,8 @@ public class NotificationService {
             .toList();
     }
 
-    public void deleteByReferenceNumbers(List<String> referenceNumbers, HttpHeaders headers) {
+    @Transactional
+    public void deleteByReferenceNumbers(List<String> referenceNumbers, AuditContext auditContext) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return;
         }
@@ -61,13 +73,14 @@ public class NotificationService {
             .filter(ref -> !foundRefs.contains(ref))
             .toList();
         if (!missing.isEmpty()) {
-            createNotificationAuditRecord(referenceNumbers, headers, Result.FAILURE);
+            createNotificationAuditRecord(referenceNumbers, auditContext, Result.FAILURE);
             throw new NotFoundException(
                 "Cannot find notifications with reference numbers: " + String.join(", ", missing));
         }
         log.info("Deleting {} notifications", found.size());
         notificationRepository.deleteAllByReferenceNumberIn(referenceNumbers);
-        createNotificationAuditRecord(referenceNumbers, headers, Result.SUCCESS);
+        documentService.deleteForNotificationRefs(referenceNumbers);
+        createNotificationAuditRecord(referenceNumbers, auditContext, Result.SUCCESS);
     }
 
     private String createReferenceNumber(Notification notification) {
@@ -107,14 +120,14 @@ public class NotificationService {
     }
 
     private void createNotificationAuditRecord(
-        List<String> referenceNumbers, HttpHeaders headers, Result result) {
+        List<String> referenceNumbers, AuditContext auditContext, Result result) {
         Audit auditRecord = Audit.builder()
             .action(Action.DELETE_NOTIFICATIONS)
             .result(result)
             .notificationReferenceNumbers(referenceNumbers)
             .numberOfNotifications(referenceNumbers.size())
-            .traceId(Objects.requireNonNull(headers.get("x-cdp-request-id")).getFirst())
-            .userId(Objects.requireNonNull(headers.get("User-Id")).getFirst())
+            .traceId(auditContext.traceId())
+            .userId(auditContext.userId())
             .timestamp(LocalDateTime.now())
             .build();
 

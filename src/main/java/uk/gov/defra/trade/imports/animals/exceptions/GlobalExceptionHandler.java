@@ -1,17 +1,22 @@
 package uk.gov.defra.trade.imports.animals.exceptions;
 
-import lombok.extern.slf4j.Slf4j;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
-import java.net.URI;
-import java.util.HashMap;
-import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Global exception handler for REST API error responses.
@@ -35,7 +40,7 @@ public class GlobalExceptionHandler {
      * Handle validation errors (400 Bad Request).
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ProblemDetail handleValidationException(MethodArgumentNotValidException ex) {
+    public ResponseEntity<ProblemDetail> handleValidationException(MethodArgumentNotValidException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.warn("Validation error (trace: {}): {}", traceId, ex.getMessage());
 
@@ -47,26 +52,51 @@ public class GlobalExceptionHandler {
         problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
         problemDetail.setTitle("Validation Error");
 
-        // Add trace ID for log correlation
         if (traceId != null) {
             problemDetail.setProperty("traceId", traceId);
         }
 
-        // Add field-level validation errors
-        Map<String, String> errors = new HashMap<>();
+        Map<String, List<String>> errors = new LinkedHashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
-            errors.put(error.getField(), error.getDefaultMessage());
+            errors.computeIfAbsent(error.getField(), k -> new ArrayList<>()).add(error.getDefaultMessage());
         }
         problemDetail.setProperty("errors", errors);
 
-        return problemDetail;
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
+     * Handle application-level bad-request errors (400 Bad Request).
+     */
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ProblemDetail> handleBadRequestException(BadRequestException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Bad request (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST,
+            ex.getMessage()
+        );
+
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/bad-request"));
+        problemDetail.setTitle("Bad Request");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
     }
 
     /**
      * Handle not found errors (404 Not Found).
      */
     @ExceptionHandler(NotFoundException.class)
-    public ProblemDetail handleNotFoundException(NotFoundException ex) {
+    public ResponseEntity<ProblemDetail> handleNotFoundException(NotFoundException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.warn("Resource not found (trace: {}): {}", traceId, ex.getMessage());
 
@@ -82,14 +112,41 @@ public class GlobalExceptionHandler {
             problemDetail.setProperty("traceId", traceId);
         }
 
-        return problemDetail;
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
+     * Handle upstream service errors (502 Bad Gateway).
+     */
+    @ExceptionHandler(ServiceUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleServiceUnavailableException(ServiceUnavailableException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.error("Upstream service error (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_GATEWAY,
+            ex.getMessage()
+        );
+
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/upstream-error"));
+        problemDetail.setTitle("Upstream Service Error");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
     }
 
     /**
      * Handle conflict errors (409 Conflict).
      */
     @ExceptionHandler(ConflictException.class)
-    public ProblemDetail handleConflictException(ConflictException ex) {
+    public ResponseEntity<ProblemDetail> handleConflictException(ConflictException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.warn("Resource conflict (trace: {}): {}", traceId, ex.getMessage());
 
@@ -105,7 +162,9 @@ public class GlobalExceptionHandler {
             problemDetail.setProperty("traceId", traceId);
         }
 
-        return problemDetail;
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
     }
 
     /**
@@ -116,12 +175,8 @@ public class GlobalExceptionHandler {
      * This allows Spring to handle its own exceptions appropriately (e.g., 404 for
      * missing endpoints).
      */
-    @ExceptionHandler({
-        RuntimeException.class,
-        IllegalStateException.class,
-        IllegalArgumentException.class
-    })
-    public ProblemDetail handleException(Exception ex) {
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ProblemDetail> handleException(Exception ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.error("Unexpected error (trace: {}): {}", traceId, ex.getMessage(), ex);
 
@@ -137,6 +192,8 @@ public class GlobalExceptionHandler {
             problemDetail.setProperty("traceId", traceId);
         }
 
-        return problemDetail;
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
     }
 }

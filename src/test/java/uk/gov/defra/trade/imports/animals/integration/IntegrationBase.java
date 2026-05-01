@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.List;
@@ -20,8 +21,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
 import org.mockserver.client.MockServerClient;
 import org.mockserver.model.JsonBody;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
@@ -42,7 +41,6 @@ import org.testcontainers.utility.DockerImageName;
 @ActiveProfiles("integration-test")
 abstract class IntegrationBase {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(IntegrationBase.class);
     static final List<String> SERVICES_TO_MOCK = List.of();
 
     @LocalServerPort
@@ -109,7 +107,7 @@ abstract class IntegrationBase {
         if (mockServerClient == null) {
             mockServerClient = new MockServerClient(MOCK_SERVER_CONTAINER.getHost(),
                 MOCK_SERVER_CONTAINER.getServerPort());
-            LOGGER.info(
+            log.info(
                 "You should be able to find the dashboard here : http://{}:{}/mockserver/dashboard",
                 MOCK_SERVER_CONTAINER.getHost(), MOCK_SERVER_CONTAINER.getServerPort());
         }
@@ -172,6 +170,29 @@ abstract class IntegrationBase {
                 : null;
         } catch (IOException e) {
             throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Loads a classpath fixture file as a UTF-8 String.
+     */
+    protected String loadFixtureAsString(String classpathResource) throws IOException {
+        return new String(readResourceBytes(classpathResource), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Loads a classpath fixture file as raw bytes.
+     */
+    protected byte[] loadFixtureAsBytes(String classpathResource) throws IOException {
+        return readResourceBytes(classpathResource);
+    }
+
+    private byte[] readResourceBytes(String classpathResource) throws IOException {
+        try (var stream = getClass().getClassLoader().getResourceAsStream(classpathResource)) {
+            if (stream == null) {
+                throw new IllegalArgumentException("Fixture not found: " + classpathResource);
+            }
+            return stream.readAllBytes();
         }
     }
 }
