@@ -555,8 +555,9 @@ class DocumentIT extends IntegrationBase {
             .expectStatus().isBadRequest()
             .expectBody()
             .jsonPath("$.status").isEqualTo(400)
-            .jsonPath("$.detail").value((String detail) ->
-                assertThat(detail).contains("correlationId"));
+            .jsonPath("$.title").isEqualTo("Bad Request")
+            .jsonPath("$.detail")
+            .isEqualTo("Scan callback missing required correlationId in metadata");
     }
 
     // ---------------------------------------------------------------------------
