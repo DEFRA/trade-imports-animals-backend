@@ -87,6 +87,7 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
    */
   @Test
   void findByCorrelationId_shouldReturnDocument_whenCorrelationIdExists() {
+    // Arrange
     AccompanyingDocument doc = AccompanyingDocument.builder()
         .uploadId("repo-test-upload-corr-001")
         .correlationId("corr-id-001")
@@ -95,8 +96,10 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
         .build();
     repository.save(doc);
 
+    // Act
     Optional<AccompanyingDocument> result = repository.findByCorrelationId("corr-id-001");
 
+    // Assert
     assertThat(result).isPresent();
     assertThat(result.get().getCorrelationId()).isEqualTo("corr-id-001");
     assertThat(result.get().getUploadId()).isEqualTo("repo-test-upload-corr-001");
@@ -107,9 +110,11 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
    */
   @Test
   void findByCorrelationId_shouldReturnEmpty_whenCorrelationIdDoesNotExist() {
+    // Act
     Optional<AccompanyingDocument> result =
         repository.findByCorrelationId("non-existent-correlation-id");
 
+    // Assert
     assertThat(result).isEmpty();
   }
 
@@ -267,6 +272,8 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
    */
   @Test
   void save_shouldThrowDuplicateKeyException_whenCorrelationIdAlreadyExists() {
+    // Arrange — first save succeeds. Use distinct uploadIds so the test specifically
+    // exercises the correlationId index rather than the uploadId index.
     AccompanyingDocument first = AccompanyingDocument.builder()
         .uploadId("repo-test-corr-uniq-001")
         .correlationId("repo-test-duplicate-correlation")
@@ -282,9 +289,11 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
         .scanStatus(ScanStatus.PENDING)
         .build();
 
+    // Act + Assert — second save with the same correlationId must violate the unique index
     assertThatThrownBy(() -> repository.save(duplicate))
         .isInstanceOf(DuplicateKeyException.class);
 
+    // And the original document must still be the only one stored for that correlationId
     assertThat(repository.findByCorrelationId("repo-test-duplicate-correlation"))
         .isPresent()
         .get()
