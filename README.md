@@ -94,8 +94,27 @@ mvn test
 
 ### Running
 
-Run the application:
+Run the application with the `local` Spring profile, which supplies development
+defaults for `BACKEND_BASE_URL` and `FRONTEND_BASE_URL`:
+
 ```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+Or equivalently:
+
+```bash
+SPRING_PROFILES_ACTIVE=local mvn spring-boot:run
+```
+
+Without the `local` profile the application reads `application.yml`, which has
+no defaults for `BACKEND_BASE_URL` / `FRONTEND_BASE_URL` (deployed environments
+must set these explicitly), so startup fails fast with a placeholder-resolution
+error. To run without the profile, export those vars manually first:
+
+```bash
+export BACKEND_BASE_URL=http://host.docker.internal:8085
+export FRONTEND_BASE_URL=http://localhost:3000
 mvn spring-boot:run
 ```
 
