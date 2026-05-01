@@ -35,12 +35,13 @@ public class DocumentService {
    * {@link AccompanyingDocument}.
    *
    * <p>This method is <strong>not idempotent</strong>. cdp-uploader is always called to create a
-   * new upload session. The returned upload ID is then persisted; if a record with the same upload
-   * ID already exists (e.g. due to a concurrent retry), the unique-index constraint causes a
-   * {@link org.springframework.dao.DuplicateKeyException} which is re-thrown as a
-   * {@link uk.gov.defra.trade.imports.animals.exceptions.ConflictException}. In that scenario the
-   * cdp-uploader session that was just created becomes orphaned — no corresponding database record
-   * is saved for it.
+   * new upload session. Multiple PENDING documents are deliberately permitted per notification —
+   * the UX supports adding a second document while the first is still being scanned.
+   *
+   * <p>The {@code uploadId} returned by cdp-uploader is enforced as globally unique by a Mongo
+   * unique index on the field. A duplicate would imply a cdp-uploader UUID collision; the
+   * defensive catch below re-throws as {@link ConflictException} (HTTP 409). In that scenario the
+   * cdp-uploader session is orphaned — no database record is saved for it.
    *
    * @param notificationRef the parent notification reference number
    * @param request         the document metadata supplied by the user
@@ -105,7 +106,7 @@ public class DocumentService {
           notificationRef);
     } catch (DuplicateKeyException e) {
       log.warn(
-          "Duplicate uploadId {} for notification {} — concurrent initiation race",
+          "Duplicate uploadId {} from cdp-uploader for notification {} — UUID collision",
           response.uploadId(),
           notificationRef);
       throw new ConflictException(

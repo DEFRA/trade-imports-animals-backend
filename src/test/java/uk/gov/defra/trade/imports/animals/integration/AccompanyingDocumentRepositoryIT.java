@@ -260,11 +260,6 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
    * accidental removal of the annotation: without the unique index, two records for the same
    * cdp-uploader upload could coexist and corrupt downstream lookups via
    * {@link AccompanyingDocumentRepository#findByUploadId(String)}.
-   *
-   * <p>The two documents use different {@code notificationReferenceNumber}s and {@code COMPLETE}
-   * scan status to avoid colliding with the partial unique compound index on
-   * {@code (notificationReferenceNumber, scanStatus=PENDING)} — that way the only constraint
-   * either record can violate is the {@code uploadId} unique index.
    */
   @Test
   void save_shouldThrowDuplicateKeyException_whenUploadIdAlreadyExists() {
