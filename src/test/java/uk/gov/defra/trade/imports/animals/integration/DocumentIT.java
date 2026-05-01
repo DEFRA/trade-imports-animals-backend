@@ -41,7 +41,9 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
  * Integration tests for the accompanying document upload flow.
  *
  * <p>Covers: initiate → MongoDB PENDING record, scan callback (complete and rejected) →
- * MongoDB status update, list/get endpoints, file download from LocalStack S3, and 404 error paths.
+ * MongoDB status update via {@code metadata.correlationId} resolution, list/get endpoints, file
+ * download from LocalStack S3, and error paths (400 missing correlationId, 404 unknown
+ * correlationId, 404 file/document not found).
  *
  * <p>Infrastructure:
  * <ul>
@@ -52,8 +54,9 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
  * </ul>
  *
  * <p>Scan callbacks are exercised by posting fixture payloads directly to the backend's
- * {@code /document-uploads/{uploadId}/scan-results} endpoint; the tests do not wait for
- * cdp-uploader to call back autonomously.
+ * {@code /document-uploads/pending/scan-results} endpoint (the production route used by
+ * cdp-uploader); document identity is resolved via {@code metadata.correlationId} in the payload,
+ * not from the URL. The tests do not wait for cdp-uploader to call back autonomously.
  */
 @Slf4j
 class DocumentIT extends IntegrationBase {
