@@ -1,8 +1,9 @@
 package uk.gov.defra.trade.imports.animals.exceptions;
 
 /**
- * Exception thrown when a request is malformed at the application level (after Spring's own
- * validation). Will be mapped to 400 Bad Request by GlobalExceptionHandler.
+ * Exception thrown when application-level validation rejects a request payload (for example, a
+ * callback payload missing required metadata). Mapped to 400 Bad Request by
+ * GlobalExceptionHandler.
  */
 public class BadRequestException extends TradeImportsAnimalsBackendException {
 
