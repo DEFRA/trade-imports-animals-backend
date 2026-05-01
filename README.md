@@ -124,8 +124,8 @@ Example SonarCloud configuration are available in the GitHub Action workflows.
 
 ### Dependabot
 
-We have added an example dependabot configuration file to the repository. You can enable it by renaming
-the [.github/example.dependabot.yml](.github/dependabot.yml) to `.github/dependabot.yml`
+We have added a dependabot configuration file to the repository at
+[.github/dependabot.yml](.github/dependabot.yml).
 
 
 ### About the licence
