@@ -69,7 +69,7 @@ sudo mongod --dbpath ~/mongodb-cdp
 #### MongoDB in CDP environments
 
 In CDP environments a MongoDB instance is already set up
-and the credentials exposed as enviromment variables.
+and the credentials exposed as environment variables.
 
 
 ### Inspect MongoDB
