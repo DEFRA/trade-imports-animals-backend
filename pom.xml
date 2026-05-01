@@ -25,6 +25,7 @@
     <jjwt.version>0.13.0</jjwt.version>
     <amazon.awssdk.version>2.40.2</amazon.awssdk.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <sonar.organization>defra</sonar.organization>
   </properties>
 
   <dependencies>
@@ -282,6 +283,12 @@
             <arg>-Amapstruct.defaultComponentModel=spring</arg>
           </compilerArgs>
         </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.sonarsource.scanner.maven</groupId>
+        <artifactId>sonar-maven-plugin</artifactId>
+        <version>5.1.0.4751</version>
       </plugin>
 
     </plugins>
