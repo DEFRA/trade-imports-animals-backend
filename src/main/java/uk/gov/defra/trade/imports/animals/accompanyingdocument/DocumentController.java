@@ -214,8 +214,8 @@ public class DocumentController {
       @PathVariable("upload-id") String uploadId,
       @RequestBody CdpScanResultPayload payload) {
 
-    // cdp-uploader does not include uploadId in the callback payload body.
-    // The path variable will always be the "pending" placeholder set at initiation time.
+    // The path variable is always the literal "pending" set at initiate time; document identity
+    // is resolved from metadata.correlationId in the payload, not from the URL.
     log.info("POST /document-uploads/{}/scan-results uploadStatus={}", uploadId,
         payload.uploadStatus());
     documentService.handleScanResult(uploadId, payload);

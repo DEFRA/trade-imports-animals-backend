@@ -315,22 +315,25 @@ class DocumentControllerTest {
   }
 
   @Test
-  void scanResult_shouldReturn404_whenUploadIdUnknown() throws Exception {
+  void scanResult_shouldReturn404_whenCorrelationIdUnknown() throws Exception {
     // Given
-    String unknownId = "unknown-upload-id";
+    String pathSegment = "pending";
+    String unknownCorrelationId = "unknown-correlation-id";
     CdpScanResultForm form = new CdpScanResultForm(Map.of());
-    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
+    CdpScanResultPayload payload = new CdpScanResultPayload(
+        "ready", Map.of("correlationId", unknownCorrelationId), form, 0);
 
-    doThrow(new NotFoundException("No accompanying document found with uploadId: " + unknownId))
-        .when(documentService).handleScanResult(eq(unknownId), any(CdpScanResultPayload.class));
+    doThrow(new NotFoundException(
+        "No accompanying document found with correlationId: " + unknownCorrelationId))
+        .when(documentService).handleScanResult(eq(pathSegment), any(CdpScanResultPayload.class));
 
     // When / Then
-    mockMvc.perform(post("/document-uploads/{id}/scan-results", unknownId)
+    mockMvc.perform(post("/document-uploads/{id}/scan-results", pathSegment)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(payload)))
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.detail").value(
-            "No accompanying document found with uploadId: " + unknownId));
+            "No accompanying document found with correlationId: " + unknownCorrelationId));
   }
 
   // ---------------------------------------------------------------------------

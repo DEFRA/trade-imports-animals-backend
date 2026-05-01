@@ -13,8 +13,7 @@ public interface AccompanyingDocumentRepository
 
   Optional<AccompanyingDocument> findByUploadId(String uploadId);
 
-  Optional<AccompanyingDocument> findFirstByNotificationReferenceNumberAndScanStatus(
-      String notificationReferenceNumber, ScanStatus scanStatus);
+  Optional<AccompanyingDocument> findByCorrelationId(String correlationId);
 
   void deleteAllByNotificationReferenceNumberIn(List<String> referenceNumbers);
 }

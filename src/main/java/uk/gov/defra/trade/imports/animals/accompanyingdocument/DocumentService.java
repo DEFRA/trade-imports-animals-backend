@@ -6,12 +6,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import uk.gov.defra.trade.imports.animals.cdp.CdpUploaderClient;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
+import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
@@ -51,24 +53,23 @@ public class DocumentService {
   public DocumentUploadResponse initiate(
       String notificationRef, DocumentUploadRequest request, String redirectUrl) {
 
-    // Build callback URL from backend base URL
-    // A temporary placeholder uploadId is used for the path; cdp-uploader will assign the real one
-    // and return it in the response. We use a path template here because cdp-uploader uses the
-    // uploadId it generates — the callback URL must contain the actual uploadId. We therefore
-    // request initiation first and use the returned uploadId to construct the stored record.
+    // Mint a backend-side correlationId before /initiate so it can ride in the metadata map
+    // and come back to us on the scan callback. cdp-uploader assigns its own uploadId during
+    // /initiate and locks the callback URL at that point; the callback payload doesn't echo
+    // uploadId back, so correlationId is the only handle we control end-to-end.
+    String correlationId = UUID.randomUUID().toString();
+
     String callbackBase = cdpConfig.backend().baseUrl();
 
     Map<String, String> metadata = Map.of(
         "notificationReferenceNumber", notificationRef,
         "documentType", request.documentType() != null ? request.documentType().name() : "",
-        "documentReference", request.documentReference() != null ? request.documentReference() : "");
+        "documentReference", request.documentReference() != null ? request.documentReference() : "",
+        "correlationId", correlationId);
 
-    // The callback URL is POSTed to by cdp-uploader after scanning completes.
-    // cdp-uploader validates the callback as a valid URI and posts to it verbatim — it does NOT
-    // perform any template substitution. Because cdp-uploader assigns the uploadId and we need it
-    // in the callback path, we call /initiate with a "pending" placeholder in the URL, then
-    // immediately replace the placeholder with the real uploadId returned in the /initiate response.
-    // The resolved URL is used for all downstream correlation.
+    // Callback URL is fixed at initiate time — cdp-uploader validates it as a URI and posts to
+    // it verbatim, with no template substitution. The path's "pending" segment is a static
+    // marker; document identity is carried via metadata.correlationId, not the URL.
     String callbackUrl = callbackBase + "/document-uploads/pending/scan-results";
 
     CdpUploaderInitiateRequest initiateRequest = new CdpUploaderInitiateRequest(
@@ -90,6 +91,7 @@ public class DocumentService {
     AccompanyingDocument document = AccompanyingDocument.builder()
         .notificationReferenceNumber(notificationRef)
         .uploadId(response.uploadId())
+        .correlationId(correlationId)
         .uploadUrl(response.uploadUrl())
         .documentType(request.documentType())
         .documentReference(request.documentReference())
@@ -118,29 +120,27 @@ public class DocumentService {
 
   /**
    * Processes a cdp-uploader scan result callback, updating the document's scan status and file
-   * list.
+   * list. The document is resolved via {@code metadata.correlationId} — cdp-uploader echoes the
+   * metadata map back verbatim and does not include {@code uploadId} in the callback body, so a
+   * backend-minted correlationId is the only safe disambiguator when multiple PENDING uploads
+   * share a notification reference.
    *
-   * @param uploadId the upload session identifier
+   * @param uploadId the upload session identifier from the callback path; informational only
+   *                 (kept for log breadcrumbs — resolution is via {@code metadata.correlationId})
    * @param payload  the callback payload from cdp-uploader
-   * @throws NotFoundException if no document with the given upload ID exists
+   * @throws BadRequestException if the payload metadata does not include a correlationId
+   * @throws NotFoundException   if no document with the given correlationId exists
    */
   public void handleScanResult(String uploadId, CdpScanResultPayload payload) {
-    // cdp-uploader does not include uploadId in the callback payload body.
-    // When the path variable is the "pending" placeholder used at initiation time,
-    // look up the document by notification reference from the callback metadata instead.
-    AccompanyingDocument document;
-    if ("pending".equals(uploadId)
-        && payload.metadata() != null
-        && payload.metadata().containsKey("notificationReferenceNumber")) {
-      String notificationRef = payload.metadata().get("notificationReferenceNumber");
-      log.info("Resolving pending callback via notificationRef={}", notificationRef);
-      document = accompanyingDocumentRepository
-          .findFirstByNotificationReferenceNumberAndScanStatus(notificationRef, ScanStatus.PENDING)
-          .orElseThrow(() -> new NotFoundException(
-              "No pending document found for notification: " + notificationRef));
-    } else {
-      document = findByUploadId(uploadId);
+    String correlationId = payload.metadata().get("correlationId");
+    if (correlationId == null || correlationId.isBlank()) {
+      throw new BadRequestException(
+          "Scan callback missing required correlationId in metadata");
     }
+    AccompanyingDocument document = accompanyingDocumentRepository
+        .findByCorrelationId(correlationId)
+        .orElseThrow(() -> new NotFoundException(
+            "No accompanying document found with correlationId: " + correlationId));
 
     List<UploadedFile> uploadedFiles = new ArrayList<>();
     if (payload.form() != null) {

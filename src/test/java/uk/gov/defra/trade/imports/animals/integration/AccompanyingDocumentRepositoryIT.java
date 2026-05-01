@@ -22,10 +22,10 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
  * <p>Covers:
  * <ul>
  *   <li>{@code findByUploadId} — unique index lookup by upload ID
- *   <li>{@code findFirstByNotificationReferenceNumberAndScanStatus} — compound field query
+ *   <li>{@code findByCorrelationId} — unique index lookup by callback correlation ID
  *   <li>{@code deleteAllByNotificationReferenceNumberIn} — bulk delete by reference number list
- *   <li>Unique-index enforcement on {@code uploadId} — guards against accidental removal of
- *       {@code @Indexed(unique = true)} on the field
+ *   <li>Unique-index enforcement on {@code uploadId} and {@code correlationId} — guards against
+ *       accidental removal of {@code @Indexed(unique = true)} on the fields
  * </ul>
  */
 class AccompanyingDocumentRepositoryIT extends IntegrationBase {
@@ -79,82 +79,37 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
   }
 
   // ---------------------------------------------------------------------------
-  // findFirstByNotificationReferenceNumberAndScanStatus
+  // findByCorrelationId
   // ---------------------------------------------------------------------------
 
   /**
-   * findFirstByNotificationReferenceNumberAndScanStatus returns the matching document when one
-   * exists with the given reference number and scan status.
+   * findByCorrelationId returns the matching document when the correlationId exists.
    */
   @Test
-  void findFirstByNotificationReferenceNumberAndScanStatus_shouldReturnDocument_whenMatchExists() {
-    // Arrange — save one PENDING and one COMPLETE for the same notification ref
-    AccompanyingDocument pending = AccompanyingDocument.builder()
-        .uploadId("repo-test-upload-pending")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPO002")
-        .scanStatus(ScanStatus.PENDING)
-        .build();
-    AccompanyingDocument complete = AccompanyingDocument.builder()
-        .uploadId("repo-test-upload-complete")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPO002")
-        .scanStatus(ScanStatus.COMPLETE)
-        .build();
-    repository.saveAll(List.of(pending, complete));
-
-    // Act — query specifically for PENDING status
-    Optional<AccompanyingDocument> result =
-        repository.findFirstByNotificationReferenceNumberAndScanStatus(
-            "DRAFT.IMP.2026.REPO002", ScanStatus.PENDING);
-
-    // Assert
-    assertThat(result).isPresent();
-    assertThat(result.get().getUploadId()).isEqualTo("repo-test-upload-pending");
-    assertThat(result.get().getScanStatus()).isEqualTo(ScanStatus.PENDING);
-  }
-
-  /**
-   * findFirstByNotificationReferenceNumberAndScanStatus returns empty when the status does not
-   * match any document for the given reference number.
-   */
-  @Test
-  void findFirstByNotificationReferenceNumberAndScanStatus_shouldReturnEmpty_whenStatusNotFound() {
-    // Arrange — only a COMPLETE document exists; query for PENDING (which doesn't exist)
-    AccompanyingDocument complete = AccompanyingDocument.builder()
-        .uploadId("repo-test-upload-complete-2")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPO003")
-        .scanStatus(ScanStatus.COMPLETE)
-        .build();
-    repository.save(complete);
-
-    // Act
-    Optional<AccompanyingDocument> result =
-        repository.findFirstByNotificationReferenceNumberAndScanStatus(
-            "DRAFT.IMP.2026.REPO003", ScanStatus.PENDING);
-
-    // Assert
-    assertThat(result).isEmpty();
-  }
-
-  /**
-   * findFirstByNotificationReferenceNumberAndScanStatus returns empty when the notification
-   * reference number does not match any stored document.
-   */
-  @Test
-  void findFirstByNotificationReferenceNumberAndScanStatus_shouldReturnEmpty_whenRefNotFound() {
-    // Arrange
+  void findByCorrelationId_shouldReturnDocument_whenCorrelationIdExists() {
     AccompanyingDocument doc = AccompanyingDocument.builder()
-        .uploadId("repo-test-upload-003")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPO004")
+        .uploadId("repo-test-upload-corr-001")
+        .correlationId("corr-id-001")
+        .notificationReferenceNumber("DRAFT.IMP.2026.REPO_CORR_A")
         .scanStatus(ScanStatus.PENDING)
         .build();
     repository.save(doc);
 
-    // Act
-    Optional<AccompanyingDocument> result =
-        repository.findFirstByNotificationReferenceNumberAndScanStatus(
-            "DRAFT.IMP.2026.REPO.UNKNOWN", ScanStatus.PENDING);
+    Optional<AccompanyingDocument> result = repository.findByCorrelationId("corr-id-001");
 
-    // Assert
+    assertThat(result).isPresent();
+    assertThat(result.get().getCorrelationId()).isEqualTo("corr-id-001");
+    assertThat(result.get().getUploadId()).isEqualTo("repo-test-upload-corr-001");
+  }
+
+  /**
+   * findByCorrelationId returns an empty Optional when no document matches the correlationId.
+   */
+  @Test
+  void findByCorrelationId_shouldReturnEmpty_whenCorrelationIdDoesNotExist() {
+    Optional<AccompanyingDocument> result =
+        repository.findByCorrelationId("non-existent-correlation-id");
+
     assertThat(result).isEmpty();
   }
 
@@ -168,19 +123,23 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
    */
   @Test
   void deleteAllByNotificationReferenceNumberIn_shouldDeleteMatchingDocuments() {
-    // Arrange — three documents; two share a reference targeted for deletion
+    // Arrange — three documents; two share a reference targeted for deletion.
+    // correlationId is unique-indexed; populate distinct values to mirror production state.
     AccompanyingDocument docA1 = AccompanyingDocument.builder()
         .uploadId("repo-test-del-A1")
+        .correlationId("repo-test-del-corr-A1")
         .notificationReferenceNumber("DRAFT.IMP.2026.REPA")
         .scanStatus(ScanStatus.PENDING)
         .build();
     AccompanyingDocument docA2 = AccompanyingDocument.builder()
         .uploadId("repo-test-del-A2")
+        .correlationId("repo-test-del-corr-A2")
         .notificationReferenceNumber("DRAFT.IMP.2026.REPA")
         .scanStatus(ScanStatus.COMPLETE)
         .build();
     AccompanyingDocument docB1 = AccompanyingDocument.builder()
         .uploadId("repo-test-del-B1")
+        .correlationId("repo-test-del-corr-B1")
         .notificationReferenceNumber("DRAFT.IMP.2026.REPB")
         .scanStatus(ScanStatus.PENDING)
         .build();
@@ -201,19 +160,22 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
    */
   @Test
   void deleteAllByNotificationReferenceNumberIn_shouldDeleteAcrossMultipleRefs() {
-    // Arrange
+    // Arrange — correlationId is unique-indexed; populate distinct values per doc.
     AccompanyingDocument docE = AccompanyingDocument.builder()
         .uploadId("repo-test-del-E")
+        .correlationId("repo-test-del-corr-E")
         .notificationReferenceNumber("DRAFT.IMP.2026.REPE")
         .scanStatus(ScanStatus.PENDING)
         .build();
     AccompanyingDocument docF = AccompanyingDocument.builder()
         .uploadId("repo-test-del-F")
+        .correlationId("repo-test-del-corr-F")
         .notificationReferenceNumber("DRAFT.IMP.2026.REPF")
         .scanStatus(ScanStatus.PENDING)
         .build();
     AccompanyingDocument docG = AccompanyingDocument.builder()
         .uploadId("repo-test-keep-G")
+        .correlationId("repo-test-del-corr-G")
         .notificationReferenceNumber("DRAFT.IMP.2026.REPG")
         .scanStatus(ScanStatus.PENDING)
         .build();
@@ -263,9 +225,11 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
    */
   @Test
   void save_shouldThrowDuplicateKeyException_whenUploadIdAlreadyExists() {
-    // Arrange — first save succeeds
+    // Arrange — first save succeeds. Use distinct correlationIds so the test specifically
+    // exercises the uploadId index rather than the correlationId index.
     AccompanyingDocument first = AccompanyingDocument.builder()
         .uploadId("repo-test-duplicate-upload")
+        .correlationId("repo-test-uploadid-uniq-corr-A")
         .notificationReferenceNumber("DRAFT.IMP.2026.UNIQ001")
         .scanStatus(ScanStatus.COMPLETE)
         .build();
@@ -273,6 +237,7 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
 
     AccompanyingDocument duplicate = AccompanyingDocument.builder()
         .uploadId("repo-test-duplicate-upload")
+        .correlationId("repo-test-uploadid-uniq-corr-B")
         .notificationReferenceNumber("DRAFT.IMP.2026.UNIQ002")
         .scanStatus(ScanStatus.COMPLETE)
         .build();
@@ -287,5 +252,43 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
         .get()
         .satisfies(stored -> assertThat(stored.getNotificationReferenceNumber())
             .isEqualTo("DRAFT.IMP.2026.UNIQ001"));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Unique index on correlationId
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Saving two documents with the same {@code correlationId} must fail with
+   * {@link DuplicateKeyException}, proving the {@code @Indexed(unique = true)} declaration on
+   * {@link AccompanyingDocument#correlationId} is materialised in MongoDB. Without this, two
+   * documents could share a correlationId and the scan-callback resolver would silently update
+   * the wrong record — the very ambiguity this field was added to eliminate.
+   */
+  @Test
+  void save_shouldThrowDuplicateKeyException_whenCorrelationIdAlreadyExists() {
+    AccompanyingDocument first = AccompanyingDocument.builder()
+        .uploadId("repo-test-corr-uniq-001")
+        .correlationId("repo-test-duplicate-correlation")
+        .notificationReferenceNumber("DRAFT.IMP.2026.UNIQ_CORR_A")
+        .scanStatus(ScanStatus.PENDING)
+        .build();
+    repository.save(first);
+
+    AccompanyingDocument duplicate = AccompanyingDocument.builder()
+        .uploadId("repo-test-corr-uniq-002")
+        .correlationId("repo-test-duplicate-correlation")
+        .notificationReferenceNumber("DRAFT.IMP.2026.UNIQ_CORR_B")
+        .scanStatus(ScanStatus.PENDING)
+        .build();
+
+    assertThatThrownBy(() -> repository.save(duplicate))
+        .isInstanceOf(DuplicateKeyException.class);
+
+    assertThat(repository.findByCorrelationId("repo-test-duplicate-correlation"))
+        .isPresent()
+        .get()
+        .satisfies(stored -> assertThat(stored.getNotificationReferenceNumber())
+            .isEqualTo("DRAFT.IMP.2026.UNIQ_CORR_A"));
   }
 }

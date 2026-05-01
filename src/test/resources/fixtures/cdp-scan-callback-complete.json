@@ -2,7 +2,8 @@
   "uploadStatus": "ready",
   "numberOfRejectedFiles": 0,
   "metadata": {
-    "notificationReferenceNumber": "DRAFT.IMP.2025.TEST"
+    "notificationReferenceNumber": "DRAFT.IMP.2025.TEST",
+    "correlationId": "__CORRELATION_ID__"
   },
   "form": {
     "file": {

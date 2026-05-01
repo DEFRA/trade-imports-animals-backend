@@ -188,6 +188,51 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleBadRequestException_shouldReturnBadRequestWithDetail() {
+        // Given
+        String traceId = "test-trace-bad-1";
+        MDC.put("trace.id", traceId);
+        BadRequestException exception =
+            new BadRequestException("Scan callback missing required correlationId in metadata");
+
+        // When
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleBadRequestException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problemDetail.getTitle()).isEqualTo("Bad Request");
+        assertThat(problemDetail.getDetail())
+            .isEqualTo("Scan callback missing required correlationId in metadata");
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/bad-request"));
+        assertThat(problemDetail.getProperties()).containsKey("traceId");
+        assertThat(problemDetail.getProperties().get("traceId")).isEqualTo(traceId);
+    }
+
+    @Test
+    void handleBadRequestException_shouldHandleNullTraceId() {
+        // Given - no trace ID in MDC
+        BadRequestException exception = new BadRequestException("Bad request");
+
+        // When
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleBadRequestException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        Map<String, Object> properties = problemDetail.getProperties();
+        assertThat(properties).satisfiesAnyOf(
+            p -> assertThat(p).isNull(),
+            p -> assertThat(p).doesNotContainKey("traceId")
+        );
+    }
+
+    @Test
     void handleException_shouldReturnInternalServerError_forRuntimeException() {
         // Given
         String traceId = "test-trace-999";

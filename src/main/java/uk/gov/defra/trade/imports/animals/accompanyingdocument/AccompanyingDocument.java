@@ -56,6 +56,15 @@ public class AccompanyingDocument {
   @Indexed(unique = true)
   private String uploadId;
 
+  /**
+   * Backend-minted opaque identifier for this document, threaded through cdp-uploader's
+   * {@code metadata} map at initiate time and echoed back verbatim in the scan callback. Used to
+   * resolve which document a callback refers to, since cdp-uploader does not include
+   * {@code uploadId} in the callback payload body.
+   */
+  @Indexed(unique = true)
+  private String correlationId;
+
   /** The cdp-uploader form URL returned at initiation; stored for idempotent re-requests. */
   private String uploadUrl;
 

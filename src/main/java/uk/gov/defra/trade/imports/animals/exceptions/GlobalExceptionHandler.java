@@ -68,6 +68,31 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle application-level bad-request errors (400 Bad Request).
+     */
+    @ExceptionHandler(BadRequestException.class)
+    public ResponseEntity<ProblemDetail> handleBadRequestException(BadRequestException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Bad request (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST,
+            ex.getMessage()
+        );
+
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/bad-request"));
+        problemDetail.setTitle("Bad Request");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
      * Handle not found errors (404 Not Found).
      */
     @ExceptionHandler(NotFoundException.class)

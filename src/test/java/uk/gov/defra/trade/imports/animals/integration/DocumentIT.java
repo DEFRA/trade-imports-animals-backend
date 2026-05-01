@@ -265,8 +265,9 @@ class DocumentIT extends IntegrationBase {
         // Arrange — initiate via real cdp-uploader to get a PENDING record
         String uploadId = initiateAndGetUploadId();
 
-        // Read the complete callback fixture
-        String completePayload = loadFixtureAsString("fixtures/cdp-scan-callback-complete.json");
+        // Read the complete callback fixture, injecting the doc's correlationId into metadata
+        String completePayload = loadCallbackFixture(
+            "fixtures/cdp-scan-callback-complete.json", correlationIdFor(uploadId));
 
         // Act — simulate the callback from cdp-uploader
         webClient("NoAuth")
@@ -308,7 +309,8 @@ class DocumentIT extends IntegrationBase {
         // Arrange
         String uploadId = initiateAndGetUploadId();
 
-        String rejectedPayload = loadFixtureAsString("fixtures/cdp-scan-callback-rejected.json");
+        String rejectedPayload = loadCallbackFixture(
+            "fixtures/cdp-scan-callback-rejected.json", correlationIdFor(uploadId));
 
         // Act
         webClient("NoAuth")
@@ -412,7 +414,8 @@ class DocumentIT extends IntegrationBase {
         // Arrange — initiate to get a PENDING record, then simulate a complete scan callback
         String uploadId = initiateAndGetUploadId();
 
-        String completePayload = loadFixtureAsString("fixtures/cdp-scan-callback-complete.json");
+        String completePayload = loadCallbackFixture(
+            "fixtures/cdp-scan-callback-complete.json", correlationIdFor(uploadId));
         webClient("NoAuth")
             .post()
             .uri("/document-uploads/" + uploadId + "/scan-results")
@@ -492,23 +495,23 @@ class DocumentIT extends IntegrationBase {
     }
 
     // ---------------------------------------------------------------------------
-    // Test: scan callback for unknown uploadId → 404
+    // Test: scan callback for unknown correlationId → 404
     // ---------------------------------------------------------------------------
 
     /**
-     * POST to /document-uploads/{id}/scan-results with an uploadId that does not exist in MongoDB
-     * returns 404 with a problem+json body containing status=404.
+     * POST to /document-uploads/pending/scan-results with a metadata.correlationId that does not
+     * resolve to any persisted document returns 404 with a problem+json body containing
+     * status=404 and the unknown correlationId in the detail.
      */
     @Test
-    void scanResult_unknownUploadId_shouldReturn404() throws IOException {
-        // Arrange — no document persisted for this uploadId
-        String unknownUploadId = "non-existent-upload-id";
-        String completePayload = loadFixtureAsString("fixtures/cdp-scan-callback-complete.json");
+    void scanResult_unknownCorrelationId_shouldReturn404() throws IOException {
+        String unknownCorrelationId = "non-existent-correlation-id";
+        String completePayload = loadCallbackFixture(
+            "fixtures/cdp-scan-callback-complete.json", unknownCorrelationId);
 
-        // Act / Assert
         webClient("NoAuth")
             .post()
-            .uri("/document-uploads/" + unknownUploadId + "/scan-results")
+            .uri("/document-uploads/pending/scan-results")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(completePayload)
             .exchange()
@@ -516,29 +519,65 @@ class DocumentIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value((String detail) ->
-                assertThat(detail).contains(unknownUploadId));
+                assertThat(detail).contains(unknownCorrelationId));
     }
 
     // ---------------------------------------------------------------------------
-    // Test: scan callback via "pending" alias path — resolves by notificationReferenceNumber
+    // Test: scan callback missing correlationId in metadata → 400
     // ---------------------------------------------------------------------------
 
     /**
-     * POST to /document-uploads/pending/scan-results with notificationReferenceNumber in metadata:
-     * the production route used by cdp-uploader. The service must resolve the PENDING document by
-     * notification reference and update its scan status to COMPLETE.
+     * POST to /document-uploads/pending/scan-results with a metadata block that omits
+     * correlationId returns 400 — the resolver requires a correlationId to identify the document.
      */
     @Test
-    void scanResult_viaPendingAlias_shouldResolveByNotificationRef() throws IOException {
-        // Arrange — initiate to create a PENDING record with the known notification ref
-        initiateAndGetUploadId();
+    void scanResult_missingCorrelationId_shouldReturn400() {
+        String payloadMissingCorrelationId = """
+            {
+              "uploadStatus": "ready",
+              "numberOfRejectedFiles": 0,
+              "metadata": {
+                "notificationReferenceNumber": "%s"
+              },
+              "form": {}
+            }
+            """.formatted(NOTIFICATION_REF);
+
+        webClient("NoAuth")
+            .post()
+            .uri("/document-uploads/pending/scan-results")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(payloadMissingCorrelationId)
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(400)
+            .jsonPath("$.detail").value((String detail) ->
+                assertThat(detail).contains("correlationId"));
+    }
+
+    // ---------------------------------------------------------------------------
+    // Test: scan callback via "pending" alias path — resolves by metadata.correlationId
+    // ---------------------------------------------------------------------------
+
+    /**
+     * POST to /document-uploads/pending/scan-results with metadata.correlationId — the production
+     * route used by cdp-uploader. The path's "pending" segment is informational; the service
+     * resolves the document via the backend-minted correlationId in the metadata block.
+     */
+    @Test
+    void scanResult_viaPendingAlias_shouldResolveByCorrelationId() throws IOException {
+        // Arrange — initiate to create a PENDING record; capture its correlationId
+        String uploadId = initiateAndGetUploadId();
+        String correlationId = correlationIdFor(uploadId);
 
         String pendingPayload = """
             {
               "uploadStatus": "ready",
               "numberOfRejectedFiles": 0,
               "metadata": {
-                "notificationReferenceNumber": "%s"
+                "notificationReferenceNumber": "%s",
+                "correlationId": "%s"
               },
               "form": {
                 "file": {
@@ -553,7 +592,7 @@ class DocumentIT extends IntegrationBase {
                 }
               }
             }
-            """.formatted(NOTIFICATION_REF, FILE_ID_FROM_FIXTURE, S3_KEY_FROM_FIXTURE);
+            """.formatted(NOTIFICATION_REF, correlationId, FILE_ID_FROM_FIXTURE, S3_KEY_FROM_FIXTURE);
 
         // Act — post to the "pending" alias path, as cdp-uploader does in production
         webClient("NoAuth")
@@ -564,11 +603,9 @@ class DocumentIT extends IntegrationBase {
             .exchange()
             .expectStatus().isNoContent();
 
-        // Assert MongoDB updated via the alias lookup
-        List<AccompanyingDocument> docs =
-            accompanyingDocumentRepository.findAllByNotificationReferenceNumber(NOTIFICATION_REF);
-        assertThat(docs).hasSize(1);
-        AccompanyingDocument persisted = docs.get(0);
+        // Assert MongoDB updated via the correlationId lookup
+        AccompanyingDocument persisted =
+            accompanyingDocumentRepository.findByCorrelationId(correlationId).orElseThrow();
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
         assertThat(persisted.getFiles()).hasSize(1);
         assertThat(persisted.getFiles().get(0).filename()).isEqualTo("test.pdf");
@@ -588,12 +625,13 @@ class DocumentIT extends IntegrationBase {
     void scanResult_mixedCompleteAndRejected_shouldSetAggregateStatusToRejected() throws IOException {
         // Arrange — initiate to get a PENDING document
         String uploadId = initiateAndGetUploadId();
+        String correlationId = correlationIdFor(uploadId);
 
         String mixedPayload = """
             {
               "uploadStatus": "ready",
               "numberOfRejectedFiles": 1,
-              "metadata": {},
+              "metadata": {"correlationId": "%s"},
               "form": {
                 "cleanFile": {
                   "fileId": "file-clean-001",
@@ -623,7 +661,7 @@ class DocumentIT extends IntegrationBase {
                 }
               }
             }
-            """.formatted(uploadId, DOCUMENTS_BUCKET);
+            """.formatted(correlationId, uploadId, DOCUMENTS_BUCKET);
 
         // Act
         webClient("NoAuth")
@@ -699,12 +737,13 @@ class DocumentIT extends IntegrationBase {
     void scanResult_nullNumberOfRejectedFiles_shouldSetStatusToRejected() throws IOException {
         // Arrange
         String uploadId = initiateAndGetUploadId();
+        String correlationId = correlationIdFor(uploadId);
 
         String payloadWithNullRejectedCount = """
             {
               "uploadStatus": "ready",
               "numberOfRejectedFiles": null,
-              "metadata": {},
+              "metadata": {"correlationId": "%s"},
               "form": {
                 "file": {
                   "fileId": "%s",
@@ -718,7 +757,7 @@ class DocumentIT extends IntegrationBase {
                 }
               }
             }
-            """.formatted(FILE_ID_FROM_FIXTURE, S3_KEY_FROM_FIXTURE);
+            """.formatted(correlationId, FILE_ID_FROM_FIXTURE, S3_KEY_FROM_FIXTURE);
 
         // Act
         webClient("NoAuth")
@@ -749,7 +788,8 @@ class DocumentIT extends IntegrationBase {
         // Arrange — initiate then simulate a rejected scan callback
         String uploadId = initiateAndGetUploadId();
 
-        String rejectedPayload = loadFixtureAsString("fixtures/cdp-scan-callback-rejected.json");
+        String rejectedPayload = loadCallbackFixture(
+            "fixtures/cdp-scan-callback-rejected.json", correlationIdFor(uploadId));
         webClient("NoAuth")
             .post()
             .uri("/document-uploads/" + uploadId + "/scan-results")
@@ -782,7 +822,8 @@ class DocumentIT extends IntegrationBase {
         // Arrange — initiate, complete the scan (registers file metadata in MongoDB)
         String uploadId = initiateAndGetUploadId();
 
-        String completePayload = loadFixtureAsString("fixtures/cdp-scan-callback-complete.json");
+        String completePayload = loadCallbackFixture(
+            "fixtures/cdp-scan-callback-complete.json", correlationIdFor(uploadId));
         webClient("NoAuth")
             .post()
             .uri("/document-uploads/" + uploadId + "/scan-results")
@@ -849,6 +890,26 @@ class DocumentIT extends IntegrationBase {
         assertThat(body).isNotNull();
         assertThat(body.uploadId()).isNotBlank();
         return body.uploadId();
+    }
+
+    /**
+     * Reads the persisted document for {@code uploadId} and returns its backend-minted
+     * {@code correlationId}. Used by callback tests to populate the metadata that the scan
+     * resolver looks up against — there is no API surface that returns correlationId to clients.
+     */
+    private String correlationIdFor(String uploadId) {
+        return accompanyingDocumentRepository.findByUploadId(uploadId)
+            .orElseThrow(() -> new AssertionError("No document for uploadId: " + uploadId))
+            .getCorrelationId();
+    }
+
+    /**
+     * Loads a callback fixture and substitutes {@code __CORRELATION_ID__} with the supplied value.
+     */
+    private String loadCallbackFixture(String classpathResource, String correlationId)
+        throws IOException {
+        return loadFixtureAsString(classpathResource)
+            .replace("__CORRELATION_ID__", correlationId);
     }
 
 }
