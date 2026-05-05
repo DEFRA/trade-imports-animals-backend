@@ -26,7 +26,20 @@
     <amazon.awssdk.version>2.40.2</amazon.awssdk.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <sonar.organization>defra</sonar.organization>
+    <testcontainers.version>2.0.2</testcontainers.version>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <dependencies>
     <!-- Spring Boot Starters -->
@@ -170,7 +183,7 @@
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>mockserver</artifactId>
+      <artifactId>testcontainers-mockserver</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -182,19 +195,16 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers</artifactId>
-      <version>1.20.4</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>mongodb</artifactId>
-      <version>1.20.4</version>
+      <artifactId>testcontainers-mongodb</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <version>1.20.4</version>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -208,6 +218,12 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <!-- @{argLine} picks up JaCoCo's -javaagent via late-binding.
+               -XX:+EnableDynamicAgentLoading suppresses JDK warnings about Mockito
+               and ByteBuddy self-attaching as dynamic agents. -->
+          <argLine>@{argLine} -XX:+EnableDynamicAgentLoading</argLine>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
@@ -222,6 +238,8 @@
         </executions>
         <configuration>
           <skipTests>${skipTests}</skipTests>
+          <!-- See Surefire comment above for argLine rationale. -->
+          <argLine>@{argLine} -XX:+EnableDynamicAgentLoading</argLine>
         </configuration>
       </plugin>
       <!-- JaCoCo Code Coverage -->
