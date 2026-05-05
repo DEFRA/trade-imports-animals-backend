@@ -29,7 +29,7 @@ COPY src ./src
 RUN mvn clean package -DskipTests -B
 
 ################################################################################
-# Stage 2: Development
+# Stage 2: Development (run pre-built JAR)
 # - Includes development tools
 # - For local development with docker compose
 ################################################################################
@@ -55,6 +55,33 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
 
 # Start application
 ENTRYPOINT ["java", "-jar", "app.jar"]
+
+################################################################################
+# Stage 3: Dev-run (Maven source mount)
+# - Maven present; no pre-built JAR
+# - Mount src/ from host for live recompile via `docker compose restart`
+# - Usage: make docker-compose-dev (backend variant)
+################################################################################
+FROM amazoncorretto:25-alpine AS dev-run
+
+WORKDIR /app
+
+# Maven + curl for healthcheck
+RUN apk add --no-cache maven curl bash
+
+# Pre-fetch dependencies (cached layer; invalidated only when pom.xml changes)
+COPY pom.xml .
+RUN mvn dependency:go-offline -B
+
+# Source is volume-mounted at runtime; copy here only so the image builds
+COPY src ./src
+
+EXPOSE 8085
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+  CMD curl -f http://localhost:8085/health || exit 1
+
+CMD ["mvn", "spring-boot:run", "-Dspring-boot.run.profiles=local"]
 
 ################################################################################
 # Stage 3: Production
