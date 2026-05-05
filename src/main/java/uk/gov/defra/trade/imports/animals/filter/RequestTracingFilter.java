@@ -48,10 +48,12 @@ public class RequestTracingFilter implements Filter {
             }
 
             // Populate request metadata
-            MDC.put(MDC_HTTP_METHOD, httpRequest.getMethod());
-            MDC.put(MDC_URL_FULL, httpRequest.getRequestURL().toString());
+            final String method = httpRequest.getMethod();
+            final String url = httpRequest.getRequestURL().toString();
+            MDC.put(MDC_HTTP_METHOD, method);
+            MDC.put(MDC_URL_FULL, url);
 
-            log.debug("{} {}", httpRequest.getMethod(), httpRequest.getRequestURL().toString());
+            log.debug("{} {}", method, url);
 
             // Execute filter chain
             chain.doFilter(request, response);
@@ -59,7 +61,7 @@ public class RequestTracingFilter implements Filter {
             // Capture response status after chain completes
             if (response instanceof HttpServletResponse httpResponse) {
                 MDC.put(MDC_HTTP_STATUS, String.valueOf(httpResponse.getStatus()));
-                log.debug("Response status {} for {}", httpResponse.getStatus(), httpRequest.getRequestURI());
+                log.debug("Response status {} for {}", httpResponse.getStatus(), url);
             }
 
         } finally {

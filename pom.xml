@@ -26,7 +26,20 @@
     <amazon.awssdk.version>2.40.2</amazon.awssdk.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <sonar.organization>defra</sonar.organization>
+    <testcontainers.version>2.0.2</testcontainers.version>
   </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-bom</artifactId>
+        <version>${testcontainers.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
 
   <dependencies>
     <!-- Spring Boot Starters -->
@@ -170,7 +183,7 @@
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>mockserver</artifactId>
+      <artifactId>testcontainers-mockserver</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -182,19 +195,16 @@
     <dependency>
       <groupId>org.testcontainers</groupId>
       <artifactId>testcontainers</artifactId>
-      <version>1.20.4</version>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>mongodb</artifactId>
-      <version>1.20.4</version>
+      <artifactId>testcontainers-mongodb</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>org.testcontainers</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <version>1.20.4</version>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -211,8 +221,7 @@
         <configuration>
           <!-- @{argLine} picks up JaCoCo's -javaagent via late-binding.
                -XX:+EnableDynamicAgentLoading suppresses JDK warnings about Mockito
-               and ByteBuddy self-attaching as dynamic agents (required until those
-               libraries add native agent support for the JDK version in use). -->
+               and ByteBuddy self-attaching as dynamic agents. -->
           <argLine>@{argLine} -XX:+EnableDynamicAgentLoading</argLine>
         </configuration>
       </plugin>
@@ -231,13 +240,6 @@
           <skipTests>${skipTests}</skipTests>
           <!-- See Surefire comment above for argLine rationale. -->
           <argLine>@{argLine} -XX:+EnableDynamicAgentLoading</argLine>
-          <systemPropertyVariables>
-            <!-- Docker Desktop 29+ requires minimum API version 1.44.
-                 Testcontainers 1.x bundles docker-java 3.4.x which defaults to 1.32.
-                 This property overrides the default so Testcontainers can connect.
-                 Fixed permanently in Testcontainers 2.0.2 (PR #11216). -->
-            <api.version>1.44</api.version>
-          </systemPropertyVariables>
         </configuration>
       </plugin>
       <!-- JaCoCo Code Coverage -->

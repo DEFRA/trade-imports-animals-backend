@@ -84,7 +84,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
 CMD ["mvn", "spring-boot:run", "-Dspring-boot.run.profiles=local"]
 
 ################################################################################
-# Stage 3: Production
+# Stage 4: Production
 # - Minimal runtime image
 # - Meets all CDP platform requirements
 ################################################################################
