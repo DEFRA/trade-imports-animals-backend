@@ -5,6 +5,14 @@ server:
 spring:
   application:
     name: trade-imports-animals-backend
+  threads:
+    virtual:
+      # Enable JDK 21 virtual threads (Project Loom) for improved throughput under I/O-bound workloads.
+      # Caveat: virtual threads can be pinned to platform threads when holding a synchronized monitor
+      # (e.g. some legacy JDBC drivers or third-party libraries). Pinning degrades throughput back to
+      # platform-thread behaviour for the affected code path; audit with -Djdk.tracePinnedThreads=full
+      # if you suspect pinning under load.
+      enabled: true
   data:
     mongodb:
       uri: ${MONGO_URI:mongodb://localhost:27017/}
@@ -34,6 +42,33 @@ cdp:
   cloudwatch:
     endpoint: ${AWS_EMF_AGENT_ENDPOINT:http://localhost:4566}
   proxyUrl: ${HTTP_PROXY:}
+  uploader:
+    base-url: ${CDP_UPLOADER_BASE_URL:http://localhost:7337}
+    max-file-size: ${CDP_UPLOADER_MAX_FILE_SIZE:52428800}
+    # Accepted MIME types (comma-separated list supplied via CDP_UPLOADER_MIME_TYPES env var):
+    #   application/pdf
+    #   application/msword
+    #   application/vnd.openxmlformats-officedocument.wordprocessingml.document
+    #   image/jpeg
+    #   image/png
+    #   application/vnd.ms-excel
+    #   application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+    mime-types: ${CDP_UPLOADER_MIME_TYPES:application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
+  backend:
+    base-url: ${BACKEND_BASE_URL}
+  frontend:
+    base-url: ${FRONTEND_BASE_URL}
+  s3:
+    documents-bucket: ${CDP_DOCUMENTS_BUCKET:trade-imports-animals-documents}
+
+# Application-level AWS overrides
+app:
+  aws:
+    endpoint-override: ${APP_AWS_ENDPOINT_OVERRIDE:}
+    # Local development only — set via environment variables or application-local.yml.
+    # Do NOT set real credentials here; these keys are ignored in deployed environments.
+    # access-key-id: ${APP_AWS_ACCESS_KEY_ID:}
+    # secret-access-key: ${APP_AWS_SECRET_ACCESS_KEY:}
 
 # AWS configuration
 aws:
@@ -99,6 +134,11 @@ management:
 # Admin secret for privileged endpoints
 admin:
   secret: ${TRADE_IMPORTS_ANIMALS_ADMIN_SECRET:local-trade-imports-animals-admin-secret}
+
+# SpringDoc / Swagger UI — disabled in deployed environments
+springdoc:
+  swagger-ui:
+    enabled: false
 
 # Application info (exposed via /info endpoint)
 info:
