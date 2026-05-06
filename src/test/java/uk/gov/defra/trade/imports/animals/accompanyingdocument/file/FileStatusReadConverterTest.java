@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.accompanyingdocument;
+package uk.gov.defra.trade.imports.animals.accompanyingdocument.file;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.accompanyingdocument;
+package uk.gov.defra.trade.imports.animals.accompanyingdocument.file;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;

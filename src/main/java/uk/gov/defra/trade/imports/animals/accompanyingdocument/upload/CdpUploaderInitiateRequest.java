@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.accompanyingdocument;
+package uk.gov.defra.trade.imports.animals.accompanyingdocument.upload;
 
 import java.util.List;
 import java.util.Map;

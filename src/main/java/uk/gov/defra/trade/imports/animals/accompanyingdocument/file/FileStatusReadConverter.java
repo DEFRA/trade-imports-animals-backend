@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.accompanyingdocument;
+package uk.gov.defra.trade.imports.animals.accompanyingdocument.file;
 
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.data.convert.ReadingConverter;

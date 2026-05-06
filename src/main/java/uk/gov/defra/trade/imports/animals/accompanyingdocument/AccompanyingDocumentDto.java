@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFileDto;
 
 /**
  * Read-only projection of an {@link AccompanyingDocument} for API responses.

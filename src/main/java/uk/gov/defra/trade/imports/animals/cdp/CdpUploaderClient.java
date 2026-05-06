@@ -8,8 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.CdpUploaderInitiateRequest;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.CdpUploaderInitiateResponse;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpUploaderInitiateRequest;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
 
 /**

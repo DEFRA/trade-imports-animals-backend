@@ -24,6 +24,12 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.S3DocumentService;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpScanResultFile;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpScanResultForm;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 

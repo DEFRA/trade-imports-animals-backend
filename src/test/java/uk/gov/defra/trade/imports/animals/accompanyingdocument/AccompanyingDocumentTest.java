@@ -11,6 +11,8 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 
 class AccompanyingDocumentTest {
 

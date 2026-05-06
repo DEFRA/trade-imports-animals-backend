@@ -30,8 +30,8 @@ import org.springframework.web.client.RestClient.RequestBodySpec;
 import org.springframework.web.client.RestClient.RequestBodyUriSpec;
 import org.springframework.web.client.RestClient.ResponseSpec;
 import org.springframework.web.client.RestClient.ResponseSpec.ErrorHandler;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.CdpUploaderInitiateRequest;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.CdpUploaderInitiateResponse;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpUploaderInitiateRequest;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
 
 @ExtendWith(MockitoExtension.class)

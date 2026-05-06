@@ -16,6 +16,7 @@ import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 
 /**
  * MongoDB document representing an accompanying document submitted alongside an import

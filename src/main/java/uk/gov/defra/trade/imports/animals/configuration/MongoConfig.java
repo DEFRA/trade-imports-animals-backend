@@ -16,8 +16,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.mongodb.config.EnableMongoAuditing;
 import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.FileStatusReadConverter;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.FileStatusWriteConverter;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatusReadConverter;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatusWriteConverter;
 import uk.gov.defra.trade.imports.animals.configuration.tls.TrustStoreConfiguration;
 
 /**

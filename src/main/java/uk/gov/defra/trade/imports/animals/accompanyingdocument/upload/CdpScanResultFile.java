@@ -1,6 +1,7 @@
-package uk.gov.defra.trade.imports.animals.accompanyingdocument;
+package uk.gov.defra.trade.imports.animals.accompanyingdocument.upload;
 
 import jakarta.annotation.Nullable;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 
 /**
  * Represents a single file entry within a cdp-uploader scan result callback payload.

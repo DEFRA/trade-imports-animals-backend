@@ -1,7 +1,8 @@
-package uk.gov.defra.trade.imports.animals.accompanyingdocument;
+package uk.gov.defra.trade.imports.animals.accompanyingdocument.file;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Builder;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpScanResultFile;
 
 /**
  * Immutable value object representing a single file within an {@link AccompanyingDocument}.

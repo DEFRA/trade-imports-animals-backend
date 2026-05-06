@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.accompanyingdocument;
+package uk.gov.defra.trade.imports.animals.accompanyingdocument.upload;
 
 /**
  * Response received from the cdp-uploader {@code /initiate} endpoint.

@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.accompanyingdocument;
+package uk.gov.defra.trade.imports.animals.accompanyingdocument.upload;
 
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import java.util.LinkedHashMap;

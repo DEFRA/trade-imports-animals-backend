@@ -33,7 +33,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocum
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentListResponse;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentUploadResponse;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.FileStatus;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 
 /**

@@ -8,6 +8,9 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFileDto;
 
 class AccompanyingDocumentDtoTest {
 
