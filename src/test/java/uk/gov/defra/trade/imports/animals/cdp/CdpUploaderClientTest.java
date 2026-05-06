@@ -107,8 +107,8 @@ class CdpUploaderClientTest {
         List.of("application/pdf"),
         null);
 
-    // onStatus registers a handler and returns the responseSpec for chaining;
-    // we capture and invoke the handler ourselves to simulate a 503 response.
+    // Stub onStatus so the helper invokes the registered error handler against a synthetic
+    // 503 response, which is what triggers ServiceUnavailableException in the real client.
     when(responseSpec.onStatus(any(), any())).thenAnswer(
         simulateErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, "Service unavailable"));
 

@@ -111,7 +111,7 @@ public class DocumentController {
       return candidate.getScheme().equalsIgnoreCase(expected.getScheme())
           && candidate.getHost().equalsIgnoreCase(expected.getHost())
           && Objects.equals(normalisePort(candidate), normalisePort(expected));
-    } catch (URISyntaxException e) {
+    } catch (URISyntaxException _) {
       return false;
     }
   }
@@ -202,8 +202,9 @@ public class DocumentController {
    * @param payload  the scan result payload
    * @return 204 No Content
    */
-  // TODO: protect this endpoint with a shared secret or HMAC once cdp-uploader supports
-  //       callback authentication — currently any caller can spoof a scan result (EUDPA-35).
+  // Security note (EUDPA-35): callback is currently unauthenticated; any caller able to reach
+  // this endpoint with a known correlationId can post a scan result. Add a shared secret or
+  // HMAC verification once cdp-uploader supports callback authentication.
   @PostMapping("/document-uploads/{upload-id}/scan-results")
   @Operation(
       summary = "Handle scan result",
@@ -264,7 +265,7 @@ public class DocumentController {
     MediaType contentType;
     try {
       contentType = MediaType.parseMediaType(file.contentType());
-    } catch (InvalidMediaTypeException e) {
+    } catch (InvalidMediaTypeException _) {
       log.warn("GET /document-uploads/{}/file — invalid content-type '{}', falling back to application/octet-stream",
           uploadId, file.contentType());
       contentType = MediaType.APPLICATION_OCTET_STREAM;

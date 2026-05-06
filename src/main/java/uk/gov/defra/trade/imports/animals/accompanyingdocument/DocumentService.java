@@ -106,7 +106,7 @@ public class DocumentService {
           "Saved AccompanyingDocument with uploadId {} for notification {}",
           response.uploadId(),
           notificationRef);
-    } catch (DuplicateKeyException e) {
+    } catch (DuplicateKeyException _) {
       log.warn(
           "Duplicate uploadId {} from cdp-uploader for notification {} — UUID collision",
           response.uploadId(),

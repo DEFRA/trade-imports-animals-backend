@@ -212,7 +212,7 @@ class DocumentIT extends IntegrationBase {
      * PENDING AccompanyingDocument was persisted in MongoDB.
      */
     @Test
-    void initiate_shouldReturn201AndPersistPendingDocument() throws IOException {
+    void initiate_shouldReturn201AndPersistPendingDocument() {
         // Act — POST to our backend which calls the real cdp-uploader internally
         EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
             .post()
@@ -344,7 +344,7 @@ class DocumentIT extends IntegrationBase {
      * notification reference.
      */
     @Test
-    void listDocuments_shouldReturnDocumentsForNotification() throws IOException {
+    void listDocuments_shouldReturnDocumentsForNotification() {
         // Arrange — initiate so we have a document in the DB
         String uploadId = initiateAndGetUploadId();
 
@@ -379,7 +379,7 @@ class DocumentIT extends IntegrationBase {
      * GET /document-uploads/{id} returns 200 with the correct DTO for a known upload ID.
      */
     @Test
-    void getByUploadId_shouldReturn200WithCorrectDto() throws IOException {
+    void getByUploadId_shouldReturn200WithCorrectDto() {
         // Arrange
         String uploadId = initiateAndGetUploadId();
 
@@ -451,8 +451,7 @@ class DocumentIT extends IntegrationBase {
 
         // Assert streamed bytes match what we uploaded
         byte[] responseBytes = result.getResponseBody();
-        assertThat(responseBytes).isNotNull();
-        assertThat(responseBytes).isEqualTo(testFileContent);
+        assertThat(responseBytes).isNotNull().isEqualTo(testFileContent);
     }
 
     // ---------------------------------------------------------------------------
@@ -569,7 +568,7 @@ class DocumentIT extends IntegrationBase {
      * resolves the document via the backend-minted correlationId in the metadata block.
      */
     @Test
-    void scanResult_viaPendingAlias_shouldResolveByCorrelationId() throws IOException {
+    void scanResult_viaPendingAlias_shouldResolveByCorrelationId() {
         // Arrange — initiate to create a PENDING record; capture its correlationId
         String uploadId = initiateAndGetUploadId();
         String correlationId = correlationIdFor(uploadId);
@@ -625,7 +624,7 @@ class DocumentIT extends IntegrationBase {
      * Both file entries should be stored with the correct per-file fileStatus and s3Key values.
      */
     @Test
-    void scanResult_mixedCompleteAndRejected_shouldSetAggregateStatusToRejected() throws IOException {
+    void scanResult_mixedCompleteAndRejected_shouldSetAggregateStatusToRejected() {
         // Arrange — initiate to get a PENDING document
         String uploadId = initiateAndGetUploadId();
         String correlationId = correlationIdFor(uploadId);
@@ -704,7 +703,7 @@ class DocumentIT extends IntegrationBase {
      * from MongoDB and asserts the dateOfIssue Instant represents midnight UTC on that date.
      */
     @Test
-    void initiate_withDateOfIssue_shouldPersistDateOfIssueAsInstant() throws IOException {
+    void initiate_withDateOfIssue_shouldPersistDateOfIssueAsInstant() {
         // Act — include dateOfIssue in the request body
         EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
             .post()
@@ -737,7 +736,7 @@ class DocumentIT extends IntegrationBase {
      * Guards against a silent data-loss bug if cdp-uploader omits this field.
      */
     @Test
-    void scanResult_nullNumberOfRejectedFiles_shouldSetStatusToRejected() throws IOException {
+    void scanResult_nullNumberOfRejectedFiles_shouldSetStatusToRejected() {
         // Arrange
         String uploadId = initiateAndGetUploadId();
         String correlationId = correlationIdFor(uploadId);
@@ -847,16 +846,12 @@ class DocumentIT extends IntegrationBase {
             .jsonPath("$.status").isEqualTo(500);
     }
 
-    // ---------------------------------------------------------------------------
-    // Tests: DELETE /document-uploads/{upload-id}
-    // ---------------------------------------------------------------------------
-
     /**
      * DELETE /document-uploads/{id} is a user-facing operation (remove an uploaded document).
      * No admin secret is required — any caller with a valid uploadId can remove it.
      */
     @Test
-    void delete_shouldReturn204AndRemoveDocument() throws IOException {
+    void delete_shouldReturn204AndRemoveDocument() {
         String uploadId = initiateAndGetUploadId();
 
         webClient("NoAuth")

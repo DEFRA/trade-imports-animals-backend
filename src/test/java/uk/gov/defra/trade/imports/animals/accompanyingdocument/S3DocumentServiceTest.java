@@ -48,7 +48,7 @@ class S3DocumentServiceTest {
   }
 
   @Test
-  void streamToOutput_shouldCallS3ClientWithCorrectBucketAndKey() throws IOException {
+  void streamToOutput_shouldCallS3ClientWithCorrectBucketAndKey() {
     // Given
     String s3Key = "upload-id-001/file-id-001";
     String bucket = "trade-imports-animals-documents";

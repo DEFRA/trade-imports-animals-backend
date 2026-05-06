@@ -271,7 +271,7 @@ class NotificationControllerTest {
                 .content(objectMapper.writeValueAsString(referenceNumbers)))
             .andExpect(status().isNoContent());
 
-        verify(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), eq(new AuditContext("trace-abc", "user-123")));
+        verify(notificationService).deleteByReferenceNumbers(referenceNumbers, new AuditContext("trace-abc", "user-123"));
     }
 
     @Test

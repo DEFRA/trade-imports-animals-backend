@@ -90,9 +90,9 @@ public class AwsConfig {
             .region(Region.of(region))
             .credentialsProvider(credentialsProvider)
             .overrideConfiguration(c -> c
-                .retryStrategy(RetryMode.ADAPTIVE)
-                .apiCallTimeout(Duration.ofSeconds(30)) // 30s total call budget
-                .apiCallAttemptTimeout(Duration.ofSeconds(10))); // 10s per attempt; with ADAPTIVE retry, multiple attempts may occur within the 30s budget
+                .retryStrategy(RetryMode.ADAPTIVE_V2)
+                .apiCallTimeout(Duration.ofSeconds(30))
+                .apiCallAttemptTimeout(Duration.ofSeconds(10)));
 
         if (hasEndpointOverride) {
             log.info("Using S3 endpoint override: {}", appAwsConfig.endpointOverride());

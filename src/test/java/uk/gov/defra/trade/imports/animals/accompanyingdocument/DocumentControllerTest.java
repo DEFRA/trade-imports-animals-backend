@@ -1,6 +1,5 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -250,10 +249,6 @@ class DocumentControllerTest {
         .andExpect(jsonPath("$.items.length()").value(0));
   }
 
-  // ---------------------------------------------------------------------------
-  // GET /document-uploads/{upload-id}
-  // ---------------------------------------------------------------------------
-
   @Test
   void get_shouldReturn200WithDocument() throws Exception {
     // Given
@@ -408,10 +403,6 @@ class DocumentControllerTest {
         .andExpect(jsonPath("$.detail").value(
             "No accompanying document found with uploadId: " + unknownId));
   }
-
-  // ---------------------------------------------------------------------------
-  // DELETE /document-uploads/{upload-id}
-  // ---------------------------------------------------------------------------
 
   @Test
   void delete_shouldReturn204() throws Exception {

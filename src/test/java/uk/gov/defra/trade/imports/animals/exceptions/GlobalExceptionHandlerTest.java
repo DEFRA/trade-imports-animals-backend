@@ -28,13 +28,9 @@ class GlobalExceptionHandlerTest {
 
     private GlobalExceptionHandler exceptionHandler;
 
-    // The handler logs WARN/ERROR for every exception it handles — that's correct production
-    // behaviour. In this unit test we only care about return values, so silence the logger to
-    // avoid flooding the test output with expected error logs.
-    //
-    // NOTE: Mutating a static logger level in @BeforeEach/@AfterEach is intentional here.
-    // These tests must run sequentially (JUnit 5 default) for the level mutation to be safe;
-    // parallel execution would cause races between setUp/tearDown and test body logging.
+    // Silence the production-correct WARN/ERROR logging from GlobalExceptionHandler so the
+    // expected exception-handling output does not flood test logs. Relies on JUnit 5's default
+    // sequential execution — parallel execution would race with the per-test level mutation.
     private static final Logger HANDLER_LOGGER =
         (Logger) LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -74,8 +70,7 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail.getTitle()).isEqualTo("Validation Error");
         assertThat(problemDetail.getDetail()).isEqualTo("Validation failed for one or more fields");
         assertThat(problemDetail.getType()).isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
-        assertThat(problemDetail.getProperties()).containsKey("traceId");
-        assertThat(problemDetail.getProperties().get("traceId")).isEqualTo(traceId);
+        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
 
         @SuppressWarnings("unchecked")
         Map<String, List<String>> errors = (Map<String, List<String>>) problemDetail.getProperties().get("errors");
@@ -99,8 +94,7 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         Map<String, Object> properties = problemDetail.getProperties();
-        assertThat(properties).isNotNull();
-        assertThat(properties).doesNotContainKey("traceId");
+        assertThat(properties).isNotNull().doesNotContainKey("traceId");
     }
 
     @Test
@@ -122,8 +116,7 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail.getTitle()).isEqualTo("Resource Not Found");
         assertThat(problemDetail.getDetail()).isEqualTo("Notification with id 12345 not found");
         assertThat(problemDetail.getType()).isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/not-found"));
-        assertThat(problemDetail.getProperties()).containsKey("traceId");
-        assertThat(problemDetail.getProperties().get("traceId")).isEqualTo(traceId);
+        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
     }
 
     @Test
@@ -164,8 +157,7 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail.getTitle()).isEqualTo("Resource Conflict");
         assertThat(problemDetail.getDetail()).isEqualTo("Notification with reference DRAFT.IMP.2026.001 already exists");
         assertThat(problemDetail.getType()).isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/conflict"));
-        assertThat(problemDetail.getProperties()).containsKey("traceId");
-        assertThat(problemDetail.getProperties().get("traceId")).isEqualTo(traceId);
+        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
     }
 
     @Test
@@ -209,8 +201,7 @@ class GlobalExceptionHandlerTest {
             .isEqualTo("Scan callback missing required correlationId in metadata");
         assertThat(problemDetail.getType())
             .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/bad-request"));
-        assertThat(problemDetail.getProperties()).containsKey("traceId");
-        assertThat(problemDetail.getProperties().get("traceId")).isEqualTo(traceId);
+        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
     }
 
     @Test
@@ -250,8 +241,7 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail.getTitle()).isEqualTo("Internal Server Error");
         assertThat(problemDetail.getDetail()).isEqualTo("An unexpected error occurred. Please try again later.");
         assertThat(problemDetail.getType()).isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/internal-error"));
-        assertThat(problemDetail.getProperties()).containsKey("traceId");
-        assertThat(problemDetail.getProperties().get("traceId")).isEqualTo(traceId);
+        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
     }
 
     @Test
@@ -324,8 +314,7 @@ class GlobalExceptionHandlerTest {
             .isEqualTo("cdp-uploader returned an error response: HTTP 503");
         assertThat(problemDetail.getType())
             .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/upstream-error"));
-        assertThat(problemDetail.getProperties()).containsKey("traceId");
-        assertThat(problemDetail.getProperties().get("traceId")).isEqualTo(traceId);
+        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
     }
 
     @Test
