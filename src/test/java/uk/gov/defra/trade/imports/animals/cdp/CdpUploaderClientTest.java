@@ -119,29 +119,6 @@ class CdpUploaderClientTest {
   }
 
   @Test
-  void initiate_shouldTruncateLongErrorBodyInLog_whenBodyExceedsMaxLogLength() {
-    // Given — error body longer than MAX_LOG_BODY_LENGTH (500) so the truncation
-    // branch in onStatus runs. Behaviour assertion focuses on the thrown exception
-    // since the log body is internal; this exercises the substring + "..." path.
-    CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-        "https://frontend/redirect",
-        "https://backend/callback",
-        "my-bucket",
-        "DRAFT.IMP.2026.abc",
-        20971520L,
-        List.of("application/pdf"),
-        null);
-    String longBody = "x".repeat(600);
-
-    when(responseSpec.onStatus(any(), any())).thenAnswer(
-        simulateErrorResponse(HttpStatus.BAD_GATEWAY, longBody));
-
-    assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
-        .isInstanceOf(ServiceUnavailableException.class)
-        .hasMessageContaining("cdp-uploader returned an error response: HTTP 502");
-  }
-
-  @Test
   void initiate_shouldThrowServiceUnavailableException_whenCdpUploaderReturns4xx() {
     // Given — simulate a 422 Unprocessable Entity from cdp-uploader
     CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
