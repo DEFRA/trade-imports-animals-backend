@@ -38,11 +38,15 @@ app:
     access-key-id: test
     secret-access-key: test
 
-# Local defaults for this service's own URLs (kept out of application.yml so deployed
-# environments fail fast if BACKEND_BASE_URL / FRONTEND_BASE_URL are unset).
-# backend.base-url uses host.docker.internal so cdp-uploader (Docker) can POST scan callbacks
-# back to this service running on the host machine — plain localhost:8085 is unreachable from
-# inside Docker.
+# Local defaults for this service's URLs. Each is reached from a different network context,
+# hence the asymmetry:
+#   backend.base-url  — cdp-uploader (inside Docker) posts scan callbacks here, so
+#                       host.docker.internal is required; plain localhost is unreachable
+#                       from inside the cdp-uploader container.
+#   frontend.base-url — the user's browser is redirected here after upload, so
+#                       localhost is correct (the browser is on the host).
+# Kept out of application.yml so deployed environments fail fast if
+# BACKEND_BASE_URL / FRONTEND_BASE_URL are unset.
 cdp:
   backend:
     base-url: ${BACKEND_BASE_URL:http://host.docker.internal:8085}
