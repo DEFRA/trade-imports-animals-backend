@@ -89,57 +89,12 @@ class NotificationIT extends IntegrationBase {
         assertThat(created.getId()).isNotNull();
         assertThat(created.getReferenceNumber()).matches("DRAFT\\.IMP\\.\\d{4}\\..+");
         assertThat(created.getReferenceNumber()).contains(created.getId());
-
-        assertThat(created.getOrigin().getCountryCode()).isEqualTo("GB");
-        assertThat(created.getOrigin().getRequiresRegionCode()).isEqualTo("true");
-        assertThat(created.getOrigin().getInternalReference()).isEqualTo("REF-001");
-
-        assertThat(created.getCommodity().getName()).isEqualTo("Live bovine animals");
-        CommodityComplement createdComplement = created.getCommodity().getCommodityComplement().getFirst();
-        assertThat(createdComplement.getTypeOfCommodity()).isEqualTo("LIVE");
-        assertThat(createdComplement.getTotalNoOfAnimals()).isEqualTo(10);
-        assertThat(createdComplement.getTotalNoOfPackages()).isEqualTo(5);
-        Species createdSpecies = createdComplement.getSpecies().getFirst();
-        assertThat(createdSpecies.getValue()).isEqualTo("BOV");
-        assertThat(createdSpecies.getText()).isEqualTo("Bovine");
-        assertThat(createdSpecies.getNoOfAnimals()).isEqualTo(10);
-        assertThat(createdSpecies.getNoOfPackages()).isEqualTo(5);
-        assertThat(createdSpecies.getEarTag()).isEqualTo("UK01234567890");
-        assertThat(createdSpecies.getPassport()).isEqualTo("UK0123456700999");
-
-        assertThat(created.getReasonForImport()).isEqualTo("PERMANENT");
-        assertThat(created.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
-        assertThat(created.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
-        assertThat(created.getCphNumber()).isEqualTo("22/123/4567");
-        assertThat(created.getTransport().getPortOfEntry()).isEqualTo("GBFXT");
-        assertThat(created.getTransport().getArrivalDate()).isEqualTo(LocalDate.of(2026, 4, 22));
+        assertNotificationMappedFields(created);
 
         // Verify persisted — reload via API
         Notification persisted = findAllNotifications().getFirst();
         assertThat(persisted.getId()).isEqualTo(created.getId());
-        assertThat(persisted.getOrigin().getCountryCode()).isEqualTo("GB");
-        assertThat(persisted.getOrigin().getRequiresRegionCode()).isEqualTo("true");
-        assertThat(persisted.getOrigin().getInternalReference()).isEqualTo("REF-001");
-
-        assertThat(persisted.getCommodity().getName()).isEqualTo("Live bovine animals");
-        CommodityComplement persistedComplement = persisted.getCommodity().getCommodityComplement().getFirst();
-        assertThat(persistedComplement.getTypeOfCommodity()).isEqualTo("LIVE");
-        assertThat(persistedComplement.getTotalNoOfAnimals()).isEqualTo(10);
-        assertThat(persistedComplement.getTotalNoOfPackages()).isEqualTo(5);
-        Species persistedSpecies = persistedComplement.getSpecies().getFirst();
-        assertThat(persistedSpecies.getValue()).isEqualTo("BOV");
-        assertThat(persistedSpecies.getText()).isEqualTo("Bovine");
-        assertThat(persistedSpecies.getNoOfAnimals()).isEqualTo(10);
-        assertThat(persistedSpecies.getNoOfPackages()).isEqualTo(5);
-        assertThat(persistedSpecies.getEarTag()).isEqualTo("UK01234567890");
-        assertThat(persistedSpecies.getPassport()).isEqualTo("UK0123456700999");
-
-        assertThat(persisted.getReasonForImport()).isEqualTo("PERMANENT");
-        assertThat(persisted.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
-        assertThat(persisted.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
-        assertThat(persisted.getCphNumber()).isEqualTo("22/123/4567");
-        assertThat(persisted.getTransport().getPortOfEntry()).isEqualTo("GBFXT");
-        assertThat(persisted.getTransport().getArrivalDate()).isEqualTo(LocalDate.of(2026, 4, 22));
+        assertNotificationMappedFields(persisted);
     }
 
     @Test
@@ -266,42 +221,13 @@ class NotificationIT extends IntegrationBase {
         // Then — verify response reflects updated values
         assertThat(updated).isNotNull();
         assertThat(updated.getReferenceNumber()).isEqualTo(referenceNumber);
-        assertThat(updated.getOrigin().getCountryCode()).isEqualTo("GB");
-        assertThat(updated.getOrigin().getRequiresRegionCode()).isEqualTo("true");
-        assertThat(updated.getOrigin().getInternalReference()).isEqualTo("REF-updated");
-        assertThat(updated.getCommodity().getName()).isEqualTo("Live bovine animals");
-        CommodityComplement updatedComplementResult = updated.getCommodity().getCommodityComplement().getFirst();
-        assertThat(updatedComplementResult.getTypeOfCommodity()).isEqualTo("LIVE");
-        assertThat(updatedComplementResult.getTotalNoOfAnimals()).isEqualTo(10);
-        assertThat(updatedComplementResult.getTotalNoOfPackages()).isEqualTo(5);
-        Species updatedSpeciesResult = updatedComplementResult.getSpecies().getFirst();
-        assertThat(updatedSpeciesResult.getValue()).isEqualTo("BOV");
-        assertThat(updatedSpeciesResult.getText()).isEqualTo("Bovine");
-        assertThat(updatedSpeciesResult.getNoOfAnimals()).isEqualTo(10);
-        assertThat(updatedSpeciesResult.getNoOfPackages()).isEqualTo(5);
-        assertThat(updatedSpeciesResult.getEarTag()).isEqualTo("UK01234567890");
-        assertThat(updatedSpeciesResult.getPassport()).isEqualTo("UK0123456700999");
-        assertThat(updated.getReasonForImport()).isEqualTo("PERMANENT");
-        assertThat(updated.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
-        assertThat(updated.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
-        assertThat(updated.getCphNumber()).isEqualTo("22/123/4567");
-        assertThat(updated.getTransport().getPortOfEntry()).isEqualTo("GBFXT");
-        assertThat(updated.getTransport().getArrivalDate()).isEqualTo(LocalDate.of(2026, 4, 22));
+        assertNotificationMappedFields(updated, "REF-updated");
 
         // Verify only one notification exists and reload via API
         List<Notification> all = findAllNotifications();
         assertThat(all).hasSize(1);
         Notification persisted = all.getFirst();
-        assertThat(persisted.getOrigin().getCountryCode()).isEqualTo("GB");
-        assertThat(persisted.getOrigin().getRequiresRegionCode()).isEqualTo("true");
-        assertThat(persisted.getOrigin().getInternalReference()).isEqualTo("REF-updated");
-        assertThat(persisted.getCommodity().getName()).isEqualTo("Live bovine animals");
-        assertThat(persisted.getReasonForImport()).isEqualTo("PERMANENT");
-        assertThat(persisted.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
-        assertThat(persisted.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
-        assertThat(persisted.getCphNumber()).isEqualTo("22/123/4567");
-        assertThat(persisted.getTransport().getPortOfEntry()).isEqualTo("GBFXT");
-        assertThat(persisted.getTransport().getArrivalDate()).isEqualTo(LocalDate.of(2026, 4, 22));
+        assertNotificationMappedFields(persisted, "REF-updated");
     }
 
     @Test
@@ -637,6 +563,51 @@ class NotificationIT extends IntegrationBase {
             .expectStatus().isOk()
             .expectBodyList(Notification.class)
             .returnResult().getResponseBody();
+    }
+
+    private void assertNotificationMappedFields(Notification notification) {
+        assertNotificationMappedFields(notification, "REF-001");
+    }
+
+    private void assertNotificationMappedFields(Notification notification, String internalReference) {
+        assertThat(notification.getOrigin())
+            .extracting(Origin::getCountryCode, Origin::getRequiresRegionCode, Origin::getInternalReference)
+            .containsExactly("GB", "true", internalReference);
+
+        assertThat(notification.getCommodity())
+            .extracting(Commodity::getName)
+            .isEqualTo("Live bovine animals");
+
+        CommodityComplement complement = notification.getCommodity().getCommodityComplement().getFirst();
+        assertThat(complement)
+            .extracting(
+                CommodityComplement::getTypeOfCommodity,
+                CommodityComplement::getTotalNoOfAnimals,
+                CommodityComplement::getTotalNoOfPackages)
+            .containsExactly("LIVE", 10, 5);
+
+        Species species = complement.getSpecies().getFirst();
+        assertThat(species)
+            .extracting(
+                Species::getValue,
+                Species::getText,
+                Species::getNoOfAnimals,
+                Species::getNoOfPackages,
+                Species::getEarTag,
+                Species::getPassport)
+            .containsExactly("BOV", "Bovine", 10, 5, "UK01234567890", "UK0123456700999");
+
+        assertThat(notification)
+            .extracting(Notification::getReasonForImport, Notification::getCphNumber)
+            .containsExactly("PERMANENT", "22/123/4567");
+
+        assertThat(notification.getAdditionalDetails())
+            .extracting(AdditionalDetails::getCertifiedFor, AdditionalDetails::getUnweanedAnimals)
+            .containsExactly("HUMAN_CONSUMPTION", "true");
+
+        assertThat(notification.getTransport())
+            .extracting(Transport::getPortOfEntry, Transport::getArrivalDate)
+            .containsExactly("GBFXT", LocalDate.of(2026, 4, 22));
     }
 
     private NotificationDto createNotificationDto(String countryCode, String commodity) {
