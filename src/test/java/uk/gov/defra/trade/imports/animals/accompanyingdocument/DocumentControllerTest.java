@@ -147,6 +147,36 @@ class DocumentControllerTest {
   }
 
   @Test
+  void post_shouldReturn400_whenRedirectUrlOmitsPortAndDefaultDoesNotMatch() throws Exception {
+    // Given — redirectUrl omits the port (so it normalises to the http default 80) but the
+    // configured frontend base URL is on port 3000. Origin check must reject this even though
+    // the host strings match — exercises the http default-port branch in normalisePort.
+    String body = """
+        {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"http://localhost/upload-complete"}
+        """;
+
+    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void post_shouldReturn400_whenRedirectUrlIsMalformedAndCannotBeParsed() throws Exception {
+    // Given — redirectUrl contains characters illegal in a URI (unclosed bracket); the
+    // origin check should treat parse failures as a hostile/malformed input and reject.
+    String body = """
+        {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"http://[invalid"}
+        """;
+
+    // When / Then
+    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
   void post_shouldReturn400_whenRedirectUrlIsHostnameSuffixAttack() throws Exception {
     // Given — redirectUrl host has the configured frontend hostname as a string prefix
     // ("http://localhost:3000.evil.com" starts with "http://localhost:3000" but resolves to a
@@ -388,6 +418,32 @@ class DocumentControllerTest {
             "Content-Disposition",
             "attachment; filename=\"=?UTF-8?Q?test-doc.pdf?=\"; filename*=UTF-8''test-doc.pdf"))
         .andExpect(header().string("Content-Type", "application/pdf"));
+  }
+
+  @Test
+  void downloadFile_shouldFallBackToOctetStream_whenStoredContentTypeIsMalformed() throws Exception {
+    // Given — cdp-uploader stores whatever Content-Type the client sent; a malformed value
+    // must not 500 the download. The handler logs a warn and substitutes octet-stream.
+    String uploadId = "upload-abc-123";
+    byte[] fileContent = "binary".getBytes();
+    UploadedFile uploadedFile = new UploadedFile(
+        "weird.bin",
+        "not/a valid/media type",
+        (long) fileContent.length,
+        uploadId + "/file-id",
+        "documents-bucket",
+        FileStatus.COMPLETE,
+        "sha256abc",
+        "application/octet-stream",
+        false,
+        null);
+    when(documentService.findFile(uploadId)).thenReturn(uploadedFile);
+    doNothing().when(s3DocumentService).streamToOutput(any(String.class), any());
+
+    // When / Then
+    mockMvc.perform(get("/document-uploads/{uploadId}/file", uploadId))
+        .andExpect(status().isOk())
+        .andExpect(header().string("Content-Type", "application/octet-stream"));
   }
 
   @Test
