@@ -8,11 +8,9 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -29,6 +27,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
+import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 
 /**
  * REST controller for accompanying document upload endpoints.
@@ -69,66 +68,11 @@ public class DocumentController {
 
     log.info("POST /notifications/{}/document-uploads", ref);
 
-    // The redirectUrl is where the user's browser is sent after the file upload form is submitted.
-    // Validate it against the configured frontend base URL to prevent open-redirect attacks.
-    // Compare scheme, host, and port explicitly — string-prefix matching is bypassable
-    // (e.g. "http://localhost:3000.evil.com" starts with "http://localhost:3000").
-    String frontendBaseUrl = cdpConfig.frontend().baseUrl();
-    if (request.redirectUrl() != null && !request.redirectUrl().isBlank()
-        && !isSameOrigin(request.redirectUrl(), frontendBaseUrl)) {
-      log.warn("POST /notifications/{}/document-uploads rejected: redirectUrl not within frontend base URL", ref);
-      return ResponseEntity.badRequest().build();
-    }
-    String redirectUrl = (request.redirectUrl() != null && !request.redirectUrl().isBlank())
-        ? request.redirectUrl()
-        : frontendBaseUrl;
+    String redirectUrl = resolveRedirectUrl(ref, request);
     DocumentUploadResponse response = documentService.initiate(ref, request, redirectUrl);
+    URI location = buildLocationUri(response.uploadId());
 
-    String backendBaseUrl = cdpConfig.backend().baseUrl();
-    if (backendBaseUrl.endsWith("/")) {
-      backendBaseUrl = backendBaseUrl.substring(0, backendBaseUrl.length() - 1);
-    }
-    URI location = URI.create(backendBaseUrl + "/document-uploads/" + response.uploadId());
     return ResponseEntity.created(location).body(response);
-  }
-
-  /**
-   * Check whether {@code candidateUrl} shares the same origin (scheme, host, port) as
-   * {@code expectedBaseUrl}. Both inputs must be absolute URIs with a scheme and host.
-   *
-   * <p>Comparison is case-insensitive for scheme and host. Ports are normalised to their
-   * scheme defaults (80 for http, 443 for https) before comparison so that, for example,
-   * "http://example.com" and "http://example.com:80" match.
-   */
-  private static boolean isSameOrigin(String candidateUrl, String expectedBaseUrl) {
-    try {
-      URI candidate = new URI(candidateUrl);
-      URI expected = new URI(expectedBaseUrl);
-      if (candidate.getScheme() == null || candidate.getHost() == null
-          || expected.getScheme() == null || expected.getHost() == null) {
-        return false;
-      }
-      return candidate.getScheme().equalsIgnoreCase(expected.getScheme())
-          && candidate.getHost().equalsIgnoreCase(expected.getHost())
-          && Objects.equals(normalisePort(candidate), normalisePort(expected));
-    } catch (URISyntaxException _) {
-      return false;
-    }
-  }
-
-  private static int normalisePort(URI uri) {
-    int port = uri.getPort();
-    if (port != -1) {
-      return port;
-    }
-    String scheme = uri.getScheme();
-    if ("https".equalsIgnoreCase(scheme)) {
-      return 443;
-    }
-    if ("http".equalsIgnoreCase(scheme)) {
-      return 80;
-    }
-    return -1;
   }
 
   /**
@@ -147,8 +91,7 @@ public class DocumentController {
   @Timed("document.list")
   public ResponseEntity<DocumentListResponse> list(@PathVariable String ref) {
     log.info("GET /notifications/{}/document-uploads", ref);
-    List<AccompanyingDocument> docs = documentService.findByNotificationRef(ref);
-    List<AccompanyingDocumentDto> items = docs.stream()
+    List<AccompanyingDocumentDto> items = documentService.findByNotificationRef(ref).stream()
         .map(AccompanyingDocumentDto::from)
         .toList();
     return ResponseEntity.ok(new DocumentListResponse(items));
@@ -245,13 +188,57 @@ public class DocumentController {
     log.info("GET /document-uploads/{}/file", uploadId);
     UploadedFile file = documentService.findFile(uploadId);
 
-    // Known limitation: if S3 throws mid-stream after response headers are committed,
-    // the client receives a 200 with a truncated body and no error indication.
-    // This is inherent to StreamingResponseBody — response headers are sent before the body writes.
-    // The test downloadFile_s3ObjectMissing_shouldReturn500 covers the pre-write failure case
-    // (NoSuchKey throws before any bytes are written, so the 500 is correctly returned).
+    StreamingResponseBody body = streamFromS3WithMdc(file);
+    MediaType contentType = resolveContentType(uploadId, file.contentType());
+    HttpHeaders headers = buildDownloadHeaders(contentType, file.filename());
+
+    return ResponseEntity.ok()
+        .headers(headers)
+        .body(body);
+  }
+
+  /**
+   * Resolves the redirect URL: returns the requested URL when same-origin with the configured
+   * frontend base URL, falls back to the configured base URL when none was supplied, and
+   * throws {@link BadRequestException} when the requested URL is on a different origin (open-
+   * redirect prevention).
+   */
+  private String resolveRedirectUrl(String ref, DocumentUploadRequest request) {
+    String frontendBaseUrl = cdpConfig.frontend().baseUrl();
+    String requested = request.redirectUrl();
+
+    if (requested == null || requested.isBlank()) {
+      return frontendBaseUrl;
+    }
+    if (!RedirectOriginChecker.matches(requested, frontendBaseUrl)) {
+      log.warn("POST /notifications/{}/document-uploads rejected: redirectUrl not within frontend base URL", ref);
+      throw new BadRequestException("redirectUrl is not within the configured frontend base URL");
+    }
+    return requested;
+  }
+
+  private URI buildLocationUri(String uploadId) {
+    String backendBaseUrl = cdpConfig.backend().baseUrl();
+    if (backendBaseUrl.endsWith("/")) {
+      backendBaseUrl = backendBaseUrl.substring(0, backendBaseUrl.length() - 1);
+    }
+    return URI.create(backendBaseUrl + "/document-uploads/" + uploadId);
+  }
+
+  /**
+   * Builds the streaming response body. Captures the current MDC context and reapplies it on
+   * the streaming thread so log lines emitted during S3 streaming carry the same trace IDs as
+   * the original request.
+   *
+   * <p>Known limitation: if S3 throws mid-stream after response headers are committed, the
+   * client receives a 200 with a truncated body and no error indication — inherent to
+   * {@link StreamingResponseBody}, since headers are sent before any body bytes are written.
+   * The pre-write failure case (e.g. NoSuchKey thrown before any bytes flow) still surfaces as
+   * a 500 because no headers have been committed yet.
+   */
+  private StreamingResponseBody streamFromS3WithMdc(UploadedFile file) {
     Map<String, String> mdcContext = MDC.getCopyOfContextMap();
-    StreamingResponseBody body = outputStream -> {
+    return outputStream -> {
       if (mdcContext != null) {
         MDC.setContextMap(mdcContext);
       }
@@ -261,23 +248,23 @@ public class DocumentController {
         MDC.clear();
       }
     };
+  }
 
-    MediaType contentType;
+  private MediaType resolveContentType(String uploadId, String declared) {
     try {
-      contentType = MediaType.parseMediaType(file.contentType());
+      return MediaType.parseMediaType(declared);
     } catch (InvalidMediaTypeException _) {
       log.warn("GET /document-uploads/{}/file — invalid content-type '{}', falling back to application/octet-stream",
-          uploadId, file.contentType());
-      contentType = MediaType.APPLICATION_OCTET_STREAM;
+          uploadId, declared);
+      return MediaType.APPLICATION_OCTET_STREAM;
     }
+  }
 
+  private static HttpHeaders buildDownloadHeaders(MediaType contentType, String filename) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(contentType);
     headers.setContentDisposition(
-        ContentDisposition.attachment().filename(file.filename(), StandardCharsets.UTF_8).build());
-
-    return ResponseEntity.ok()
-        .headers(headers)
-        .body(body);
+        ContentDisposition.attachment().filename(filename, StandardCharsets.UTF_8).build());
+    return headers;
   }
 }
