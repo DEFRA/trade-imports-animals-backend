@@ -23,6 +23,6 @@ class FileStatusReadConverterTest {
     void convert_shouldThrowIllegalArgumentException_whenValueIsUnrecognised() {
         assertThatThrownBy(() -> converter.convert("unknown"))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("Unrecognised FileStatus in MongoDB: unknown");
+            .hasMessage("Unrecognised FileStatus: unknown");
     }
 }
