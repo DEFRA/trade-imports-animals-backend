@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.core.retry.RetryMode;
@@ -41,18 +42,8 @@ public class AwsConfig {
         this.appAwsConfig = appAwsConfig;
     }
 
-    private StsClient stsClient() {
-
-        return StsClient.builder()
-            .region(Region.of(region))
-            .credentialsProvider(DefaultCredentialsProvider.builder().build())
-            .build();
-
-    }
-
     public String getWebIdentityToken() {
         try (StsClient stsClient = stsClient()) {
-
             GetWebIdentityTokenRequest request = GetWebIdentityTokenRequest.builder()
                 .audience(audience)
                 .signingAlgorithm("RS256")
@@ -70,39 +61,55 @@ public class AwsConfig {
 
     @Bean
     public S3Client s3Client() {
-        boolean hasEndpointOverride = appAwsConfig.endpointOverride() != null
-            && !appAwsConfig.endpointOverride().isBlank();
-        boolean hasStaticCredentials = appAwsConfig.accessKeyId() != null
-            && !appAwsConfig.accessKeyId().isBlank()
-            && appAwsConfig.secretAccessKey() != null
-            && !appAwsConfig.secretAccessKey().isBlank();
-
-        if (hasEndpointOverride && !hasStaticCredentials) {
-            log.warn("APP_AWS_ENDPOINT_OVERRIDE is set but static credentials are absent — falling back to DefaultCredentialsProvider");
-        }
-
-        var credentialsProvider = hasEndpointOverride && hasStaticCredentials
-            ? StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(appAwsConfig.accessKeyId(), appAwsConfig.secretAccessKey()))
-            : DefaultCredentialsProvider.builder().build();
-
         S3ClientBuilder builder = S3Client.builder()
             .region(Region.of(region))
-            .credentialsProvider(credentialsProvider)
+            .credentialsProvider(resolveCredentialsProvider())
             .overrideConfiguration(c -> c
                 .retryStrategy(RetryMode.ADAPTIVE_V2)
                 .apiCallTimeout(Duration.ofSeconds(30))
                 .apiCallAttemptTimeout(Duration.ofSeconds(10)));
-
-        if (hasEndpointOverride) {
-            log.info("Using S3 endpoint override: {}", appAwsConfig.endpointOverride());
-            builder.endpointOverride(URI.create(appAwsConfig.endpointOverride()))
-                   .serviceConfiguration(S3Configuration.builder()
-                       .pathStyleAccessEnabled(true)
-                       .build());
-        }
-
+        applyEndpointOverride(builder);
         return builder.build();
     }
-}
 
+    private StsClient stsClient() {
+        return StsClient.builder()
+            .region(Region.of(region))
+            .credentialsProvider(DefaultCredentialsProvider.builder().build())
+            .build();
+    }
+
+    private boolean hasEndpointOverride() {
+        return appAwsConfig.endpointOverride() != null
+            && !appAwsConfig.endpointOverride().isBlank();
+    }
+
+    private boolean hasStaticCredentials() {
+        return appAwsConfig.accessKeyId() != null
+            && !appAwsConfig.accessKeyId().isBlank()
+            && appAwsConfig.secretAccessKey() != null
+            && !appAwsConfig.secretAccessKey().isBlank();
+    }
+
+    private AwsCredentialsProvider resolveCredentialsProvider() {
+        if (hasEndpointOverride() && hasStaticCredentials()) {
+            return StaticCredentialsProvider.create(
+                AwsBasicCredentials.create(appAwsConfig.accessKeyId(), appAwsConfig.secretAccessKey()));
+        }
+        if (hasEndpointOverride()) {
+            log.warn("APP_AWS_ENDPOINT_OVERRIDE is set but static credentials are absent — falling back to DefaultCredentialsProvider");
+        }
+        return DefaultCredentialsProvider.builder().build();
+    }
+
+    private void applyEndpointOverride(S3ClientBuilder builder) {
+        if (!hasEndpointOverride()) {
+            return;
+        }
+        log.info("Using S3 endpoint override: {}", appAwsConfig.endpointOverride());
+        builder.endpointOverride(URI.create(appAwsConfig.endpointOverride()))
+            .serviceConfiguration(S3Configuration.builder()
+                .pathStyleAccessEnabled(true)
+                .build());
+    }
+}
