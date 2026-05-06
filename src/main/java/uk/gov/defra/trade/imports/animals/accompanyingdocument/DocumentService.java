@@ -59,61 +59,20 @@ public class DocumentService {
     // uploadId back, so correlationId is the only handle we control end-to-end.
     String correlationId = UUID.randomUUID().toString();
 
-    String callbackBase = cdpConfig.backend().baseUrl();
-
-    Map<String, String> metadata = Map.of(
-        "notificationReferenceNumber", notificationRef,
-        "documentType", request.documentType() != null ? request.documentType().name() : "",
-        "documentReference", request.documentReference() != null ? request.documentReference() : "",
-        "correlationId", correlationId);
-
-    // Callback URL is fixed at initiate time — cdp-uploader validates it as a URI and posts to
-    // it verbatim, with no template substitution. The path's "pending" segment is a static
-    // marker; document identity is carried via metadata.correlationId, not the URL.
-    String callbackUrl = callbackBase + "/document-uploads/pending/scan-results";
-
     CdpUploaderInitiateRequest initiateRequest = new CdpUploaderInitiateRequest(
         redirectUrl,
-        callbackUrl,
+        buildCallbackUrl(),
         cdpConfig.s3().documentsBucket(),
         notificationRef,
         cdpConfig.uploader().maxFileSize(),
         cdpConfig.uploader().mimeTypes(),
-        metadata);
+        buildMetadata(notificationRef, request, correlationId));
 
     log.info("Initiating cdp-uploader session for notification {}", notificationRef);
     CdpUploaderInitiateResponse response = cdpUploaderClient.initiate(initiateRequest);
 
-    Instant dateOfIssueInstant = request.dateOfIssue() != null
-        ? request.dateOfIssue().atStartOfDay(ZoneOffset.UTC).toInstant()
-        : null;
-
-    AccompanyingDocument document = AccompanyingDocument.builder()
-        .notificationReferenceNumber(notificationRef)
-        .uploadId(response.uploadId())
-        .correlationId(correlationId)
-        .uploadUrl(response.uploadUrl())
-        .documentType(request.documentType())
-        .documentReference(request.documentReference())
-        .dateOfIssue(dateOfIssueInstant)
-        .scanStatus(ScanStatus.PENDING)
-        .files(new ArrayList<>())
-        .build();
-
-    try {
-      accompanyingDocumentRepository.save(document);
-      log.info(
-          "Saved AccompanyingDocument with uploadId {} for notification {}",
-          response.uploadId(),
-          notificationRef);
-    } catch (DuplicateKeyException _) {
-      log.warn(
-          "Duplicate uploadId {} from cdp-uploader for notification {} — UUID collision",
-          response.uploadId(),
-          notificationRef);
-      throw new ConflictException(
-          "Upload session with id " + response.uploadId() + " already exists");
-    }
+    AccompanyingDocument document = buildPendingDocument(notificationRef, request, response, correlationId);
+    saveOrThrowOnDuplicate(document, notificationRef);
 
     return new DocumentUploadResponse(response.uploadId(), response.uploadUrl());
   }
@@ -132,35 +91,14 @@ public class DocumentService {
    * @throws NotFoundException   if no document with the given correlationId exists
    */
   public void handleScanResult(String uploadId, CdpScanResultPayload payload) {
-    String correlationId = payload.metadata().get("correlationId");
-    if (correlationId == null || correlationId.isBlank()) {
-      throw new BadRequestException(
-          "Scan callback missing required correlationId in metadata");
-    }
-    AccompanyingDocument document = accompanyingDocumentRepository
-        .findByCorrelationId(correlationId)
-        .orElseThrow(() -> new NotFoundException(
-            "No accompanying document found with correlationId: " + correlationId));
+    String correlationId = extractCorrelationId(payload);
+    AccompanyingDocument document = findByCorrelationId(correlationId);
 
-    List<UploadedFile> uploadedFiles = new ArrayList<>();
-    if (payload.form() != null) {
-      for (Map.Entry<String, CdpScanResultFile> entry : payload.form().getFiles().entrySet()) {
-        uploadedFiles.add(UploadedFile.from(entry.getValue()));
-      }
-    }
-
-    document.setFiles(uploadedFiles);
-
-    // Fail-closed: treat missing or non-zero rejected count as REJECTED to avoid
-    // silently accepting a file when cdp-uploader omits the field.
-    ScanStatus scanStatus = (payload.numberOfRejectedFiles() != null
-        && payload.numberOfRejectedFiles() == 0)
-        ? ScanStatus.COMPLETE
-        : ScanStatus.REJECTED;
-    document.setScanStatus(scanStatus);
+    document.setFiles(mapUploadedFiles(payload));
+    document.setScanStatus(resolveScanStatus(payload));
 
     accompanyingDocumentRepository.save(document);
-    log.info("Updated uploadId {} scanStatus to {}", document.getUploadId(), scanStatus);
+    log.info("Updated uploadId {} scanStatus to {}", document.getUploadId(), document.getScanStatus());
   }
 
   /**
@@ -234,5 +172,98 @@ public class DocumentService {
           "File for uploadId: " + uploadId + " was rejected and is not available for download");
     }
     return file;
+  }
+
+  /**
+   * Callback URL is fixed at initiate time — cdp-uploader validates it as a URI and posts to it
+   * verbatim, with no template substitution. The path's "pending" segment is a static marker;
+   * document identity is carried via {@code metadata.correlationId}, not the URL.
+   */
+  private String buildCallbackUrl() {
+    return cdpConfig.backend().baseUrl() + "/document-uploads/pending/scan-results";
+  }
+
+  private static Map<String, String> buildMetadata(
+      String notificationRef, DocumentUploadRequest request, String correlationId) {
+    return Map.of(
+        "notificationReferenceNumber", notificationRef,
+        "documentType", request.documentType() != null ? request.documentType().name() : "",
+        "documentReference", request.documentReference() != null ? request.documentReference() : "",
+        "correlationId", correlationId);
+  }
+
+  private static AccompanyingDocument buildPendingDocument(
+      String notificationRef,
+      DocumentUploadRequest request,
+      CdpUploaderInitiateResponse response,
+      String correlationId) {
+    Instant dateOfIssueInstant = request.dateOfIssue() != null
+        ? request.dateOfIssue().atStartOfDay(ZoneOffset.UTC).toInstant()
+        : null;
+    return AccompanyingDocument.builder()
+        .notificationReferenceNumber(notificationRef)
+        .uploadId(response.uploadId())
+        .correlationId(correlationId)
+        .uploadUrl(response.uploadUrl())
+        .documentType(request.documentType())
+        .documentReference(request.documentReference())
+        .dateOfIssue(dateOfIssueInstant)
+        .scanStatus(ScanStatus.PENDING)
+        .files(new ArrayList<>())
+        .build();
+  }
+
+  private void saveOrThrowOnDuplicate(AccompanyingDocument document, String notificationRef) {
+    try {
+      accompanyingDocumentRepository.save(document);
+      log.info(
+          "Saved AccompanyingDocument with uploadId {} for notification {}",
+          document.getUploadId(),
+          notificationRef);
+    } catch (DuplicateKeyException _) {
+      log.warn(
+          "Duplicate uploadId {} from cdp-uploader for notification {} — UUID collision",
+          document.getUploadId(),
+          notificationRef);
+      throw new ConflictException(
+          "Upload session with id " + document.getUploadId() + " already exists");
+    }
+  }
+
+  private static String extractCorrelationId(CdpScanResultPayload payload) {
+    String correlationId = payload.metadata().get("correlationId");
+    if (correlationId == null || correlationId.isBlank()) {
+      throw new BadRequestException(
+          "Scan callback missing required correlationId in metadata");
+    }
+    return correlationId;
+  }
+
+  private AccompanyingDocument findByCorrelationId(String correlationId) {
+    return accompanyingDocumentRepository
+        .findByCorrelationId(correlationId)
+        .orElseThrow(() -> new NotFoundException(
+            "No accompanying document found with correlationId: " + correlationId));
+  }
+
+  private static List<UploadedFile> mapUploadedFiles(CdpScanResultPayload payload) {
+    List<UploadedFile> files = new ArrayList<>();
+    if (payload.form() != null) {
+      for (CdpScanResultFile entry : payload.form().getFiles().values()) {
+        files.add(UploadedFile.from(entry));
+      }
+    }
+    return files;
+  }
+
+  /**
+   * Fail-closed: treat a missing or non-zero rejected count as REJECTED to avoid silently
+   * accepting a file when cdp-uploader omits the field.
+   */
+  private static ScanStatus resolveScanStatus(CdpScanResultPayload payload) {
+    Integer rejectedCount = payload.numberOfRejectedFiles();
+    return rejectedCount != null && rejectedCount == 0
+        ? ScanStatus.COMPLETE
+        : ScanStatus.REJECTED;
   }
 }
