@@ -107,10 +107,12 @@ Or equivalently:
 SPRING_PROFILES_ACTIVE=local mvn spring-boot:run
 ```
 
-Without the `local` profile the application reads `application.yml`, which has
-no defaults for `BACKEND_BASE_URL` / `FRONTEND_BASE_URL` (deployed environments
-must set these explicitly), so startup fails fast with a placeholder-resolution
-error. To run without the profile, export those vars manually first:
+Without the `local` profile the application reads `application.yml`, which
+resolves `BACKEND_BASE_URL` / `FRONTEND_BASE_URL` to empty strings if unset
+(deployed environments must set these explicitly). `CdpConfig` enforces
+`@NotBlank` on both, so startup fails fast with a binding/validation error
+(`Property: cdp.backend.baseUrl`, `Reason: must not be blank`). To run without
+the profile, export those vars manually first:
 
 ```bash
 export BACKEND_BASE_URL=http://host.docker.internal:8085

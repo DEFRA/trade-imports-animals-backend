@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.configuration;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -34,8 +35,8 @@ public record CdpConfig(
     CloudwatchConfig cloudwatch,
     String proxyUrl,
     @NotNull UploaderConfig uploader,
-    BackendConfig backend,
-    FrontendConfig frontend,
+    @Valid @NotNull BackendConfig backend,
+    @Valid @NotNull FrontendConfig frontend,
     S3Config s3) {
 
   /**

@@ -36,7 +36,11 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 @WebMvcTest(NotificationController.class)
-@TestPropertySource(properties = "admin.secret=test-secret")
+@TestPropertySource(properties = {
+    "admin.secret=test-secret",
+    "cdp.backend.base-url=http://localhost:8085",
+    "cdp.frontend.base-url=http://localhost:3000"
+})
 class NotificationControllerTest {
 
     @Autowired
