@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -62,144 +63,148 @@ class CdpUploaderClientTest {
     when(requestBodySpec.retrieve()).thenReturn(responseSpec);
   }
 
-  // ─── Happy path ───────────────────────────────────────────────────────────────
+  @Nested
+  class HappyPath {
 
-  @Test
-  void initiate_shouldReturnResponseFromCdpUploader_whenRequestSucceeds() {
-    // Given
-    CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-        "https://frontend/redirect",
-        "https://backend/callback",
-        "my-bucket",
-        "DRAFT.IMP.2026.abc",
-        20971520L,
-        List.of("application/pdf"),
-        null);
+    @Test
+    void initiate_shouldReturnResponseFromCdpUploader_whenRequestSucceeds() {
+      // Given
+      CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
+          "https://frontend/redirect",
+          "https://backend/callback",
+          "my-bucket",
+          "DRAFT.IMP.2026.abc",
+          20971520L,
+          List.of("application/pdf"),
+          null);
 
-    CdpUploaderInitiateResponse expected =
-        new CdpUploaderInitiateResponse(
-            "upload-id-001",
-            "https://cdp-uploader/form/upload-id-001",
-            "https://cdp-uploader/status/upload-id-001");
+      CdpUploaderInitiateResponse expected =
+          new CdpUploaderInitiateResponse(
+              "upload-id-001",
+              "https://cdp-uploader/form/upload-id-001",
+              "https://cdp-uploader/status/upload-id-001");
 
-    when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
-    when(responseSpec.body(CdpUploaderInitiateResponse.class)).thenReturn(expected);
+      when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
+      when(responseSpec.body(CdpUploaderInitiateResponse.class)).thenReturn(expected);
 
-    // When
-    CdpUploaderInitiateResponse actual = cdpUploaderClient.initiate(request);
+      // When
+      CdpUploaderInitiateResponse actual = cdpUploaderClient.initiate(request);
 
-    // Then
-    assertThat(actual).isEqualTo(expected);
-    verify(responseSpec).onStatus(any(), any());
+      // Then
+      assertThat(actual).isEqualTo(expected);
+      verify(responseSpec).onStatus(any(), any());
+    }
   }
 
-  // ─── Error path ───────────────────────────────────────────────────────────────
+  @Nested
+  class ErrorPath {
 
-  @Test
-  void initiate_shouldThrowServiceUnavailableException_whenCdpUploaderReturns503() {
-    // Given — simulate the onStatus handler executing for a 503 response
-    CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-        "https://frontend/redirect",
-        "https://backend/callback",
-        "my-bucket",
-        "DRAFT.IMP.2026.abc",
-        20971520L,
-        List.of("application/pdf"),
-        null);
+    @Test
+    void initiate_shouldThrowServiceUnavailableException_whenCdpUploaderReturns503() {
+      // Given — simulate the onStatus handler executing for a 503 response
+      CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
+          "https://frontend/redirect",
+          "https://backend/callback",
+          "my-bucket",
+          "DRAFT.IMP.2026.abc",
+          20971520L,
+          List.of("application/pdf"),
+          null);
 
-    // Stub onStatus so the helper invokes the registered error handler against a synthetic
-    // 503 response, which is what triggers ServiceUnavailableException in the real client.
-    when(responseSpec.onStatus(any(), any())).thenAnswer(
-        simulateErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, "Service unavailable"));
+      // Stub onStatus so the helper invokes the registered error handler against a synthetic
+      // 503 response, which is what triggers ServiceUnavailableException in the real client.
+      when(responseSpec.onStatus(any(), any())).thenAnswer(
+          simulateErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, "Service unavailable"));
 
-    // When / Then
-    assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
-        .isInstanceOf(ServiceUnavailableException.class)
-        .hasMessageContaining("cdp-uploader returned an error response: HTTP 503");
+      // When / Then
+      assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
+          .isInstanceOf(ServiceUnavailableException.class)
+          .hasMessageContaining("cdp-uploader returned an error response: HTTP 503");
+    }
+
+    @Test
+    void initiate_shouldThrowServiceUnavailableException_whenCdpUploaderReturns4xx() {
+      // Given — simulate a 422 Unprocessable Entity from cdp-uploader
+      CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
+          "https://frontend/redirect",
+          "https://backend/callback",
+          "my-bucket",
+          "DRAFT.IMP.2026.abc",
+          20971520L,
+          List.of("application/pdf"),
+          null);
+
+      when(responseSpec.onStatus(any(), any())).thenAnswer(
+          simulateErrorResponse(HttpStatus.UNPROCESSABLE_ENTITY, "{\"error\":\"invalid request\"}"));
+
+      // When / Then
+      assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
+          .isInstanceOf(ServiceUnavailableException.class)
+          .hasMessageContaining("cdp-uploader returned an error response: HTTP 422");
+    }
+
+    @Test
+    void initiate_shouldWrapResourceAccessExceptionAsServiceUnavailable_whenConnectionRefused() {
+      // Given — simulate a transport-level failure (e.g. connection refused) by having the
+      // RestClient's onStatus chain throw a ResourceAccessException (a RestClientException subtype).
+      // This mirrors what Spring's RestClient does when the underlying HTTP client cannot reach
+      // the upstream service.
+      CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
+          "https://frontend/redirect",
+          "https://backend/callback",
+          "my-bucket",
+          "DRAFT.IMP.2026.abc",
+          20971520L,
+          List.of("application/pdf"),
+          null);
+
+      ResourceAccessException transportFailure =
+          new ResourceAccessException("I/O error: Connection refused");
+      when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
+      when(responseSpec.body(CdpUploaderInitiateResponse.class)).thenThrow(transportFailure);
+
+      // When / Then — caller sees the same exception type as for HTTP errors, with the
+      // original RestClientException preserved on the cause chain.
+      assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
+          .isInstanceOf(ServiceUnavailableException.class)
+          .hasMessageContaining("cdp-uploader is unreachable")
+          .hasCause(transportFailure);
+    }
+
+    @Test
+    void initiate_onStatusPredicate_shouldMatchNon2xxOnly() {
+      // Given — verify the predicate passed to onStatus correctly classifies status codes
+      CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
+          "https://frontend/redirect",
+          "https://backend/callback",
+          "my-bucket",
+          "DRAFT.IMP.2026.abc",
+          20971520L,
+          List.of("application/pdf"),
+          null);
+
+      // Capture the predicate without triggering the handler
+      AtomicReference<Predicate<HttpStatusCode>> capturedPredicate = new AtomicReference<>();
+      when(responseSpec.onStatus(any(), any())).thenAnswer(invocation -> {
+        capturedPredicate.set(invocation.getArgument(0));
+        return responseSpec;
+      });
+      // initiate() return value not asserted in this test — only the captured predicate matters
+      when(responseSpec.body(CdpUploaderInitiateResponse.class)).thenReturn(null);
+
+      cdpUploaderClient.initiate(request);
+
+      // Then — predicate should match non-2xx codes but not 2xx
+      assertThat(capturedPredicate.get()).isNotNull();
+      assertThat(capturedPredicate.get().test(HttpStatus.OK)).isFalse();
+      assertThat(capturedPredicate.get().test(HttpStatus.CREATED)).isFalse();
+      assertThat(capturedPredicate.get().test(HttpStatus.BAD_REQUEST)).isTrue();
+      assertThat(capturedPredicate.get().test(HttpStatus.SERVICE_UNAVAILABLE)).isTrue();
+      assertThat(capturedPredicate.get().test(HttpStatus.INTERNAL_SERVER_ERROR)).isTrue();
+    }
   }
 
-  @Test
-  void initiate_shouldThrowServiceUnavailableException_whenCdpUploaderReturns4xx() {
-    // Given — simulate a 422 Unprocessable Entity from cdp-uploader
-    CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-        "https://frontend/redirect",
-        "https://backend/callback",
-        "my-bucket",
-        "DRAFT.IMP.2026.abc",
-        20971520L,
-        List.of("application/pdf"),
-        null);
-
-    when(responseSpec.onStatus(any(), any())).thenAnswer(
-        simulateErrorResponse(HttpStatus.UNPROCESSABLE_ENTITY, "{\"error\":\"invalid request\"}"));
-
-    // When / Then
-    assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
-        .isInstanceOf(ServiceUnavailableException.class)
-        .hasMessageContaining("cdp-uploader returned an error response: HTTP 422");
-  }
-
-  @Test
-  void initiate_shouldWrapResourceAccessExceptionAsServiceUnavailable_whenConnectionRefused() {
-    // Given — simulate a transport-level failure (e.g. connection refused) by having the
-    // RestClient's onStatus chain throw a ResourceAccessException (a RestClientException subtype).
-    // This mirrors what Spring's RestClient does when the underlying HTTP client cannot reach
-    // the upstream service.
-    CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-        "https://frontend/redirect",
-        "https://backend/callback",
-        "my-bucket",
-        "DRAFT.IMP.2026.abc",
-        20971520L,
-        List.of("application/pdf"),
-        null);
-
-    ResourceAccessException transportFailure =
-        new ResourceAccessException("I/O error: Connection refused");
-    when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
-    when(responseSpec.body(CdpUploaderInitiateResponse.class)).thenThrow(transportFailure);
-
-    // When / Then — caller sees the same exception type as for HTTP errors, with the
-    // original RestClientException preserved on the cause chain.
-    assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
-        .isInstanceOf(ServiceUnavailableException.class)
-        .hasMessageContaining("cdp-uploader is unreachable")
-        .hasCause(transportFailure);
-  }
-
-  @Test
-  void initiate_onStatusPredicate_shouldMatchNon2xxOnly() {
-    // Given — verify the predicate passed to onStatus correctly classifies status codes
-    CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-        "https://frontend/redirect",
-        "https://backend/callback",
-        "my-bucket",
-        "DRAFT.IMP.2026.abc",
-        20971520L,
-        List.of("application/pdf"),
-        null);
-
-    // Capture the predicate without triggering the handler
-    AtomicReference<Predicate<HttpStatusCode>> capturedPredicate = new AtomicReference<>();
-    when(responseSpec.onStatus(any(), any())).thenAnswer(invocation -> {
-      capturedPredicate.set(invocation.getArgument(0));
-      return responseSpec;
-    });
-    // initiate() return value not asserted in this test — only the captured predicate matters
-    when(responseSpec.body(CdpUploaderInitiateResponse.class)).thenReturn(null);
-
-    cdpUploaderClient.initiate(request);
-
-    // Then — predicate should match non-2xx codes but not 2xx
-    assertThat(capturedPredicate.get()).isNotNull();
-    assertThat(capturedPredicate.get().test(HttpStatus.OK)).isFalse();
-    assertThat(capturedPredicate.get().test(HttpStatus.CREATED)).isFalse();
-    assertThat(capturedPredicate.get().test(HttpStatus.BAD_REQUEST)).isTrue();
-    assertThat(capturedPredicate.get().test(HttpStatus.SERVICE_UNAVAILABLE)).isTrue();
-    assertThat(capturedPredicate.get().test(HttpStatus.INTERNAL_SERVER_ERROR)).isTrue();
-  }
-
-  // ─── Helpers ──────────────────────────────────────────────────────────────────
+  // Helpers
 
   private org.mockito.stubbing.Answer<ResponseSpec> simulateErrorResponse(
       HttpStatus status, String body) {

@@ -15,11 +15,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import org.mockito.ArgumentCaptor;
-
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
@@ -66,8 +66,6 @@ class DocumentServiceTest {
         cdpConfig);
   }
 
-  // ─── initiate ────────────────────────────────────────────────────────────────
-
   private void stubCdpConfig() {
     when(cdpConfig.uploader()).thenReturn(uploaderConfig);
     when(cdpConfig.backend()).thenReturn(backendConfig);
@@ -78,295 +76,305 @@ class DocumentServiceTest {
     when(s3Config.documentsBucket()).thenReturn("documents-bucket");
   }
 
-  @Test
-  void initiate_shouldCallCdpUploaderAndSaveWithPendingStatus() {
-    // Given
-    String notificationRef = "DRAFT.IMP.2026.abc123";
-    String redirectUrl = "https://frontend.example.com/documents";
+  @Nested
+  class Initiate {
 
-    DocumentUploadRequest request = new DocumentUploadRequest(
-        DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15), redirectUrl);
+    @Test
+    void initiate_shouldCallCdpUploaderAndSaveWithPendingStatus() {
+      // Given
+      String notificationRef = "DRAFT.IMP.2026.abc123";
+      String redirectUrl = "https://frontend.example.com/documents";
 
-    stubCdpConfig();
+      DocumentUploadRequest request = new DocumentUploadRequest(
+          DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15), redirectUrl);
 
-    CdpUploaderInitiateResponse uploaderResponse =
-        new CdpUploaderInitiateResponse("upload-id-001", "https://cdp-uploader/form/upload-id-001", "https://cdp-uploader/status/upload-id-001");
-    when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
-        .thenReturn(uploaderResponse);
+      stubCdpConfig();
 
-    AccompanyingDocument savedDoc = AccompanyingDocument.builder()
-        .uploadId("upload-id-001")
-        .scanStatus(ScanStatus.PENDING)
-        .build();
-    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
-        .thenReturn(savedDoc);
+      CdpUploaderInitiateResponse uploaderResponse =
+          new CdpUploaderInitiateResponse("upload-id-001", "https://cdp-uploader/form/upload-id-001", "https://cdp-uploader/status/upload-id-001");
+      when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
+          .thenReturn(uploaderResponse);
 
-    // When
-    DocumentUploadResponse response = documentService.initiate(notificationRef, request, redirectUrl);
+      AccompanyingDocument savedDoc = AccompanyingDocument.builder()
+          .uploadId("upload-id-001")
+          .scanStatus(ScanStatus.PENDING)
+          .build();
+      when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
+          .thenReturn(savedDoc);
 
-    // Then — assert on the response returned to the caller
-    assertThat(response).isNotNull();
-    assertThat(response.uploadId()).isEqualTo("upload-id-001");
-    assertThat(response.uploadUrl()).isEqualTo("https://cdp-uploader/form/upload-id-001");
+      // When
+      DocumentUploadResponse response = documentService.initiate(notificationRef, request, redirectUrl);
 
-    // Then — assert on the request sent to cdp-uploader: metadata.correlationId is present
-    ArgumentCaptor<CdpUploaderInitiateRequest> initiateCaptor =
-        ArgumentCaptor.forClass(CdpUploaderInitiateRequest.class);
-    verify(cdpUploaderClient).initiate(initiateCaptor.capture());
-    String metadataCorrelationId = initiateCaptor.getValue().metadata().get("correlationId");
-    assertThat(metadataCorrelationId).isNotBlank();
+      // Then — assert on the response returned to the caller
+      assertThat(response).isNotNull();
+      assertThat(response.uploadId()).isEqualTo("upload-id-001");
+      assertThat(response.uploadUrl()).isEqualTo("https://cdp-uploader/form/upload-id-001");
 
-    // Then — assert on the entity persisted to the repository
-    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
-    verify(accompanyingDocumentRepository).save(captor.capture());
-    AccompanyingDocument saved = captor.getValue();
-    assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.PENDING);
-    assertThat(saved.getNotificationReferenceNumber()).isEqualTo(notificationRef);
-    Instant expectedDateOfIssue = LocalDate.of(2026, 1, 15).atStartOfDay(ZoneOffset.UTC).toInstant();
-    assertThat(saved.getDateOfIssue()).isEqualTo(expectedDateOfIssue);
+      // Then — assert on the request sent to cdp-uploader: metadata.correlationId is present
+      ArgumentCaptor<CdpUploaderInitiateRequest> initiateCaptor =
+          ArgumentCaptor.forClass(CdpUploaderInitiateRequest.class);
+      verify(cdpUploaderClient).initiate(initiateCaptor.capture());
+      String metadataCorrelationId = initiateCaptor.getValue().metadata().get("correlationId");
+      assertThat(metadataCorrelationId).isNotBlank();
 
-    // Then — the same correlationId is on the saved doc and is a valid UUID
-    assertThat(saved.getCorrelationId()).isEqualTo(metadataCorrelationId);
-    assertThat(java.util.UUID.fromString(saved.getCorrelationId())).isNotNull();
-  }
+      // Then — assert on the entity persisted to the repository
+      ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
+      verify(accompanyingDocumentRepository).save(captor.capture());
+      AccompanyingDocument saved = captor.getValue();
+      assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.PENDING);
+      assertThat(saved.getNotificationReferenceNumber()).isEqualTo(notificationRef);
+      Instant expectedDateOfIssue = LocalDate.of(2026, 1, 15).atStartOfDay(ZoneOffset.UTC).toInstant();
+      assertThat(saved.getDateOfIssue()).isEqualTo(expectedDateOfIssue);
 
-  // ─── handleScanResult ────────────────────────────────────────────────────────
-  // Status transitions and file list population are covered end-to-end in DocumentIT
-  // (real MongoDB, real HTTP). Unit tests here only cover error paths and resolution
-  // semantics that the IT tests cannot exercise cheaply.
+      // Then — the same correlationId is on the saved doc and is a valid UUID
+      assertThat(saved.getCorrelationId()).isEqualTo(metadataCorrelationId);
+      assertThat(java.util.UUID.fromString(saved.getCorrelationId())).isNotNull();
+    }
 
-  @Test
-  void handleScanResult_shouldThrowBadRequest_whenCorrelationIdMissing() {
-    // Given — payload metadata has no correlationId entry
-    CdpScanResultForm form = new CdpScanResultForm();
-    CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
+    @Test
+    void initiate_shouldThrowConflictException_whenSaveThrowsDuplicateKeyException() {
+      // Given — production code catches DuplicateKeyException and re-throws ConflictException (→ 409)
+      String notificationRef = "DRAFT.IMP.2026.concurrent";
+      String redirectUrl = null;
 
-    // When / Then
-    assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
-        .isInstanceOf(BadRequestException.class)
-        .hasMessageContaining("correlationId");
+      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", null, null);
 
-    verify(accompanyingDocumentRepository, never()).save(any());
-  }
+      stubCdpConfig();
 
-  @Test
-  void handleScanResult_shouldThrowBadRequest_whenCorrelationIdBlank() {
-    // Given — correlationId is present but blank (whitespace only)
-    CdpScanResultForm form = new CdpScanResultForm();
-    CdpScanResultPayload payload = new CdpScanResultPayload(
-        "ready", Map.of("correlationId", "   "), form, 0);
+      CdpUploaderInitiateResponse uploaderResponse =
+          new CdpUploaderInitiateResponse("upload-id-dup",
+              "https://cdp-uploader/form/upload-id-dup",
+              "https://cdp-uploader/status/upload-id-dup");
+      when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
+          .thenReturn(uploaderResponse);
 
-    // When / Then
-    assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
-        .isInstanceOf(BadRequestException.class)
-        .hasMessageContaining("correlationId");
+      when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
+          .thenThrow(new DuplicateKeyException("duplicate key: uploadId"));
 
-    verify(accompanyingDocumentRepository, never()).save(any());
-  }
-
-  @Test
-  void handleScanResult_shouldThrowNotFound_whenCorrelationIdUnknown() {
-    // Given — correlationId is present but no document matches
-    String correlationId = "unknown-correlation-id";
-    when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
-        .thenReturn(Optional.empty());
-
-    CdpScanResultForm form = new CdpScanResultForm();
-    CdpScanResultPayload payload = new CdpScanResultPayload(
-        "ready", Map.of("correlationId", correlationId), form, 0);
-
-    // When / Then
-    assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
-        .isInstanceOf(NotFoundException.class)
-        .hasMessageContaining(correlationId);
-
-    verify(accompanyingDocumentRepository, never()).save(any());
-  }
-
-  @Test
-  void handleScanResult_shouldSetStatusToRejected_whenNumberOfRejectedFilesIsNull() {
-    // Given — null numberOfRejectedFiles must fail-closed to REJECTED (not silently COMPLETE)
-    String correlationId = "corr-null-rejected";
-
-    AccompanyingDocument document = AccompanyingDocument.builder()
-        .uploadId("upload-id-null-rejected")
-        .correlationId(correlationId)
-        .scanStatus(ScanStatus.PENDING)
-        .files(new ArrayList<>())
-        .build();
-    when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
-        .thenReturn(Optional.of(document));
-
-    CdpScanResultForm form = new CdpScanResultForm();
-    CdpScanResultPayload payload = new CdpScanResultPayload(
-        "ready", Map.of("correlationId", correlationId), form, null);
-
-    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
-
-    // When
-    documentService.handleScanResult("pending", payload);
-
-    // Then — fail-closed: null count → REJECTED, never COMPLETE
-    verify(accompanyingDocumentRepository).save(captor.capture());
-    assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.REJECTED);
+      // When / Then
+      assertThatThrownBy(() -> documentService.initiate(notificationRef, request, redirectUrl))
+          .isInstanceOf(ConflictException.class)
+          .hasMessageContaining("upload-id-dup");
+    }
   }
 
   /**
-   * Headline regression guard for the multi-PENDING ambiguity that motivated correlationId.
-   *
-   * <p>Two PENDING documents share the same notification reference (legal — a user can start a
-   * second upload before the first leaves PENDING). A scan callback arrives for one. With the
-   * old {@code findFirst(notificationRef, PENDING)} resolver this was non-deterministic and could
-   * silently update the wrong record. With correlationId routing, only the targeted document
-   * transitions; the sibling stays PENDING with empty {@code files}.
+   * Status transitions and file list population are covered end-to-end in {@code DocumentIT}
+   * (real MongoDB, real HTTP). Unit tests here only cover error paths and resolution semantics
+   * that the IT tests cannot exercise cheaply.
    */
-  @Test
-  void handleScanResult_updatesOnlyMatchingDocument_whenMultiplePendingForSameRef() {
-    // Given — two PENDING docs for the same notification ref, each with a distinct correlationId
-    String notificationRef = "DRAFT.IMP.2026.MULTI";
-    String targetCorrelationId = "corr-target";
-    String siblingCorrelationId = "corr-sibling";
+  @Nested
+  class HandleScanResult {
 
-    AccompanyingDocument target = AccompanyingDocument.builder()
-        .uploadId("upload-target")
-        .correlationId(targetCorrelationId)
-        .notificationReferenceNumber(notificationRef)
-        .scanStatus(ScanStatus.PENDING)
-        .files(new ArrayList<>())
-        .build();
-    AccompanyingDocument sibling = AccompanyingDocument.builder()
-        .uploadId("upload-sibling")
-        .correlationId(siblingCorrelationId)
-        .notificationReferenceNumber(notificationRef)
-        .scanStatus(ScanStatus.PENDING)
-        .files(new ArrayList<>())
-        .build();
+    @Test
+    void handleScanResult_shouldThrowBadRequest_whenCorrelationIdMissing() {
+      // Given — payload metadata has no correlationId entry
+      CdpScanResultForm form = new CdpScanResultForm();
+      CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
 
-    when(accompanyingDocumentRepository.findByCorrelationId(targetCorrelationId))
-        .thenReturn(Optional.of(target));
+      // When / Then
+      assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("correlationId");
 
-    CdpScanResultForm form = new CdpScanResultForm();
-    CdpScanResultPayload payload = new CdpScanResultPayload(
-        "ready",
-        Map.of("notificationReferenceNumber", notificationRef,
-               "correlationId", targetCorrelationId),
-        form,
-        0);
+      verify(accompanyingDocumentRepository, never()).save(any());
+    }
 
-    // When — fire callback for the target only
-    documentService.handleScanResult("pending", payload);
+    @Test
+    void handleScanResult_shouldThrowBadRequest_whenCorrelationIdBlank() {
+      // Given — correlationId is present but blank (whitespace only)
+      CdpScanResultForm form = new CdpScanResultForm();
+      CdpScanResultPayload payload = new CdpScanResultPayload(
+          "ready", Map.of("correlationId", "   "), form, 0);
 
-    // Then — only the target is saved, transitioning to COMPLETE
-    ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
-    verify(accompanyingDocumentRepository).save(captor.capture());
-    AccompanyingDocument saved = captor.getValue();
-    assertThat(saved.getCorrelationId()).isEqualTo(targetCorrelationId);
-    assertThat(saved.getUploadId()).isEqualTo("upload-target");
-    assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+      // When / Then
+      assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("correlationId");
 
-    // And — the sibling was never looked up nor saved; its in-memory state is unchanged
-    verify(accompanyingDocumentRepository, never()).findByCorrelationId(siblingCorrelationId);
-    assertThat(sibling.getScanStatus()).isEqualTo(ScanStatus.PENDING);
-    assertThat(sibling.getFiles()).isEmpty();
+      verify(accompanyingDocumentRepository, never()).save(any());
+    }
+
+    @Test
+    void handleScanResult_shouldThrowNotFound_whenCorrelationIdUnknown() {
+      // Given — correlationId is present but no document matches
+      String correlationId = "unknown-correlation-id";
+      when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
+          .thenReturn(Optional.empty());
+
+      CdpScanResultForm form = new CdpScanResultForm();
+      CdpScanResultPayload payload = new CdpScanResultPayload(
+          "ready", Map.of("correlationId", correlationId), form, 0);
+
+      // When / Then
+      assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
+          .isInstanceOf(NotFoundException.class)
+          .hasMessageContaining(correlationId);
+
+      verify(accompanyingDocumentRepository, never()).save(any());
+    }
+
+    @Test
+    void handleScanResult_shouldSetStatusToRejected_whenNumberOfRejectedFilesIsNull() {
+      // Given — null numberOfRejectedFiles must fail-closed to REJECTED (not silently COMPLETE)
+      String correlationId = "corr-null-rejected";
+
+      AccompanyingDocument document = AccompanyingDocument.builder()
+          .uploadId("upload-id-null-rejected")
+          .correlationId(correlationId)
+          .scanStatus(ScanStatus.PENDING)
+          .files(new ArrayList<>())
+          .build();
+      when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
+          .thenReturn(Optional.of(document));
+
+      CdpScanResultForm form = new CdpScanResultForm();
+      CdpScanResultPayload payload = new CdpScanResultPayload(
+          "ready", Map.of("correlationId", correlationId), form, null);
+
+      ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
+
+      // When
+      documentService.handleScanResult("pending", payload);
+
+      // Then — fail-closed: null count → REJECTED, never COMPLETE
+      verify(accompanyingDocumentRepository).save(captor.capture());
+      assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.REJECTED);
+    }
+
+    /**
+     * Headline regression guard for the multi-PENDING ambiguity that motivated correlationId.
+     *
+     * <p>Two PENDING documents share the same notification reference (legal — a user can start a
+     * second upload before the first leaves PENDING). A scan callback arrives for one. With the
+     * old {@code findFirst(notificationRef, PENDING)} resolver this was non-deterministic and could
+     * silently update the wrong record. With correlationId routing, only the targeted document
+     * transitions; the sibling stays PENDING with empty {@code files}.
+     */
+    @Test
+    void handleScanResult_updatesOnlyMatchingDocument_whenMultiplePendingForSameRef() {
+      // Given — two PENDING docs for the same notification ref, each with a distinct correlationId
+      String notificationRef = "DRAFT.IMP.2026.MULTI";
+      String targetCorrelationId = "corr-target";
+      String siblingCorrelationId = "corr-sibling";
+
+      AccompanyingDocument target = AccompanyingDocument.builder()
+          .uploadId("upload-target")
+          .correlationId(targetCorrelationId)
+          .notificationReferenceNumber(notificationRef)
+          .scanStatus(ScanStatus.PENDING)
+          .files(new ArrayList<>())
+          .build();
+      AccompanyingDocument sibling = AccompanyingDocument.builder()
+          .uploadId("upload-sibling")
+          .correlationId(siblingCorrelationId)
+          .notificationReferenceNumber(notificationRef)
+          .scanStatus(ScanStatus.PENDING)
+          .files(new ArrayList<>())
+          .build();
+
+      when(accompanyingDocumentRepository.findByCorrelationId(targetCorrelationId))
+          .thenReturn(Optional.of(target));
+
+      CdpScanResultForm form = new CdpScanResultForm();
+      CdpScanResultPayload payload = new CdpScanResultPayload(
+          "ready",
+          Map.of("notificationReferenceNumber", notificationRef,
+                 "correlationId", targetCorrelationId),
+          form,
+          0);
+
+      // When — fire callback for the target only
+      documentService.handleScanResult("pending", payload);
+
+      // Then — only the target is saved, transitioning to COMPLETE
+      ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
+      verify(accompanyingDocumentRepository).save(captor.capture());
+      AccompanyingDocument saved = captor.getValue();
+      assertThat(saved.getCorrelationId()).isEqualTo(targetCorrelationId);
+      assertThat(saved.getUploadId()).isEqualTo("upload-target");
+      assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+
+      // And — the sibling was never looked up nor saved; its in-memory state is unchanged
+      verify(accompanyingDocumentRepository, never()).findByCorrelationId(siblingCorrelationId);
+      assertThat(sibling.getScanStatus()).isEqualTo(ScanStatus.PENDING);
+      assertThat(sibling.getFiles()).isEmpty();
+    }
   }
 
-  // ─── initiate — DuplicateKeyException → ConflictException (409) ────────────
+  @Nested
+  class DeleteForNotificationRefs {
 
-  @Test
-  void initiate_shouldThrowConflictException_whenSaveThrowsDuplicateKeyException() {
-    // Given — production code catches DuplicateKeyException and re-throws ConflictException (→ 409)
-    String notificationRef = "DRAFT.IMP.2026.concurrent";
-    String redirectUrl = null;
+    @Test
+    void deleteForNotificationRefs_shouldDeleteAllDocumentsForGivenRefs() {
+      // Given
+      List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111", "DRAFT.IMP.2026.222");
 
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", null, null);
+      // When
+      documentService.deleteForNotificationRefs(referenceNumbers);
 
-    stubCdpConfig();
+      // Then
+      verify(accompanyingDocumentRepository).deleteAllByNotificationReferenceNumberIn(referenceNumbers);
+    }
 
-    CdpUploaderInitiateResponse uploaderResponse =
-        new CdpUploaderInitiateResponse("upload-id-dup",
-            "https://cdp-uploader/form/upload-id-dup",
-            "https://cdp-uploader/status/upload-id-dup");
-    when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
-        .thenReturn(uploaderResponse);
-
-    when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
-        .thenThrow(new DuplicateKeyException("duplicate key: uploadId"));
-
-    // When / Then
-    assertThatThrownBy(() -> documentService.initiate(notificationRef, request, redirectUrl))
-        .isInstanceOf(ConflictException.class)
-        .hasMessageContaining("upload-id-dup");
+    @Test
+    void deleteForNotificationRefs_shouldThrowNullPointerException_whenReferenceNumbersIsNull() {
+      // When / Then
+      assertThatThrownBy(() -> documentService.deleteForNotificationRefs(null))
+          .isInstanceOf(NullPointerException.class)
+          .hasMessageContaining("referenceNumbers must not be null");
+    }
   }
 
-  // ─── deleteForNotificationRefs ───────────────────────────────────────────────
+  @Nested
+  class FindFile {
 
-  @Test
-  void deleteForNotificationRefs_shouldDeleteAllDocumentsForGivenRefs() {
-    // Given
-    List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111", "DRAFT.IMP.2026.222");
+    @Test
+    void findFile_shouldThrowNotFoundException_whenNoFilesPresent() {
+      // Given
+      String uploadId = "upload-id-004";
 
-    // When
-    documentService.deleteForNotificationRefs(referenceNumbers);
+      AccompanyingDocument document = AccompanyingDocument.builder()
+          .uploadId(uploadId)
+          .files(Collections.emptyList())
+          .build();
+      when(accompanyingDocumentRepository.findByUploadId(uploadId))
+          .thenReturn(Optional.of(document));
 
-    // Then
-    verify(accompanyingDocumentRepository).deleteAllByNotificationReferenceNumberIn(referenceNumbers);
-  }
+      // When / Then
+      assertThatThrownBy(() -> documentService.findFile(uploadId))
+          .isInstanceOf(NotFoundException.class)
+          .hasMessageContaining(uploadId);
+    }
 
-  @Test
-  void deleteForNotificationRefs_shouldThrowNullPointerException_whenReferenceNumbersIsNull() {
-    // When / Then
-    assertThatThrownBy(() -> documentService.deleteForNotificationRefs(null))
-        .isInstanceOf(NullPointerException.class)
-        .hasMessageContaining("referenceNumbers must not be null");
-  }
+    @Test
+    void findFile_shouldThrowNotFoundException_whenFileIsRejected() {
+      // Given — a file whose s3Key is null indicates it was rejected by the virus scanner
+      String uploadId = "upload-id-rejected";
 
-  // ─── findFile ────────────────────────────────────────────────────────────────
+      UploadedFile rejectedFile = new UploadedFile(
+          "document.pdf",
+          "application/pdf",
+          1024L,
+          null, // s3Key is null for rejected files
+          "documents-bucket",
+          FileStatus.REJECTED,
+          null,
+          null,
+          true,
+          "File rejected by virus scanner");
 
-  @Test
-  void findFile_shouldThrowNotFoundException_whenNoFilesPresent() {
-    // Given
-    String uploadId = "upload-id-004";
+      AccompanyingDocument document = AccompanyingDocument.builder()
+          .uploadId(uploadId)
+          .files(List.of(rejectedFile))
+          .build();
+      when(accompanyingDocumentRepository.findByUploadId(uploadId))
+          .thenReturn(Optional.of(document));
 
-    AccompanyingDocument document = AccompanyingDocument.builder()
-        .uploadId(uploadId)
-        .files(Collections.emptyList())
-        .build();
-    when(accompanyingDocumentRepository.findByUploadId(uploadId))
-        .thenReturn(Optional.of(document));
-
-    // When / Then
-    assertThatThrownBy(() -> documentService.findFile(uploadId))
-        .isInstanceOf(NotFoundException.class)
-        .hasMessageContaining(uploadId);
-  }
-
-  @Test
-  void findFile_shouldThrowNotFoundException_whenFileIsRejected() {
-    // Given — a file whose s3Key is null indicates it was rejected by the virus scanner
-    String uploadId = "upload-id-rejected";
-
-    UploadedFile rejectedFile = new UploadedFile(
-        "document.pdf",
-        "application/pdf",
-        1024L,
-        null, // s3Key is null for rejected files
-        "documents-bucket",
-        FileStatus.REJECTED,
-        null,
-        null,
-        true,
-        "File rejected by virus scanner");
-
-    AccompanyingDocument document = AccompanyingDocument.builder()
-        .uploadId(uploadId)
-        .files(List.of(rejectedFile))
-        .build();
-    when(accompanyingDocumentRepository.findByUploadId(uploadId))
-        .thenReturn(Optional.of(document));
-
-    // When / Then
-    assertThatThrownBy(() -> documentService.findFile(uploadId))
-        .isInstanceOf(NotFoundException.class)
-        .hasMessageContaining(uploadId);
+      // When / Then
+      assertThatThrownBy(() -> documentService.findFile(uploadId))
+          .isInstanceOf(NotFoundException.class)
+          .hasMessageContaining(uploadId);
+    }
   }
 }
