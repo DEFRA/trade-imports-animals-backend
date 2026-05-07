@@ -97,25 +97,26 @@ class AccompanyingDocumentTest {
   class FileStatusJsonSerialisation {
 
     @Test
-    void fileStatus_complete_serialisesToLowercaseString() throws JsonProcessingException {
+    void fileStatus_complete_serialisesToUppercaseString() throws JsonProcessingException {
       String json = objectMapper.writeValueAsString(FileStatus.COMPLETE);
-      assertThat(json).isEqualTo("\"complete\"");
+      assertThat(json).isEqualTo("\"COMPLETE\"");
     }
 
     @Test
-    void fileStatus_rejected_serialisesToLowercaseString() throws JsonProcessingException {
+    void fileStatus_rejected_serialisesToUppercaseString() throws JsonProcessingException {
       String json = objectMapper.writeValueAsString(FileStatus.REJECTED);
-      assertThat(json).isEqualTo("\"rejected\"");
+      assertThat(json).isEqualTo("\"REJECTED\"");
     }
 
+    // cdp-uploader sends lowercase; @JsonAlias on the enum is what makes that round-trip.
     @Test
-    void fileStatus_complete_deserialisesFromLowercaseString() throws JsonProcessingException {
+    void fileStatus_complete_deserialisesFromLowercaseAlias() throws JsonProcessingException {
       FileStatus status = objectMapper.readValue("\"complete\"", FileStatus.class);
       assertThat(status).isEqualTo(FileStatus.COMPLETE);
     }
 
     @Test
-    void fileStatus_rejected_deserialisesFromLowercaseString() throws JsonProcessingException {
+    void fileStatus_rejected_deserialisesFromLowercaseAlias() throws JsonProcessingException {
       FileStatus status = objectMapper.readValue("\"rejected\"", FileStatus.class);
       assertThat(status).isEqualTo(FileStatus.REJECTED);
     }
