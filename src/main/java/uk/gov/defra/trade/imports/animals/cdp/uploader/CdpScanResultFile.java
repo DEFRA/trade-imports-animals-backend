@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.accompanyingdocument.upload;
+package uk.gov.defra.trade.imports.animals.cdp.uploader;
 
 import jakarta.annotation.Nullable;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;

@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.cdp;
+package uk.gov.defra.trade.imports.animals.cdp.uploader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,8 +31,8 @@ import org.springframework.web.client.RestClient.RequestBodySpec;
 import org.springframework.web.client.RestClient.RequestBodyUriSpec;
 import org.springframework.web.client.RestClient.ResponseSpec;
 import org.springframework.web.client.RestClient.ResponseSpec.ErrorHandler;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpUploaderInitiateRequest;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpUploaderInitiateResponse;
+import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateRequest;
+import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
 
 @ExtendWith(MockitoExtension.class)
