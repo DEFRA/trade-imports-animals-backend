@@ -66,12 +66,11 @@ public class CdpUploaderClient {
                     "cdp-uploader returned an error response: HTTP " + statusCode);
               })
           .body(CdpUploaderInitiateResponse.class);
-    } catch (ServiceUnavailableException e) {
-      // Already wrapped by the onStatus handler — rethrow unchanged.
-      throw e;
     } catch (RestClientException e) {
-      // Transport-level failure (connection refused, timeout, DNS, etc.). Wrap so callers
-      // see a single exception type for both upstream HTTP errors and unreachability.
+      // Transport-level failure (connection refused, timeout, DNS, etc.) — distinct from
+      // a non-2xx HTTP response, which the onStatus handler above turns into
+      // ServiceUnavailableException directly. ServiceUnavailableException doesn't extend
+      // RestClientException, so it propagates around this catch and isn't re-wrapped.
       log.error("cdp-uploader request failed at transport level", e);
       throw new ServiceUnavailableException("cdp-uploader is unreachable: " + e.getMessage(), e);
     }
