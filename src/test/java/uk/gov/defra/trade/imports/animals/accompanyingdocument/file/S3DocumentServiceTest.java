@@ -12,6 +12,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,6 @@ import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
-import uk.gov.defra.trade.imports.animals.exceptions.TradeImportsAnimalsBackendException;
 
 @ExtendWith(MockitoExtension.class)
 class S3DocumentServiceTest {
@@ -77,8 +77,8 @@ class S3DocumentServiceTest {
   }
 
   @Test
-  void streamToOutput_shouldThrowWrappedException_whenS3ExceptionThrown() {
-    // Given
+  void streamToOutput_shouldLetS3ExceptionBubble_whenS3RejectsRequest() {
+    // S3Exception is a RuntimeException — we don't catch it; GlobalExceptionHandler does.
     String s3Key = "upload-id-002/file-id-002";
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
@@ -96,15 +96,12 @@ class S3DocumentServiceTest {
 
     when(s3Client.getObject(any(GetObjectRequest.class))).thenThrow(s3Exception);
 
-    // When / Then
     assertThatThrownBy(() -> s3DocumentService.streamToOutput(s3Key, outputStream))
-        .isInstanceOf(TradeImportsAnimalsBackendException.class)
-        .hasMessageContaining("Failed to stream document from S3");
+        .isSameAs(s3Exception);
   }
 
   @Test
-  void streamToOutput_shouldThrowWrappedException_whenIOExceptionThrown() throws IOException {
-    // Given
+  void streamToOutput_shouldWrapIOExceptionAsUnchecked_whenTransferFails() throws IOException {
     String s3Key = "upload-id-003/file-id-003";
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
@@ -122,9 +119,8 @@ class S3DocumentServiceTest {
 
     when(s3Client.getObject(any(GetObjectRequest.class))).thenReturn(responseInputStream);
 
-    // When / Then
     assertThatThrownBy(() -> s3DocumentService.streamToOutput(s3Key, outputStream))
-        .isInstanceOf(TradeImportsAnimalsBackendException.class)
+        .isInstanceOf(UncheckedIOException.class)
         .hasMessageContaining("I/O error while streaming document from S3")
         .hasCauseInstanceOf(IOException.class);
   }

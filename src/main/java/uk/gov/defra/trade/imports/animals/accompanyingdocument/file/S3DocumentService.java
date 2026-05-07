@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument.file;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -10,15 +11,14 @@ import software.amazon.awssdk.core.ResponseInputStream;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectResponse;
-import software.amazon.awssdk.services.s3.model.S3Exception;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
-import uk.gov.defra.trade.imports.animals.exceptions.TradeImportsAnimalsBackendException;
 
 /**
  * Service responsible for streaming documents from S3 to a caller-supplied output stream.
  *
- * <p>Wraps the AWS SDK {@link S3Client} and maps SDK exceptions to
- * {@link TradeImportsAnimalsBackendException} so callers remain decoupled from the AWS SDK.
+ * <p>Lets AWS SDK exceptions ({@code S3Exception} and friends, all {@code RuntimeException}s)
+ * bubble up to {@code GlobalExceptionHandler}; the only thing we wrap here is the checked
+ * {@link IOException} from the underlying transfer, which becomes an {@link UncheckedIOException}.
  */
 @Service
 @Slf4j
@@ -34,7 +34,6 @@ public class S3DocumentService {
    *
    * @param s3Key        the S3 object key
    * @param outputStream the destination output stream; the caller is responsible for closing it
-   * @throws TradeImportsAnimalsBackendException if the S3 request fails or an I/O error occurs
    */
   public void streamToOutput(String s3Key, OutputStream outputStream) {
     Objects.requireNonNull(s3Key, "s3Key must not be null");
@@ -47,19 +46,8 @@ public class S3DocumentService {
 
     try (ResponseInputStream<GetObjectResponse> s3Object = s3Client.getObject(request)) {
       s3Object.transferTo(outputStream);
-    } catch (S3Exception ex) {
-      log.error(
-          "S3 error streaming key={} bucket={}: statusCode={} errorCode={} message={}",
-          s3Key,
-          bucket,
-          ex.statusCode(),
-          ex.awsErrorDetails().errorCode(),
-          ex.awsErrorDetails().errorMessage());
-      throw new TradeImportsAnimalsBackendException(
-          "Failed to stream document from S3: " + ex.awsErrorDetails().errorMessage());
     } catch (IOException ex) {
-      throw new TradeImportsAnimalsBackendException(
-          "I/O error while streaming document from S3: " + ex.getMessage(), ex);
+      throw new UncheckedIOException("I/O error while streaming document from S3", ex);
     }
   }
 }
