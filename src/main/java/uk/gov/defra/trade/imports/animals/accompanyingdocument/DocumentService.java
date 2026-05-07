@@ -188,12 +188,18 @@ public class DocumentService {
     return cdpConfig.backend().baseUrl() + "/document-uploads/pending/scan-results";
   }
 
+  /**
+   * Builds the metadata map for a cdp-uploader initiate request. {@code documentType} and
+   * {@code documentReference} are non-null per {@link DocumentUploadRequest}'s {@code @NotNull} /
+   * {@code @NotBlank} constraints (validated at the controller boundary), so no null-fallback is
+   * needed here.
+   */
   private static Map<String, String> buildMetadata(
       String notificationRef, DocumentUploadRequest request, String correlationId) {
     return Map.of(
         "notificationReferenceNumber", notificationRef,
-        "documentType", request.documentType() != null ? request.documentType().name() : "",
-        "documentReference", request.documentReference() != null ? request.documentReference() : "",
+        "documentType", request.documentType().name(),
+        "documentReference", request.documentReference(),
         "correlationId", correlationId);
   }
 

@@ -18,6 +18,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -27,7 +29,6 @@ import org.springframework.test.web.servlet.MockMvc;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.S3DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpScanResultFile;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpScanResultForm;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.upload.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
@@ -138,61 +139,28 @@ class DocumentControllerTest {
         .andExpect(jsonPath("$.errors.dateOfIssue").exists());
   }
 
-  @Test
-  void post_shouldReturn400_whenRedirectUrlIsOutsideFrontendBaseUrl() throws Exception {
-    // Given — redirectUrl points to an external host (open-redirect vector)
+  /**
+   * Each row pins a distinct branch in the open-redirect guard:
+   * <ul>
+   *   <li>external host — different scheme/host (open-redirect vector)</li>
+   *   <li>port omitted — http default 80 must not match configured 3000 (normalisePort branch)</li>
+   *   <li>malformed URI — URISyntaxException must reject, not pass-through</li>
+   *   <li>hostname-suffix — "localhost:3000.evil.com" starts with "localhost:3000" but resolves
+   *       to a different host; this is the bypass that motivated the origin comparison</li>
+   * </ul>
+   */
+  @ParameterizedTest(name = "[{index}] {1}")
+  @CsvSource(value = {
+      "https://evil.example.com/steal       | external host",
+      "http://localhost/upload-complete     | port omitted, default http port mismatches",
+      "http://[invalid                      | malformed URI",
+      "http://localhost:3000.evil.com/steal | hostname-suffix attack"
+  }, delimiter = '|')
+  void post_shouldReturn400_whenRedirectUrlIsRejected(String redirectUrl, String scenario) throws Exception {
     String body = """
-        {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"https://evil.example.com/steal"}
-        """;
+        {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"%s"}
+        """.formatted(redirectUrl.trim());
 
-    // When / Then
-    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isBadRequest());
-  }
-
-  @Test
-  void post_shouldReturn400_whenRedirectUrlOmitsPortAndDefaultDoesNotMatch() throws Exception {
-    // Given — redirectUrl omits the port (so it normalises to the http default 80) but the
-    // configured frontend base URL is on port 3000. Origin check must reject this even though
-    // the host strings match — exercises the http default-port branch in normalisePort.
-    String body = """
-        {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"http://localhost/upload-complete"}
-        """;
-
-    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isBadRequest());
-  }
-
-  @Test
-  void post_shouldReturn400_whenRedirectUrlIsMalformedAndCannotBeParsed() throws Exception {
-    // Given — redirectUrl contains characters illegal in a URI (unclosed bracket); the
-    // origin check should treat parse failures as a hostile/malformed input and reject.
-    String body = """
-        {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"http://[invalid"}
-        """;
-
-    // When / Then
-    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(body))
-        .andExpect(status().isBadRequest());
-  }
-
-  @Test
-  void post_shouldReturn400_whenRedirectUrlIsHostnameSuffixAttack() throws Exception {
-    // Given — redirectUrl host has the configured frontend hostname as a string prefix
-    // ("http://localhost:3000.evil.com" starts with "http://localhost:3000" but resolves to a
-    // different host). This is the bypass that motivated switching from startsWith to origin
-    // comparison.
-    String body = """
-        {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"http://localhost:3000.evil.com/steal"}
-        """;
-
-    // When / Then
     mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
