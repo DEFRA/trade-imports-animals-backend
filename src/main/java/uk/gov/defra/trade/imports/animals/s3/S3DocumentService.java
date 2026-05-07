@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.accompanyingdocument.file;
+package uk.gov.defra.trade.imports.animals.s3;
 
 import java.io.IOException;
 import java.io.OutputStream;

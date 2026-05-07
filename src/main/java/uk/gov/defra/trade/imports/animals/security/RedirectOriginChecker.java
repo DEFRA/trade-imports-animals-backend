@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.accompanyingdocument;
+package uk.gov.defra.trade.imports.animals.security;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -17,11 +17,11 @@ import java.util.Objects;
  * defaults (80 for http, 443 for https) so {@code "http://example.com"} and
  * {@code "http://example.com:80"} match.
  */
-final class RedirectOriginChecker {
+public final class RedirectOriginChecker {
 
   private RedirectOriginChecker() {}
 
-  static boolean matches(String candidateUrl, String expectedBaseUrl) {
+  public static boolean matches(String candidateUrl, String expectedBaseUrl) {
     try {
       URI candidate = new URI(candidateUrl);
       URI expected = new URI(expectedBaseUrl);

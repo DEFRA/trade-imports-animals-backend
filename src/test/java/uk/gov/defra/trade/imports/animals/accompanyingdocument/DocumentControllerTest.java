@@ -27,7 +27,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.S3DocumentService;
+import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultForm;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
