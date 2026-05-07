@@ -14,6 +14,8 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.InvalidMediaTypeException;
@@ -48,6 +50,7 @@ public class DocumentController {
   private final DocumentService documentService;
   private final S3DocumentService s3DocumentService;
   private final CdpConfig cdpConfig;
+  private final Environment environment;
 
   /**
    * Initiate a new document upload session for a notification.
@@ -206,6 +209,11 @@ public class DocumentController {
    * frontend base URL, falls back to the configured base URL when none was supplied, and
    * throws {@link BadRequestException} when the requested URL is on a different origin (open-
    * redirect prevention).
+   *
+   * <p>The origin check is skipped under the {@code local} Spring profile so that frontend and
+   * backend can be run independently in Docker or natively without having to keep
+   * {@code FRONTEND_BASE_URL} aligned across both processes' network views (e.g. {@code
+   * localhost} vs {@code host.docker.internal} vs the in-network service name).
    */
   private String resolveRedirectUrl(String ref, DocumentUploadRequest request) {
     String frontendBaseUrl = cdpConfig.frontend().baseUrl();
@@ -215,6 +223,11 @@ public class DocumentController {
       return frontendBaseUrl;
     }
     if (!RedirectOriginChecker.matches(requested, frontendBaseUrl)) {
+      if (environment.acceptsProfiles(Profiles.of("local"))) {
+        log.warn("POST /notifications/{}/document-uploads: redirectUrl '{}' not within frontend base URL '{}' — allowed because local profile is active",
+            ref, requested, frontendBaseUrl);
+        return requested;
+      }
       log.warn("POST /notifications/{}/document-uploads rejected: redirectUrl not within frontend base URL", ref);
       throw new BadRequestException("redirectUrl is not within the configured frontend base URL");
     }
