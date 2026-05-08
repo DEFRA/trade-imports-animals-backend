@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -20,6 +21,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -168,7 +170,17 @@ class DocumentControllerTest {
             .content(body))
         .andExpect(status().isCreated());
 
-    verify(documentService).initiate(eq(ref), any(DocumentUploadRequest.class));
+    // Pin the "silently ignore" half of the contract: the unknown redirectUrl field must be
+    // dropped during deserialisation, leaving only the 3 declared fields with their literal
+    // values. Asserting the captured request guards against a future jackson config tighten
+    // (e.g. fail-on-unknown-properties=true) silently regressing this behaviour.
+    ArgumentCaptor<DocumentUploadRequest> requestCaptor =
+        ArgumentCaptor.forClass(DocumentUploadRequest.class);
+    verify(documentService).initiate(eq(ref), requestCaptor.capture());
+    DocumentUploadRequest captured = requestCaptor.getValue();
+    assertThat(captured.documentType()).isEqualTo(DocumentType.ITAHC);
+    assertThat(captured.documentReference()).isEqualTo("UKGB2026001");
+    assertThat(captured.dateOfIssue()).isEqualTo(LocalDate.of(2026, 1, 15));
   }
 
   // ---------------------------------------------------------------------------
