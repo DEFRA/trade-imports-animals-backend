@@ -13,7 +13,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpEntity;
@@ -265,13 +264,10 @@ class DocumentIT extends IntegrationBase {
     @Autowired
     private AccompanyingDocumentRepository accompanyingDocumentRepository;
 
-    @LocalServerPort
-    int localServerPort;
-
     @BeforeEach
     void setUpDocuments() {
         accompanyingDocumentRepository.deleteAll();
-        assertThat(localServerPort).isEqualTo(BACKEND_PORT); // sanity: DEFINED_PORT honoured
+        assertThat(port).isEqualTo(BACKEND_PORT); // sanity: DEFINED_PORT honoured
     }
 
     // ---------------------------------------------------------------------------
