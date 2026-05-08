@@ -216,9 +216,6 @@ public class DocumentService {
       DocumentUploadRequest request,
       CdpUploaderInitiateResponse response,
       String correlationId) {
-    Instant dateOfIssueInstant = request.dateOfIssue() != null
-        ? request.dateOfIssue().atStartOfDay(ZoneOffset.UTC).toInstant()
-        : null;
     return AccompanyingDocument.builder()
         .notificationReferenceNumber(notificationRef)
         .uploadId(response.uploadId())
@@ -226,7 +223,7 @@ public class DocumentService {
         .uploadUrl(response.uploadUrl())
         .documentType(request.documentType())
         .documentReference(request.documentReference())
-        .dateOfIssue(dateOfIssueInstant)
+        .dateOfIssue(request.dateOfIssue().atStartOfDay(ZoneOffset.UTC).toInstant())
         .scanStatus(ScanStatus.PENDING)
         .files(new ArrayList<>())
         .build();

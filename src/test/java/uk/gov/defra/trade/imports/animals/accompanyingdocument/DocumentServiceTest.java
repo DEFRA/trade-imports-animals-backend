@@ -136,7 +136,7 @@ class DocumentServiceTest {
       // Given — production code catches DuplicateKeyException and re-throws ConflictException (→ 409)
       String notificationRef = "DRAFT.IMP.2026.concurrent";
 
-      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", null);
+      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
 
       stubCdpConfig();
 
