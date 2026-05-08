@@ -60,7 +60,7 @@ public class DocumentController {
       description = "Creates a new upload session via cdp-uploader and returns the upload URL")
   @ApiResponse(responseCode = "201", description = "Upload session created",
       content = @Content(schema = @Schema(implementation = DocumentUploadResponse.class)))
-  @ApiResponse(responseCode = "400", description = "Invalid request body", content = @Content)
+  @ApiResponse(responseCode = "400", description = "Validation error", content = @Content)
   @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
   @Timed("document.initiate")
   public ResponseEntity<DocumentUploadResponse> initiate(
