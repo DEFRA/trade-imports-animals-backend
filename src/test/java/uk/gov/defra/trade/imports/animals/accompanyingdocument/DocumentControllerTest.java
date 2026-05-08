@@ -27,6 +27,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
+import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultForm;
@@ -36,8 +37,7 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 
 @WebMvcTest(DocumentController.class)
 @TestPropertySource(properties = {
-    "cdp.tracing.header-name=x-cdp-request-id",
-    "cdp.backend.base-url=http://localhost:8085"
+    "cdp.tracing.header-name=x-cdp-request-id"
 })
 class DocumentControllerTest {
 
@@ -53,13 +53,22 @@ class DocumentControllerTest {
   @MockitoBean
   private S3DocumentService s3DocumentService;
 
+  @MockitoBean
+  private CdpConfig cdpConfig;
+
   // ---------------------------------------------------------------------------
   // POST /notifications/{ref}/document-uploads
   // ---------------------------------------------------------------------------
 
-  @Test
-  void post_shouldReturn201WithLocationHeader() throws Exception {
-    // Given
+  @ParameterizedTest
+  @CsvSource({"http://localhost:8085", "http://localhost:8085/"})
+  void post_shouldReturn201WithLocationHeader(String configuredBaseUrl) throws Exception {
+    // Given — configuredBaseUrl exercises both branches of the trailing-slash normalisation in
+    // DocumentController.buildLocationUri: with and without a trailing "/" the rendered Location
+    // header must be identical (no double slash).
+    CdpConfig.BackendConfig backendConfig = new CdpConfig.BackendConfig(configuredBaseUrl);
+    when(cdpConfig.backend()).thenReturn(backendConfig);
+
     String ref = "DRAFT.IMP.2026.00000001";
     DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
     DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "https://cdp-uploader.example/upload/abc");
@@ -142,6 +151,8 @@ class DocumentControllerTest {
   void post_shouldIgnoreUnknownFieldsLikeRedirectUrl() throws Exception {
     // Defensive: the redirectUrl payload field was dropped from the contract. Older callers may
     // still send it; the controller must accept the request and silently ignore the extra field.
+    when(cdpConfig.backend()).thenReturn(new CdpConfig.BackendConfig("http://localhost:8085"));
+
     String ref = "DRAFT.IMP.2026.00000001";
     String body = """
         {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"/anything"}
