@@ -6,6 +6,7 @@ import static org.awaitility.Awaitility.await;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
@@ -196,7 +197,7 @@ class DocumentIT extends IntegrationBase {
         localStackSqsClient.createQueue(CreateQueueRequest.builder().queueName(DOWNLOAD_REQUESTS_QUEUE).build());
         localStackSqsClient.createQueue(CreateQueueRequest.builder()
             .queueName(SCAN_RESULTS_CALLBACK_QUEUE)
-            .attributes(java.util.Map.of(
+            .attributes(Map.of(
                 QueueAttributeName.FIFO_QUEUE, "true",
                 QueueAttributeName.CONTENT_BASED_DEDUPLICATION, "true"))
             .build());
