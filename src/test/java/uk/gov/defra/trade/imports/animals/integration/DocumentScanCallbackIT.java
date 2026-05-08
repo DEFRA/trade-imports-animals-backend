@@ -3,6 +3,8 @@ package uk.gov.defra.trade.imports.animals.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +13,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 
@@ -263,17 +266,17 @@ class DocumentScanCallbackIT extends IntegrationBase {
      * — the minimum state needed to drive the scan-callback handler against this seed.
      */
     private AccompanyingDocument persistPendingDocument() {
-        String correlationId = java.util.UUID.randomUUID().toString();
-        String uploadId = java.util.UUID.randomUUID().toString();
+        String correlationId = UUID.randomUUID().toString();
+        String uploadId = UUID.randomUUID().toString();
         AccompanyingDocument doc = AccompanyingDocument.builder()
             .notificationReferenceNumber(NOTIFICATION_REF)
             .uploadId(uploadId)
             .correlationId(correlationId)
             .uploadUrl("http://stub/upload/" + uploadId)
-            .documentType(uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType.ITAHC)
+            .documentType(DocumentType.ITAHC)
             .documentReference("UKGB2026001234")
             .scanStatus(ScanStatus.PENDING)
-            .files(new java.util.ArrayList<>())
+            .files(new ArrayList<>())
             .build();
         return accompanyingDocumentRepository.save(doc);
     }
