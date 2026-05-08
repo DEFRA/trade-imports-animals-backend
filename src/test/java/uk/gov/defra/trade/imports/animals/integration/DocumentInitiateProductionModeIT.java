@@ -27,7 +27,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentUploadRes
 @Slf4j
 class DocumentInitiateProductionModeIT extends IntegrationBase {
 
-    private static final String NOTIFICATION_REF = "DRAFT.IMP.2025.PROD-IT001";
+    private static final String NOTIFICATION_REF = "DRAFT.IMP.2026.PROD-IT001";
 
     private static final Network CONTAINER_NETWORK = Network.newNetwork();
 
