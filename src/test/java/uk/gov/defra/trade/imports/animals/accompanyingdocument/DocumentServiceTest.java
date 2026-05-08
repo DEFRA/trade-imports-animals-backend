@@ -115,6 +115,7 @@ class DocumentServiceTest {
       verify(cdpUploaderClient).initiate(initiateCaptor.capture());
       String metadataCorrelationId = initiateCaptor.getValue().metadata().get("correlationId");
       assertThat(metadataCorrelationId).isNotBlank();
+      assertThat(initiateCaptor.getValue().redirect()).isEqualTo("/");
 
       // Then — assert on the entity persisted to the repository
       ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
