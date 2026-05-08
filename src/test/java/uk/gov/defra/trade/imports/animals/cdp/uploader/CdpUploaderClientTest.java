@@ -69,14 +69,7 @@ class CdpUploaderClientTest {
     @Test
     void initiate_shouldReturnResponseFromCdpUploader_whenRequestSucceeds() {
       // Given
-      CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-          "/redirect",
-          "https://backend/callback",
-          "my-bucket",
-          "DRAFT.IMP.2026.abc",
-          20971520L,
-          List.of("application/pdf"),
-          null);
+      CdpUploaderInitiateRequest request = sampleRequest();
 
       CdpUploaderInitiateResponse expected =
           new CdpUploaderInitiateResponse(
@@ -102,14 +95,7 @@ class CdpUploaderClientTest {
     @Test
     void initiate_shouldThrowServiceUnavailableException_whenCdpUploaderReturns503() {
       // Given — simulate the onStatus handler executing for a 503 response
-      CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-          "/redirect",
-          "https://backend/callback",
-          "my-bucket",
-          "DRAFT.IMP.2026.abc",
-          20971520L,
-          List.of("application/pdf"),
-          null);
+      CdpUploaderInitiateRequest request = sampleRequest();
 
       // Stub onStatus so the helper invokes the registered error handler against a synthetic
       // 503 response, which is what triggers ServiceUnavailableException in the real client.
@@ -125,14 +111,7 @@ class CdpUploaderClientTest {
     @Test
     void initiate_shouldThrowServiceUnavailableException_whenCdpUploaderReturns4xx() {
       // Given — simulate a 422 Unprocessable Entity from cdp-uploader
-      CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-          "/redirect",
-          "https://backend/callback",
-          "my-bucket",
-          "DRAFT.IMP.2026.abc",
-          20971520L,
-          List.of("application/pdf"),
-          null);
+      CdpUploaderInitiateRequest request = sampleRequest();
 
       when(responseSpec.onStatus(any(), any())).thenAnswer(
           simulateErrorResponse(HttpStatus.UNPROCESSABLE_ENTITY, "{\"error\":\"invalid request\"}"));
@@ -149,14 +128,7 @@ class CdpUploaderClientTest {
       // RestClient's onStatus chain throw a ResourceAccessException (a RestClientException subtype).
       // This mirrors what Spring's RestClient does when the underlying HTTP client cannot reach
       // the upstream service.
-      CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-          "/redirect",
-          "https://backend/callback",
-          "my-bucket",
-          "DRAFT.IMP.2026.abc",
-          20971520L,
-          List.of("application/pdf"),
-          null);
+      CdpUploaderInitiateRequest request = sampleRequest();
 
       ResourceAccessException transportFailure =
           new ResourceAccessException("I/O error: Connection refused");
@@ -174,14 +146,7 @@ class CdpUploaderClientTest {
     @Test
     void initiate_onStatusPredicate_shouldMatchNon2xxOnly() {
       // Given — verify the predicate passed to onStatus correctly classifies status codes
-      CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-          "/redirect",
-          "https://backend/callback",
-          "my-bucket",
-          "DRAFT.IMP.2026.abc",
-          20971520L,
-          List.of("application/pdf"),
-          null);
+      CdpUploaderInitiateRequest request = sampleRequest();
 
       // Capture the predicate without triggering the handler
       AtomicReference<Predicate<HttpStatusCode>> capturedPredicate = new AtomicReference<>();
@@ -205,6 +170,17 @@ class CdpUploaderClientTest {
   }
 
   // Helpers
+
+  private static CdpUploaderInitiateRequest sampleRequest() {
+    return new CdpUploaderInitiateRequest(
+        "/redirect",
+        "https://backend/callback",
+        "my-bucket",
+        "DRAFT.IMP.2026.abc",
+        20971520L,
+        List.of("application/pdf"),
+        null);
+  }
 
   private org.mockito.stubbing.Answer<ResponseSpec> simulateErrorResponse(
       HttpStatus status, String body) {
