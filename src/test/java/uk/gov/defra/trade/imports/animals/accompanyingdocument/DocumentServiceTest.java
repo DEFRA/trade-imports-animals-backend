@@ -83,10 +83,9 @@ class DocumentServiceTest {
     void initiate_shouldCallCdpUploaderAndSaveWithPendingStatus() {
       // Given
       String notificationRef = "DRAFT.IMP.2026.abc123";
-      String redirectUrl = "https://frontend.example.com/documents";
 
       DocumentUploadRequest request = new DocumentUploadRequest(
-          DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15), redirectUrl);
+          DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
 
       stubCdpConfig();
 
@@ -103,7 +102,7 @@ class DocumentServiceTest {
           .thenReturn(savedDoc);
 
       // When
-      DocumentUploadResponse response = documentService.initiate(notificationRef, request, redirectUrl);
+      DocumentUploadResponse response = documentService.initiate(notificationRef, request);
 
       // Then — assert on the response returned to the caller
       assertThat(response).isNotNull();
@@ -135,9 +134,8 @@ class DocumentServiceTest {
     void initiate_shouldThrowConflictException_whenSaveThrowsDuplicateKeyException() {
       // Given — production code catches DuplicateKeyException and re-throws ConflictException (→ 409)
       String notificationRef = "DRAFT.IMP.2026.concurrent";
-      String redirectUrl = null;
 
-      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", null, null);
+      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", null);
 
       stubCdpConfig();
 
@@ -152,7 +150,7 @@ class DocumentServiceTest {
           .thenThrow(new DuplicateKeyException("duplicate key: uploadId"));
 
       // When / Then
-      assertThatThrownBy(() -> documentService.initiate(notificationRef, request, redirectUrl))
+      assertThatThrownBy(() -> documentService.initiate(notificationRef, request))
           .isInstanceOf(ConflictException.class)
           .hasMessageContaining("upload-id-dup");
     }

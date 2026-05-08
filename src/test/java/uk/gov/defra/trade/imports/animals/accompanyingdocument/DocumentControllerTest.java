@@ -37,8 +37,7 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 @WebMvcTest(DocumentController.class)
 @TestPropertySource(properties = {
     "cdp.tracing.header-name=x-cdp-request-id",
-    "cdp.backend.base-url=http://localhost:8085",
-    "cdp.frontend.base-url=http://localhost:3000"
+    "cdp.backend.base-url=http://localhost:8085"
 })
 class DocumentControllerTest {
 
@@ -62,10 +61,10 @@ class DocumentControllerTest {
   void post_shouldReturn201WithLocationHeader() throws Exception {
     // Given
     String ref = "DRAFT.IMP.2026.00000001";
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15), null);
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
     DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "https://cdp-uploader.example/upload/abc");
 
-    when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class), any(String.class)))
+    when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class)))
         .thenReturn(serviceResponse);
 
     // When / Then
@@ -139,73 +138,26 @@ class DocumentControllerTest {
         .andExpect(jsonPath("$.errors.dateOfIssue").exists());
   }
 
-  /**
-   * Each row pins a distinct branch in the open-redirect guard:
-   * <ul>
-   *   <li>external host — different scheme/host (open-redirect vector)</li>
-   *   <li>port omitted — http default 80 must not match configured 3000 (normalisePort branch)</li>
-   *   <li>malformed URI — URISyntaxException must reject, not pass-through</li>
-   *   <li>hostname-suffix — "localhost:3000.evil.com" starts with "localhost:3000" but resolves
-   *       to a different host; this is the bypass that motivated the origin comparison</li>
-   * </ul>
-   */
-  @ParameterizedTest(name = "[{index}] {1}")
-  @CsvSource(value = {
-      "https://evil.example.com/steal       | external host",
-      "http://localhost/upload-complete     | port omitted, default http port mismatches",
-      "http://[invalid                      | malformed URI",
-      "http://localhost:3000.evil.com/steal | hostname-suffix attack"
-  }, delimiter = '|')
-  void post_shouldReturn400_whenRedirectUrlIsRejected(String redirectUrl, String scenario) throws Exception {
+  @Test
+  void post_shouldIgnoreUnknownFieldsLikeRedirectUrl() throws Exception {
+    // Defensive: the redirectUrl payload field was dropped from the contract. Older callers may
+    // still send it; the controller must accept the request and silently ignore the extra field.
+    String ref = "DRAFT.IMP.2026.00000001";
     String body = """
-        {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"%s"}
-        """.formatted(redirectUrl.trim());
+        {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"/anything"}
+        """;
+    DocumentUploadResponse serviceResponse = new DocumentUploadResponse(
+        "upload-abc-123", "https://cdp-uploader.example/upload/abc");
 
-    mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+    when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class)))
+        .thenReturn(serviceResponse);
+
+    mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
             .contentType(MediaType.APPLICATION_JSON)
             .content(body))
-        .andExpect(status().isBadRequest());
-  }
-
-  @Test
-  void post_shouldReturn201_whenRedirectUrlIsWithinFrontendBaseUrl() throws Exception {
-    // Given — redirectUrl is under the configured frontend base URL
-    String ref = "DRAFT.IMP.2026.00000001";
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15), "http://localhost:3000/notifications/DRAFT.IMP.2026.00000001/upload-complete");
-    DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "https://cdp-uploader.example/upload/abc");
-
-    when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class), any(String.class)))
-        .thenReturn(serviceResponse);
-
-    // When / Then
-    mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(objectMapper.writeValueAsString(request)))
-        .andExpect(status().isCreated())
-        .andExpect(header().string("Location", "http://localhost:8085/document-uploads/upload-abc-123"))
-        .andExpect(jsonPath("$.uploadId").value("upload-abc-123"))
-        .andExpect(jsonPath("$.uploadUrl").value("https://cdp-uploader.example/upload/abc"));
-  }
-
-  @Test
-  void post_shouldFallBackToFrontendBaseUrl_whenRedirectUrlIsNull() throws Exception {
-    // Given — redirectUrl is absent; controller should pass cdpConfig.frontend().baseUrl() to the service
-    String ref = "DRAFT.IMP.2026.00000001";
-    String frontendBaseUrl = "http://localhost:3000";
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15), null);
-    DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "https://cdp-uploader.example/upload/abc");
-
-    when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class), eq(frontendBaseUrl)))
-        .thenReturn(serviceResponse);
-
-    // When
-    mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
-            .contentType(MediaType.APPLICATION_JSON)
-            .content(objectMapper.writeValueAsString(request)))
-        // Then
         .andExpect(status().isCreated());
 
-    verify(documentService).initiate(eq(ref), any(DocumentUploadRequest.class), eq(frontendBaseUrl));
+    verify(documentService).initiate(eq(ref), any(DocumentUploadRequest.class));
   }
 
   // ---------------------------------------------------------------------------

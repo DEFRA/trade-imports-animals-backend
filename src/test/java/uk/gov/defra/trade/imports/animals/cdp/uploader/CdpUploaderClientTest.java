@@ -70,7 +70,7 @@ class CdpUploaderClientTest {
     void initiate_shouldReturnResponseFromCdpUploader_whenRequestSucceeds() {
       // Given
       CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-          "https://frontend/redirect",
+          "/redirect",
           "https://backend/callback",
           "my-bucket",
           "DRAFT.IMP.2026.abc",
@@ -103,7 +103,7 @@ class CdpUploaderClientTest {
     void initiate_shouldThrowServiceUnavailableException_whenCdpUploaderReturns503() {
       // Given — simulate the onStatus handler executing for a 503 response
       CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-          "https://frontend/redirect",
+          "/redirect",
           "https://backend/callback",
           "my-bucket",
           "DRAFT.IMP.2026.abc",
@@ -126,7 +126,7 @@ class CdpUploaderClientTest {
     void initiate_shouldThrowServiceUnavailableException_whenCdpUploaderReturns4xx() {
       // Given — simulate a 422 Unprocessable Entity from cdp-uploader
       CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-          "https://frontend/redirect",
+          "/redirect",
           "https://backend/callback",
           "my-bucket",
           "DRAFT.IMP.2026.abc",
@@ -150,7 +150,7 @@ class CdpUploaderClientTest {
       // This mirrors what Spring's RestClient does when the underlying HTTP client cannot reach
       // the upstream service.
       CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-          "https://frontend/redirect",
+          "/redirect",
           "https://backend/callback",
           "my-bucket",
           "DRAFT.IMP.2026.abc",
@@ -175,7 +175,7 @@ class CdpUploaderClientTest {
     void initiate_onStatusPredicate_shouldMatchNon2xxOnly() {
       // Given — verify the predicate passed to onStatus correctly classifies status codes
       CdpUploaderInitiateRequest request = new CdpUploaderInitiateRequest(
-          "https://frontend/redirect",
+          "/redirect",
           "https://backend/callback",
           "my-bucket",
           "DRAFT.IMP.2026.abc",

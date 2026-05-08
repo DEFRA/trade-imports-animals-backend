@@ -130,10 +130,9 @@ services:
       CDP_UPLOADER_BASE_URL: http://cdp-uploader:7337
       CDP_DOCUMENTS_BUCKET: trade-imports-animals-documents
 
-      # This service's own URLs (no defaults in application.yml,
-      # so these must be set explicitly in every environment).
+      # This service's own URL (no default in application.yml, so must be set explicitly in
+      # every environment — used to construct the cdp-uploader scan-result callback URL).
       TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL}
-      TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL: ${TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL}
 
       # Logging
       LOG_LEVEL: DEBUG
