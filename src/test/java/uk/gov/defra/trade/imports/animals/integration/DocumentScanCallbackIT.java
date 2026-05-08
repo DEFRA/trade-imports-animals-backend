@@ -3,7 +3,6 @@ package uk.gov.defra.trade.imports.animals.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
-import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +22,6 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
  * <p>The end-to-end CLEAN/REJECTED happy paths live in {@link DocumentIT} and run against a real
  * cdp-uploader scan.
  */
-@Slf4j
 class DocumentScanCallbackIT extends IntegrationBase {
 
     private static final String NOTIFICATION_REF = "DRAFT.IMP.2025.IT-CB-001";
