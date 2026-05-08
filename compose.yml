@@ -132,8 +132,8 @@ services:
 
       # This service's own URLs (no defaults in application.yml,
       # so these must be set explicitly in every environment).
-      BACKEND_BASE_URL: ${BACKEND_BASE_URL}
-      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL}
+      TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL}
+      TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL: ${TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL}
 
       # Logging
       LOG_LEVEL: DEBUG

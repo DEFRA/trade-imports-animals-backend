@@ -34,16 +34,16 @@ they must be set in every environment (e.g. via a `.env` file or shell export)
 or `docker compose` will surface a missing-var warning and the service will
 fail fast at startup:
 
-- `BACKEND_BASE_URL` — externally reachable base URL for this service
+- `TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL` — externally reachable base URL for this service
   (typical local value: `http://host.docker.internal:8085`)
-- `FRONTEND_BASE_URL` — externally reachable base URL for the frontend
+- `TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL` — externally reachable base URL for the frontend
   (typical local value: `http://localhost:3000`)
 
 Example `.env`:
 
 ```
-BACKEND_BASE_URL=http://host.docker.internal:8085
-FRONTEND_BASE_URL=http://localhost:3000
+TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL=http://host.docker.internal:8085
+TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL=http://localhost:3000
 ```
 
 ### MongoDB
@@ -95,7 +95,7 @@ mvn test
 ### Running
 
 Run the application with the `local` Spring profile, which supplies development
-defaults for `BACKEND_BASE_URL` and `FRONTEND_BASE_URL`:
+defaults for `TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL` and `TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL`:
 
 ```bash
 mvn spring-boot:run -Dspring-boot.run.profiles=local
@@ -108,15 +108,15 @@ SPRING_PROFILES_ACTIVE=local mvn spring-boot:run
 ```
 
 Without the `local` profile the application reads `application.yml`, which
-resolves `BACKEND_BASE_URL` / `FRONTEND_BASE_URL` to empty strings if unset
+resolves `TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL` / `TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL` to empty strings if unset
 (deployed environments must set these explicitly). `CdpConfig` enforces
 `@NotBlank` on both, so startup fails fast with a binding/validation error
 (`Property: cdp.backend.baseUrl`, `Reason: must not be blank`). To run without
 the profile, export those vars manually first:
 
 ```bash
-export BACKEND_BASE_URL=http://host.docker.internal:8085
-export FRONTEND_BASE_URL=http://localhost:3000
+export TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL=http://host.docker.internal:8085
+export TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL=http://localhost:3000
 mvn spring-boot:run
 ```
 

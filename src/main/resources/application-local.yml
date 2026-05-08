@@ -4,7 +4,7 @@
 
 logging:
   level:
-    root: DEBUG
+    root: INFO
     uk.gov.defra.trade.imports.animals: DEBUG
     org.mongodb.driver: ${LOGGING_LEVEL_ORG_MONGODB_DRIVER:WARN}
     org.springframework: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK:INFO}
@@ -46,9 +46,9 @@ app:
 #   frontend.base-url — the user's browser is redirected here after upload, so
 #                       localhost is correct (the browser is on the host).
 # Kept out of application.yml so deployed environments fail fast if
-# BACKEND_BASE_URL / FRONTEND_BASE_URL are unset.
+# TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL / TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL are unset.
 cdp:
   backend:
-    base-url: ${BACKEND_BASE_URL:http://host.docker.internal:8085}
+    base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:http://host.docker.internal:8085}
   frontend:
-    base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+    base-url: ${TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL:http://localhost:3000}

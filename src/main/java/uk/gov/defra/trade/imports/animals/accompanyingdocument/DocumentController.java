@@ -212,7 +212,7 @@ public class DocumentController {
    *
    * <p>The origin check is skipped under the {@code local} Spring profile so that frontend and
    * backend can be run independently in Docker or natively without having to keep
-   * {@code FRONTEND_BASE_URL} aligned across both processes' network views (e.g. {@code
+   * {@code TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL} aligned across both processes' network views (e.g. {@code
    * localhost} vs {@code host.docker.internal} vs the in-network service name).
    */
   private String resolveRedirectUrl(String ref, DocumentUploadRequest request) {

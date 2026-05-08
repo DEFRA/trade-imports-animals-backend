@@ -25,7 +25,7 @@ import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
  *
  * <p>Currently exercises the {@code local} profile, which bypasses the redirectUrl origin check
  * so frontend and backend can run in different network contexts (Docker / native) without
- * having to keep {@code FRONTEND_BASE_URL} aligned across both.
+ * having to keep {@code TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL} aligned across both.
  */
 @WebMvcTest(DocumentController.class)
 @ActiveProfiles("local")
@@ -50,7 +50,7 @@ class DocumentControllerProfileTest {
    * local-profile bypass is total — not a localhost-only or hostname-only relaxation:
    * <ul>
    *   <li>different in-network host — the case that motivated the bypass (Docker frontend
-   *       reaches native backend with mismatched FRONTEND_BASE_URL)</li>
+   *       reaches native backend with mismatched TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL)</li>
    *   <li>external host — confirms the bypass is unconditional under local; the open-redirect
    *       guard intentionally does not run</li>
    *   <li>malformed URI — confirms even unparseable values pass through</li>
