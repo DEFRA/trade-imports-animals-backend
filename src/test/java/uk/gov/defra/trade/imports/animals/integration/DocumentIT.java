@@ -193,6 +193,7 @@ class DocumentIT extends IntegrationBase {
 
         localStackSqsClient.createQueue(CreateQueueRequest.builder().queueName(MOCK_CLAMAV_QUEUE).build());
         localStackSqsClient.createQueue(CreateQueueRequest.builder().queueName(SCAN_RESULTS_QUEUE).build());
+        // cdp-uploader expects this queue to exist on startup; not consumed by these tests.
         localStackSqsClient.createQueue(CreateQueueRequest.builder().queueName(DOWNLOAD_REQUESTS_QUEUE).build());
         localStackSqsClient.createQueue(CreateQueueRequest.builder()
             .queueName(SCAN_RESULTS_CALLBACK_QUEUE)
