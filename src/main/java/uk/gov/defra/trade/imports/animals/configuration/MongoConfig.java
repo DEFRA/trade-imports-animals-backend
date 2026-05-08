@@ -7,12 +7,13 @@ import com.mongodb.WriteConcern;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.connection.ConnectionPoolSettings;
+import java.util.concurrent.TimeUnit;
+import javax.net.ssl.SSLContext;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import javax.net.ssl.SSLContext;
-import java.util.concurrent.TimeUnit;
+import org.springframework.data.mongodb.config.EnableMongoAuditing;
 import uk.gov.defra.trade.imports.animals.configuration.tls.TrustStoreConfiguration;
 
 /**
@@ -27,6 +28,7 @@ import uk.gov.defra.trade.imports.animals.configuration.tls.TrustStoreConfigurat
  * mongodb://host:port/database?authMechanism=MONGODB-AWS&authSource=$external
  */
 @Configuration
+@EnableMongoAuditing
 @Slf4j
 public class MongoConfig {
 

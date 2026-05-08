@@ -4,11 +4,12 @@
 
 logging:
   level:
-    root: DEBUG
+    root: INFO
     uk.gov.defra.trade.imports.animals: DEBUG
     org.mongodb.driver: ${LOGGING_LEVEL_ORG_MONGODB_DRIVER:WARN}
     org.springframework: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK:INFO}
     org.springframework.web: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB:INFO}
+    software.amazon.cloudwatchlogs.emf: ERROR
 
 management:
   endpoints:
@@ -23,3 +24,31 @@ spring:
     mongodb:
       ssl:
         enabled: false
+
+# SpringDoc — enable Swagger UI locally
+springdoc:
+  swagger-ui:
+    enabled: true
+
+# App-level AWS overrides for local development
+# Credentials are dummy values accepted by LocalStack — never use real keys here
+app:
+  aws:
+    endpoint-override: ${APP_AWS_ENDPOINT_OVERRIDE:http://localhost:4566}
+    access-key-id: test
+    secret-access-key: test
+
+# Local defaults for this service's URLs. Each is reached from a different network context,
+# hence the asymmetry:
+#   backend.base-url  — cdp-uploader (inside Docker) posts scan callbacks here, so
+#                       host.docker.internal is required; plain localhost is unreachable
+#                       from inside the cdp-uploader container.
+#   frontend.base-url — the user's browser is redirected here after upload, so
+#                       localhost is correct (the browser is on the host).
+# Kept out of application.yml so deployed environments fail fast if
+# TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL / TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL are unset.
+cdp:
+  backend:
+    base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:http://host.docker.internal:8085}
+  frontend:
+    base-url: ${TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL:http://localhost:3000}

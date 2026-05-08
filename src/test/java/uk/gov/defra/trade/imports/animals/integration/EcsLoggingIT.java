@@ -29,7 +29,7 @@ class EcsLoggingIT extends IntegrationBase {
 
     private final ByteArrayOutputStream outputStreamCaptor = new ByteArrayOutputStream();
     private final PrintStream originalOut = System.out;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     @BeforeEach
     void setUp() {
@@ -43,10 +43,11 @@ class EcsLoggingIT extends IntegrationBase {
 
     @Test
     void requestLogging_shouldProduceEcsJsonFormat() throws Exception {
-        // Make a request with CDP trace ID header
-        mockMvc.perform(get("/actuator/info")
+        // Make a request with CDP trace ID header — use an app endpoint so the controller's
+        // own INFO log carries the MDC fields we assert on.
+        mockMvc.perform(get("/notifications/LOGGING-TEST/document-uploads")
                         .header("x-cdp-request-id", "test-trace-123"))
-                .andExpect(status().isNotFound()); // info endpoint not exposed in prod
+                .andExpect(status().isOk());
 
         // Capture and parse log output
         String logOutput = outputStreamCaptor.toString(StandardCharsets.UTF_8);
@@ -80,7 +81,7 @@ class EcsLoggingIT extends IntegrationBase {
         assertThat(logJson.get("http.request.method").asText()).isEqualTo("GET");
 
         assertThat(logJson.has("url.full")).isTrue();
-        assertThat(logJson.get("url.full").asText()).contains("/actuator/info");
+        assertThat(logJson.get("url.full").asText()).contains("/notifications/LOGGING-TEST/document-uploads");
 
         // Verify service metadata
         assertThat(logJson.has("service.name")).isTrue();
@@ -108,23 +109,28 @@ class EcsLoggingIT extends IntegrationBase {
         outputStreamCaptor.reset();
 
         // Make request WITHOUT x-cdp-request-id header
-        mockMvc.perform(get("/actuator/info"))
-                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/notifications/LOGGING-TEST/document-uploads"))
+                .andExpect(status().isOk());
 
         String logOutput = outputStreamCaptor.toString(StandardCharsets.UTF_8);
 
         // Parse log output
         String[] lines = logOutput.split("\n");
+        JsonNode logJson = null;
         for (String line : lines) {
             if (line.trim().startsWith("{")) {
-                JsonNode logJson = objectMapper.readTree(line);
+                JsonNode candidate = objectMapper.readTree(line);
 
-                if (logJson.has("url.full")) {
-                    // trace.id should not be present when header is missing
-                    assertThat(logJson.has("trace.id")).isFalse();
+                if (candidate.has("url.full")) {
+                    logJson = candidate;
                     break;
                 }
             }
         }
+
+        assertThat(logJson).as("Expected a log line with url.full field").isNotNull();
+
+        // trace.id should not be present when header is missing
+        assertThat(logJson.has("trace.id")).isFalse();
     }
 }

@@ -2,7 +2,7 @@
 
 Core delivery Java Spring Boot backend template.
 
-* [Install MongoDB](#install-mongodb)
+* [MongoDB](#mongodb)
 * [Inspect MongoDB](#inspect-mongodb)
 * [Testing](#testing)
 * [Running](#running)
@@ -18,14 +18,33 @@ A local environment with:
 - Localstack for AWS services (S3, SQS)
 - Redis
 - MongoDB
+- `cdp-uploader` — virus-scanning upload service used by accompanying-documents
 - This service.
-- A commented out frontend example.
 
 ```bash
 docker compose --profile services up --build -d
 ```
 
 A more extensive setup is available in [github.com/DEFRA/cdp-local-environment](https://github.com/DEFRA/cdp-local-environment)
+
+#### Required environment variables
+
+The compose file deliberately has no defaults for the following variables —
+they must be set in every environment (e.g. via a `.env` file or shell export)
+or `docker compose` will surface a missing-var warning and the service will
+fail fast at startup:
+
+- `TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL` — externally reachable base URL for this service
+  (typical local value: `http://host.docker.internal:8085`)
+- `TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL` — externally reachable base URL for the frontend
+  (typical local value: `http://localhost:3000`)
+
+Example `.env`:
+
+```
+TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL=http://host.docker.internal:8085
+TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL=http://localhost:3000
+```
 
 ### MongoDB
 
@@ -50,7 +69,7 @@ sudo mongod --dbpath ~/mongodb-cdp
 #### MongoDB in CDP environments
 
 In CDP environments a MongoDB instance is already set up
-and the credentials exposed as enviromment variables.
+and the credentials exposed as environment variables.
 
 
 ### Inspect MongoDB
@@ -75,8 +94,29 @@ mvn test
 
 ### Running
 
-Run the application:
+Run the application with the `local` Spring profile, which supplies development
+defaults for `TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL` and `TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL`:
+
 ```bash
+mvn spring-boot:run -Dspring-boot.run.profiles=local
+```
+
+Or equivalently:
+
+```bash
+SPRING_PROFILES_ACTIVE=local mvn spring-boot:run
+```
+
+Without the `local` profile the application reads `application.yml`, which
+resolves `TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL` / `TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL` to empty strings if unset
+(deployed environments must set these explicitly). `CdpConfig` enforces
+`@NotBlank` on both, so startup fails fast with a binding/validation error
+(`Property: cdp.backend.baseUrl`, `Reason: must not be blank`). To run without
+the profile, export those vars manually first:
+
+```bash
+export TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL=http://host.docker.internal:8085
+export TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL=http://localhost:3000
 mvn spring-boot:run
 ```
 
@@ -86,8 +126,8 @@ Example SonarCloud configuration are available in the GitHub Action workflows.
 
 ### Dependabot
 
-We have added an example dependabot configuration file to the repository. You can enable it by renaming
-the [.github/example.dependabot.yml](.github/dependabot.yml) to `.github/dependabot.yml`
+We have added a dependabot configuration file to the repository at
+[.github/dependabot.yml](.github/dependabot.yml).
 
 
 ### About the licence
