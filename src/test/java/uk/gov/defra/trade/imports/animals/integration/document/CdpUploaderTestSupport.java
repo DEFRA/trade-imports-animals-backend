@@ -35,6 +35,8 @@ final class CdpUploaderTestSupport {
     static final String REDIS_IMAGE = "redis:7.2.3-alpine3.18";
     static final String LOCALSTACK_IMAGE = "localstack/localstack:3";
 
+    static final String LOCALSTACK_ALIAS = "localstack";
+
     static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
     static final String QUARANTINE_BUCKET = "cdp-uploader-quarantine";
     static final String MOCK_CLAMAV_QUEUE = "mock-clamav";
@@ -89,7 +91,7 @@ final class CdpUploaderTestSupport {
         return new LocalStackContainer(DockerImageName.parse(LOCALSTACK_IMAGE))
             .withServices("s3", "sqs")
             .withNetwork(network)
-            .withNetworkAliases("localstack")
+            .withNetworkAliases(LOCALSTACK_ALIAS)
             .withEnv("DEFAULT_REGION", region)
             .withEnv("AWS_DEFAULT_REGION", region);
     }
@@ -172,7 +174,7 @@ final class CdpUploaderTestSupport {
             .withEnv("SQS_SCAN_RESULTS_CALLBACK_WAIT_TIME_SECONDS", "1")
             .withEnv("SQS_DOWNLOAD_REQUESTS_WAIT_TIME_SECONDS", "1")
             .withEnv("SQS_MOCK_CLAMAV_WAIT_TIME_SECONDS", "1")
-            .withEnv("S3_ENDPOINT", "http://localstack:4566")
+            .withEnv("S3_ENDPOINT", "http://" + LOCALSTACK_ALIAS + ":4566")
             .withEnv("AWS_REGION", region)
             .withEnv("AWS_ACCESS_KEY_ID", "test")
             .withEnv("AWS_SECRET_ACCESS_KEY", "test");
