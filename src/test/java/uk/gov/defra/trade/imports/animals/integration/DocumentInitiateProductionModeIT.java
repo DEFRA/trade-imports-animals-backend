@@ -5,9 +5,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
+import org.springframework.test.web.reactive.server.WebTestClient;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -92,5 +94,40 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
         assertThat(body).isNotNull();
         assertThat(body.uploadId()).isNotBlank();
         assertThat(body.uploadUrl()).contains("/upload-and-scan/" + body.uploadId());
+    }
+
+    /**
+     * Pins the cdp-uploader contract that the original EUDPA-35 bug tripped over: in
+     * production mode the {@code redirect} field is validated as relative-only. Bypasses our
+     * backend (which now hard-codes a relative path) and posts directly to cdp-uploader's
+     * {@code /initiate} so a future cdp-uploader image bump that relaxes
+     * {@code relativeOnly} would fail this test rather than silently weaken the guard.
+     */
+    @Test
+    void cdpUploaderInitiate_shouldReject400_whenRedirectIsAbsoluteUrl() {
+        String cdpUploaderUrl = "http://" + CDP_UPLOADER_PROD_CONTAINER.getHost()
+            + ":" + CDP_UPLOADER_PROD_CONTAINER.getMappedPort(3000);
+
+        EntityExchangeResult<byte[]> result = WebTestClient.bindToServer()
+            .baseUrl(cdpUploaderUrl)
+            .build()
+            .post()
+            .uri("/initiate")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue("""
+                {
+                  "redirect": "https://frontend.dev.cdp-int.defra.cloud/accompanying-documents",
+                  "callback": "https://backend.dev.cdp-int.defra.cloud/document-uploads/pending/scan-results",
+                  "s3Bucket": "trade-imports-animals-documents",
+                  "s3Path": "DRAFT.IMP.2026.PROD-IT001",
+                  "metadata": {}
+                }
+                """)
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody().returnResult();
+
+        String body = result.getResponseBody() == null ? "" : new String(result.getResponseBody());
+        assertThat(body).contains("redirect").contains("relative");
     }
 }
