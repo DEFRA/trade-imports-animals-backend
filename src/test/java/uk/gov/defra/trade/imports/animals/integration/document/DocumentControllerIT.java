@@ -140,7 +140,7 @@ class DocumentControllerIT extends IntegrationBase {
             LOCAL_STACK_CONTAINER.getEndpoint());
         log.info("Backend will bind to port {} (host.testcontainers.internal:{})",
             BACKEND_PORT, BACKEND_PORT);
-        log.info("cdp-uploader started on port {}", CDP_UPLOADER_CONTAINER.getMappedPort(3000));
+        log.info("cdp-uploader started on port {}", CDP_UPLOADER_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT));
     }
 
     @DynamicPropertySource
@@ -154,7 +154,7 @@ class DocumentControllerIT extends IntegrationBase {
 
         registry.add("cdp.uploader.base-url",
             () -> "http://" + CDP_UPLOADER_CONTAINER.getHost()
-                + ":" + CDP_UPLOADER_CONTAINER.getMappedPort(3000));
+                + ":" + CDP_UPLOADER_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT));
 
         registry.add("app.aws.endpoint-override",
             () -> LOCAL_STACK_CONTAINER.getEndpoint().toString());
@@ -513,7 +513,7 @@ class DocumentControllerIT extends IntegrationBase {
         String uploadId, String filename, byte[] bytes, String contentType) {
 
         String cdpUploaderBaseUrl = "http://" + CDP_UPLOADER_CONTAINER.getHost()
-            + ":" + CDP_UPLOADER_CONTAINER.getMappedPort(3000);
+            + ":" + CDP_UPLOADER_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT);
 
         MultiValueMap<String, HttpEntity<?>> body = new LinkedMultiValueMap<>();
         HttpHeaders partHeaders = new HttpHeaders();

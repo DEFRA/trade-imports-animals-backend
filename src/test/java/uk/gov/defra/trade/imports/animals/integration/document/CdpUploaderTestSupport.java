@@ -37,6 +37,8 @@ final class CdpUploaderTestSupport {
 
     static final String LOCALSTACK_ALIAS = "localstack";
 
+    static final int CDP_UPLOADER_PORT = 3000;
+
     static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
     static final String QUARANTINE_BUCKET = "cdp-uploader-quarantine";
     static final String MOCK_CLAMAV_QUEUE = "mock-clamav";
@@ -68,15 +70,15 @@ final class CdpUploaderTestSupport {
     static GenericContainer<?> cdpUploaderContainer(
         Network network, String alias, String redisAlias, String consumerBuckets) {
         return new GenericContainer<>(DockerImageName.parse(CDP_UPLOADER_IMAGE))
-            .withExposedPorts(3000)
+            .withExposedPorts(CDP_UPLOADER_PORT)
             .withNetwork(network)
             .withNetworkAliases(alias)
-            .withEnv("PORT", "3000")
+            .withEnv("PORT", String.valueOf(CDP_UPLOADER_PORT))
             .withEnv("REDIS_HOST", redisAlias)
             .withEnv("USE_SINGLE_INSTANCE_CACHE", "true")
             .withEnv("CONSUMER_BUCKETS", consumerBuckets)
             .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("cdp-uploader")))
-            .waitingFor(Wait.forHttp("/health").forPort(3000)
+            .waitingFor(Wait.forHttp("/health").forPort(CDP_UPLOADER_PORT)
                 .withStartupTimeout(Duration.ofSeconds(60)));
     }
 

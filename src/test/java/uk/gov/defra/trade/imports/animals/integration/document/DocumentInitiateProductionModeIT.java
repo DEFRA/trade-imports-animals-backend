@@ -48,14 +48,14 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
         Startables.deepStart(REDIS_CONTAINER).join();
         Startables.deepStart(CDP_UPLOADER_PROD_CONTAINER).join();
         log.info("Production-mode cdp-uploader started on port {}",
-            CDP_UPLOADER_PROD_CONTAINER.getMappedPort(3000));
+            CDP_UPLOADER_PROD_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT));
     }
 
     @DynamicPropertySource
     static void registerProductionModeProperties(DynamicPropertyRegistry registry) {
         registry.add("cdp.uploader.base-url",
             () -> "http://" + CDP_UPLOADER_PROD_CONTAINER.getHost()
-                + ":" + CDP_UPLOADER_PROD_CONTAINER.getMappedPort(3000));
+                + ":" + CDP_UPLOADER_PROD_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT));
 
         // Callback URL must end in cdp-int.defra.cloud to satisfy prod-mode Joi schema.
         // Reachability doesn't matter here — /initiate only validates the URL string.
@@ -91,7 +91,7 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
     @Test
     void cdpUploaderInitiate_shouldReject400_whenRedirectIsAbsoluteUrl() {
         String cdpUploaderUrl = "http://" + CDP_UPLOADER_PROD_CONTAINER.getHost()
-            + ":" + CDP_UPLOADER_PROD_CONTAINER.getMappedPort(3000);
+            + ":" + CDP_UPLOADER_PROD_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT);
 
         EntityExchangeResult<byte[]> result = WebTestClient.bindToServer()
             .baseUrl(cdpUploaderUrl)
