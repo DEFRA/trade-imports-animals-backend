@@ -50,7 +50,6 @@ final class CdpUploaderTestSupport {
      * Redis Testcontainer with the standard wait-for-readiness log probe. cdp-uploader uses
      * Redis for upload-session state — without it, /initiate hangs.
      */
-    @SuppressWarnings("resource") // long-lived static container; lifecycle owned by Testcontainers' Ryuk reaper
     static GenericContainer<?> redisContainer(Network network, String alias) {
         return new GenericContainer<>(DockerImageName.parse(REDIS_IMAGE))
             .withExposedPorts(6379)
@@ -66,7 +65,6 @@ final class CdpUploaderTestSupport {
      * readiness probe. Callers chain {@code .withEnv(...)} for NODE_ENV and any mode-specific
      * scanner/AWS config.
      */
-    @SuppressWarnings("resource")
     static GenericContainer<?> cdpUploaderContainer(
         Network network, String alias, String redisAlias, String consumerBuckets) {
         return new GenericContainer<>(DockerImageName.parse(CDP_UPLOADER_IMAGE))
