@@ -161,12 +161,25 @@ final class CdpUploaderTestSupport {
     }
 
     /**
-     * Adds the cluster of env vars required for cdp-uploader's mock virus scanner to run end-to-end:
-     * dev-mode flags, mock-virus toggles, AWS endpoints/credentials, and SQS long-poll waits
-     * cranked down to 1s so the upload→scan→callback round-trip completes inside a normal
-     * IT timeout rather than blocking on the 20s default.
+     * Adds the full cluster of env vars required to run cdp-uploader in dev mode against
+     * LocalStack with the mock virus scanner end-to-end. Specifically sets:
+     *
+     * <ul>
+     *   <li>{@code NODE_ENV=development} — switches cdp-uploader into dev mode (e.g. relaxed
+     *       redirect handling, mock-scanner code paths enabled).</li>
+     *   <li>{@code MOCK_VIRUS_SCAN_ENABLED=true} and {@code MOCK_VIRUS_RESULT_DELAY=0} —
+     *       turn on the in-process mock scanner and short-circuit its artificial delay.</li>
+     *   <li>{@code SQS_*_WAIT_TIME_SECONDS=1} for scan-results, scan-results-callback,
+     *       download-requests, and mock-clamav queues — cranks SQS long-poll waits down from
+     *       the 20s default so the upload→scan→callback round-trip completes inside a normal
+     *       IT timeout.</li>
+     *   <li>{@code S3_ENDPOINT} pointing at the LocalStack network alias, plus
+     *       {@code AWS_REGION} matching the {@link #localStackContainer} region pin, plus
+     *       static {@code AWS_ACCESS_KEY_ID}/{@code AWS_SECRET_ACCESS_KEY=test} credentials —
+     *       so the uploader's AWS SDK clients reach LocalStack and sign for the right region.</li>
+     * </ul>
      */
-    static GenericContainer<?> withDevModeMockScannerEnv(GenericContainer<?> container, String region) {
+    static GenericContainer<?> withDevModeUploaderEnv(GenericContainer<?> container, String region) {
         return container
             .withEnv("NODE_ENV", "development")
             .withEnv("MOCK_VIRUS_SCAN_ENABLED", "true")
