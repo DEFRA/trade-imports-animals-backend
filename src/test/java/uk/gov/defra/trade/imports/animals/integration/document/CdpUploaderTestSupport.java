@@ -62,8 +62,9 @@ final class CdpUploaderTestSupport {
 
     /**
      * Pre-configured cdp-uploader Testcontainer with the env vars common to all IT shapes
-     * (PORT, USE_SINGLE_INSTANCE_CACHE, CONSUMER_BUCKETS) and a /health-based readiness probe.
-     * Callers chain {@code .withEnv(...)} for NODE_ENV and any mode-specific config.
+     * (PORT, REDIS_HOST, USE_SINGLE_INSTANCE_CACHE, CONSUMER_BUCKETS) and a /health-based
+     * readiness probe. Callers chain {@code .withEnv(...)} for NODE_ENV and any mode-specific
+     * scanner/AWS config.
      */
     @SuppressWarnings("resource")
     static GenericContainer<?> cdpUploaderContainer(
