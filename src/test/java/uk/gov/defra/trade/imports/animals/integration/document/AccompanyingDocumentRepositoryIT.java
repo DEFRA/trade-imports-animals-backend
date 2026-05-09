@@ -29,7 +29,7 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
  *       accidental removal of {@code @Indexed(unique = true)} on the fields
  * </ul>
  */
-class DocumentRepositoryIT extends IntegrationBase {
+class AccompanyingDocumentRepositoryIT extends IntegrationBase {
 
   @Autowired
   private AccompanyingDocumentRepository repository;
