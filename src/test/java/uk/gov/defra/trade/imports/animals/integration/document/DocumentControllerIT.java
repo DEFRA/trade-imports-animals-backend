@@ -75,7 +75,6 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class DocumentControllerIT extends IntegrationBase {
 
-    private static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
     private static final String NOTIFICATION_REF = "DRAFT.IMP.2025.IT001";
     private static final String AWS_REGION = "eu-west-2";
 
@@ -101,7 +100,7 @@ class DocumentControllerIT extends IntegrationBase {
         CdpUploaderTestSupport.withDevModeMockScannerEnv(
             CdpUploaderTestSupport.cdpUploaderContainer(
                 CONTAINER_NETWORK, "cdp-uploader", "redis",
-                DOCUMENTS_BUCKET + "," + CdpUploaderTestSupport.QUARANTINE_BUCKET),
+                CdpUploaderTestSupport.DOCUMENTS_BUCKET + "," + CdpUploaderTestSupport.QUARANTINE_BUCKET),
             AWS_REGION);
 
     private static final S3Client localStackS3Client;
@@ -119,7 +118,8 @@ class DocumentControllerIT extends IntegrationBase {
         localStackS3Client = CdpUploaderTestSupport.s3Client(LOCAL_STACK_CONTAINER, AWS_REGION);
         localStackSqsClient = CdpUploaderTestSupport.sqsClient(LOCAL_STACK_CONTAINER, AWS_REGION);
 
-        localStackS3Client.createBucket(CreateBucketRequest.builder().bucket(DOCUMENTS_BUCKET).build());
+        localStackS3Client.createBucket(
+            CreateBucketRequest.builder().bucket(CdpUploaderTestSupport.DOCUMENTS_BUCKET).build());
         localStackS3Client.createBucket(
             CreateBucketRequest.builder().bucket(CdpUploaderTestSupport.QUARANTINE_BUCKET).build());
 
@@ -162,7 +162,7 @@ class DocumentControllerIT extends IntegrationBase {
         registry.add("app.aws.access-key-id", LOCAL_STACK_CONTAINER::getAccessKey);
         registry.add("app.aws.secret-access-key", LOCAL_STACK_CONTAINER::getSecretKey);
 
-        registry.add("cdp.s3.documents-bucket", () -> DOCUMENTS_BUCKET);
+        registry.add("cdp.s3.documents-bucket", () -> CdpUploaderTestSupport.DOCUMENTS_BUCKET);
 
         registry.add("aws.sts.token.audience", () -> "test-audience");
         registry.add("aws.sts.token.expiration", () -> "3600");
@@ -242,7 +242,7 @@ class DocumentControllerIT extends IntegrationBase {
         assertThat(file.fileStatus()).isEqualTo(FileStatus.COMPLETE);
         assertThat(file.contentLength()).isEqualTo(pdfBytes.length);
         assertThat(file.s3Key()).isNotBlank();
-        assertThat(file.s3Bucket()).isEqualTo(DOCUMENTS_BUCKET);
+        assertThat(file.s3Bucket()).isEqualTo(CdpUploaderTestSupport.DOCUMENTS_BUCKET);
     }
 
     // ---------------------------------------------------------------------------
@@ -448,7 +448,7 @@ class DocumentControllerIT extends IntegrationBase {
         String s3Key = persisted.getFiles().get(0).s3Key();
 
         localStackS3Client.deleteObject(DeleteObjectRequest.builder()
-            .bucket(DOCUMENTS_BUCKET)
+            .bucket(CdpUploaderTestSupport.DOCUMENTS_BUCKET)
             .key(s3Key)
             .build());
 

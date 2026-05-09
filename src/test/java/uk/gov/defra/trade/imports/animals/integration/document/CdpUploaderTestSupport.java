@@ -35,6 +35,7 @@ final class CdpUploaderTestSupport {
     static final String REDIS_IMAGE = "redis:7.2.3-alpine3.18";
     static final String LOCALSTACK_IMAGE = "localstack/localstack:3";
 
+    static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
     static final String QUARANTINE_BUCKET = "cdp-uploader-quarantine";
     static final String MOCK_CLAMAV_QUEUE = "mock-clamav";
     static final String SCAN_RESULTS_QUEUE = "cdp-clamav-results";

@@ -28,7 +28,6 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 class DocumentInitiateProductionModeIT extends IntegrationBase {
 
     private static final String NOTIFICATION_REF = "DRAFT.IMP.2026.PROD-IT001";
-    private static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
     private static final String REDIS_ALIAS = "redis-prod-it";
     private static final String CDP_UPLOADER_ALIAS = "cdp-uploader-prod";
 
@@ -42,7 +41,7 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
     //   - callback must be on the cdp-int.defra.cloud domain
     private static final GenericContainer<?> CDP_UPLOADER_PROD_CONTAINER =
         CdpUploaderTestSupport.cdpUploaderContainer(
-                CONTAINER_NETWORK, CDP_UPLOADER_ALIAS, REDIS_ALIAS, DOCUMENTS_BUCKET)
+                CONTAINER_NETWORK, CDP_UPLOADER_ALIAS, REDIS_ALIAS, CdpUploaderTestSupport.DOCUMENTS_BUCKET)
             .withEnv("NODE_ENV", "production");
 
     static {
@@ -108,7 +107,7 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
                   "s3Path": "%s",
                   "metadata": {}
                 }
-                """.formatted(DOCUMENTS_BUCKET, NOTIFICATION_REF))
+                """.formatted(CdpUploaderTestSupport.DOCUMENTS_BUCKET, NOTIFICATION_REF))
             .exchange()
             .expectStatus().isBadRequest()
             .expectBody().returnResult();
