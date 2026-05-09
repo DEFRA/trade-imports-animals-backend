@@ -36,6 +36,20 @@ import org.testcontainers.mockserver.MockServerContainer;
 import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
 
+/**
+ * Base class for Spring Boot integration tests, activating the {@code integration-test} profile
+ * on a random port and starting three shared Testcontainers in a static block: a
+ * {@link OAuthMockServerContainer mock OAuth2 server} (token + JWKS issuer), a
+ * {@link org.testcontainers.mockserver.MockServerContainer MockServer} for stubbing downstream
+ * HTTP services via {@link #usingStub()}, and a MongoDB container wired in via
+ * {@code spring.data.mongodb.uri}.
+ *
+ * <p>{@link #webClient(String)} returns a {@link WebTestClient} pre-authenticated with a token
+ * minted by the mock OAuth server using {@code clientType} as the {@code client_id}; the token
+ * is decided by the {@code /integration/oauth2-mock-server.json} fixture, and tests currently
+ * pass {@code "NoAuth"}. Subclasses inherit an {@code @AfterEach} hook that resets all
+ * MockServer expectations, so per-test stubs do not leak across tests.
+ */
 @Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
