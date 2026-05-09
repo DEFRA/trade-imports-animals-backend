@@ -123,7 +123,7 @@ public abstract class IntegrationBase {
             .build();
     }
 
-    protected String getToken(String clientType) {
+    String getToken(String clientType) {
         final RestClient restClient =
             RestClient.builder()
                 .requestFactory(new HttpComponentsClientHttpRequestFactory())
@@ -148,7 +148,7 @@ public abstract class IntegrationBase {
     }
     
     @SneakyThrows
-    protected JsonBody getJsonFromFile(String filename) {
+    JsonBody getJsonFromFile(String filename) {
         return new JsonBody(
             Files.readString(Paths.get(getClass().getClassLoader().getResource(filename).toURI())));
     }
@@ -158,7 +158,7 @@ public abstract class IntegrationBase {
         usingStub().reset();
     }
 
-    protected <T> T getResponseAsObject(byte[] bytes, Class<T> clazz) {
+    <T> T getResponseAsObject(byte[] bytes, Class<T> clazz) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             mapper.registerModule(new JavaTimeModule());
