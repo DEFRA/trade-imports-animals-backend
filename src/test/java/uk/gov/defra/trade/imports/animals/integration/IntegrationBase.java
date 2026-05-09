@@ -39,12 +39,12 @@ import org.testcontainers.utility.DockerImageName;
 @Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
-abstract class IntegrationBase {
+public abstract class IntegrationBase {
 
     static final List<String> SERVICES_TO_MOCK = List.of();
 
     @LocalServerPort
-    int port;
+    protected int port;
     
 
     private MockServerClient mockServerClient;
@@ -103,7 +103,7 @@ abstract class IntegrationBase {
      *
      * @return the MockServerClient to be used for stubbing out external services.
      */
-    MockServerClient usingStub() {
+    protected MockServerClient usingStub() {
         if (mockServerClient == null) {
             mockServerClient = new MockServerClient(MOCK_SERVER_CONTAINER.getHost(),
                 MOCK_SERVER_CONTAINER.getServerPort());
@@ -114,7 +114,7 @@ abstract class IntegrationBase {
         return mockServerClient;
     }
 
-    WebTestClient webClient(String clientType) {
+    protected WebTestClient webClient(String clientType) {
         return WebTestClient.bindToServer()
             .baseUrl("http://localhost:%d".formatted(port))
             .defaultHeader("Authorization", "Bearer " + getToken(clientType))
@@ -123,7 +123,7 @@ abstract class IntegrationBase {
             .build();
     }
 
-    String getToken(String clientType) {
+    protected String getToken(String clientType) {
         final RestClient restClient =
             RestClient.builder()
                 .requestFactory(new HttpComponentsClientHttpRequestFactory())
@@ -148,7 +148,7 @@ abstract class IntegrationBase {
     }
     
     @SneakyThrows
-    JsonBody getJsonFromFile(String filename) {
+    protected JsonBody getJsonFromFile(String filename) {
         return new JsonBody(
             Files.readString(Paths.get(getClass().getClassLoader().getResource(filename).toURI())));
     }
@@ -158,7 +158,7 @@ abstract class IntegrationBase {
         usingStub().reset();
     }
 
-    <T> T getResponseAsObject(byte[] bytes, Class<T> clazz) {
+    protected <T> T getResponseAsObject(byte[] bytes, Class<T> clazz) {
         try {
             ObjectMapper mapper = new ObjectMapper();
             mapper.registerModule(new JavaTimeModule());

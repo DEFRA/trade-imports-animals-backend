@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.integration;
+package uk.gov.defra.trade.imports.animals.integration.document;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -6,11 +6,11 @@ import static org.awaitility.Awaitility.await;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.ByteArrayResource;
@@ -25,28 +25,16 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.slf4j.LoggerFactory;
 import org.testcontainers.Testcontainers;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
-import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.localstack.LocalStackContainer;
 import org.testcontainers.lifecycle.Startables;
-import org.testcontainers.utility.DockerImageName;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
-import software.amazon.awssdk.services.s3.model.NotificationConfiguration;
-import software.amazon.awssdk.services.s3.model.PutBucketNotificationConfigurationRequest;
-import software.amazon.awssdk.services.s3.model.QueueConfiguration;
-import software.amazon.awssdk.services.s3.model.Event;
 import software.amazon.awssdk.services.sqs.SqsClient;
-import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
-import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
@@ -55,6 +43,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentUploadResponse;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
+import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 
 /**
  * Integration tests for the accompanying document upload flow.
@@ -84,16 +73,11 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
  */
 @Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
-class DocumentIT extends IntegrationBase {
+class DocumentControllerIT extends IntegrationBase {
 
     private static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
-    private static final String QUARANTINE_BUCKET = "cdp-uploader-quarantine";
     private static final String NOTIFICATION_REF = "DRAFT.IMP.2025.IT001";
-
-    private static final String MOCK_CLAMAV_QUEUE = "mock-clamav";
-    private static final String SCAN_RESULTS_QUEUE = "cdp-clamav-results";
-    private static final String SCAN_RESULTS_CALLBACK_QUEUE = "cdp-uploader-scan-results-callback.fifo";
-    private static final String DOWNLOAD_REQUESTS_QUEUE = "cdp-uploader-download-requests";
+    private static final String AWS_REGION = "eu-west-2";
 
     private static final Duration SCAN_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(250);
@@ -107,53 +91,18 @@ class DocumentIT extends IntegrationBase {
 
     static final Network CONTAINER_NETWORK = Network.newNetwork();
 
-    private static final String AWS_REGION = "eu-west-2";
-
     static final LocalStackContainer LOCAL_STACK_CONTAINER =
-        new LocalStackContainer(DockerImageName.parse("localstack/localstack:3"))
-            .withServices("s3", "sqs")
-            .withNetwork(CONTAINER_NETWORK)
-            .withNetworkAliases("localstack")
-            .withEnv("DEFAULT_REGION", AWS_REGION)
-            .withEnv("AWS_DEFAULT_REGION", AWS_REGION);
+        CdpUploaderTestSupport.localStackContainer(CONTAINER_NETWORK, AWS_REGION);
 
-    @SuppressWarnings("resource")
     static final GenericContainer<?> REDIS_CONTAINER =
-        new GenericContainer<>(DockerImageName.parse("redis:7.2.3-alpine3.18"))
-            .withExposedPorts(6379)
-            .withNetwork(CONTAINER_NETWORK)
-            .withNetworkAliases("redis")
-            .waitingFor(Wait.forLogMessage(".*Ready to accept connections.*\\n", 1)
-                .withStartupTimeout(Duration.ofSeconds(30)));
+        CdpUploaderTestSupport.redisContainer(CONTAINER_NETWORK, "redis");
 
-    private static final String CDP_UPLOADER_IMAGE = "defradigital/cdp-uploader:latest";
-
-    @SuppressWarnings("resource")
     static final GenericContainer<?> CDP_UPLOADER_CONTAINER =
-        new GenericContainer<>(DockerImageName.parse(CDP_UPLOADER_IMAGE))
-            .withExposedPorts(3000)
-            .withNetwork(CONTAINER_NETWORK)
-            .withNetworkAliases("cdp-uploader")
-            .withEnv("PORT", "3000")
-            .withEnv("NODE_ENV", "development")
-            .withEnv("REDIS_HOST", "redis")
-            .withEnv("USE_SINGLE_INSTANCE_CACHE", "true")
-            .withEnv("MOCK_VIRUS_SCAN_ENABLED", "true")
-            .withEnv("MOCK_VIRUS_RESULT_DELAY", "0")
-            // Each SQS listener long-polls for up to its waitTimeSeconds. Defaults are 20s for
-            // scan-results and the callback queue, which makes the full upload→scan→callback
-            // round-trip take 20s+ even when results are immediate. Crank everything down for IT.
-            .withEnv("SQS_SCAN_RESULTS_WAIT_TIME_SECONDS", "1")
-            .withEnv("SQS_SCAN_RESULTS_CALLBACK_WAIT_TIME_SECONDS", "1")
-            .withEnv("SQS_DOWNLOAD_REQUESTS_WAIT_TIME_SECONDS", "1")
-            .withEnv("SQS_MOCK_CLAMAV_WAIT_TIME_SECONDS", "1")
-            .withEnv("S3_ENDPOINT", "http://localstack:4566")
-            .withEnv("AWS_REGION", AWS_REGION)
-            .withEnv("AWS_ACCESS_KEY_ID", "test")
-            .withEnv("AWS_SECRET_ACCESS_KEY", "test")
-            .withEnv("CONSUMER_BUCKETS", DOCUMENTS_BUCKET + "," + QUARANTINE_BUCKET)
-            .waitingFor(Wait.forHttp("/health").forPort(3000)
-                .withStartupTimeout(Duration.ofSeconds(60)));
+        CdpUploaderTestSupport.withDevModeMockScannerEnv(
+            CdpUploaderTestSupport.cdpUploaderContainer(
+                CONTAINER_NETWORK, "cdp-uploader", "redis",
+                DOCUMENTS_BUCKET + "," + CdpUploaderTestSupport.QUARANTINE_BUCKET),
+            AWS_REGION);
 
     private static final S3Client localStackS3Client;
     private static final SqsClient localStackSqsClient;
@@ -165,61 +114,18 @@ class DocumentIT extends IntegrationBase {
         CDP_UPLOADER_CONTAINER.withEnv("SQS_ENDPOINT", "http://localstack:4566");
         CDP_UPLOADER_CONTAINER.withEnv(
             "SQS_SCAN_RESULTS_CALLBACK",
-            "http://localstack:4566/000000000000/" + SCAN_RESULTS_CALLBACK_QUEUE);
+            "http://localstack:4566/000000000000/" + CdpUploaderTestSupport.SCAN_RESULTS_CALLBACK_QUEUE);
 
-        // Region must match cdp-uploader's AWS_REGION env var: SQS queues are scoped per region
-        // even in LocalStack, so a queue created via us-east-1 (the SDK's default) is invisible
-        // to a client signing as eu-west-2.
-        localStackS3Client = S3Client.builder()
-            .endpointOverride(LOCAL_STACK_CONTAINER.getEndpoint())
-            .credentialsProvider(StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(
-                    LOCAL_STACK_CONTAINER.getAccessKey(),
-                    LOCAL_STACK_CONTAINER.getSecretKey())))
-            .region(Region.of(AWS_REGION))
-            .build();
-
-        localStackSqsClient = SqsClient.builder()
-            .endpointOverride(LOCAL_STACK_CONTAINER.getEndpoint())
-            .credentialsProvider(StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(
-                    LOCAL_STACK_CONTAINER.getAccessKey(),
-                    LOCAL_STACK_CONTAINER.getSecretKey())))
-            .region(Region.of(AWS_REGION))
-            .build();
+        localStackS3Client = CdpUploaderTestSupport.s3Client(LOCAL_STACK_CONTAINER, AWS_REGION);
+        localStackSqsClient = CdpUploaderTestSupport.sqsClient(LOCAL_STACK_CONTAINER, AWS_REGION);
 
         localStackS3Client.createBucket(CreateBucketRequest.builder().bucket(DOCUMENTS_BUCKET).build());
-        localStackS3Client.createBucket(CreateBucketRequest.builder().bucket(QUARANTINE_BUCKET).build());
+        localStackS3Client.createBucket(
+            CreateBucketRequest.builder().bucket(CdpUploaderTestSupport.QUARANTINE_BUCKET).build());
 
-        localStackSqsClient.createQueue(CreateQueueRequest.builder().queueName(MOCK_CLAMAV_QUEUE).build());
-        localStackSqsClient.createQueue(CreateQueueRequest.builder().queueName(SCAN_RESULTS_QUEUE).build());
-        // cdp-uploader expects this queue to exist on startup; not consumed by these tests.
-        localStackSqsClient.createQueue(CreateQueueRequest.builder().queueName(DOWNLOAD_REQUESTS_QUEUE).build());
-        localStackSqsClient.createQueue(CreateQueueRequest.builder()
-            .queueName(SCAN_RESULTS_CALLBACK_QUEUE)
-            .attributes(Map.of(
-                QueueAttributeName.FIFO_QUEUE, "true",
-                QueueAttributeName.CONTENT_BASED_DEDUPLICATION, "true"))
-            .build());
+        CdpUploaderTestSupport.wireScanQueuesAndBucketNotification(
+            localStackSqsClient, localStackS3Client, AWS_REGION);
 
-        // Wire the quarantine bucket to fan ObjectCreated events to mock-clamav so cdp-uploader's
-        // mock scanner sees uploads. LocalStack uses the literal AWS account id 000000000000.
-        localStackS3Client.putBucketNotificationConfiguration(
-            PutBucketNotificationConfigurationRequest.builder()
-                .bucket(QUARANTINE_BUCKET)
-                .notificationConfiguration(NotificationConfiguration.builder()
-                    .queueConfigurations(QueueConfiguration.builder()
-                        .queueArn("arn:aws:sqs:" + AWS_REGION
-                            + ":000000000000:" + MOCK_CLAMAV_QUEUE)
-                        .events(Event.S3_OBJECT_CREATED)
-                        .build())
-                    .build())
-                .build());
-
-        // Stream cdp-uploader + LocalStack logs into the test output so failed scans aren't a
-        // black box.
-        CDP_UPLOADER_CONTAINER.withLogConsumer(
-            new Slf4jLogConsumer(LoggerFactory.getLogger("cdp-uploader")));
         LOCAL_STACK_CONTAINER.followOutput(
             new Slf4jLogConsumer(LoggerFactory.getLogger("localstack")));
 

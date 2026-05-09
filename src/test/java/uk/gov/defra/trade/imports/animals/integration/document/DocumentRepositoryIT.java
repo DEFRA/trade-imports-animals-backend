@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.integration;
+package uk.gov.defra.trade.imports.animals.integration.document;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -12,6 +12,7 @@ import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
+import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 
 /**
  * Integration test for {@link AccompanyingDocumentRepository} derived query methods.
@@ -28,7 +29,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
  *       accidental removal of {@code @Indexed(unique = true)} on the fields
  * </ul>
  */
-class AccompanyingDocumentRepositoryIT extends IntegrationBase {
+class DocumentRepositoryIT extends IntegrationBase {
 
   @Autowired
   private AccompanyingDocumentRepository repository;
