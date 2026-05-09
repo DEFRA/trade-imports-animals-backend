@@ -129,7 +129,7 @@ final class CdpUploaderTestSupport {
      *   <li>Creates {@code mock-clamav}, {@code cdp-clamav-results}, {@code cdp-uploader-download-requests}
      *       (standard) and {@code cdp-uploader-scan-results-callback.fifo} (FIFO + content-based dedup).</li>
      *   <li>Configures the quarantine bucket to fan {@code s3:ObjectCreated:*} events to the
-     *       {@code mock-clamav} queue. LocalStack uses the literal AWS account id 000000000000.</li>
+     *       {@code mock-clamav} queue.</li>
      * </ol>
      *
      * Caller is responsible for pre-creating the buckets — we don't create them here because
@@ -153,7 +153,7 @@ final class CdpUploaderTestSupport {
                 .bucket(QUARANTINE_BUCKET)
                 .notificationConfiguration(NotificationConfiguration.builder()
                     .queueConfigurations(QueueConfiguration.builder()
-                        .queueArn("arn:aws:sqs:" + region + ":000000000000:" + MOCK_CLAMAV_QUEUE)
+                        .queueArn(localStackSqsArn(region, MOCK_CLAMAV_QUEUE))
                         .events(Event.S3_OBJECT_CREATED)
                         .build())
                     .build())
@@ -179,5 +179,10 @@ final class CdpUploaderTestSupport {
             .withEnv("AWS_REGION", region)
             .withEnv("AWS_ACCESS_KEY_ID", "test")
             .withEnv("AWS_SECRET_ACCESS_KEY", "test");
+    }
+
+    private static String localStackSqsArn(String region, String queueName) {
+        // LocalStack uses the literal AWS account id 000000000000
+        return "arn:aws:sqs:" + region + ":000000000000:" + queueName;
     }
 }
