@@ -33,7 +33,7 @@ public record CdpConfig(
     TracingConfig tracing,
     CloudwatchConfig cloudwatch,
     String proxyUrl,
-    @NotNull UploaderConfig uploader,
+    @Valid @NotNull UploaderConfig uploader,
     @Valid @NotNull BackendConfig backend,
     S3Config s3) {
 
@@ -45,7 +45,7 @@ public record CdpConfig(
    * @param mimeTypes   the list of permitted MIME types for uploads
    */
   public record UploaderConfig(
-      String baseUrl,
+      @NotBlank String baseUrl,
       @NotNull @Positive Long maxFileSize,
       List<String> mimeTypes) {}
 
