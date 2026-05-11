@@ -123,10 +123,9 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
         // Pin to the literal Joi message fragment so a future cdp-uploader image bump that
         // weakens or removes the relativeOnly() guard fails this test rather than silently
         // passing on an unrelated structured-error shape that happens to contain both
-        // "redirect" and "relative". The body is JSON of shape
-        //   {"message":"\"redirect\" must be a valid relative uri"}
-        // so the raw bytes include backslash-escaped quotes around the field name; match
-        // them literally.
+        // "redirect" and "relative". cdp-uploader returns the message JSON-escaped, so the
+        // raw bytes include backslash-escaped quotes around the field name; match them
+        // literally.
         assertThat(body).contains("\\\"redirect\\\" must be a valid relative uri");
     }
 }
