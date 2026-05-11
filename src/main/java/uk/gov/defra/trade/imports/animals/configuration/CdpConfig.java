@@ -33,9 +33,9 @@ public record CdpConfig(
     TracingConfig tracing,
     CloudwatchConfig cloudwatch,
     String proxyUrl,
-    @NotNull UploaderConfig uploader,
+    @Valid @NotNull UploaderConfig uploader,
     @Valid @NotNull BackendConfig backend,
-    S3Config s3) {
+    @Valid @NotNull S3Config s3) {
 
   /**
    * Configuration for the CDP uploader service.
@@ -45,7 +45,7 @@ public record CdpConfig(
    * @param mimeTypes   the list of permitted MIME types for uploads
    */
   public record UploaderConfig(
-      String baseUrl,
+      @NotBlank String baseUrl,
       @NotNull @Positive Long maxFileSize,
       List<String> mimeTypes) {}
 
@@ -61,7 +61,7 @@ public record CdpConfig(
    *
    * @param documentsBucket the name of the S3 bucket used to store uploaded documents
    */
-  public record S3Config(String documentsBucket) {}
+  public record S3Config(@NotBlank String documentsBucket) {}
 
   /**
    * Metrics-publishing configuration.

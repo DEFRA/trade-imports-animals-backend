@@ -75,7 +75,6 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class DocumentControllerIT extends IntegrationBase {
 
-    private static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
     private static final String NOTIFICATION_REF = "DRAFT.IMP.2025.IT001";
     private static final String AWS_REGION = "eu-west-2";
 
@@ -98,10 +97,10 @@ class DocumentControllerIT extends IntegrationBase {
         CdpUploaderTestSupport.redisContainer(CONTAINER_NETWORK, "redis");
 
     static final GenericContainer<?> CDP_UPLOADER_CONTAINER =
-        CdpUploaderTestSupport.withDevModeMockScannerEnv(
+        CdpUploaderTestSupport.withDevModeUploaderEnv(
             CdpUploaderTestSupport.cdpUploaderContainer(
                 CONTAINER_NETWORK, "cdp-uploader", "redis",
-                DOCUMENTS_BUCKET + "," + CdpUploaderTestSupport.QUARANTINE_BUCKET),
+                CdpUploaderTestSupport.DOCUMENTS_BUCKET + "," + CdpUploaderTestSupport.QUARANTINE_BUCKET),
             AWS_REGION);
 
     private static final S3Client localStackS3Client;
@@ -119,7 +118,8 @@ class DocumentControllerIT extends IntegrationBase {
         localStackS3Client = CdpUploaderTestSupport.s3Client(LOCAL_STACK_CONTAINER, AWS_REGION);
         localStackSqsClient = CdpUploaderTestSupport.sqsClient(LOCAL_STACK_CONTAINER, AWS_REGION);
 
-        localStackS3Client.createBucket(CreateBucketRequest.builder().bucket(DOCUMENTS_BUCKET).build());
+        localStackS3Client.createBucket(
+            CreateBucketRequest.builder().bucket(CdpUploaderTestSupport.DOCUMENTS_BUCKET).build());
         localStackS3Client.createBucket(
             CreateBucketRequest.builder().bucket(CdpUploaderTestSupport.QUARANTINE_BUCKET).build());
 
@@ -140,7 +140,7 @@ class DocumentControllerIT extends IntegrationBase {
             LOCAL_STACK_CONTAINER.getEndpoint());
         log.info("Backend will bind to port {} (host.testcontainers.internal:{})",
             BACKEND_PORT, BACKEND_PORT);
-        log.info("cdp-uploader started on port {}", CDP_UPLOADER_CONTAINER.getMappedPort(3000));
+        log.info("cdp-uploader started on port {}", CDP_UPLOADER_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT));
     }
 
     @DynamicPropertySource
@@ -154,7 +154,7 @@ class DocumentControllerIT extends IntegrationBase {
 
         registry.add("cdp.uploader.base-url",
             () -> "http://" + CDP_UPLOADER_CONTAINER.getHost()
-                + ":" + CDP_UPLOADER_CONTAINER.getMappedPort(3000));
+                + ":" + CDP_UPLOADER_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT));
 
         registry.add("app.aws.endpoint-override",
             () -> LOCAL_STACK_CONTAINER.getEndpoint().toString());
@@ -162,7 +162,7 @@ class DocumentControllerIT extends IntegrationBase {
         registry.add("app.aws.access-key-id", LOCAL_STACK_CONTAINER::getAccessKey);
         registry.add("app.aws.secret-access-key", LOCAL_STACK_CONTAINER::getSecretKey);
 
-        registry.add("cdp.s3.documents-bucket", () -> DOCUMENTS_BUCKET);
+        registry.add("cdp.s3.documents-bucket", () -> CdpUploaderTestSupport.DOCUMENTS_BUCKET);
 
         registry.add("aws.sts.token.audience", () -> "test-audience");
         registry.add("aws.sts.token.expiration", () -> "3600");
@@ -227,12 +227,12 @@ class DocumentControllerIT extends IntegrationBase {
      */
     @Test
     void scanResult_cleanFile_shouldEndUpAsCompleteViaRealScan() throws IOException {
-        String uploadId = initiateAndGetUploadId();
+        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
-        uploadFileViaCdpUploader(uploadId, "clean.pdf", pdfBytes, "application/pdf");
+        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "clean.pdf", pdfBytes, "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(uploadId);
+        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
         assertThat(persisted.getFiles()).hasSize(1);
 
@@ -242,7 +242,7 @@ class DocumentControllerIT extends IntegrationBase {
         assertThat(file.fileStatus()).isEqualTo(FileStatus.COMPLETE);
         assertThat(file.contentLength()).isEqualTo(pdfBytes.length);
         assertThat(file.s3Key()).isNotBlank();
-        assertThat(file.s3Bucket()).isEqualTo(DOCUMENTS_BUCKET);
+        assertThat(file.s3Bucket()).isEqualTo(CdpUploaderTestSupport.DOCUMENTS_BUCKET);
     }
 
     // ---------------------------------------------------------------------------
@@ -256,12 +256,12 @@ class DocumentControllerIT extends IntegrationBase {
      */
     @Test
     void scanResult_virusFile_shouldEndUpAsRejectedViaRealScan() throws IOException {
-        String uploadId = initiateAndGetUploadId();
+        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
-        uploadFileViaCdpUploader(uploadId, "virus.pdf", pdfBytes, "application/pdf");
+        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "virus.pdf", pdfBytes, "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(uploadId);
+        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
         assertThat(persisted.getFiles()).hasSize(1);
 
@@ -331,16 +331,16 @@ class DocumentControllerIT extends IntegrationBase {
 
     @Test
     void downloadFile_shouldStreamFileFromS3WithCorrectHeaders() throws IOException {
-        String uploadId = initiateAndGetUploadId();
+        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
-        uploadFileViaCdpUploader(uploadId, "clean.pdf", pdfBytes, "application/pdf");
+        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "clean.pdf", pdfBytes, "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(uploadId);
+        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
 
         EntityExchangeResult<byte[]> result = webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + uploadId + "/file")
+            .uri("/document-uploads/" + initiateResponse.uploadId() + "/file")
             .exchange()
             .expectStatus().isOk()
             .expectHeader().contentType(MediaType.APPLICATION_PDF)
@@ -412,16 +412,16 @@ class DocumentControllerIT extends IntegrationBase {
 
     @Test
     void downloadFile_rejectedFile_shouldReturn404() throws IOException {
-        String uploadId = initiateAndGetUploadId();
+        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
-        uploadFileViaCdpUploader(uploadId, "virus.pdf", pdfBytes, "application/pdf");
+        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "virus.pdf", pdfBytes, "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(uploadId);
+        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
 
         webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + uploadId + "/file")
+            .uri("/document-uploads/" + initiateResponse.uploadId() + "/file")
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
@@ -439,22 +439,22 @@ class DocumentControllerIT extends IntegrationBase {
      */
     @Test
     void downloadFile_s3ObjectMissing_shouldReturn500() throws IOException {
-        String uploadId = initiateAndGetUploadId();
+        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
-        uploadFileViaCdpUploader(uploadId, "clean.pdf", pdfBytes, "application/pdf");
+        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "clean.pdf", pdfBytes, "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(uploadId);
+        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
         String s3Key = persisted.getFiles().get(0).s3Key();
 
         localStackS3Client.deleteObject(DeleteObjectRequest.builder()
-            .bucket(DOCUMENTS_BUCKET)
+            .bucket(CdpUploaderTestSupport.DOCUMENTS_BUCKET)
             .key(s3Key)
             .build());
 
         webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + uploadId + "/file")
+            .uri("/document-uploads/" + initiateResponse.uploadId() + "/file")
             .exchange()
             .expectStatus().is5xxServerError()
             .expectBody()
@@ -489,6 +489,10 @@ class DocumentControllerIT extends IntegrationBase {
     }
 
     private String initiateAndGetUploadId() {
+        return initiateAndGetResponse().uploadId();
+    }
+
+    private DocumentUploadResponse initiateAndGetResponse() {
         EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
@@ -501,19 +505,18 @@ class DocumentControllerIT extends IntegrationBase {
         DocumentUploadResponse body = result.getResponseBody();
         assertThat(body).isNotNull();
         assertThat(body.uploadId()).isNotBlank();
-        return body.uploadId();
+        assertThat(body.uploadUrl()).isNotBlank();
+        return body;
     }
 
     /**
-     * POSTs a multipart {@code file} part to cdp-uploader's {@code /upload-and-scan/{uploadId}}
-     * endpoint. cdp-uploader stores the bytes in the quarantine bucket and returns 302 to the
-     * configured redirect path; we don't follow the redirect (it would land on a 404).
+     * POSTs a multipart {@code file} part to the upload URL the backend returned. Driving the
+     * upload via {@code body.uploadUrl()} (rather than re-constructing the URL here) exercises
+     * the backend's relative→absolute resolution end-to-end — a regression that left the URL
+     * relative would fail this fetch with a URL-parse error rather than slipping through.
      */
     private void uploadFileViaCdpUploader(
-        String uploadId, String filename, byte[] bytes, String contentType) {
-
-        String cdpUploaderBaseUrl = "http://" + CDP_UPLOADER_CONTAINER.getHost()
-            + ":" + CDP_UPLOADER_CONTAINER.getMappedPort(3000);
+        String uploadUrl, String filename, byte[] bytes, String contentType) {
 
         MultiValueMap<String, HttpEntity<?>> body = new LinkedMultiValueMap<>();
         HttpHeaders partHeaders = new HttpHeaders();
@@ -524,11 +527,9 @@ class DocumentControllerIT extends IntegrationBase {
             @Override public String getFilename() { return filename; }
         }, partHeaders));
 
-        WebClient.builder()
-            .baseUrl(cdpUploaderBaseUrl)
-            .build()
+        WebClient.create()
             .post()
-            .uri("/upload-and-scan/" + uploadId)
+            .uri(uploadUrl)
             .contentType(MediaType.MULTIPART_FORM_DATA)
             .body(BodyInserters.fromMultipartData(body))
             .retrieve()

@@ -35,6 +35,11 @@ final class CdpUploaderTestSupport {
     static final String REDIS_IMAGE = "redis:7.2.3-alpine3.18";
     static final String LOCALSTACK_IMAGE = "localstack/localstack:3";
 
+    static final String LOCALSTACK_ALIAS = "localstack";
+
+    static final int CDP_UPLOADER_PORT = 3000;
+
+    static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
     static final String QUARANTINE_BUCKET = "cdp-uploader-quarantine";
     static final String MOCK_CLAMAV_QUEUE = "mock-clamav";
     static final String SCAN_RESULTS_QUEUE = "cdp-clamav-results";
@@ -47,7 +52,6 @@ final class CdpUploaderTestSupport {
      * Redis Testcontainer with the standard wait-for-readiness log probe. cdp-uploader uses
      * Redis for upload-session state — without it, /initiate hangs.
      */
-    @SuppressWarnings("resource") // long-lived static container; lifecycle owned by Testcontainers' Ryuk reaper
     static GenericContainer<?> redisContainer(Network network, String alias) {
         return new GenericContainer<>(DockerImageName.parse(REDIS_IMAGE))
             .withExposedPorts(6379)
@@ -59,22 +63,22 @@ final class CdpUploaderTestSupport {
 
     /**
      * Pre-configured cdp-uploader Testcontainer with the env vars common to all IT shapes
-     * (PORT, USE_SINGLE_INSTANCE_CACHE, CONSUMER_BUCKETS) and a /health-based readiness probe.
-     * Callers chain {@code .withEnv(...)} for NODE_ENV and any mode-specific config.
+     * (PORT, REDIS_HOST, USE_SINGLE_INSTANCE_CACHE, CONSUMER_BUCKETS) and a /health-based
+     * readiness probe. Callers chain {@code .withEnv(...)} for NODE_ENV and any mode-specific
+     * scanner/AWS config.
      */
-    @SuppressWarnings("resource")
     static GenericContainer<?> cdpUploaderContainer(
         Network network, String alias, String redisAlias, String consumerBuckets) {
         return new GenericContainer<>(DockerImageName.parse(CDP_UPLOADER_IMAGE))
-            .withExposedPorts(3000)
+            .withExposedPorts(CDP_UPLOADER_PORT)
             .withNetwork(network)
             .withNetworkAliases(alias)
-            .withEnv("PORT", "3000")
+            .withEnv("PORT", String.valueOf(CDP_UPLOADER_PORT))
             .withEnv("REDIS_HOST", redisAlias)
             .withEnv("USE_SINGLE_INSTANCE_CACHE", "true")
             .withEnv("CONSUMER_BUCKETS", consumerBuckets)
             .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("cdp-uploader")))
-            .waitingFor(Wait.forHttp("/health").forPort(3000)
+            .waitingFor(Wait.forHttp("/health").forPort(CDP_UPLOADER_PORT)
                 .withStartupTimeout(Duration.ofSeconds(60)));
     }
 
@@ -88,7 +92,7 @@ final class CdpUploaderTestSupport {
         return new LocalStackContainer(DockerImageName.parse(LOCALSTACK_IMAGE))
             .withServices("s3", "sqs")
             .withNetwork(network)
-            .withNetworkAliases("localstack")
+            .withNetworkAliases(LOCALSTACK_ALIAS)
             .withEnv("DEFAULT_REGION", region)
             .withEnv("AWS_DEFAULT_REGION", region);
     }
@@ -125,7 +129,7 @@ final class CdpUploaderTestSupport {
      *   <li>Creates {@code mock-clamav}, {@code cdp-clamav-results}, {@code cdp-uploader-download-requests}
      *       (standard) and {@code cdp-uploader-scan-results-callback.fifo} (FIFO + content-based dedup).</li>
      *   <li>Configures the quarantine bucket to fan {@code s3:ObjectCreated:*} events to the
-     *       {@code mock-clamav} queue. LocalStack uses the literal AWS account id 000000000000.</li>
+     *       {@code mock-clamav} queue.</li>
      * </ol>
      *
      * Caller is responsible for pre-creating the buckets — we don't create them here because
@@ -149,7 +153,7 @@ final class CdpUploaderTestSupport {
                 .bucket(QUARANTINE_BUCKET)
                 .notificationConfiguration(NotificationConfiguration.builder()
                     .queueConfigurations(QueueConfiguration.builder()
-                        .queueArn("arn:aws:sqs:" + region + ":000000000000:" + MOCK_CLAMAV_QUEUE)
+                        .queueArn(localStackSqsArn(region, MOCK_CLAMAV_QUEUE))
                         .events(Event.S3_OBJECT_CREATED)
                         .build())
                     .build())
@@ -157,12 +161,25 @@ final class CdpUploaderTestSupport {
     }
 
     /**
-     * Adds the cluster of env vars required for cdp-uploader's mock virus scanner to run end-to-end:
-     * dev-mode flags, mock-virus toggles, AWS endpoints/credentials, and SQS long-poll waits
-     * cranked down to 1s so the upload→scan→callback round-trip completes inside a normal
-     * IT timeout rather than blocking on the 20s default.
+     * Adds the full cluster of env vars required to run cdp-uploader in dev mode against
+     * LocalStack with the mock virus scanner end-to-end. Specifically sets:
+     *
+     * <ul>
+     *   <li>{@code NODE_ENV=development} — switches cdp-uploader into dev mode (e.g. relaxed
+     *       redirect handling, mock-scanner code paths enabled).</li>
+     *   <li>{@code MOCK_VIRUS_SCAN_ENABLED=true} and {@code MOCK_VIRUS_RESULT_DELAY=0} —
+     *       turn on the in-process mock scanner and short-circuit its artificial delay.</li>
+     *   <li>{@code SQS_*_WAIT_TIME_SECONDS=1} for scan-results, scan-results-callback,
+     *       download-requests, and mock-clamav queues — cranks SQS long-poll waits down from
+     *       the 20s default so the upload→scan→callback round-trip completes inside a normal
+     *       IT timeout.</li>
+     *   <li>{@code S3_ENDPOINT} pointing at the LocalStack network alias, plus
+     *       {@code AWS_REGION} matching the {@link #localStackContainer} region pin, plus
+     *       static {@code AWS_ACCESS_KEY_ID}/{@code AWS_SECRET_ACCESS_KEY=test} credentials —
+     *       so the uploader's AWS SDK clients reach LocalStack and sign for the right region.</li>
+     * </ul>
      */
-    static GenericContainer<?> withDevModeMockScannerEnv(GenericContainer<?> container, String region) {
+    static GenericContainer<?> withDevModeUploaderEnv(GenericContainer<?> container, String region) {
         return container
             .withEnv("NODE_ENV", "development")
             .withEnv("MOCK_VIRUS_SCAN_ENABLED", "true")
@@ -171,9 +188,14 @@ final class CdpUploaderTestSupport {
             .withEnv("SQS_SCAN_RESULTS_CALLBACK_WAIT_TIME_SECONDS", "1")
             .withEnv("SQS_DOWNLOAD_REQUESTS_WAIT_TIME_SECONDS", "1")
             .withEnv("SQS_MOCK_CLAMAV_WAIT_TIME_SECONDS", "1")
-            .withEnv("S3_ENDPOINT", "http://localstack:4566")
+            .withEnv("S3_ENDPOINT", "http://" + LOCALSTACK_ALIAS + ":4566")
             .withEnv("AWS_REGION", region)
             .withEnv("AWS_ACCESS_KEY_ID", "test")
             .withEnv("AWS_SECRET_ACCESS_KEY", "test");
+    }
+
+    private static String localStackSqsArn(String region, String queueName) {
+        // LocalStack uses the literal AWS account id 000000000000
+        return "arn:aws:sqs:" + region + ":000000000000:" + queueName;
     }
 }

@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.integration.document;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -28,7 +29,6 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 class DocumentInitiateProductionModeIT extends IntegrationBase {
 
     private static final String NOTIFICATION_REF = "DRAFT.IMP.2026.PROD-IT001";
-    private static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
     private static final String REDIS_ALIAS = "redis-prod-it";
     private static final String CDP_UPLOADER_ALIAS = "cdp-uploader-prod";
 
@@ -42,21 +42,21 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
     //   - callback must be on the cdp-int.defra.cloud domain
     private static final GenericContainer<?> CDP_UPLOADER_PROD_CONTAINER =
         CdpUploaderTestSupport.cdpUploaderContainer(
-                CONTAINER_NETWORK, CDP_UPLOADER_ALIAS, REDIS_ALIAS, DOCUMENTS_BUCKET)
+                CONTAINER_NETWORK, CDP_UPLOADER_ALIAS, REDIS_ALIAS, CdpUploaderTestSupport.DOCUMENTS_BUCKET)
             .withEnv("NODE_ENV", "production");
 
     static {
         Startables.deepStart(REDIS_CONTAINER).join();
         Startables.deepStart(CDP_UPLOADER_PROD_CONTAINER).join();
         log.info("Production-mode cdp-uploader started on port {}",
-            CDP_UPLOADER_PROD_CONTAINER.getMappedPort(3000));
+            CDP_UPLOADER_PROD_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT));
     }
 
     @DynamicPropertySource
     static void registerProductionModeProperties(DynamicPropertyRegistry registry) {
         registry.add("cdp.uploader.base-url",
             () -> "http://" + CDP_UPLOADER_PROD_CONTAINER.getHost()
-                + ":" + CDP_UPLOADER_PROD_CONTAINER.getMappedPort(3000));
+                + ":" + CDP_UPLOADER_PROD_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT));
 
         // Callback URL must end in cdp-int.defra.cloud to satisfy prod-mode Joi schema.
         // Reachability doesn't matter here — /initiate only validates the URL string.
@@ -80,6 +80,10 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
         assertThat(body).isNotNull();
         assertThat(body.uploadId()).isNotBlank();
         assertThat(body.uploadUrl()).contains("/upload-and-scan/" + body.uploadId());
+        // Directly pin the absoluteness property the EUDPA-35 fix introduces: the named
+        // regression test would otherwise catch the path-only bug only indirectly (via
+        // cdp-uploader 400'ing the buggy absolute redirect and isCreated() failing).
+        assertThat(body.uploadUrl()).startsWith("http://");
     }
 
     /**
@@ -92,7 +96,7 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
     @Test
     void cdpUploaderInitiate_shouldReject400_whenRedirectIsAbsoluteUrl() {
         String cdpUploaderUrl = "http://" + CDP_UPLOADER_PROD_CONTAINER.getHost()
-            + ":" + CDP_UPLOADER_PROD_CONTAINER.getMappedPort(3000);
+            + ":" + CDP_UPLOADER_PROD_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT);
 
         EntityExchangeResult<byte[]> result = WebTestClient.bindToServer()
             .baseUrl(cdpUploaderUrl)
@@ -108,12 +112,20 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
                   "s3Path": "%s",
                   "metadata": {}
                 }
-                """.formatted(DOCUMENTS_BUCKET, NOTIFICATION_REF))
+                """.formatted(CdpUploaderTestSupport.DOCUMENTS_BUCKET, NOTIFICATION_REF))
             .exchange()
             .expectStatus().isBadRequest()
             .expectBody().returnResult();
 
-        String body = result.getResponseBody() == null ? "" : new String(result.getResponseBody());
-        assertThat(body).contains("redirect").contains("relative");
+        String body = result.getResponseBody() == null
+            ? ""
+            : new String(result.getResponseBody(), StandardCharsets.UTF_8);
+        // Pin to the literal Joi message fragment so a future cdp-uploader image bump that
+        // weakens or removes the relativeOnly() guard fails this test rather than silently
+        // passing on an unrelated structured-error shape that happens to contain both
+        // "redirect" and "relative". cdp-uploader returns the message JSON-escaped, so the
+        // raw bytes include backslash-escaped quotes around the field name; match them
+        // literally.
+        assertThat(body).contains("\\\"redirect\\\" must be a valid relative uri");
     }
 }
