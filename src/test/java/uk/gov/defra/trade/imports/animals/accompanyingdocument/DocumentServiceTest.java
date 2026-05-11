@@ -70,6 +70,7 @@ class DocumentServiceTest {
     when(cdpConfig.uploader()).thenReturn(uploaderConfig);
     when(cdpConfig.backend()).thenReturn(backendConfig);
     when(cdpConfig.s3()).thenReturn(s3Config);
+    when(uploaderConfig.baseUrl()).thenReturn("https://cdp-uploader");
     when(uploaderConfig.maxFileSize()).thenReturn(52428800L);
     when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
     when(backendConfig.baseUrl()).thenReturn("http://backend");
@@ -89,8 +90,10 @@ class DocumentServiceTest {
 
       stubCdpConfig();
 
+      // cdp-uploader returns the uploadUrl as a relative path (its APP_BASE_URL is unset
+      // in CDP-deployed envs); the backend resolves it against cdp.uploader.base-url.
       CdpUploaderInitiateResponse uploaderResponse =
-          new CdpUploaderInitiateResponse("upload-id-001", "https://cdp-uploader/form/upload-id-001", "https://cdp-uploader/status/upload-id-001");
+          new CdpUploaderInitiateResponse("upload-id-001", "/upload-and-scan/upload-id-001", "/status/upload-id-001");
       when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
           .thenReturn(uploaderResponse);
 
@@ -104,10 +107,10 @@ class DocumentServiceTest {
       // When
       DocumentUploadResponse response = documentService.initiate(notificationRef, request);
 
-      // Then — assert on the response returned to the caller
+      // Then — relative uploadUrl from cdp-uploader is resolved to absolute against base
       assertThat(response).isNotNull();
       assertThat(response.uploadId()).isEqualTo("upload-id-001");
-      assertThat(response.uploadUrl()).isEqualTo("https://cdp-uploader/form/upload-id-001");
+      assertThat(response.uploadUrl()).isEqualTo("https://cdp-uploader/upload-and-scan/upload-id-001");
 
       // Then — assert on the request sent to cdp-uploader: metadata.correlationId is present
       ArgumentCaptor<CdpUploaderInitiateRequest> initiateCaptor =
@@ -123,6 +126,7 @@ class DocumentServiceTest {
       AccompanyingDocument saved = captor.getValue();
       assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.PENDING);
       assertThat(saved.getNotificationReferenceNumber()).isEqualTo(notificationRef);
+      assertThat(saved.getUploadUrl()).isEqualTo("https://cdp-uploader/upload-and-scan/upload-id-001");
       Instant expectedDateOfIssue = LocalDate.of(2026, 1, 15).atStartOfDay(ZoneOffset.UTC).toInstant();
       assertThat(saved.getDateOfIssue()).isEqualTo(expectedDateOfIssue);
 

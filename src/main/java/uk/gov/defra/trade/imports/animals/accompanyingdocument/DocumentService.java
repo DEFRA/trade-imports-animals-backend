@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
+import java.net.URI;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -82,11 +83,30 @@ public class DocumentService {
 
     log.info("Initiating cdp-uploader session for notification {}", notificationRef);
     CdpUploaderInitiateResponse response = cdpUploaderClient.initiate(initiateRequest);
+    String absoluteUploadUrl = resolveUploadUrl(response.uploadUrl());
 
-    AccompanyingDocument document = buildPendingDocument(notificationRef, request, response, correlationId);
+    AccompanyingDocument document = buildPendingDocument(
+        notificationRef, request, response, absoluteUploadUrl, correlationId);
     saveOrThrowOnDuplicate(document, notificationRef);
 
-    return new DocumentUploadResponse(response.uploadId(), response.uploadUrl());
+    return new DocumentUploadResponse(response.uploadId(), absoluteUploadUrl);
+  }
+
+  /**
+   * cdp-uploader's {@code uploadUrl} response shape depends on its {@code NODE_ENV}: in
+   * development it returns an absolute URL built from its own {@code appBaseUrl}, which often
+   * isn't reachable from this backend (e.g. {@code http://localhost:7337}); in production it
+   * returns a path-only relative URL. Either way the only meaningful part is the path —
+   * strip the host that cdp-uploader chose and resolve the path against the URL the backend
+   * uses to reach cdp-uploader, so the URL we hand to the frontend is always reachable.
+   */
+  private String resolveUploadUrl(String uploadUrlFromCdpUploader) {
+    URI parsed = URI.create(uploadUrlFromCdpUploader);
+    String pathAndQuery = parsed.getRawPath()
+        + (parsed.getRawQuery() != null ? "?" + parsed.getRawQuery() : "");
+    return URI.create(cdpConfig.uploader().baseUrl())
+        .resolve(pathAndQuery)
+        .toString();
   }
 
   /**
@@ -214,12 +234,13 @@ public class DocumentService {
       String notificationRef,
       DocumentUploadRequest request,
       CdpUploaderInitiateResponse response,
+      String absoluteUploadUrl,
       String correlationId) {
     return AccompanyingDocument.builder()
         .notificationReferenceNumber(notificationRef)
         .uploadId(response.uploadId())
         .correlationId(correlationId)
-        .uploadUrl(response.uploadUrl())
+        .uploadUrl(absoluteUploadUrl)
         .documentType(request.documentType())
         .documentReference(request.documentReference())
         .dateOfIssue(request.dateOfIssue().atStartOfDay(ZoneOffset.UTC).toInstant())

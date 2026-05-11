@@ -227,12 +227,12 @@ class DocumentControllerIT extends IntegrationBase {
      */
     @Test
     void scanResult_cleanFile_shouldEndUpAsCompleteViaRealScan() throws IOException {
-        String uploadId = initiateAndGetUploadId();
+        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
-        uploadFileViaCdpUploader(uploadId, "clean.pdf", pdfBytes, "application/pdf");
+        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "clean.pdf", pdfBytes, "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(uploadId);
+        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
         assertThat(persisted.getFiles()).hasSize(1);
 
@@ -256,12 +256,12 @@ class DocumentControllerIT extends IntegrationBase {
      */
     @Test
     void scanResult_virusFile_shouldEndUpAsRejectedViaRealScan() throws IOException {
-        String uploadId = initiateAndGetUploadId();
+        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
-        uploadFileViaCdpUploader(uploadId, "virus.pdf", pdfBytes, "application/pdf");
+        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "virus.pdf", pdfBytes, "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(uploadId);
+        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
         assertThat(persisted.getFiles()).hasSize(1);
 
@@ -331,16 +331,16 @@ class DocumentControllerIT extends IntegrationBase {
 
     @Test
     void downloadFile_shouldStreamFileFromS3WithCorrectHeaders() throws IOException {
-        String uploadId = initiateAndGetUploadId();
+        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
-        uploadFileViaCdpUploader(uploadId, "clean.pdf", pdfBytes, "application/pdf");
+        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "clean.pdf", pdfBytes, "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(uploadId);
+        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
 
         EntityExchangeResult<byte[]> result = webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + uploadId + "/file")
+            .uri("/document-uploads/" + initiateResponse.uploadId() + "/file")
             .exchange()
             .expectStatus().isOk()
             .expectHeader().contentType(MediaType.APPLICATION_PDF)
@@ -412,16 +412,16 @@ class DocumentControllerIT extends IntegrationBase {
 
     @Test
     void downloadFile_rejectedFile_shouldReturn404() throws IOException {
-        String uploadId = initiateAndGetUploadId();
+        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
-        uploadFileViaCdpUploader(uploadId, "virus.pdf", pdfBytes, "application/pdf");
+        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "virus.pdf", pdfBytes, "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(uploadId);
+        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
 
         webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + uploadId + "/file")
+            .uri("/document-uploads/" + initiateResponse.uploadId() + "/file")
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
@@ -439,11 +439,11 @@ class DocumentControllerIT extends IntegrationBase {
      */
     @Test
     void downloadFile_s3ObjectMissing_shouldReturn500() throws IOException {
-        String uploadId = initiateAndGetUploadId();
+        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
-        uploadFileViaCdpUploader(uploadId, "clean.pdf", pdfBytes, "application/pdf");
+        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "clean.pdf", pdfBytes, "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(uploadId);
+        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
         String s3Key = persisted.getFiles().get(0).s3Key();
 
@@ -454,7 +454,7 @@ class DocumentControllerIT extends IntegrationBase {
 
         webClient("NoAuth")
             .get()
-            .uri("/document-uploads/" + uploadId + "/file")
+            .uri("/document-uploads/" + initiateResponse.uploadId() + "/file")
             .exchange()
             .expectStatus().is5xxServerError()
             .expectBody()
@@ -489,6 +489,10 @@ class DocumentControllerIT extends IntegrationBase {
     }
 
     private String initiateAndGetUploadId() {
+        return initiateAndGetResponse().uploadId();
+    }
+
+    private DocumentUploadResponse initiateAndGetResponse() {
         EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
@@ -501,19 +505,18 @@ class DocumentControllerIT extends IntegrationBase {
         DocumentUploadResponse body = result.getResponseBody();
         assertThat(body).isNotNull();
         assertThat(body.uploadId()).isNotBlank();
-        return body.uploadId();
+        assertThat(body.uploadUrl()).isNotBlank();
+        return body;
     }
 
     /**
-     * POSTs a multipart {@code file} part to cdp-uploader's {@code /upload-and-scan/{uploadId}}
-     * endpoint. cdp-uploader stores the bytes in the quarantine bucket and returns 302 to the
-     * configured redirect path; we don't follow the redirect (it would land on a 404).
+     * POSTs a multipart {@code file} part to the upload URL the backend returned. Driving the
+     * upload via {@code body.uploadUrl()} (rather than re-constructing the URL here) exercises
+     * the backend's relative→absolute resolution end-to-end — a regression that left the URL
+     * relative would fail this fetch with a URL-parse error rather than slipping through.
      */
     private void uploadFileViaCdpUploader(
-        String uploadId, String filename, byte[] bytes, String contentType) {
-
-        String cdpUploaderBaseUrl = "http://" + CDP_UPLOADER_CONTAINER.getHost()
-            + ":" + CDP_UPLOADER_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT);
+        String uploadUrl, String filename, byte[] bytes, String contentType) {
 
         MultiValueMap<String, HttpEntity<?>> body = new LinkedMultiValueMap<>();
         HttpHeaders partHeaders = new HttpHeaders();
@@ -524,11 +527,9 @@ class DocumentControllerIT extends IntegrationBase {
             @Override public String getFilename() { return filename; }
         }, partHeaders));
 
-        WebClient.builder()
-            .baseUrl(cdpUploaderBaseUrl)
-            .build()
+        WebClient.create()
             .post()
-            .uri("/upload-and-scan/" + uploadId)
+            .uri(uploadUrl)
             .contentType(MediaType.MULTIPART_FORM_DATA)
             .body(BodyInserters.fromMultipartData(body))
             .retrieve()
