@@ -15,6 +15,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -83,6 +84,7 @@ class DocumentServiceTest {
     @Test
     void initiate_shouldCallCdpUploaderAndSaveWithPendingStatus() {
       // Given
+      final String uploadId = UUID.randomUUID().toString();
       String notificationRef = "DRAFT.IMP.2026.abc123";
 
       DocumentUploadRequest request = new DocumentUploadRequest(
@@ -94,12 +96,12 @@ class DocumentServiceTest {
       // pass it through — the backend constructs the URL from cdp.uploader.base-url and the
       // uploadId cdp-uploader minted, ignoring whatever uploadUrl shape cdp-uploader chose.
       CdpUploaderInitiateResponse uploaderResponse =
-          new CdpUploaderInitiateResponse("upload-id-001", "http://wrong-host:9999/wrong-path", "/status/upload-id-001");
+          new CdpUploaderInitiateResponse(uploadId, "http://wrong-host:9999/wrong-path", "/status/" + uploadId);
       when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
           .thenReturn(uploaderResponse);
 
       AccompanyingDocument savedDoc = AccompanyingDocument.builder()
-          .uploadId("upload-id-001")
+          .uploadId(uploadId)
           .scanStatus(ScanStatus.PENDING)
           .build();
       when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
@@ -111,8 +113,8 @@ class DocumentServiceTest {
       // Then — uploadUrl is reconstructed from the configured base + the uploadId, not derived
       // from response.uploadUrl()
       assertThat(response).isNotNull();
-      assertThat(response.uploadId()).isEqualTo("upload-id-001");
-      assertThat(response.uploadUrl()).isEqualTo("https://cdp-uploader/upload-and-scan/upload-id-001");
+      assertThat(response.uploadId()).isEqualTo(uploadId);
+      assertThat(response.uploadUrl()).isEqualTo("https://cdp-uploader/upload-and-scan/" + uploadId);
 
       // Then — assert on the request sent to cdp-uploader: metadata.correlationId is present
       ArgumentCaptor<CdpUploaderInitiateRequest> initiateCaptor =
@@ -128,7 +130,7 @@ class DocumentServiceTest {
       AccompanyingDocument saved = captor.getValue();
       assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.PENDING);
       assertThat(saved.getNotificationReferenceNumber()).isEqualTo(notificationRef);
-      assertThat(saved.getUploadUrl()).isEqualTo("https://cdp-uploader/upload-and-scan/upload-id-001");
+      assertThat(saved.getUploadUrl()).isEqualTo("https://cdp-uploader/upload-and-scan/" + uploadId);
       Instant expectedDateOfIssue = LocalDate.of(2026, 1, 15).atStartOfDay(ZoneOffset.UTC).toInstant();
       assertThat(saved.getDateOfIssue()).isEqualTo(expectedDateOfIssue);
 
