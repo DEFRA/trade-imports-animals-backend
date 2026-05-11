@@ -136,7 +136,7 @@ class DocumentServiceTest {
 
       // Then — the same correlationId is on the saved doc and is a valid UUID
       assertThat(saved.getCorrelationId()).isEqualTo(metadataCorrelationId);
-      assertThat(java.util.UUID.fromString(saved.getCorrelationId())).isNotNull();
+      assertThat(UUID.fromString(saved.getCorrelationId())).isNotNull();
     }
 
     @Test
