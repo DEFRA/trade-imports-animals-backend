@@ -90,10 +90,11 @@ class DocumentServiceTest {
 
       stubCdpConfig();
 
-      // cdp-uploader returns the uploadUrl as a relative path (its APP_BASE_URL is unset
-      // in CDP-deployed envs); the backend resolves it against cdp.uploader.base-url.
+      // The uploadUrl in cdp-uploader's response is intentionally bizarre to prove we don't
+      // pass it through — the backend constructs the URL from cdp.uploader.base-url and the
+      // uploadId cdp-uploader minted, ignoring whatever uploadUrl shape cdp-uploader chose.
       CdpUploaderInitiateResponse uploaderResponse =
-          new CdpUploaderInitiateResponse("upload-id-001", "/upload-and-scan/upload-id-001", "/status/upload-id-001");
+          new CdpUploaderInitiateResponse("upload-id-001", "http://wrong-host:9999/wrong-path", "/status/upload-id-001");
       when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
           .thenReturn(uploaderResponse);
 
@@ -107,7 +108,8 @@ class DocumentServiceTest {
       // When
       DocumentUploadResponse response = documentService.initiate(notificationRef, request);
 
-      // Then — relative uploadUrl from cdp-uploader is resolved to absolute against base
+      // Then — uploadUrl is reconstructed from the configured base + the uploadId, not derived
+      // from response.uploadUrl()
       assertThat(response).isNotNull();
       assertThat(response.uploadId()).isEqualTo("upload-id-001");
       assertThat(response.uploadUrl()).isEqualTo("https://cdp-uploader/upload-and-scan/upload-id-001");

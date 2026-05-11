@@ -83,29 +83,31 @@ public class DocumentService {
 
     log.info("Initiating cdp-uploader session for notification {}", notificationRef);
     CdpUploaderInitiateResponse response = cdpUploaderClient.initiate(initiateRequest);
-    String absoluteUploadUrl = resolveUploadUrl(response.uploadUrl());
+    String uploadUrl = buildUploadUrl(response.uploadId());
 
     AccompanyingDocument document = buildPendingDocument(
-        notificationRef, request, response, absoluteUploadUrl, correlationId);
+        notificationRef, request, response, uploadUrl, correlationId);
     saveOrThrowOnDuplicate(document, notificationRef);
 
-    return new DocumentUploadResponse(response.uploadId(), absoluteUploadUrl);
+    return new DocumentUploadResponse(response.uploadId(), uploadUrl);
   }
 
   /**
-   * cdp-uploader's {@code uploadUrl} response shape depends on its {@code NODE_ENV}: in
-   * development it returns an absolute URL built from its own {@code appBaseUrl}, which often
-   * isn't reachable from this backend (e.g. {@code http://localhost:7337}); in production it
-   * returns a path-only relative URL. Either way the only meaningful part is the path —
-   * strip the host that cdp-uploader chose and resolve the path against the URL the backend
-   * uses to reach cdp-uploader, so the URL we hand to the frontend is always reachable.
+   * Constructs the upload URL from {@code cdp.uploader.base-url} and the {@code uploadId}
+   * cdp-uploader minted. Deliberately ignores {@code response.uploadUrl()} — that field's
+   * shape varies (absolute in cdp-uploader's dev mode, relative in production, with hosts
+   * that may not be reachable from this backend), but its content is fully determined by the
+   * documented {@code POST /upload-and-scan/{uploadId}} route, so we can build it ourselves.
+   *
+   * <p>The tradeoff is a hard dependency on cdp-uploader's URL pattern: a future cdp-uploader
+   * release that changes the route would silently produce broken URLs here. The
+   * {@code DocumentControllerIT} real-scan tests guard against that by uploading to the URL
+   * we constructed against a real cdp-uploader container — a pattern change would surface as
+   * a 404 on upload, not as a silent regression.
    */
-  private String resolveUploadUrl(String uploadUrlFromCdpUploader) {
-    URI parsed = URI.create(uploadUrlFromCdpUploader);
-    String pathAndQuery = parsed.getRawPath()
-        + (parsed.getRawQuery() != null ? "?" + parsed.getRawQuery() : "");
+  private String buildUploadUrl(String uploadId) {
     return URI.create(cdpConfig.uploader().baseUrl())
-        .resolve(pathAndQuery)
+        .resolve("/upload-and-scan/" + uploadId)
         .toString();
   }
 
