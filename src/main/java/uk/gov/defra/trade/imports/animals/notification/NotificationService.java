@@ -51,6 +51,15 @@ public class NotificationService {
         return notifications;
     }
 
+    public Notification submitNotification(String referenceNumber) {
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                "Cannot find notification with reference number: " + referenceNumber));
+        notification.setStatus(NotificationStatus.SUBMITTED);
+        notification.setUpdated(LocalDateTime.now());
+        return notificationRepository.save(notification);
+    }
+
     public List<String> findAllReferenceNumbers() {
         log.debug("Fetching all notification reference numbers");
         return notificationRepository.findAllProjectedBy()
@@ -90,6 +99,7 @@ public class NotificationService {
     private Notification createNotification(NotificationDto dto) {
         Notification notification = new Notification();
         notification.setCreated(LocalDateTime.now());
+        notification.setStatus(NotificationStatus.DRAFT);
         setNotificationDetails(dto, notification);
         var saved = notificationRepository.save(notification);
         log.info("Notification saved with id: {}", saved.getId());
