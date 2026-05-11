@@ -79,6 +79,10 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
         assertThat(body).isNotNull();
         assertThat(body.uploadId()).isNotBlank();
         assertThat(body.uploadUrl()).contains("/upload-and-scan/" + body.uploadId());
+        // Directly pin the absoluteness property the EUDPA-35 fix introduces: the named
+        // regression test would otherwise catch the path-only bug only indirectly (via
+        // cdp-uploader 400'ing the buggy absolute redirect and isCreated() failing).
+        assertThat(body.uploadUrl()).startsWith("http://");
     }
 
     /**
