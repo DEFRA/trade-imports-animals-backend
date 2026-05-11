@@ -22,7 +22,6 @@ import org.springframework.validation.annotation.Validated;
  * @param proxyUrl       the outbound HTTP proxy URL used to reach CDP services
  * @param uploader       cdp-uploader service configuration; required
  * @param backend        backend service base URL configuration
- * @param frontend       frontend service base URL configuration
  * @param s3             S3 document storage configuration
  */
 @Validated
@@ -36,7 +35,6 @@ public record CdpConfig(
     String proxyUrl,
     @NotNull UploaderConfig uploader,
     @Valid @NotNull BackendConfig backend,
-    @Valid @NotNull FrontendConfig frontend,
     S3Config s3) {
 
   /**
@@ -54,22 +52,9 @@ public record CdpConfig(
   /**
    * Backend service base URL configuration.
    *
-   * <p>Kept as a distinct type from {@link FrontendConfig} to provide compile-time type safety —
-   * injection sites can declare exactly which URL they need and avoid accidental swaps.
-   *
    * @param baseUrl the public base URL of the backend service, used for callback construction
    */
   public record BackendConfig(@NotBlank String baseUrl) {}
-
-  /**
-   * Frontend service base URL configuration.
-   *
-   * <p>Kept as a distinct type from {@link BackendConfig} to provide compile-time type safety —
-   * injection sites can declare exactly which URL they need and avoid accidental swaps.
-   *
-   * @param baseUrl the public base URL of the frontend service
-   */
-  public record FrontendConfig(@NotBlank String baseUrl) {}
 
   /**
    * S3 document storage configuration.

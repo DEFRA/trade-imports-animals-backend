@@ -35,15 +35,13 @@ or `docker compose` will surface a missing-var warning and the service will
 fail fast at startup:
 
 - `TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL` — externally reachable base URL for this service
-  (typical local value: `http://host.docker.internal:8085`)
-- `TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL` — externally reachable base URL for the frontend
-  (typical local value: `http://localhost:3000`)
+  (typical local value: `http://host.docker.internal:8085`). Used to construct the cdp-uploader
+  scan-result callback URL.
 
 Example `.env`:
 
 ```
 TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL=http://host.docker.internal:8085
-TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL=http://localhost:3000
 ```
 
 ### MongoDB
@@ -94,8 +92,8 @@ mvn test
 
 ### Running
 
-Run the application with the `local` Spring profile, which supplies development
-defaults for `TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL` and `TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL`:
+Run the application with the `local` Spring profile, which supplies a development
+default for `TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL`:
 
 ```bash
 mvn spring-boot:run -Dspring-boot.run.profiles=local
@@ -107,16 +105,15 @@ Or equivalently:
 SPRING_PROFILES_ACTIVE=local mvn spring-boot:run
 ```
 
-Without the `local` profile the application reads `application.yml`, which
-resolves `TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL` / `TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL` to empty strings if unset
-(deployed environments must set these explicitly). `CdpConfig` enforces
-`@NotBlank` on both, so startup fails fast with a binding/validation error
-(`Property: cdp.backend.baseUrl`, `Reason: must not be blank`). To run without
-the profile, export those vars manually first:
+Without the `local` profile the application reads `application.yml`, which resolves
+`TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL` to an empty string if unset (deployed
+environments must set it explicitly). `CdpConfig` enforces `@NotBlank` on it, so
+startup fails fast with a binding/validation error
+(`Property: cdp.backend.baseUrl`, `Reason: must not be blank`). To run without the
+profile, export the var manually first:
 
 ```bash
 export TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL=http://host.docker.internal:8085
-export TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL=http://localhost:3000
 mvn spring-boot:run
 ```
 

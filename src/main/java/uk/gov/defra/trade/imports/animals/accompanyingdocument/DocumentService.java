@@ -38,6 +38,15 @@ public class DocumentService {
   private final CdpConfig cdpConfig;
 
   /**
+   * cdp-uploader's {@code /initiate} schema requires {@code xor('redirect', 'downloadUrls')}, so
+   * we always pass a redirect path. Our flow is server-proxied (the frontend POSTs the file to
+   * cdp-uploader on the user's behalf and ignores cdp-uploader's 302 response), so the value is
+   * never user-visible — anything cdp-uploader accepts as a relative URI works. Hard-coded
+   * because nothing in the caller's payload meaningfully affects it.
+   */
+  private static final String CDP_UPLOADER_REDIRECT_PATH = "/";
+
+  /**
    * Initiates a new document upload session via cdp-uploader and persists a pending
    * {@link AccompanyingDocument}.
    *
@@ -52,11 +61,10 @@ public class DocumentService {
    *
    * @param notificationRef the parent notification reference number
    * @param request         the document metadata supplied by the user
-   * @param redirectUrl     the URL to redirect the user to after they complete the upload form
    * @return the upload session details (upload ID and upload URL)
    */
   public DocumentUploadResponse initiate(
-      String notificationRef, DocumentUploadRequest request, String redirectUrl) {
+      String notificationRef, DocumentUploadRequest request) {
 
     // Mint a backend-side correlationId before /initiate so it can ride in the metadata map
     // and come back to us on the scan callback. cdp-uploader assigns its own uploadId during
@@ -65,7 +73,7 @@ public class DocumentService {
     String correlationId = UUID.randomUUID().toString();
 
     CdpUploaderInitiateRequest initiateRequest = new CdpUploaderInitiateRequest(
-        redirectUrl,
+        CDP_UPLOADER_REDIRECT_PATH,
         buildCallbackUrl(),
         cdpConfig.s3().documentsBucket(),
         notificationRef,
@@ -208,9 +216,6 @@ public class DocumentService {
       DocumentUploadRequest request,
       CdpUploaderInitiateResponse response,
       String correlationId) {
-    Instant dateOfIssueInstant = request.dateOfIssue() != null
-        ? request.dateOfIssue().atStartOfDay(ZoneOffset.UTC).toInstant()
-        : null;
     return AccompanyingDocument.builder()
         .notificationReferenceNumber(notificationRef)
         .uploadId(response.uploadId())
@@ -218,7 +223,7 @@ public class DocumentService {
         .uploadUrl(response.uploadUrl())
         .documentType(request.documentType())
         .documentReference(request.documentReference())
-        .dateOfIssue(dateOfIssueInstant)
+        .dateOfIssue(request.dateOfIssue().atStartOfDay(ZoneOffset.UTC).toInstant())
         .scanStatus(ScanStatus.PENDING)
         .files(new ArrayList<>())
         .build();

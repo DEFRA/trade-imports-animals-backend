@@ -14,8 +14,6 @@ import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
-import org.springframework.core.env.Environment;
-import org.springframework.core.env.Profiles;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.InvalidMediaTypeException;
@@ -31,9 +29,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
-import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
-import uk.gov.defra.trade.imports.animals.security.RedirectOriginChecker;
 
 /**
  * REST controller for accompanying document upload endpoints.
@@ -50,15 +46,13 @@ public class DocumentController {
   private final DocumentService documentService;
   private final S3DocumentService s3DocumentService;
   private final CdpConfig cdpConfig;
-  private final Environment environment;
 
   /**
    * Initiate a new document upload session for a notification.
    *
    * @param ref     the notification reference number
    * @param request the document metadata
-   * @return 201 Created with the upload session details and a Location header,
-   *         or 400 Bad Request if redirectUrl is not on the same origin as the configured frontend base URL
+   * @return 201 Created with the upload session details and a Location header
    */
   @PostMapping("/notifications/{ref}/document-uploads")
   @Operation(
@@ -66,7 +60,7 @@ public class DocumentController {
       description = "Creates a new upload session via cdp-uploader and returns the upload URL")
   @ApiResponse(responseCode = "201", description = "Upload session created",
       content = @Content(schema = @Schema(implementation = DocumentUploadResponse.class)))
-  @ApiResponse(responseCode = "400", description = "Invalid redirectUrl", content = @Content)
+  @ApiResponse(responseCode = "400", description = "Validation error", content = @Content)
   @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
   @Timed("document.initiate")
   public ResponseEntity<DocumentUploadResponse> initiate(
@@ -75,8 +69,7 @@ public class DocumentController {
 
     log.info("POST /notifications/{}/document-uploads", ref);
 
-    String redirectUrl = resolveRedirectUrl(ref, request);
-    DocumentUploadResponse response = documentService.initiate(ref, request, redirectUrl);
+    DocumentUploadResponse response = documentService.initiate(ref, request);
     URI location = buildLocationUri(response.uploadId());
 
     return ResponseEntity.created(location).body(response);
@@ -202,36 +195,6 @@ public class DocumentController {
     return ResponseEntity.ok()
         .headers(headers)
         .body(body);
-  }
-
-  /**
-   * Resolves the redirect URL: returns the requested URL when same-origin with the configured
-   * frontend base URL, falls back to the configured base URL when none was supplied, and
-   * throws {@link BadRequestException} when the requested URL is on a different origin (open-
-   * redirect prevention).
-   *
-   * <p>The origin check is skipped under the {@code local} Spring profile so that frontend and
-   * backend can be run independently in Docker or natively without having to keep
-   * {@code TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL} aligned across both processes' network views (e.g. {@code
-   * localhost} vs {@code host.docker.internal} vs the in-network service name).
-   */
-  private String resolveRedirectUrl(String ref, DocumentUploadRequest request) {
-    String frontendBaseUrl = cdpConfig.frontend().baseUrl();
-    String requested = request.redirectUrl();
-
-    if (requested == null || requested.isBlank()) {
-      return frontendBaseUrl;
-    }
-    if (!RedirectOriginChecker.matches(requested, frontendBaseUrl)) {
-      if (environment.acceptsProfiles(Profiles.of("local"))) {
-        log.warn("POST /notifications/{}/document-uploads: redirectUrl '{}' not within frontend base URL '{}' — allowed because local profile is active",
-            ref, requested, frontendBaseUrl);
-        return requested;
-      }
-      log.warn("POST /notifications/{}/document-uploads rejected: redirectUrl not within frontend base URL", ref);
-      throw new BadRequestException("redirectUrl is not within the configured frontend base URL");
-    }
-    return requested;
   }
 
   private URI buildLocationUri(String uploadId) {

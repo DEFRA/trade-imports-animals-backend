@@ -38,17 +38,10 @@ app:
     access-key-id: test
     secret-access-key: test
 
-# Local defaults for this service's URLs. Each is reached from a different network context,
-# hence the asymmetry:
-#   backend.base-url  — cdp-uploader (inside Docker) posts scan callbacks here, so
-#                       host.docker.internal is required; plain localhost is unreachable
-#                       from inside the cdp-uploader container.
-#   frontend.base-url — the user's browser is redirected here after upload, so
-#                       localhost is correct (the browser is on the host).
-# Kept out of application.yml so deployed environments fail fast if
-# TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL / TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL are unset.
+# Local default for this service's base URL — cdp-uploader (inside Docker) POSTs scan-result
+# callbacks here, so host.docker.internal is required; plain localhost is unreachable from
+# inside the cdp-uploader container. Kept out of application.yml so deployed environments fail
+# fast if TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL is unset.
 cdp:
   backend:
     base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:http://host.docker.internal:8085}
-  frontend:
-    base-url: ${TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL:http://localhost:3000}
