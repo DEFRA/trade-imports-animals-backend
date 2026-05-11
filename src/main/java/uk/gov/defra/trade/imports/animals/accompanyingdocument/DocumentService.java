@@ -103,7 +103,9 @@ public class DocumentService {
    * release that changes the route would silently produce broken URLs here. The
    * {@code DocumentControllerIT} real-scan tests guard against that by uploading to the URL
    * we constructed against a real cdp-uploader container — a pattern change would surface as
-   * a 404 on upload, not as a silent regression.
+   * a 404 on upload, not as a silent regression. Note: {@code cdp.uploader.base-url} is
+   * treated as origin-only — any path prefix is discarded by {@link URI#resolve} because the
+   * absolute {@code /upload-and-scan/...} reference replaces the base path.
    */
   private String buildUploadUrl(String uploadId) {
     return URI.create(cdpConfig.uploader().baseUrl())
