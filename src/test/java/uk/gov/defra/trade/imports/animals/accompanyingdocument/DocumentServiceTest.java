@@ -146,10 +146,12 @@ class DocumentServiceTest {
 
       stubCdpConfig();
 
+      // Same decoy shape as the happy-path test: an obviously-wrong host and a relative status path,
+      // to pin uniformly that the backend ignores cdp-uploader's response uploadUrl/statusUrl fields.
       CdpUploaderInitiateResponse uploaderResponse =
           new CdpUploaderInitiateResponse("upload-id-dup",
-              "https://cdp-uploader/form/upload-id-dup",
-              "https://cdp-uploader/status/upload-id-dup");
+              "http://wrong-host:9999/wrong-path",
+              "/status/upload-id-dup");
       when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
           .thenReturn(uploaderResponse);
 
