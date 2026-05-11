@@ -1,6 +1,5 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
-import java.net.URI;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriComponentsBuilder;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
@@ -103,14 +103,16 @@ public class DocumentService {
    * release that changes the route would silently produce broken URLs here. The
    * {@code DocumentControllerIT} real-scan tests guard against that by uploading to the URL
    * we constructed against a real cdp-uploader container — a pattern change would surface as
-   * a 404 on upload, not as a silent regression. Note: {@code cdp.uploader.base-url} is
-   * treated as origin-only — any path prefix is discarded by {@link URI#resolve} because the
-   * absolute {@code /upload-and-scan/...} reference replaces the base path.
+   * a 404 on upload, not as a silent regression. {@link UriComponentsBuilder#pathSegment}
+   * percent-encodes each path segment individually and appends to any existing path on
+   * {@code cdp.uploader.base-url} (so a base URL with a path prefix is preserved, not
+   * stripped).
    */
   private String buildUploadUrl(String uploadId) {
-    return URI.create(cdpConfig.uploader().baseUrl())
-        .resolve("/upload-and-scan/" + uploadId)
-        .toString();
+    return UriComponentsBuilder.fromUriString(cdpConfig.uploader().baseUrl())
+        .pathSegment("upload-and-scan", uploadId)
+        .build()
+        .toUriString();
   }
 
   /**
