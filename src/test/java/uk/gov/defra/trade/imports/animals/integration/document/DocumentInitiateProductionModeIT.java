@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.integration.document;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.nio.charset.StandardCharsets;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -116,7 +117,9 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
             .expectStatus().isBadRequest()
             .expectBody().returnResult();
 
-        String body = result.getResponseBody() == null ? "" : new String(result.getResponseBody());
+        String body = result.getResponseBody() == null
+            ? ""
+            : new String(result.getResponseBody(), StandardCharsets.UTF_8);
         // Pin to the literal Joi message fragment so a future cdp-uploader image bump that
         // weakens or removes the relativeOnly() guard fails this test rather than silently
         // passing on an unrelated structured-error shape that happens to contain both
