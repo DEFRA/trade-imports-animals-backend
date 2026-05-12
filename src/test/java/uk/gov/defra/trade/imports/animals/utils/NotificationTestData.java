@@ -5,6 +5,7 @@ import uk.gov.defra.trade.imports.animals.notification.Address;
 import uk.gov.defra.trade.imports.animals.notification.Consignor;
 import uk.gov.defra.trade.imports.animals.notification.Destination;
 import uk.gov.defra.trade.imports.animals.notification.Species;
+import uk.gov.defra.trade.imports.animals.notification.Transporter;
 
 public final class NotificationTestData {
 
@@ -58,6 +59,41 @@ public final class NotificationTestData {
                     .addressLine2("London LS1 5AB")
                     .country("United Kingdom")
                     .build())
+                .build()
+        );
+    }
+    
+    public static List<Transporter> transporters() {
+        return List.of(
+            Transporter.builder()
+                .name("García Livestock Transport SL")
+                .address(Address.builder()
+                    .addressLine1("46199 Brandy Dam, Suite 368, 2051")
+                    .addressLine2("5298, Vernier, Soleure")
+                    .country("Switzerland")
+                    .build())
+                .approvalNumber("ES-T2-45001294")
+                .type("Commercial")
+                .build(),
+            Transporter.builder()
+                .name("J & G Campbell LTD")
+                .address(Address.builder()
+                    .addressLine1("Noahplein 627b, 3e verdieping")
+                    .addressLine2("1836, Lauwe, Vlaams-Brabant")
+                    .country("Belgium")
+                    .build())
+                .approvalNumber("DE/BURY/T2/00104115")
+                .type("Private")
+                .build(),
+            Transporter.builder()
+                .name("John Gosden LTD")
+                .address(Address.builder()
+                    .addressLine1("67 Old Saffron Lane")
+                    .addressLine2("BURY, LE2 7FT")
+                    .country("UK")
+                    .build())
+                .approvalNumber("UK/BURY/T2/00104115")
+                .type("Private")
                 .build()
         );
     }

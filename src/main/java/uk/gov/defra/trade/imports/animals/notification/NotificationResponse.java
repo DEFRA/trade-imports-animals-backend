@@ -25,6 +25,7 @@ public record NotificationResponse(
     String reasonForImport,
     AdditionalDetails additionalDetails,
     String cphNumber,
+    Transport transport,
     NotificationStatus status,
     LocalDateTime created,
     LocalDateTime updated,
@@ -51,6 +52,7 @@ public record NotificationResponse(
         .reasonForImport(notification.getReasonForImport())
         .additionalDetails(notification.getAdditionalDetails())
         .cphNumber(notification.getCphNumber())
+        .transport(notification.getTransport())
         .status(notification.getStatus())
         .created(notification.getCreated())
         .updated(notification.getUpdated())
