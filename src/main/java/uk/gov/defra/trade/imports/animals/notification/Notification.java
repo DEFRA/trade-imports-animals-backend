@@ -37,6 +37,8 @@ public class Notification {
     
     private Transport transport;
 
+    private NotificationStatus status;
+
     private LocalDateTime created;
 
     private LocalDateTime updated;

@@ -44,6 +44,15 @@ public class NotificationController {
         return ResponseEntity.ok(notificationService.saveOriginOfImport(notificationDto));
     }
 
+    @PostMapping("/{referenceNumber}/submit")
+    @Operation(summary = "Submit notification", description = "Transitions notification status from DRAFT to SUBMITTED")
+    @Timed("controller.submitNotification.time")
+    public ResponseEntity<Notification> submit(
+        @Pattern(regexp = "^[A-Za-z0-9.]{1,50}$") @PathVariable String referenceNumber) {
+        log.info("POST /notifications/{}/submit - Submitting notification", referenceNumber);
+        return ResponseEntity.ok(notificationService.submitNotification(referenceNumber));
+    }
+
     @GetMapping("/{referenceNumber}")
     @Operation(summary = "Get notification by reference number",
         description = "Returns a single notification with its accompanying documents")

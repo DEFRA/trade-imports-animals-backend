@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
+import lombok.Builder;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 
@@ -15,6 +16,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocum
  *
  * <p>Use {@link #from(Notification, List)} to construct an instance from domain objects.
  */
+@Builder
 public record NotificationResponse(
     String id,
     String referenceNumber,
@@ -23,6 +25,7 @@ public record NotificationResponse(
     String reasonForImport,
     AdditionalDetails additionalDetails,
     String cphNumber,
+    NotificationStatus status,
     LocalDateTime created,
     LocalDateTime updated,
     List<AccompanyingDocumentDto> accompanyingDocuments) {
@@ -40,16 +43,18 @@ public record NotificationResponse(
       Notification notification, List<AccompanyingDocument> documents) {
     Objects.requireNonNull(notification, "notification");
     Objects.requireNonNull(documents, "documents");
-    return new NotificationResponse(
-        notification.getId(),
-        notification.getReferenceNumber(),
-        notification.getOrigin(),
-        notification.getCommodity(),
-        notification.getReasonForImport(),
-        notification.getAdditionalDetails(),
-        notification.getCphNumber(),
-        notification.getCreated(),
-        notification.getUpdated(),
-        documents.stream().map(AccompanyingDocumentDto::from).toList());
+    return NotificationResponse.builder()
+        .id(notification.getId())
+        .referenceNumber(notification.getReferenceNumber())
+        .origin(notification.getOrigin())
+        .commodity(notification.getCommodity())
+        .reasonForImport(notification.getReasonForImport())
+        .additionalDetails(notification.getAdditionalDetails())
+        .cphNumber(notification.getCphNumber())
+        .status(notification.getStatus())
+        .created(notification.getCreated())
+        .updated(notification.getUpdated())
+        .accompanyingDocuments(documents.stream().map(AccompanyingDocumentDto::from).toList())
+        .build();
   }
 }

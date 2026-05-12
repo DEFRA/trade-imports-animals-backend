@@ -23,6 +23,7 @@ import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.NotificationResponse;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Species;
@@ -392,6 +393,44 @@ class NotificationIT extends IntegrationBase {
             .bodyValue(List.of("DRAFT.IMP.2026.ANY"))
             .exchange()
             .expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void submit_shouldTransitionStatusFromDraftToSubmitted() {
+        // Given — create a notification (starts as DRAFT)
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When — submit the notification
+        Notification submitted = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult().getResponseBody();
+
+        // Then — status is SUBMITTED
+        assertThat(submitted).isNotNull();
+        assertThat(submitted.getReferenceNumber()).isEqualTo(referenceNumber);
+        assertThat(submitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(submitted.getUpdated()).isNotNull();
+    }
+
+    @Test
+    void submit_shouldReturn404_whenReferenceNumberDoesNotExist() {
+        // When / Then
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", "DRAFT.IMP.2026.DOESNOTEXIST")
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(404)
+            .jsonPath("$.detail").value(
+                Matchers.containsString("DRAFT.IMP.2026.DOESNOTEXIST"));
     }
 
     @Test

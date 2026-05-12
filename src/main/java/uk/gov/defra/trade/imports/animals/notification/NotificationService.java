@@ -23,6 +23,7 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 @RequiredArgsConstructor
 public class NotificationService {
 
+    private static final String CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER = "Cannot find notification with reference number: ";
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
     private final DocumentService documentService;
@@ -39,8 +40,9 @@ public class NotificationService {
         log.debug("Fetching notification for reference {}", referenceNumber);
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
-                "Cannot find notification with reference number: " + referenceNumber));
-        List<AccompanyingDocument> documents = documentService.findByNotificationRef(referenceNumber);
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+        List<AccompanyingDocument> documents = documentService.findByNotificationRef(
+            referenceNumber);
         return NotificationResponse.from(notification, documents);
     }
 
@@ -49,6 +51,15 @@ public class NotificationService {
         List<Notification> notifications = notificationRepository.findAll();
         log.debug("Found {} notifications", notifications.size());
         return notifications;
+    }
+
+    public Notification submitNotification(String referenceNumber) {
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+        notification.setStatus(NotificationStatus.SUBMITTED);
+        notification.setUpdated(LocalDateTime.now());
+        return notificationRepository.save(notification);
     }
 
     public List<String> findAllReferenceNumbers() {
@@ -90,6 +101,7 @@ public class NotificationService {
     private Notification createNotification(NotificationDto dto) {
         Notification notification = new Notification();
         notification.setCreated(LocalDateTime.now());
+        notification.setStatus(NotificationStatus.DRAFT);
         setNotificationDetails(dto, notification);
         var saved = notificationRepository.save(notification);
         log.info("Notification saved with id: {}", saved.getId());
@@ -101,7 +113,7 @@ public class NotificationService {
     private Notification updateNotification(NotificationDto dto) {
         Notification existingNotification = notificationRepository.findByReferenceNumber(
             dto.getReferenceNumber()).orElseThrow(() -> new NotFoundException(
-            "Cannot find notification with reference number: " + dto.getReferenceNumber()));
+            CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + dto.getReferenceNumber()));
         log.info("Notification already exists, updating {}", dto.getReferenceNumber());
         setNotificationDetails(dto, existingNotification);
         return notificationRepository.save(existingNotification);

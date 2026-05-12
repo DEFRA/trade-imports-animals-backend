@@ -168,6 +168,45 @@ class NotificationControllerTest {
     }
 
     @Nested
+    class SubmitNotification {
+
+        @Test
+        void submit_shouldReturn200WithSubmittedNotification() throws Exception {
+            // Given
+            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            Notification submitted = new Notification();
+            submitted.setId("notif-id-001");
+            submitted.setReferenceNumber(referenceNumber);
+            submitted.setStatus(NotificationStatus.SUBMITTED);
+
+            when(notificationService.submitNotification(referenceNumber)).thenReturn(submitted);
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/submit", referenceNumber)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.referenceNumber").value(referenceNumber))
+                .andExpect(jsonPath("$.status").value("SUBMITTED"));
+        }
+
+        @Test
+        void submit_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
+            // Given
+            String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
+            when(notificationService.submitNotification(referenceNumber))
+                .thenThrow(new NotFoundException(
+                    "Cannot find notification with reference number: " + referenceNumber));
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/submit", referenceNumber)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value(
+                    "Cannot find notification with reference number: " + referenceNumber));
+        }
+    }
+
+    @Nested
     class FindAll {
 
         @Test
@@ -367,12 +406,14 @@ class NotificationControllerTest {
                 /* dateOfIssue */ null, ScanStatus.COMPLETE,
                 /* files */ Collections.emptyList(), /* created */ null, /* updated */ null);
 
-            NotificationResponse response = new NotificationResponse(
-                "notif-id-001", referenceNumber, origin,
-                Commodity.builder().name("Live bovine animals").build(),
-                "PERMANENT", /* additionalDetails */ null, /* cphNumber */ null,
-                /* created */ null, /* updated */ null,
-                List.of(document));
+            NotificationResponse response = NotificationResponse.builder()
+                .id("notif-id-001")
+                .referenceNumber(referenceNumber)
+                .origin(origin)
+                .commodity(Commodity.builder().name("Live bovine animals").build())
+                .reasonForImport("PERMANENT")
+                .accompanyingDocuments(List.of(document))
+                .build();
 
             when(notificationService.findByRef(referenceNumber)).thenReturn(response);
 
@@ -395,12 +436,14 @@ class NotificationControllerTest {
             String referenceNumber = "DRAFT.IMP.2026.nodocs";
             Origin origin = new Origin("GB", "true", "REF-002");
 
-            NotificationResponse response = new NotificationResponse(
-                "notif-id-002", referenceNumber, origin,
-                Commodity.builder().name("Live sheep").build(),
-                "PERMANENT", /* additionalDetails */ null, /* cphNumber */ null,
-                /* created */ null, /* updated */ null,
-                Collections.emptyList());
+            NotificationResponse response = NotificationResponse.builder()
+                .id("notif-id-002")
+                .referenceNumber(referenceNumber)
+                .origin(origin)
+                .commodity(Commodity.builder().name("Live sheep").build())
+                .reasonForImport("PERMANENT")
+                .accompanyingDocuments(Collections.emptyList())
+                .build();
 
             when(notificationService.findByRef(referenceNumber)).thenReturn(response);
 

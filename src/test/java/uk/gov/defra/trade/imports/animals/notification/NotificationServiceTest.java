@@ -345,6 +345,49 @@ class NotificationServiceTest {
     }
 
     @Nested
+    class SubmitNotification {
+
+        @Test
+        void submitNotification_shouldSetStatusToSubmittedAndSave() {
+            // Given
+            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            Notification notification = Notification.builder()
+                .id("notif-id-001")
+                .referenceNumber(referenceNumber)
+                .status(NotificationStatus.DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.submitNotification(referenceNumber);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+            assertThat(result.getUpdated()).isNotNull();
+            verify(notificationRepository).save(notification);
+        }
+
+        @Test
+        void submitNotification_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
+            // Given
+            String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.empty());
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.submitNotification(referenceNumber))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining(referenceNumber);
+
+            verify(notificationRepository, never()).save(any());
+        }
+    }
+
+    @Nested
     class FindByRef {
 
         @Test
