@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
 import java.time.LocalDate;
 import java.util.Collections;
@@ -114,6 +115,7 @@ class NotificationServiceTest {
             Transport transport = Transport.builder()
                 .portOfEntry("ABERDEEN")
                 .arrivalDate(LocalDate.of(2026, 1, 1))
+                .transporter(transporters().getFirst())
                 .build();
 
             Notification existingNotification = new Notification();
