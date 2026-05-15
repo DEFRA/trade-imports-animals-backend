@@ -234,21 +234,4 @@ class AccompanyingDocumentDtoTest {
     }
   }
 
-  @Nested
-  class UploadUrlNotExposed {
-
-    @Test
-    void from_shouldNotExposeUploadUrl() {
-      AccompanyingDocument entity = AccompanyingDocument.builder()
-          .uploadId("upload-uuid-8")
-          .uploadUrl("https://cdp-uploader.internal/form/upload-uuid-8")
-          .build();
-
-      AccompanyingDocumentDto dto = AccompanyingDocumentDto.from(entity);
-
-      // AccompanyingDocumentDto record has no uploadUrl accessor — compile-time guarantee.
-      // This test documents that the DTO type does not expose the uploadUrl field.
-      assertThat(dto.uploadId()).isEqualTo("upload-uuid-8");
-    }
-  }
 }

@@ -21,6 +21,10 @@ spring:
         enabled: false
   lifecycle:
     timeout-per-shutdown-phase: 30s
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 51MB
 
 # CDP platform configuration
 cdp:

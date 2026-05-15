@@ -24,7 +24,6 @@ import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
-import org.springframework.web.reactive.function.client.WebClient;
 import org.testcontainers.Testcontainers;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
@@ -200,7 +199,7 @@ class DocumentControllerIT extends IntegrationBase {
         assertThat(result.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
             .endsWith("/document-uploads/" + uploadId);
 
-        assertThat(responseBody.uploadUrl()).contains("/upload-and-scan/" + uploadId);
+        assertThat(responseBody.uploadUrl()).contains("/document-uploads/" + uploadId + "/file");
 
         List<AccompanyingDocument> persisted =
             accompanyingDocumentRepository.findAllByNotificationReferenceNumber(NOTIFICATION_REF);
@@ -230,7 +229,7 @@ class DocumentControllerIT extends IntegrationBase {
         DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
-        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "clean.pdf", pdfBytes, "application/pdf");
+        uploadFileThroughBackend(initiateResponse.uploadId(), pdfBytes, "clean.pdf", "application/pdf");
 
         AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
@@ -259,7 +258,7 @@ class DocumentControllerIT extends IntegrationBase {
         DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
-        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "virus.pdf", pdfBytes, "application/pdf");
+        uploadFileThroughBackend(initiateResponse.uploadId(), pdfBytes, "virus.pdf", "application/pdf");
 
         AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
@@ -333,7 +332,7 @@ class DocumentControllerIT extends IntegrationBase {
     void downloadFile_shouldStreamFileFromS3WithCorrectHeaders() throws IOException {
         DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
-        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "clean.pdf", pdfBytes, "application/pdf");
+        uploadFileThroughBackend(initiateResponse.uploadId(), pdfBytes, "clean.pdf", "application/pdf");
 
         AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
@@ -414,7 +413,7 @@ class DocumentControllerIT extends IntegrationBase {
     void downloadFile_rejectedFile_shouldReturn404() throws IOException {
         DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
-        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "virus.pdf", pdfBytes, "application/pdf");
+        uploadFileThroughBackend(initiateResponse.uploadId(), pdfBytes, "virus.pdf", "application/pdf");
 
         AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
@@ -441,7 +440,7 @@ class DocumentControllerIT extends IntegrationBase {
     void downloadFile_s3ObjectMissing_shouldReturn500() throws IOException {
         DocumentUploadResponse initiateResponse = initiateAndGetResponse();
         byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
-        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "clean.pdf", pdfBytes, "application/pdf");
+        uploadFileThroughBackend(initiateResponse.uploadId(), pdfBytes, "clean.pdf", "application/pdf");
 
         AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
@@ -479,6 +478,52 @@ class DocumentControllerIT extends IntegrationBase {
     }
 
     // ---------------------------------------------------------------------------
+    // Test: upload file — unknown upload ID
+    // ---------------------------------------------------------------------------
+
+    @Test
+    void uploadFile_unknownUploadId_shouldReturn404() {
+        MultiValueMap<String, HttpEntity<?>> body = new LinkedMultiValueMap<>();
+        HttpHeaders partHeaders = new HttpHeaders();
+        partHeaders.setContentType(MediaType.TEXT_PLAIN);
+        partHeaders.setContentDisposition(ContentDisposition.formData().name("file").filename("test.txt").build());
+        body.add("file", new HttpEntity<>(new ByteArrayResource("hello".getBytes()) {
+            @Override public String getFilename() { return "test.txt"; }
+        }, partHeaders));
+
+        webClient("NoAuth")
+            .post()
+            .uri("/document-uploads/this-upload-id-does-not-exist/file")
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(BodyInserters.fromMultipartData(body))
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(404);
+    }
+
+    @Test
+    void uploadFile_oversizeFile_shouldReturn413() {
+        MultiValueMap<String, HttpEntity<?>> body = new LinkedMultiValueMap<>();
+        HttpHeaders partHeaders = new HttpHeaders();
+        partHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        partHeaders.setContentDisposition(ContentDisposition.formData().name("file").filename("big.bin").build());
+        // 50MB + 1 byte exceeds max-file-size: 50MB — Spring rejects at the multipart boundary
+        byte[] oversizeBytes = new byte[(int) (50L * 1024 * 1024) + 1];
+        body.add("file", new HttpEntity<>(new ByteArrayResource(oversizeBytes) {
+            @Override public String getFilename() { return "big.bin"; }
+        }, partHeaders));
+
+        webClient("NoAuth")
+            .post()
+            .uri("/document-uploads/any-upload-id/file")
+            .contentType(MediaType.MULTIPART_FORM_DATA)
+            .body(BodyInserters.fromMultipartData(body))
+            .exchange()
+            .expectStatus().isEqualTo(413);
+    }
+
+    // ---------------------------------------------------------------------------
     // Helpers
     // ---------------------------------------------------------------------------
 
@@ -510,13 +555,13 @@ class DocumentControllerIT extends IntegrationBase {
     }
 
     /**
-     * POSTs a multipart {@code file} part to the upload URL the backend returned. Driving the
-     * upload via {@code body.uploadUrl()} (rather than re-constructing the URL here) exercises
-     * the backend's relative→absolute resolution end-to-end — a regression that left the URL
-     * relative would fail this fetch with a URL-parse error rather than slipping through.
+     * POSTs a multipart {@code file} part to the backend's own file-proxy endpoint.
+     * Does NOT use {@code initiateResponse.uploadUrl()} — that URL contains
+     * {@code host.testcontainers.internal:{BACKEND_PORT}}, reachable only from inside
+     * containers. Using {@code webClient("NoAuth")} routes through localhost instead.
      */
-    private void uploadFileViaCdpUploader(
-        String uploadUrl, String filename, byte[] bytes, String contentType) {
+    private void uploadFileThroughBackend(
+        String uploadId, byte[] bytes, String filename, String contentType) {
 
         MultiValueMap<String, HttpEntity<?>> body = new LinkedMultiValueMap<>();
         HttpHeaders partHeaders = new HttpHeaders();
@@ -527,14 +572,13 @@ class DocumentControllerIT extends IntegrationBase {
             @Override public String getFilename() { return filename; }
         }, partHeaders));
 
-        WebClient.create()
+        webClient("NoAuth")
             .post()
-            .uri(uploadUrl)
+            .uri("/document-uploads/" + uploadId + "/file")
             .contentType(MediaType.MULTIPART_FORM_DATA)
             .body(BodyInserters.fromMultipartData(body))
-            .retrieve()
-            .toBodilessEntity()
-            .block(Duration.ofSeconds(30));
+            .exchange()
+            .expectStatus().isAccepted();
     }
 
     /**

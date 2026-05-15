@@ -24,7 +24,9 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
@@ -164,6 +166,32 @@ public class DocumentController {
         payload.uploadStatus());
     documentService.handleScanResult(uploadId, payload);
     return ResponseEntity.noContent().build();
+  }
+
+  /**
+   * Upload the file for a document session, proxying it to cdp-uploader.
+   *
+   * @param uploadId the upload session identifier
+   * @param file     the multipart file to proxy
+   * @return 202 Accepted — the scan is asynchronous; poll GET /document-uploads/{uploadId} for status
+   */
+  @PostMapping(
+      value = "/document-uploads/{upload-id}/file",
+      consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @Operation(
+      summary = "Upload file for document session",
+      description = "Proxies the multipart file to cdp-uploader. Scan is asynchronous.")
+  @ApiResponse(responseCode = "202", description = "File accepted for scanning", content = @Content)
+  @ApiResponse(responseCode = "404", description = "Upload session not found", content = @Content)
+  @ApiResponse(responseCode = "502", description = "cdp-uploader unavailable", content = @Content)
+  @Timed("document.uploadFile")
+  public ResponseEntity<Void> uploadFile(
+      @PathVariable("upload-id") String uploadId,
+      @RequestParam("file") MultipartFile file) {
+
+    log.info("POST /document-uploads/{}/file size={}B", uploadId, file.getSize());
+    documentService.proxyFileToUploader(uploadId, file);
+    return ResponseEntity.accepted().build();
   }
 
   /**

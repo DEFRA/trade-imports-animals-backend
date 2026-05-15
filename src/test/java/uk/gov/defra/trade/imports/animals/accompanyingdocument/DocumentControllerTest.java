@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -36,6 +38,7 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultForm;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
 
 @WebMvcTest(DocumentController.class)
 @TestPropertySource(properties = {
@@ -73,7 +76,7 @@ class DocumentControllerTest {
 
     String ref = "DRAFT.IMP.2026.00000001";
     DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
-    DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "https://cdp-uploader.example/upload/abc");
+    DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
 
     when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class)))
         .thenReturn(serviceResponse);
@@ -85,7 +88,7 @@ class DocumentControllerTest {
         .andExpect(status().isCreated())
         .andExpect(header().string("Location", "http://localhost:8085/document-uploads/upload-abc-123"))
         .andExpect(jsonPath("$.uploadId").value("upload-abc-123"))
-        .andExpect(jsonPath("$.uploadUrl").value("https://cdp-uploader.example/upload/abc"));
+        .andExpect(jsonPath("$.uploadUrl").value("http://localhost:8085/document-uploads/upload-abc-123/file"));
   }
 
   @Test
@@ -407,6 +410,55 @@ class DocumentControllerTest {
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.detail").value(
             "No accompanying document found with uploadId: " + unknownId));
+  }
+
+  // ---------------------------------------------------------------------------
+  // POST /document-uploads/{upload-id}/file
+  // ---------------------------------------------------------------------------
+
+  @Test
+  void uploadFile_shouldReturn202_onSuccess() throws Exception {
+    // Given
+    String uploadId = "upload-abc-123";
+    MockMultipartFile file = new MockMultipartFile("file", "doc.pdf", "application/pdf", "PDF content".getBytes());
+    doNothing().when(documentService).proxyFileToUploader(eq(uploadId), any());
+
+    // When / Then
+    mockMvc.perform(multipart("/document-uploads/{id}/file", uploadId)
+            .file(file))
+        .andExpect(status().isAccepted());
+
+    verify(documentService).proxyFileToUploader(eq(uploadId), any());
+  }
+
+  @Test
+  void uploadFile_shouldReturn404_whenServiceThrowsNotFound() throws Exception {
+    // Given
+    String uploadId = "upload-unknown";
+    MockMultipartFile file = new MockMultipartFile("file", "doc.pdf", "application/pdf", "PDF content".getBytes());
+    doThrow(new NotFoundException("No accompanying document found with uploadId: " + uploadId))
+        .when(documentService).proxyFileToUploader(eq(uploadId), any());
+
+    // When / Then
+    mockMvc.perform(multipart("/document-uploads/{id}/file", uploadId)
+            .file(file))
+        .andExpect(status().isNotFound())
+        .andExpect(jsonPath("$.detail").value(
+            "No accompanying document found with uploadId: " + uploadId));
+  }
+
+  @Test
+  void uploadFile_shouldReturn502_whenServiceThrowsServiceUnavailable() throws Exception {
+    // Given
+    String uploadId = "upload-abc-123";
+    MockMultipartFile file = new MockMultipartFile("file", "doc.pdf", "application/pdf", "PDF content".getBytes());
+    doThrow(new ServiceUnavailableException("cdp-uploader file upload failed at transport level"))
+        .when(documentService).proxyFileToUploader(eq(uploadId), any());
+
+    // When / Then
+    mockMvc.perform(multipart("/document-uploads/{id}/file", uploadId)
+            .file(file))
+        .andExpect(status().isBadGateway());
   }
 
   @Test

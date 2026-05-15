@@ -273,7 +273,6 @@ class DocumentScanCallbackIT extends IntegrationBase {
             .notificationReferenceNumber(NOTIFICATION_REF)
             .uploadId(uploadId)
             .correlationId(correlationId)
-            .uploadUrl("http://stub/upload/" + uploadId)
             .documentType(DocumentType.ITAHC)
             .documentReference("UKGB2026001234")
             .scanStatus(ScanStatus.PENDING)

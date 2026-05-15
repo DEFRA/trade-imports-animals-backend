@@ -15,6 +15,7 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -163,6 +164,31 @@ public class GlobalExceptionHandler {
         }
 
         return ResponseEntity.status(HttpStatus.CONFLICT)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
+     * Handle oversized multipart uploads (413 Payload Too Large).
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ProblemDetail> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Upload size exceeded (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.PAYLOAD_TOO_LARGE,
+            "Uploaded file exceeds the maximum permitted size"
+        );
+
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/payload-too-large"));
+        problemDetail.setTitle("Payload Too Large");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
             .body(problemDetail);
     }

@@ -74,7 +74,6 @@ class CdpUploaderClientTest {
       CdpUploaderInitiateResponse expected =
           new CdpUploaderInitiateResponse(
               "upload-id-001",
-              "https://cdp-uploader/form/upload-id-001",
               "https://cdp-uploader/status/upload-id-001");
 
       when(responseSpec.onStatus(any(), any())).thenReturn(responseSpec);
