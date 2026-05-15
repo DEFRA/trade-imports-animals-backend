@@ -417,7 +417,7 @@ class DocumentControllerTest {
   // ---------------------------------------------------------------------------
 
   @Test
-  void uploadFile_shouldReturn202_onSuccess() throws Exception {
+  void uploadFile_shouldReturn202() throws Exception {
     // Given
     String uploadId = "upload-abc-123";
     MockMultipartFile file = new MockMultipartFile("file", "doc.pdf", "application/pdf", "PDF content".getBytes());

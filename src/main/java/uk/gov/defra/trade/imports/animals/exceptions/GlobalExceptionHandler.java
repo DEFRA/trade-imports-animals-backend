@@ -20,16 +20,7 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Global exception handler for REST API error responses.
- *
- * Uses Spring 6 ProblemDetail (RFC 7807) for standardized error responses.
- * Includes request trace ID in error responses for log correlation.
- *
- * CDP Compliance:
- * - Structured error responses with trace ID
- * - Proper HTTP status codes (400, 404, 409, 500)
- * - Validation errors with field-level details
- * - Logs errors with trace ID for troubleshooting
+ * Global exception handler producing RFC 7807 ProblemDetail responses with trace IDs.
  */
 @RestControllerAdvice
 @Slf4j

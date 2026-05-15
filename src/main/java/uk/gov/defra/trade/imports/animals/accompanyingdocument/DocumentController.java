@@ -36,8 +36,8 @@ import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 /**
  * REST controller for accompanying document upload endpoints.
  *
- * <p>Exposes five endpoints covering the full upload lifecycle: initiation, listing,
- * retrieval, scan-result callback, and file download.
+ * <p>Exposes endpoints covering the full upload lifecycle: initiation, listing, retrieval,
+ * deletion, scan-result callback, file upload (proxied to cdp-uploader), and file download.
  */
 @RestController
 @Tag(name = "Document Uploads", description = "Operations for accompanying document upload sessions")
@@ -183,6 +183,7 @@ public class DocumentController {
       description = "Proxies the multipart file to cdp-uploader. Scan is asynchronous.")
   @ApiResponse(responseCode = "202", description = "File accepted for scanning", content = @Content)
   @ApiResponse(responseCode = "404", description = "Upload session not found", content = @Content)
+  @ApiResponse(responseCode = "413", description = "File exceeds maximum size", content = @Content)
   @ApiResponse(responseCode = "502", description = "cdp-uploader unavailable", content = @Content)
   @Timed("document.uploadFile")
   public ResponseEntity<Void> uploadFile(
