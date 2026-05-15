@@ -27,7 +27,11 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.NotificationResponse;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Species;
+import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 class NotificationIT extends IntegrationBase {
@@ -35,6 +39,7 @@ class NotificationIT extends IntegrationBase {
     private static final String NOTIFICATION_ENDPOINT = "/notifications";
     private static final String ADMIN_SECRET_HEADER = "Trade-Imports-Animals-Admin-Secret";
     private static final String VALID_ADMIN_SECRET = "test-admin-secret";
+    private static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -45,11 +50,15 @@ class NotificationIT extends IntegrationBase {
     @Autowired
     private AccompanyingDocumentRepository accompanyingDocumentRepository;
 
+    @Autowired
+    private OutboxEventRepository outboxEventRepository;
+
     @BeforeEach
     void setUp() {
         notificationRepository.deleteAll();
         auditRepository.deleteAll();
         accompanyingDocumentRepository.deleteAll();
+        outboxEventRepository.deleteAll();
     }
 
     @Test
@@ -431,6 +440,101 @@ class NotificationIT extends IntegrationBase {
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value(
                 Matchers.containsString("DRAFT.IMP.2026.DOESNOTEXIST"));
+    }
+
+    @Test
+    void submit_shouldWriteOutboxEventWithCorrectEnvelope() {
+        // Given — create a notification
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When — submit it with a trace ID
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .header(HEADER_TRACE_ID, "trace-outbox-001")
+            .exchange()
+            .expectStatus().isOk();
+
+        // Then — one outbox event exists with the correct envelope
+        List<OutboxEvent> events = outboxEventRepository.findAll();
+        assertThat(events).hasSize(1);
+        OutboxEvent event = events.getFirst();
+
+        assertThat(event.getAggregateId())
+            .isEqualTo(OutboxService.buildAggregateId(referenceNumber));
+        assertThat(event.getAggregateType()).isEqualTo("Notification");
+        assertThat(event.getSubType()).isEqualTo("GBN-AG");
+        assertThat(event.getEventType())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
+        assertThat(event.getAggregateVersion()).isEqualTo(1L);
+        assertThat(event.getTimestamp()).isNotNull();
+        assertThat(event.getEventId()).isNotNull();
+        assertThat(event.getMetadata().getCorrelationId()).isEqualTo("trace-outbox-001");
+        assertThat(event.getMetadata().getSchemaVersion()).isEqualTo("1");
+        assertThat(event.getData().referenceNumber()).isEqualTo(referenceNumber);
+    }
+
+    @Test
+    void submit_shouldIncrementAggregateVersion_onSubsequentSubmissions() {
+        // Given — create and submit a notification (version 1)
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // Reset status to DRAFT so we can submit again (simulates re-submission scenario)
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        notification.setStatus(NotificationStatus.DRAFT);
+        notificationRepository.save(notification);
+
+        // When — submit again (version 2)
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // Then — two outbox events with incrementing versions
+        List<OutboxEvent> events = outboxEventRepository.findAll()
+            .stream()
+            .sorted(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
+            .toList();
+
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0).getAggregateVersion()).isEqualTo(1L);
+        assertThat(events.get(1).getAggregateVersion()).isEqualTo(2L);
+    }
+
+    @Test
+    void submit_shouldNotWriteOutboxEvent_whenNotificationDoesNotExist() {
+        // When
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", "DRAFT.IMP.2026.MISSING")
+            .exchange()
+            .expectStatus().isNotFound();
+
+        // Then — no outbox events written
+        assertThat(outboxEventRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void post_shouldNotWriteOutboxEvent_whenCreatingDraftNotification() {
+        // When — create a draft notification
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk();
+
+        // Then — no outbox events written
+        assertThat(outboxEventRepository.findAll()).isEmpty();
     }
 
     @Test

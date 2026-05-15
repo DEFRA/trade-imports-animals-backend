@@ -23,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 
 class GlobalExceptionHandlerTest {
 
@@ -282,6 +283,61 @@ class GlobalExceptionHandlerTest {
         ProblemDetail problemDetail = response.getBody();
 
         // Then
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        Map<String, Object> properties = problemDetail.getProperties();
+        assertThat(properties).satisfiesAnyOf(
+            p -> assertThat(p).isNull(),
+            p -> assertThat(p).doesNotContainKey("traceId")
+        );
+    }
+
+    @Test
+    void handleOutboxWriteException_shouldReturn500_withGenericMessage_andNoInternalDetailsLeaked() {
+        // Given
+        String traceId = "test-trace-outbox-1";
+        MDC.put("trace.id", traceId);
+        OutboxWriteException exception = new OutboxWriteException(
+            "Duplicate aggregateVersion on outbox insert",
+            "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123",
+            1L,
+            "correlation-abc");
+
+        // When
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleOutboxWriteException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        assertThat(problemDetail.getTitle()).isEqualTo("Internal Server Error");
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/internal-error"));
+        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
+
+        // Internal details must not appear in the response body
+        String detail = problemDetail.getDetail();
+        assertThat(detail).doesNotContain("aggregateId", "aggregateVersion", "correlationId",
+            "Duplicate", "outbox", "DRAFT.IMP.2026.abc123");
+    }
+
+    @Test
+    void handleOutboxWriteException_shouldHandleNullTraceId() {
+        // Given - no trace ID in MDC
+        OutboxWriteException exception = new OutboxWriteException(
+            "Could not acquire outbox lock",
+            "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123",
+            null,
+            "correlation-xyz");
+
+        // When
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleOutboxWriteException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
         Map<String, Object> properties = problemDetail.getProperties();

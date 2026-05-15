@@ -168,6 +168,35 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle outbox write failures (500 Internal Server Error).
+     *
+     * Logs full diagnostic detail server-side; returns a generic message to the client
+     * so no internal details (lock keys, mongo error codes, stack traces) are leaked.
+     */
+    @ExceptionHandler(OutboxWriteException.class)
+    public ResponseEntity<ProblemDetail> handleOutboxWriteException(OutboxWriteException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.error("Outbox write failed (trace: {}): aggregateId={} attemptedVersion={} correlationId={} cause={}",
+            traceId, ex.getAggregateId(), ex.getAggregateVersion(), ex.getCorrelationId(),
+            ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage(), ex);
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "An error occurred during submission. Please try again."
+        );
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/internal-error"));
+        problemDetail.setTitle("Internal Server Error");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
      * Handle unexpected errors (500 Internal Server Error).
      *
      * Note: Does NOT catch Spring framework exceptions like NoResourceFoundException

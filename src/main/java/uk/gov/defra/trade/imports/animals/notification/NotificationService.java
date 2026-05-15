@@ -1,13 +1,18 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.core.LockConfiguration;
+import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
@@ -17,16 +22,37 @@ import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class NotificationService {
 
     private static final String CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER = "Cannot find notification with reference number: ";
+    private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
+
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
     private final DocumentService documentService;
+    private final OutboxService outboxService;
+    private final LockingTaskExecutor lockingTaskExecutor;
+    private final Duration lockAtLeastFor;
+
+    public NotificationService(
+        NotificationRepository notificationRepository,
+        AuditRepository auditRepository,
+        DocumentService documentService,
+        OutboxService outboxService,
+        LockingTaskExecutor lockingTaskExecutor,
+        @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor) {
+        this.notificationRepository = notificationRepository;
+        this.auditRepository = auditRepository;
+        this.documentService = documentService;
+        this.outboxService = outboxService;
+        this.lockingTaskExecutor = lockingTaskExecutor;
+        this.lockAtLeastFor = lockAtLeastFor;
+    }
 
     public Notification saveOriginOfImport(NotificationDto notificationDto) {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
@@ -53,13 +79,43 @@ public class NotificationService {
         return notifications;
     }
 
-    public Notification submitNotification(String referenceNumber) {
+    @Transactional
+    public Notification submitNotification(String referenceNumber, String correlationId) {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        notification.setStatus(NotificationStatus.SUBMITTED);
-        notification.setUpdated(LocalDateTime.now());
-        return notificationRepository.save(notification);
+
+        String aggregateId = OutboxService.buildAggregateId(referenceNumber);
+        LockConfiguration lockConfig = new LockConfiguration(
+            Instant.now(),
+            "outbox-write:" + aggregateId,
+            LOCK_AT_MOST_FOR,
+            lockAtLeastFor);
+
+        try {
+            LockingTaskExecutor.TaskResult<Notification> result = lockingTaskExecutor.executeWithLock(
+                (LockingTaskExecutor.TaskWithResult<Notification>) () -> {
+                    notification.setStatus(NotificationStatus.SUBMITTED);
+                    notification.setUpdated(LocalDateTime.now());
+                    Notification saved = notificationRepository.save(notification);
+                    outboxService.appendEvent(saved, correlationId);
+                    return saved;
+                },
+                lockConfig);
+
+            if (!result.wasExecuted()) {
+                throw new OutboxWriteException(
+                    "Could not acquire outbox lock for submission",
+                    aggregateId, null, correlationId);
+            }
+            return result.getResult();
+        } catch (OutboxWriteException | DataAccessException e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new OutboxWriteException(
+                "Outbox write failed during submission",
+                aggregateId, null, correlationId, e);
+        }
     }
 
     public List<String> findAllReferenceNumbers() {
@@ -70,7 +126,7 @@ public class NotificationService {
             .toList();
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = NotFoundException.class)
     public void deleteByReferenceNumbers(List<String> referenceNumbers, AuditContext auditContext) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return;

@@ -10,10 +10,17 @@ import com.mongodb.connection.ConnectionPoolSettings;
 import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLContext;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
+import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.core.LockingTaskExecutor;
+import net.javacrumbs.shedlock.provider.mongo.MongoLockProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.data.mongodb.MongoDatabaseFactory;
+import org.springframework.data.mongodb.MongoTransactionManager;
 import org.springframework.data.mongodb.config.EnableMongoAuditing;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import uk.gov.defra.trade.imports.animals.configuration.tls.TrustStoreConfiguration;
 
 /**
@@ -29,6 +36,7 @@ import uk.gov.defra.trade.imports.animals.configuration.tls.TrustStoreConfigurat
  */
 @Configuration
 @EnableMongoAuditing
+@EnableScheduling
 @Slf4j
 public class MongoConfig {
 
@@ -77,5 +85,21 @@ public class MongoConfig {
   MongoClient mongoClient(MongoClientSettings mongoClientSettings) {
       log.info("Creating MongoDB client");
     return MongoClients.create(mongoClientSettings);
+  }
+
+  @Bean
+  MongoTransactionManager transactionManager(MongoDatabaseFactory dbFactory) {
+    return new MongoTransactionManager(dbFactory);
+  }
+
+  @Bean
+  LockProvider lockProvider(MongoClient mongoClient,
+      @Value("${spring.data.mongodb.database}") String dbName) {
+    return new MongoLockProvider(mongoClient.getDatabase(dbName));
+  }
+
+  @Bean
+  LockingTaskExecutor lockingTaskExecutor(LockProvider lockProvider) {
+    return new DefaultLockingTaskExecutor(lockProvider);
   }
 }
