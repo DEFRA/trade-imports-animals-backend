@@ -42,6 +42,5 @@ app:
 # callbacks here, so host.docker.internal is required; plain localhost is unreachable from
 # inside the cdp-uploader container. Kept out of application.yml so deployed environments fail
 # fast if TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL is unset.
-cdp:
-  backend:
-    base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:http://host.docker.internal:8085}
+app:
+  base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:http://host.docker.internal:8085}

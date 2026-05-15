@@ -30,7 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
-import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
+import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
 /**
@@ -47,7 +47,7 @@ public class DocumentController {
 
   private final DocumentService documentService;
   private final S3DocumentService s3DocumentService;
-  private final CdpConfig cdpConfig;
+  private final AppConfig appConfig;
 
   /**
    * Initiate a new document upload session for a notification.
@@ -227,7 +227,7 @@ public class DocumentController {
   }
 
   private URI buildLocationUri(String uploadId) {
-    String backendBaseUrl = cdpConfig.backend().baseUrl();
+    String backendBaseUrl = appConfig.baseUrl();
     if (backendBaseUrl.endsWith("/")) {
       backendBaseUrl = backendBaseUrl.substring(0, backendBaseUrl.length() - 1);
     }

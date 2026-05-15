@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.cdp.uploader;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -95,18 +96,8 @@ public class CdpUploaderClient {
     Objects.requireNonNull(uploadId, "uploadId");
     Objects.requireNonNull(file, "file");
     log.debug("Proxying file upload to cdp-uploader: uploadId={}", uploadId);
-    MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
-    HttpHeaders partHeaders = new HttpHeaders();
-    String contentType = file.getContentType() != null
-        ? file.getContentType() : "application/octet-stream";
-    partHeaders.setContentType(MediaType.parseMediaType(contentType));
-    String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload";
-    partHeaders.setContentDisposition(
-        ContentDisposition.formData()
-            .name("file").filename(filename).build());
-    // MultipartFileResource overrides getFilename() and contentLength() correctly;
-    // RestClient streams it via ResourceHttpMessageConverter — file bytes never sit in heap.
-    body.add("file", new HttpEntity<>(file.getResource(), partHeaders));
+
+    MultiValueMap<String, Object> body = buildMultipartBody(file);
 
     try {
       cdpUploaderRestClient
@@ -117,25 +108,41 @@ public class CdpUploaderClient {
           .retrieve()
           .onStatus(
               status -> status.is4xxClientError() || status.is5xxServerError(),
-              (req, resp) -> {
-                int statusCode = resp.getStatusCode().value();
-                String responseBody;
-                try (var is = resp.getBody()) {
-                  responseBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
-                }
-                String safeBody = responseBody.length() > MAX_LOG_BODY_LENGTH
-                    ? responseBody.substring(0, MAX_LOG_BODY_LENGTH) + "..."
-                    : responseBody;
-                log.error("cdp-uploader file upload returned non-2xx/3xx: status={}, body={}",
-                    statusCode, safeBody);
-                throw new ServiceUnavailableException(
-                    "cdp-uploader file upload returned error: HTTP " + statusCode);
-              })
+              (req, resp) -> handleUploadError(resp))
           .toBodilessEntity();
-      // cdp-uploader returns 302 on success — Java HttpClient's Redirect.NEVER default returns
-      // it as-is; RestClient doesn't throw for 3xx; onStatus handler only catches 4xx/5xx.
     } catch (RestClientException e) {
       throw new ServiceUnavailableException("cdp-uploader file upload failed at transport level", e);
     }
+  }
+
+  private MultiValueMap<String, Object> buildMultipartBody(MultipartFile file) {
+    HttpHeaders partHeaders = new HttpHeaders();
+    String contentType = file.getContentType() != null
+        ? file.getContentType() : "application/octet-stream";
+    partHeaders.setContentType(MediaType.parseMediaType(contentType));
+    String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload";
+    partHeaders.setContentDisposition(
+        ContentDisposition.formData()
+            .name("file").filename(filename).build());
+
+    MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+    body.add("file", new HttpEntity<>(file.getResource(), partHeaders));
+    return body;
+  }
+
+  private void handleUploadError(org.springframework.http.client.ClientHttpResponse resp)
+      throws IOException {
+    int statusCode = resp.getStatusCode().value();
+    String responseBody;
+    try (var is = resp.getBody()) {
+      responseBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    String safeBody = responseBody.length() > MAX_LOG_BODY_LENGTH
+        ? responseBody.substring(0, MAX_LOG_BODY_LENGTH) + "..."
+        : responseBody;
+    log.error("cdp-uploader file upload returned non-2xx/3xx: status={}, body={}",
+        statusCode, safeBody);
+    throw new ServiceUnavailableException(
+        "cdp-uploader file upload returned error: HTTP " + statusCode);
   }
 }

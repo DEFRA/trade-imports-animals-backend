@@ -34,6 +34,7 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateRequest;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderClient;
+import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
@@ -50,10 +51,10 @@ class DocumentServiceTest {
   private CdpUploaderClient cdpUploaderClient;
 
   @Mock
-  private CdpConfig cdpConfig;
+  private AppConfig appConfig;
 
   @Mock
-  private CdpConfig.BackendConfig backendConfig;
+  private CdpConfig cdpConfig;
 
   @Mock
   private CdpConfig.S3Config s3Config;
@@ -65,15 +66,15 @@ class DocumentServiceTest {
     documentService = new DocumentService(
         accompanyingDocumentRepository,
         cdpUploaderClient,
+        appConfig,
         cdpConfig);
   }
 
   private void stubCdpConfig() {
     when(cdpConfig.uploader()).thenReturn(
         new CdpConfig.UploaderConfig("http://localhost:7337", 52428800L, List.of("application/pdf")));
-    when(cdpConfig.backend()).thenReturn(backendConfig);
     when(cdpConfig.s3()).thenReturn(s3Config);
-    when(backendConfig.baseUrl()).thenReturn("http://backend");
+    when(appConfig.baseUrl()).thenReturn("http://backend");
     when(s3Config.documentsBucket()).thenReturn("documents-bucket");
   }
 
@@ -106,7 +107,7 @@ class DocumentServiceTest {
       // When
       DocumentUploadResponse response = documentService.initiate(notificationRef, request);
 
-      // Then — uploadUrl is reconstructed from cdp.backend.base-url + uploadId, pointing at
+      // Then — uploadUrl is reconstructed from app.base-url + uploadId, pointing at
       // the backend's own file-proxy endpoint rather than cdp-uploader directly
       assertThat(response).isNotNull();
       assertThat(response.uploadId()).isEqualTo(uploadId);

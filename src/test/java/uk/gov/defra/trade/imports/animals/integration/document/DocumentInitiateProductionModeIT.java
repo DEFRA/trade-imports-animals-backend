@@ -60,7 +60,7 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
 
         // Callback URL must end in cdp-int.defra.cloud to satisfy prod-mode Joi schema.
         // Reachability doesn't matter here — /initiate only validates the URL string.
-        registry.add("cdp.backend.base-url", () -> "https://backend.dev.cdp-int.defra.cloud");
+        registry.add("app.base-url", () -> "https://backend.dev.cdp-int.defra.cloud");
     }
 
     @Test

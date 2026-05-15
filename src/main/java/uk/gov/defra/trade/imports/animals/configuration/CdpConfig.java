@@ -21,7 +21,6 @@ import org.springframework.validation.annotation.Validated;
  * @param cloudwatch     CloudWatch logging endpoint configuration
  * @param proxyUrl       the outbound HTTP proxy URL used to reach CDP services
  * @param uploader       cdp-uploader service configuration; required
- * @param backend        backend service base URL configuration
  * @param s3             S3 document storage configuration
  */
 @Validated
@@ -34,7 +33,6 @@ public record CdpConfig(
     CloudwatchConfig cloudwatch,
     String proxyUrl,
     @Valid @NotNull UploaderConfig uploader,
-    @Valid @NotNull BackendConfig backend,
     @Valid @NotNull S3Config s3) {
 
   /**
@@ -48,13 +46,6 @@ public record CdpConfig(
       @NotBlank String baseUrl,
       @NotNull @Positive Long maxFileSize,
       List<String> mimeTypes) {}
-
-  /**
-   * Backend service base URL configuration.
-   *
-   * @param baseUrl the public base URL of the backend service, used for callback construction
-   */
-  public record BackendConfig(@NotBlank String baseUrl) {}
 
   /**
    * S3 document storage configuration.

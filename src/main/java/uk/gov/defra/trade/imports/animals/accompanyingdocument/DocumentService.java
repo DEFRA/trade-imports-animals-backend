@@ -17,6 +17,7 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateRequest;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderClient;
+import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 import org.springframework.web.multipart.MultipartFile;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
@@ -37,6 +38,7 @@ public class DocumentService {
 
   private final AccompanyingDocumentRepository accompanyingDocumentRepository;
   private final CdpUploaderClient cdpUploaderClient;
+  private final AppConfig appConfig;
   private final CdpConfig cdpConfig;
 
   /**
@@ -101,10 +103,10 @@ public class DocumentService {
    * reaching cdp-uploader directly.
    *
    * <p>{@link UriComponentsBuilder#pathSegment} percent-encodes each segment individually and
-   * appends to any existing path on {@code cdp.backend.base-url}, preserving path prefixes.
+   * appends to any existing path on {@code app.base-url}, preserving path prefixes.
    */
   private String buildUploadUrl(String uploadId) {
-    return UriComponentsBuilder.fromUriString(cdpConfig.backend().baseUrl())
+    return UriComponentsBuilder.fromUriString(appConfig.baseUrl())
         .pathSegment("document-uploads", uploadId, "file")
         .build()
         .toUriString();
@@ -226,7 +228,7 @@ public class DocumentService {
    * document identity is carried via {@code metadata.correlationId}, not the URL.
    */
   private String buildCallbackUrl() {
-    return cdpConfig.backend().baseUrl() + "/document-uploads/pending/scan-results";
+    return appConfig.baseUrl() + "/document-uploads/pending/scan-results";
   }
 
   /**
