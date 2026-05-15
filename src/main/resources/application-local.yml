@@ -30,17 +30,15 @@ springdoc:
   swagger-ui:
     enabled: true
 
-# App-level AWS overrides for local development
-# Credentials are dummy values accepted by LocalStack — never use real keys here
+# App-level overrides for local development
+# AWS credentials are dummy values accepted by LocalStack — never use real keys here
+# base-url: cdp-uploader (inside Docker) POSTs scan-result callbacks here, so
+# host.docker.internal is required; plain localhost is unreachable from inside the
+# cdp-uploader container. Kept out of application.yml so deployed environments fail
+# fast if TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL is unset.
 app:
   aws:
     endpoint-override: ${APP_AWS_ENDPOINT_OVERRIDE:http://localhost:4566}
     access-key-id: test
     secret-access-key: test
-
-# Local default for this service's base URL — cdp-uploader (inside Docker) POSTs scan-result
-# callbacks here, so host.docker.internal is required; plain localhost is unreachable from
-# inside the cdp-uploader container. Kept out of application.yml so deployed environments fail
-# fast if TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL is unset.
-app:
   base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:http://host.docker.internal:8085}
