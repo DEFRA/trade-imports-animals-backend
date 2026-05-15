@@ -114,7 +114,7 @@ class CdpUploaderClientTest {
       // Stub onStatus so the helper invokes the registered error handler against a synthetic
       // 503 response, which is what triggers ServiceUnavailableException in the real client.
       when(responseSpec.onStatus(any(), any())).thenAnswer(
-          simulateErrorResponse(HttpStatus.SERVICE_UNAVAILABLE, "Service unavailable"));
+          simulateErrorResponse(responseSpec, HttpStatus.SERVICE_UNAVAILABLE, "Service unavailable"));
 
       // When / Then
       assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
@@ -128,7 +128,7 @@ class CdpUploaderClientTest {
       CdpUploaderInitiateRequest request = sampleRequest();
 
       when(responseSpec.onStatus(any(), any())).thenAnswer(
-          simulateErrorResponse(HttpStatus.UNPROCESSABLE_ENTITY, "{\"error\":\"invalid request\"}"));
+          simulateErrorResponse(responseSpec, HttpStatus.UNPROCESSABLE_ENTITY, "{\"error\":\"invalid request\"}"));
 
       // When / Then
       assertThatThrownBy(() -> cdpUploaderClient.initiate(request))
@@ -226,23 +226,8 @@ class CdpUploaderClientTest {
       // Given — simulate the onStatus handler executing for a 500 response
       MultipartFile file = stubMultipartFile();
 
-      when(uploadResponseSpec.onStatus(any(), any())).thenAnswer(invocation -> {
-        Predicate<HttpStatusCode> predicate = invocation.getArgument(0);
-        ErrorHandler handler = invocation.getArgument(1);
-
-        if (predicate.test(HttpStatus.INTERNAL_SERVER_ERROR)) {
-          ClientHttpResponse mockResponse = mock(ClientHttpResponse.class);
-          try {
-            when(mockResponse.getStatusCode()).thenReturn(HttpStatus.INTERNAL_SERVER_ERROR);
-            when(mockResponse.getBody())
-                .thenReturn(new ByteArrayInputStream("server error".getBytes(StandardCharsets.UTF_8)));
-            handler.handle(mock(ClientHttpRequest.class), mockResponse);
-          } catch (IOException e) {
-            throw new UncheckedIOException(e);
-          }
-        }
-        return uploadResponseSpec;
-      });
+      when(uploadResponseSpec.onStatus(any(), any())).thenAnswer(
+          simulateErrorResponse(uploadResponseSpec, HttpStatus.INTERNAL_SERVER_ERROR, "server error"));
 
       // When / Then
       assertThatThrownBy(() -> cdpUploaderClient.uploadFile("upload-123", file))
@@ -289,8 +274,8 @@ class CdpUploaderClientTest {
         null);
   }
 
-  private org.mockito.stubbing.Answer<ResponseSpec> simulateErrorResponse(
-      HttpStatus status, String body) {
+  private static org.mockito.stubbing.Answer<ResponseSpec> simulateErrorResponse(
+      ResponseSpec target, HttpStatus status, String body) {
     return invocation -> {
       Predicate<HttpStatusCode> predicate = invocation.getArgument(0);
       ErrorHandler handler = invocation.getArgument(1);
@@ -306,7 +291,7 @@ class CdpUploaderClientTest {
           throw new UncheckedIOException(e);
         }
       }
-      return responseSpec;
+      return target;
     };
   }
 }
