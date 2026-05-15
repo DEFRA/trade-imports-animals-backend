@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -37,6 +38,7 @@ import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
 
 @ExtendWith(MockitoExtension.class)
 class DocumentServiceTest {
@@ -49,9 +51,6 @@ class DocumentServiceTest {
 
   @Mock
   private CdpConfig cdpConfig;
-
-  @Mock
-  private CdpConfig.UploaderConfig uploaderConfig;
 
   @Mock
   private CdpConfig.BackendConfig backendConfig;
@@ -70,7 +69,8 @@ class DocumentServiceTest {
   }
 
   private void stubCdpConfig() {
-    when(cdpConfig.uploader()).thenReturn(uploaderConfig);
+    when(cdpConfig.uploader()).thenReturn(
+        new CdpConfig.UploaderConfig("http://localhost:7337", 52428800L, List.of("application/pdf")));
     when(cdpConfig.backend()).thenReturn(backendConfig);
     when(cdpConfig.s3()).thenReturn(s3Config);
     when(backendConfig.baseUrl()).thenReturn("http://backend");
@@ -320,6 +320,26 @@ class DocumentServiceTest {
 
       // Then
       verify(cdpUploaderClient).uploadFile(uploadId, file);
+    }
+
+    @Test
+    void proxyFileToUploader_propagatesServiceUnavailableException_whenUploaderFails() {
+      // Given
+      String uploadId = "upload-id-proxy-fail";
+      MultipartFile file = mock(MultipartFile.class);
+
+      AccompanyingDocument document = AccompanyingDocument.builder().uploadId(uploadId).build();
+      when(accompanyingDocumentRepository.findByUploadId(uploadId))
+          .thenReturn(Optional.of(document));
+
+      ServiceUnavailableException uploaderFailure =
+          new ServiceUnavailableException("cdp-uploader file upload failed at transport level");
+      doThrow(uploaderFailure).when(cdpUploaderClient).uploadFile(uploadId, file);
+
+      // When / Then
+      assertThatThrownBy(() -> documentService.proxyFileToUploader(uploadId, file))
+          .isInstanceOf(ServiceUnavailableException.class)
+          .isSameAs(uploaderFailure);
     }
 
     @Test

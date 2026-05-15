@@ -23,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 class GlobalExceptionHandlerTest {
 
@@ -284,6 +285,53 @@ class GlobalExceptionHandlerTest {
         // Then
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        Map<String, Object> properties = problemDetail.getProperties();
+        assertThat(properties).satisfiesAnyOf(
+            p -> assertThat(p).isNull(),
+            p -> assertThat(p).doesNotContainKey("traceId")
+        );
+    }
+
+    @Test
+    void handleMaxUploadSizeExceededException_shouldReturnPayloadTooLarge() {
+        // Given
+        String traceId = "test-trace-oversize";
+        MDC.put("trace.id", traceId);
+        MaxUploadSizeExceededException exception =
+            new MaxUploadSizeExceededException(50 * 1024 * 1024);
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleMaxUploadSizeExceededException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE.value());
+        assertThat(problemDetail.getTitle()).isEqualTo("Payload Too Large");
+        assertThat(problemDetail.getDetail())
+            .isEqualTo("Uploaded file exceeds the maximum permitted size");
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/payload-too-large"));
+        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
+    }
+
+    @Test
+    void handleMaxUploadSizeExceededException_shouldHandleNullTraceId() {
+        // Given - no trace ID in MDC
+        MaxUploadSizeExceededException exception =
+            new MaxUploadSizeExceededException(50 * 1024 * 1024);
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleMaxUploadSizeExceededException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE.value());
         Map<String, Object> properties = problemDetail.getProperties();
         assertThat(properties).satisfiesAnyOf(
             p -> assertThat(p).isNull(),

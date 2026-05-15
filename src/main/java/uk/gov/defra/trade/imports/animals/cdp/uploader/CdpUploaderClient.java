@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.cdp.uploader;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ContentDisposition;
@@ -91,15 +92,18 @@ public class CdpUploaderClient {
    * @throws ServiceUnavailableException if cdp-uploader returns 4xx/5xx or is unreachable
    */
   public void uploadFile(String uploadId, MultipartFile file) {
+    Objects.requireNonNull(uploadId, "uploadId");
+    Objects.requireNonNull(file, "file");
     log.debug("Proxying file upload to cdp-uploader: uploadId={}", uploadId);
     MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
     HttpHeaders partHeaders = new HttpHeaders();
     String contentType = file.getContentType() != null
         ? file.getContentType() : "application/octet-stream";
     partHeaders.setContentType(MediaType.parseMediaType(contentType));
+    String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload";
     partHeaders.setContentDisposition(
         ContentDisposition.formData()
-            .name("file").filename(file.getOriginalFilename()).build());
+            .name("file").filename(filename).build());
     // MultipartFileResource overrides getFilename() and contentLength() correctly;
     // RestClient streams it via ResourceHttpMessageConverter — file bytes never sit in heap.
     body.add("file", new HttpEntity<>(file.getResource(), partHeaders));

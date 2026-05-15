@@ -504,6 +504,8 @@ class DocumentControllerIT extends IntegrationBase {
 
     @Test
     void uploadFile_oversizeFile_shouldReturn413() {
+        String uploadId = initiateAndGetUploadId();
+
         MultiValueMap<String, HttpEntity<?>> body = new LinkedMultiValueMap<>();
         HttpHeaders partHeaders = new HttpHeaders();
         partHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
@@ -516,7 +518,7 @@ class DocumentControllerIT extends IntegrationBase {
 
         webClient("NoAuth")
             .post()
-            .uri("/document-uploads/any-upload-id/file")
+            .uri("/document-uploads/" + uploadId + "/file")
             .contentType(MediaType.MULTIPART_FORM_DATA)
             .body(BodyInserters.fromMultipartData(body))
             .exchange()

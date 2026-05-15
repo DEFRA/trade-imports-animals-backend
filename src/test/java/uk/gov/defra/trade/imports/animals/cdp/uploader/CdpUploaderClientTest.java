@@ -20,13 +20,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.ClientHttpRequest;
 import org.springframework.http.client.ClientHttpResponse;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.client.RestClient.RequestBodySpec;
 import org.springframework.web.client.RestClient.RequestBodyUriSpec;
 import org.springframework.web.client.RestClient.ResponseSpec;
@@ -55,7 +58,9 @@ class CdpUploaderClientTest {
   @BeforeEach
   void setUp() {
     cdpUploaderClient = new CdpUploaderClient(restClient);
+  }
 
+  private void stubInitiateChain() {
     when(restClient.post()).thenReturn(requestBodyUriSpec);
     when(requestBodyUriSpec.uri("/initiate")).thenReturn(requestBodySpec);
     when(requestBodySpec.contentType(MediaType.APPLICATION_JSON)).thenReturn(requestBodySpec);
@@ -65,6 +70,11 @@ class CdpUploaderClientTest {
 
   @Nested
   class HappyPath {
+
+    @BeforeEach
+    void setUpInitiate() {
+      stubInitiateChain();
+    }
 
     @Test
     void initiate_shouldReturnResponseFromCdpUploader_whenRequestSucceeds() {
@@ -90,6 +100,11 @@ class CdpUploaderClientTest {
 
   @Nested
   class ErrorPath {
+
+    @BeforeEach
+    void setUpInitiate() {
+      stubInitiateChain();
+    }
 
     @Test
     void initiate_shouldThrowServiceUnavailableException_whenCdpUploaderReturns503() {
@@ -165,6 +180,100 @@ class CdpUploaderClientTest {
       assertThat(capturedPredicate.get().test(HttpStatus.BAD_REQUEST)).isTrue();
       assertThat(capturedPredicate.get().test(HttpStatus.SERVICE_UNAVAILABLE)).isTrue();
       assertThat(capturedPredicate.get().test(HttpStatus.INTERNAL_SERVER_ERROR)).isTrue();
+    }
+  }
+
+  @Nested
+  class UploadFile {
+
+    @Mock
+    private RequestBodyUriSpec uploadRequestBodyUriSpec;
+
+    @Mock
+    private RequestBodySpec uploadRequestBodySpec;
+
+    @Mock
+    private ResponseSpec uploadResponseSpec;
+
+    @BeforeEach
+    void setUpUpload() {
+      when(restClient.post()).thenReturn(uploadRequestBodyUriSpec);
+      when(uploadRequestBodyUriSpec.uri("/upload-and-scan/{uploadId}", "upload-123"))
+          .thenReturn(uploadRequestBodySpec);
+      when(uploadRequestBodySpec.contentType(MediaType.MULTIPART_FORM_DATA))
+          .thenReturn(uploadRequestBodySpec);
+      when(uploadRequestBodySpec.body(any(MultiValueMap.class)))
+          .thenReturn(uploadRequestBodySpec);
+      when(uploadRequestBodySpec.retrieve()).thenReturn(uploadResponseSpec);
+    }
+
+    @Test
+    void uploadFile_shouldSucceed_when302Returned() {
+      // Given — cdp-uploader returns 302 on success; onStatus only catches 4xx/5xx
+      MultipartFile file = mock(MultipartFile.class);
+      when(file.getResource()).thenReturn(new ByteArrayResource("pdf-bytes".getBytes(StandardCharsets.UTF_8)));
+      when(file.getContentType()).thenReturn("application/pdf");
+      when(file.getOriginalFilename()).thenReturn("test.pdf");
+
+      when(uploadResponseSpec.onStatus(any(), any())).thenReturn(uploadResponseSpec);
+      when(uploadResponseSpec.toBodilessEntity()).thenReturn(null);
+
+      // When / Then — no exception
+      cdpUploaderClient.uploadFile("upload-123", file);
+
+      verify(uploadResponseSpec).toBodilessEntity();
+    }
+
+    @Test
+    void uploadFile_shouldThrowServiceUnavailableException_whenCdpUploaderReturns4xxOr5xx() {
+      // Given — simulate the onStatus handler executing for a 500 response
+      MultipartFile file = mock(MultipartFile.class);
+      when(file.getResource()).thenReturn(new ByteArrayResource("pdf-bytes".getBytes(StandardCharsets.UTF_8)));
+      when(file.getContentType()).thenReturn("application/pdf");
+      when(file.getOriginalFilename()).thenReturn("test.pdf");
+
+      when(uploadResponseSpec.onStatus(any(), any())).thenAnswer(invocation -> {
+        Predicate<HttpStatusCode> predicate = invocation.getArgument(0);
+        ErrorHandler handler = invocation.getArgument(1);
+
+        if (predicate.test(HttpStatus.INTERNAL_SERVER_ERROR)) {
+          ClientHttpResponse mockResponse = mock(ClientHttpResponse.class);
+          try {
+            when(mockResponse.getStatusCode()).thenReturn(HttpStatus.INTERNAL_SERVER_ERROR);
+            when(mockResponse.getBody())
+                .thenReturn(new ByteArrayInputStream("server error".getBytes(StandardCharsets.UTF_8)));
+            handler.handle(mock(ClientHttpRequest.class), mockResponse);
+          } catch (IOException e) {
+            throw new UncheckedIOException(e);
+          }
+        }
+        return uploadResponseSpec;
+      });
+
+      // When / Then
+      assertThatThrownBy(() -> cdpUploaderClient.uploadFile("upload-123", file))
+          .isInstanceOf(ServiceUnavailableException.class)
+          .hasMessageContaining("cdp-uploader file upload returned error: HTTP 500");
+    }
+
+    @Test
+    void uploadFile_shouldWrapRestClientExceptionAsServiceUnavailable() {
+      // Given — simulate a transport-level failure
+      MultipartFile file = mock(MultipartFile.class);
+      when(file.getResource()).thenReturn(new ByteArrayResource("pdf-bytes".getBytes(StandardCharsets.UTF_8)));
+      when(file.getContentType()).thenReturn("application/pdf");
+      when(file.getOriginalFilename()).thenReturn("test.pdf");
+
+      ResourceAccessException transportFailure =
+          new ResourceAccessException("I/O error: Connection refused");
+      when(uploadResponseSpec.onStatus(any(), any())).thenReturn(uploadResponseSpec);
+      when(uploadResponseSpec.toBodilessEntity()).thenThrow(transportFailure);
+
+      // When / Then
+      assertThatThrownBy(() -> cdpUploaderClient.uploadFile("upload-123", file))
+          .isInstanceOf(ServiceUnavailableException.class)
+          .hasMessageContaining("cdp-uploader file upload failed at transport level")
+          .hasCause(transportFailure);
     }
   }
 

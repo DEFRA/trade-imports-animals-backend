@@ -1,5 +1,7 @@
 package uk.gov.defra.trade.imports.animals.cdp.uploader;
 
+import java.util.Objects;
+
 /**
  * Response received from the cdp-uploader {@code /initiate} endpoint.
  *
@@ -8,4 +10,9 @@ package uk.gov.defra.trade.imports.animals.cdp.uploader;
  * @param statusUrl URL that can be polled to check upload/scan progress; retained for contract
  *                  completeness but not currently consumed by this service
  */
-public record CdpUploaderInitiateResponse(String uploadId, String statusUrl) {}
+public record CdpUploaderInitiateResponse(String uploadId, String statusUrl) {
+
+  public CdpUploaderInitiateResponse {
+    Objects.requireNonNull(uploadId, "uploadId");
+  }
+}

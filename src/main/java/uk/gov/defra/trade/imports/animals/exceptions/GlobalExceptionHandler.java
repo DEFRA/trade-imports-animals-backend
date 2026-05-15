@@ -193,7 +193,7 @@ public class GlobalExceptionHandler {
      * missing endpoints).
      */
     @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ProblemDetail> handleException(Exception ex) {
+    public ResponseEntity<ProblemDetail> handleException(RuntimeException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.error("Unexpected error (trace: {}): {}", traceId, ex.getMessage(), ex);
 

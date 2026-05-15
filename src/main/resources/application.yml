@@ -26,8 +26,8 @@ spring:
     timeout-per-shutdown-phase: 30s
   servlet:
     multipart:
-      max-file-size: 50MB
-      max-request-size: 51MB
+      max-file-size: ${SPRING_MULTIPART_MAX_FILE_SIZE:50MB}
+      max-request-size: ${SPRING_MULTIPART_MAX_REQUEST_SIZE:51MB}
 
 # CDP platform configuration
 cdp:

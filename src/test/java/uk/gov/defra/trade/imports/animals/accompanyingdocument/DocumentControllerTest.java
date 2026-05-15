@@ -458,7 +458,9 @@ class DocumentControllerTest {
     // When / Then
     mockMvc.perform(multipart("/document-uploads/{id}/file", uploadId)
             .file(file))
-        .andExpect(status().isBadGateway());
+        .andExpect(status().isBadGateway())
+        .andExpect(jsonPath("$.title").value("Upstream Service Error"))
+        .andExpect(jsonPath("$.detail").value("cdp-uploader file upload failed at transport level"));
   }
 
   @Test
