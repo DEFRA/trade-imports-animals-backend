@@ -34,6 +34,7 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateRequest;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderClient;
+import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
@@ -64,7 +65,7 @@ class DocumentServiceTest {
     documentService = new DocumentService(
         accompanyingDocumentRepository,
         cdpUploaderClient,
-        BACKEND_BASE_URL,
+        new AppConfig(BACKEND_BASE_URL),
         cdpConfig);
   }
 

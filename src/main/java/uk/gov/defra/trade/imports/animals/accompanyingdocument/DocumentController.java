@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.InvalidMediaTypeException;
@@ -30,6 +29,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
+import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
 /**
@@ -50,10 +50,10 @@ public class DocumentController {
   public DocumentController(
       DocumentService documentService,
       S3DocumentService s3DocumentService,
-      @Value("${app.base-url}") String backendBaseUrl) {
+      AppConfig appConfig) {
     this.documentService = documentService;
     this.s3DocumentService = s3DocumentService;
-    this.backendBaseUrl = backendBaseUrl;
+    this.backendBaseUrl = appConfig.baseUrl();
   }
 
   /**

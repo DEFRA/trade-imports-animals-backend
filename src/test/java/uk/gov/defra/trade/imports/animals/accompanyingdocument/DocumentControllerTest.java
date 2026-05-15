@@ -25,9 +25,11 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
+import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
@@ -40,6 +42,7 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
 
 @WebMvcTest(DocumentController.class)
+@EnableConfigurationProperties(AppConfig.class)
 @TestPropertySource(properties = {
     "cdp.tracing.header-name=x-cdp-request-id",
     "app.base-url=http://localhost:8085"
