@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -435,7 +436,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
-            org.mockito.Mockito.doThrow(new OutboxWriteException("Forced failure", "agg-id", 1L, "trace-001"))
+            doThrow(new OutboxWriteException("Forced failure", "agg-id", 1L, "trace-001"))
                 .when(outboxService).appendEvent(any(), any());
 
             // When / Then — exception propagates out of submitNotification

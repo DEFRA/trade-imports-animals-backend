@@ -50,7 +50,7 @@ public class NotificationController {
         content = @Content(schema = @Schema(implementation = Notification.class)))
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
-    @ApiResponse(responseCode = "500", description = "Outbox write failed", content = @Content)
+    @ApiResponse(responseCode = "500", description = "Submission failed", content = @Content)
     @Timed("controller.submitNotification.time")
     public ResponseEntity<Notification> submit(
         @Pattern(regexp = "^[A-Za-z0-9.]{1,50}$") @PathVariable String referenceNumber,
