@@ -11,7 +11,6 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.ContentDisposition;
@@ -25,12 +24,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
-import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
 /**
@@ -42,12 +41,20 @@ import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 @RestController
 @Tag(name = "Document Uploads", description = "Operations for accompanying document upload sessions")
 @Slf4j
-@RequiredArgsConstructor
 public class DocumentController {
 
   private final DocumentService documentService;
   private final S3DocumentService s3DocumentService;
-  private final AppConfig appConfig;
+  private final String backendBaseUrl;
+
+  public DocumentController(
+      DocumentService documentService,
+      S3DocumentService s3DocumentService,
+      @Value("${app.base-url}") String backendBaseUrl) {
+    this.documentService = documentService;
+    this.s3DocumentService = s3DocumentService;
+    this.backendBaseUrl = backendBaseUrl;
+  }
 
   /**
    * Initiate a new document upload session for a notification.
@@ -227,11 +234,11 @@ public class DocumentController {
   }
 
   private URI buildLocationUri(String uploadId) {
-    String backendBaseUrl = appConfig.baseUrl();
-    if (backendBaseUrl.endsWith("/")) {
-      backendBaseUrl = backendBaseUrl.substring(0, backendBaseUrl.length() - 1);
+    String baseUrl = backendBaseUrl;
+    if (baseUrl.endsWith("/")) {
+      baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
     }
-    return URI.create(backendBaseUrl + "/document-uploads/" + uploadId);
+    return URI.create(baseUrl + "/document-uploads/" + uploadId);
   }
 
   /**

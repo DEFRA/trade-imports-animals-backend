@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponentsBuilder;
@@ -17,7 +17,6 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateRequest;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderClient;
-import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 import org.springframework.web.multipart.MultipartFile;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
@@ -33,13 +32,23 @@ import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException
  */
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class DocumentService {
 
   private final AccompanyingDocumentRepository accompanyingDocumentRepository;
   private final CdpUploaderClient cdpUploaderClient;
-  private final AppConfig appConfig;
+  private final String backendBaseUrl;
   private final CdpConfig cdpConfig;
+
+  public DocumentService(
+      AccompanyingDocumentRepository accompanyingDocumentRepository,
+      CdpUploaderClient cdpUploaderClient,
+      @Value("${app.base-url}") String backendBaseUrl,
+      CdpConfig cdpConfig) {
+    this.accompanyingDocumentRepository = accompanyingDocumentRepository;
+    this.cdpUploaderClient = cdpUploaderClient;
+    this.backendBaseUrl = backendBaseUrl;
+    this.cdpConfig = cdpConfig;
+  }
 
   /**
    * cdp-uploader's {@code /initiate} schema requires {@code xor('redirect', 'downloadUrls')}, so
@@ -106,7 +115,7 @@ public class DocumentService {
    * appends to any existing path on {@code app.base-url}, preserving path prefixes.
    */
   private String buildUploadUrl(String uploadId) {
-    return UriComponentsBuilder.fromUriString(appConfig.baseUrl())
+    return UriComponentsBuilder.fromUriString(backendBaseUrl)
         .pathSegment("document-uploads", uploadId, "file")
         .build()
         .toUriString();
@@ -228,7 +237,7 @@ public class DocumentService {
    * document identity is carried via {@code metadata.correlationId}, not the URL.
    */
   private String buildCallbackUrl() {
-    return appConfig.baseUrl() + "/document-uploads/pending/scan-results";
+    return backendBaseUrl + "/document-uploads/pending/scan-results";
   }
 
   /**

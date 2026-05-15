@@ -34,7 +34,6 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateRequest;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderClient;
-import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
@@ -51,9 +50,6 @@ class DocumentServiceTest {
   private CdpUploaderClient cdpUploaderClient;
 
   @Mock
-  private AppConfig appConfig;
-
-  @Mock
   private CdpConfig cdpConfig;
 
   @Mock
@@ -61,12 +57,14 @@ class DocumentServiceTest {
 
   private DocumentService documentService;
 
+  private static final String BACKEND_BASE_URL = "http://backend";
+
   @BeforeEach
   void setUp() {
     documentService = new DocumentService(
         accompanyingDocumentRepository,
         cdpUploaderClient,
-        appConfig,
+        BACKEND_BASE_URL,
         cdpConfig);
   }
 
@@ -74,7 +72,6 @@ class DocumentServiceTest {
     when(cdpConfig.uploader()).thenReturn(
         new CdpConfig.UploaderConfig("http://localhost:7337", 52428800L, List.of("application/pdf")));
     when(cdpConfig.s3()).thenReturn(s3Config);
-    when(appConfig.baseUrl()).thenReturn("http://backend");
     when(s3Config.documentsBucket()).thenReturn("documents-bucket");
   }
 

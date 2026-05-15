@@ -21,8 +21,6 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,7 +30,6 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
-import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultForm;
@@ -43,7 +40,8 @@ import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException
 
 @WebMvcTest(DocumentController.class)
 @TestPropertySource(properties = {
-    "cdp.tracing.header-name=x-cdp-request-id"
+    "cdp.tracing.header-name=x-cdp-request-id",
+    "app.base-url=http://localhost:8085"
 })
 class DocumentControllerTest {
 
@@ -59,17 +57,11 @@ class DocumentControllerTest {
   @MockitoBean
   private S3DocumentService s3DocumentService;
 
-  @MockitoBean
-  private AppConfig appConfig;
-
   @Nested
   class Initiate {
 
-    @ParameterizedTest
-    @CsvSource({"http://localhost:8085", "http://localhost:8085/"})
-    void shouldReturn201WithLocationHeader(String configuredBaseUrl) throws Exception {
-      when(appConfig.baseUrl()).thenReturn(configuredBaseUrl);
-
+    @Test
+    void shouldReturn201WithLocationHeader() throws Exception {
       String ref = "DRAFT.IMP.2026.00000001";
       DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
       DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
@@ -141,8 +133,6 @@ class DocumentControllerTest {
 
     @Test
     void shouldIgnoreUnknownFieldsLikeRedirectUrl() throws Exception {
-      when(appConfig.baseUrl()).thenReturn("http://localhost:8085");
-
       String ref = "DRAFT.IMP.2026.00000001";
       String body = """
           {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"/anything"}
