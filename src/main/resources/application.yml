@@ -125,6 +125,11 @@ springdoc:
   swagger-ui:
     enabled: false
 
+# Notification submission outbox lock configuration
+notification:
+  submit:
+    lock-at-least-for: 50ms
+
 # Application info (exposed via /info endpoint)
 info:
   app:

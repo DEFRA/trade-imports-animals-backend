@@ -7,11 +7,11 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,18 +27,32 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class NotificationService {
 
     private static final String CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER = "Cannot find notification with reference number: ";
     private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
-    private static final Duration LOCK_AT_LEAST_FOR = Duration.ofMillis(50);
 
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
     private final DocumentService documentService;
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
+    private final Duration lockAtLeastFor;
+
+    public NotificationService(
+        NotificationRepository notificationRepository,
+        AuditRepository auditRepository,
+        DocumentService documentService,
+        OutboxService outboxService,
+        LockingTaskExecutor lockingTaskExecutor,
+        @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor) {
+        this.notificationRepository = notificationRepository;
+        this.auditRepository = auditRepository;
+        this.documentService = documentService;
+        this.outboxService = outboxService;
+        this.lockingTaskExecutor = lockingTaskExecutor;
+        this.lockAtLeastFor = lockAtLeastFor;
+    }
 
     public Notification saveOriginOfImport(NotificationDto notificationDto) {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
@@ -76,7 +90,7 @@ public class NotificationService {
             Instant.now(),
             "outbox-write:" + aggregateId,
             LOCK_AT_MOST_FOR,
-            LOCK_AT_LEAST_FOR);
+            lockAtLeastFor);
 
         try {
             LockingTaskExecutor.TaskResult<Notification> result = lockingTaskExecutor.executeWithLock(

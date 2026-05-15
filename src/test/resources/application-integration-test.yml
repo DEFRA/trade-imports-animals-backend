@@ -87,6 +87,11 @@ management:
 admin:
   secret: test-admin-secret
 
+# Disable ShedLock minimum hold time so rapid re-submissions in tests don't fail to acquire the lock
+notification:
+  submit:
+    lock-at-least-for: 0ms
+
 # Application info (exposed via /info endpoint)
 info:
   app:

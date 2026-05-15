@@ -479,7 +479,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submit_shouldIncrementAggregateVersion_onSubsequentSubmissions() throws InterruptedException {
+    void submit_shouldIncrementAggregateVersion_onSubsequentSubmissions() {
         // Given — create and submit a notification (version 1)
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
@@ -496,9 +496,6 @@ class NotificationIT extends IntegrationBase {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
         notification.setStatus(NotificationStatus.DRAFT);
         notificationRepository.save(notification);
-
-        // Wait for the ShedLock minimum hold time to elapse before the second submit
-        Thread.sleep(100);
 
         // When — submit again (version 2)
         webClient("NoAuth")

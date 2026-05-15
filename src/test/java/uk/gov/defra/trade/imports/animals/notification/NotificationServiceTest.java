@@ -15,6 +15,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.cons
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
@@ -71,7 +72,7 @@ class NotificationServiceTest {
     void setUp() {
         lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         notificationService = new NotificationService(notificationRepository, auditRepository,
-            documentService, outboxService, lockingTaskExecutor);
+            documentService, outboxService, lockingTaskExecutor, Duration.ZERO);
     }
 
     @Nested
