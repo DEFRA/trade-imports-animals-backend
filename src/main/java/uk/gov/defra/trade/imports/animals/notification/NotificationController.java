@@ -48,9 +48,10 @@ public class NotificationController {
     @Operation(summary = "Submit notification", description = "Transitions notification status from DRAFT to SUBMITTED")
     @Timed("controller.submitNotification.time")
     public ResponseEntity<Notification> submit(
-        @Pattern(regexp = "^[A-Za-z0-9.]{1,50}$") @PathVariable String referenceNumber) {
+        @Pattern(regexp = "^[A-Za-z0-9.]{1,50}$") @PathVariable String referenceNumber,
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId) {
         log.info("POST /notifications/{}/submit - Submitting notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.submitNotification(referenceNumber));
+        return ResponseEntity.ok(notificationService.submitNotification(referenceNumber, traceId));
     }
 
     @GetMapping("/{referenceNumber}")

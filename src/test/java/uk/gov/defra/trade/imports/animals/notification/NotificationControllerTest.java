@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -179,7 +180,8 @@ class NotificationControllerTest {
             submitted.setReferenceNumber(referenceNumber);
             submitted.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.submitNotification(referenceNumber)).thenReturn(submitted);
+            when(notificationService.submitNotification(eq(referenceNumber), anyString()))
+                .thenReturn(submitted);
 
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/submit", referenceNumber)
@@ -190,10 +192,29 @@ class NotificationControllerTest {
         }
 
         @Test
+        void submit_shouldPassTraceIdAsCorrelationId() throws Exception {
+            // Given
+            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            Notification submitted = new Notification();
+            submitted.setId("notif-id-001");
+            submitted.setReferenceNumber(referenceNumber);
+            submitted.setStatus(NotificationStatus.SUBMITTED);
+
+            when(notificationService.submitNotification(eq(referenceNumber), eq("trace-abc")))
+                .thenReturn(submitted);
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/submit", referenceNumber)
+                    .header(HEADER_TRACE_ID, "trace-abc")
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+        }
+
+        @Test
         void submit_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
             String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
-            when(notificationService.submitNotification(referenceNumber))
+            when(notificationService.submitNotification(eq(referenceNumber), anyString()))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + referenceNumber));
 

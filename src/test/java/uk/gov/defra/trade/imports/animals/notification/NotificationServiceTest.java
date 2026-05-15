@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -17,6 +19,11 @@ import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
+import net.javacrumbs.shedlock.core.LockConfiguration;
+import net.javacrumbs.shedlock.core.LockProvider;
+import net.javacrumbs.shedlock.core.LockingTaskExecutor;
+import net.javacrumbs.shedlock.core.SimpleLock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -33,6 +40,8 @@ import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
@@ -49,11 +58,21 @@ class NotificationServiceTest {
     @Mock
     private DocumentService documentService;
 
+    @Mock
+    private OutboxService outboxService;
+
+    @Mock
+    private LockProvider lockProvider;
+
+    private LockingTaskExecutor lockingTaskExecutor;
+
     private NotificationService notificationService;
 
     @BeforeEach
     void setUp() {
-        notificationService = new NotificationService(notificationRepository, auditRepository, documentService);
+        lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
+        notificationService = new NotificationService(notificationRepository, auditRepository,
+            documentService, outboxService, lockingTaskExecutor);
     }
 
     @Nested
@@ -347,6 +366,12 @@ class NotificationServiceTest {
     @Nested
     class SubmitNotification {
 
+        @BeforeEach
+        void setUp() {
+            // Default: lock is acquired and the task executes
+            lenient().when(lockProvider.lock(any())).thenReturn(Optional.of(mock(SimpleLock.class)));
+        }
+
         @Test
         void submitNotification_shouldSetStatusToSubmittedAndSave() {
             // Given
@@ -363,12 +388,34 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            Notification result = notificationService.submitNotification(referenceNumber);
+            Notification result = notificationService.submitNotification(referenceNumber, "trace-001");
 
             // Then
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
+        }
+
+        @Test
+        void submitNotification_shouldWriteOutboxEvent() {
+            // Given
+            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            Notification notification = Notification.builder()
+                .id("notif-id-001")
+                .referenceNumber(referenceNumber)
+                .status(NotificationStatus.DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.submitNotification(referenceNumber, "trace-001");
+
+            // Then
+            verify(outboxService).appendEvent(notification, "trace-001");
         }
 
         @Test
@@ -379,9 +426,33 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.submitNotification(referenceNumber))
+            assertThatThrownBy(() -> notificationService.submitNotification(referenceNumber, "trace-001"))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(referenceNumber);
+
+            verify(notificationRepository, never()).save(any());
+            verify(outboxService, never()).appendEvent(any(), any());
+        }
+
+        @Test
+        void submitNotification_shouldThrowOutboxWriteException_whenLockNotAcquired() {
+            // Given
+            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            Notification notification = Notification.builder()
+                .id("notif-id-001")
+                .referenceNumber(referenceNumber)
+                .status(NotificationStatus.DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+
+            // Lock not available — executor returns wasExecuted() == false
+            when(lockProvider.lock(any())).thenReturn(Optional.empty());
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.submitNotification(referenceNumber, "trace-001"))
+                .isInstanceOf(OutboxWriteException.class);
 
             verify(notificationRepository, never()).save(any());
         }

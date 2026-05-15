@@ -30,15 +30,22 @@ services:
     container_name: mongodb
     profiles: ['infra', 'services']
     restart: always
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
       - '27017:27017'
     volumes:
       - mongodb-data:/data/db
     healthcheck:
-      test: ['CMD', 'mongosh', '--eval', 'db.adminCommand("ping")']
+      test:
+        - CMD
+        - mongosh
+        - --eval
+        - >
+          try { rs.status().ok } catch(e) {
+          rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]}).ok }
       interval: 5s
-      start_period: 10s
-      retries: 3
+      start_period: 15s
+      retries: 5
     networks:
       - trade-imports-tenant
 
@@ -118,8 +125,8 @@ services:
       SERVICE_VERSION: 0.0.0-local
       ENVIRONMENT: local
 
-      # MongoDB
-      MONGO_URI: mongodb://mongodb:27017
+      # MongoDB (directConnection bypasses replica-set topology redirection in Docker)
+      MONGO_URI: mongodb://mongodb:27017/?directConnection=true
       MONGO_DATABASE: trade-imports-animals-backend
 
       # AWS (via LocalStack)
