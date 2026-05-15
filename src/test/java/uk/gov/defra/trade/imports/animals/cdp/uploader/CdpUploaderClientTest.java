@@ -210,10 +210,7 @@ class CdpUploaderClientTest {
     @Test
     void uploadFile_shouldSucceed_when302Returned() {
       // Given — cdp-uploader returns 302 on success; onStatus only catches 4xx/5xx
-      MultipartFile file = mock(MultipartFile.class);
-      when(file.getResource()).thenReturn(new ByteArrayResource("pdf-bytes".getBytes(StandardCharsets.UTF_8)));
-      when(file.getContentType()).thenReturn("application/pdf");
-      when(file.getOriginalFilename()).thenReturn("test.pdf");
+      MultipartFile file = stubMultipartFile();
 
       when(uploadResponseSpec.onStatus(any(), any())).thenReturn(uploadResponseSpec);
       when(uploadResponseSpec.toBodilessEntity()).thenReturn(null);
@@ -227,10 +224,7 @@ class CdpUploaderClientTest {
     @Test
     void uploadFile_shouldThrowServiceUnavailableException_whenCdpUploaderReturns4xxOr5xx() {
       // Given — simulate the onStatus handler executing for a 500 response
-      MultipartFile file = mock(MultipartFile.class);
-      when(file.getResource()).thenReturn(new ByteArrayResource("pdf-bytes".getBytes(StandardCharsets.UTF_8)));
-      when(file.getContentType()).thenReturn("application/pdf");
-      when(file.getOriginalFilename()).thenReturn("test.pdf");
+      MultipartFile file = stubMultipartFile();
 
       when(uploadResponseSpec.onStatus(any(), any())).thenAnswer(invocation -> {
         Predicate<HttpStatusCode> predicate = invocation.getArgument(0);
@@ -259,10 +253,7 @@ class CdpUploaderClientTest {
     @Test
     void uploadFile_shouldWrapRestClientExceptionAsServiceUnavailable() {
       // Given — simulate a transport-level failure
-      MultipartFile file = mock(MultipartFile.class);
-      when(file.getResource()).thenReturn(new ByteArrayResource("pdf-bytes".getBytes(StandardCharsets.UTF_8)));
-      when(file.getContentType()).thenReturn("application/pdf");
-      when(file.getOriginalFilename()).thenReturn("test.pdf");
+      MultipartFile file = stubMultipartFile();
 
       ResourceAccessException transportFailure =
           new ResourceAccessException("I/O error: Connection refused");
@@ -278,6 +269,14 @@ class CdpUploaderClientTest {
   }
 
   // Helpers
+
+  private static MultipartFile stubMultipartFile() {
+    MultipartFile file = mock(MultipartFile.class);
+    when(file.getResource()).thenReturn(new ByteArrayResource("pdf-bytes".getBytes(StandardCharsets.UTF_8)));
+    when(file.getContentType()).thenReturn("application/pdf");
+    when(file.getOriginalFilename()).thenReturn("test.pdf");
+    return file;
+  }
 
   private static CdpUploaderInitiateRequest sampleRequest() {
     return new CdpUploaderInitiateRequest(
