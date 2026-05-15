@@ -31,7 +31,7 @@ public class OutboxService {
             .orElse(1L);
 
         OutboxEvent event = OutboxEvent.builder()
-            .id(UUID.randomUUID().toString())
+            .eventId(UUID.randomUUID().toString())
             .aggregateId(aggregateId)
             .aggregateType(AGGREGATE_TYPE)
             .subType(SUB_TYPE)

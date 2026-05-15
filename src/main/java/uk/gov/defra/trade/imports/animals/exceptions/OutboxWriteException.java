@@ -3,7 +3,7 @@ package uk.gov.defra.trade.imports.animals.exceptions;
 import lombok.Getter;
 
 @Getter
-public class OutboxWriteException extends RuntimeException {
+public class OutboxWriteException extends TradeImportsAnimalsBackendException {
 
     private final String aggregateId;
     private final Long aggregateVersion;

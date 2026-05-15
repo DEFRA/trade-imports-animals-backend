@@ -6,6 +6,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -16,8 +18,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
+import uk.gov.defra.trade.imports.animals.notification.Commodity;
+import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
+import uk.gov.defra.trade.imports.animals.notification.Origin;
+import uk.gov.defra.trade.imports.animals.notification.Transport;
+import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 @ExtendWith(MockitoExtension.class)
 class OutboxServiceTest {
@@ -43,7 +51,8 @@ class OutboxServiceTest {
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
-            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(any()))
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
+                "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123"))
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -62,7 +71,7 @@ class OutboxServiceTest {
             assertThat(saved.getEventType()).isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
             assertThat(saved.getMetadata().getCorrelationId()).isEqualTo("trace-001");
             assertThat(saved.getMetadata().getSchemaVersion()).isEqualTo("1");
-            assertThat(saved.getId()).isNotNull();
+            assertThat(saved.getEventId()).isNotNull();
             assertThat(saved.getTimestamp()).isNotNull();
         }
 
@@ -79,7 +88,8 @@ class OutboxServiceTest {
                 .aggregateVersion(3L)
                 .build();
 
-            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(any()))
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
+                "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123"))
                 .thenReturn(Optional.of(existing));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -93,14 +103,31 @@ class OutboxServiceTest {
         }
 
         @Test
-        void appendEvent_shouldIncludeNotificationDataInEvent() {
+        void appendEvent_shouldIncludeAllNotificationDataInEvent() {
             // Given
+            Origin origin = new Origin("GB", "true", "REF123");
+            Commodity commodity = Commodity.builder().name("Live bovine animals").build();
+            AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
+            Transport transport = Transport.builder()
+                .portOfEntry("GBFXT")
+                .arrivalDate(LocalDate.of(2026, 4, 22))
+                .build();
+
             Notification notification = Notification.builder()
                 .referenceNumber("DRAFT.IMP.2026.abc123")
                 .status(NotificationStatus.SUBMITTED)
+                .origin(origin)
+                .commodity(commodity)
+                .reasonForImport("PERMANENT")
+                .additionalDetails(additionalDetails)
+                .cphNumber("12/345/6789")
+                .transport(transport)
+                .consignor(NotificationTestData.consignors().getFirst())
+                .destination(NotificationTestData.destinations().getFirst())
                 .build();
 
-            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(any()))
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
+                "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123"))
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -110,8 +137,16 @@ class OutboxServiceTest {
             // Then
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
             verify(outboxEventRepository).save(captor.capture());
-            assertThat(captor.getValue().getData().referenceNumber())
-                .isEqualTo("DRAFT.IMP.2026.abc123");
+            NotificationSubmittedData data = captor.getValue().getData();
+            assertThat(data.referenceNumber()).isEqualTo("DRAFT.IMP.2026.abc123");
+            assertThat(data.origin()).isEqualTo(origin);
+            assertThat(data.commodity()).isEqualTo(commodity);
+            assertThat(data.reasonForImport()).isEqualTo("PERMANENT");
+            assertThat(data.additionalDetails()).isEqualTo(additionalDetails);
+            assertThat(data.cphNumber()).isEqualTo("12/345/6789");
+            assertThat(data.transport()).isEqualTo(transport);
+            assertThat(data.consignor()).isEqualTo(NotificationTestData.consignors().getFirst());
+            assertThat(data.destination()).isEqualTo(NotificationTestData.destinations().getFirst());
         }
 
         @Test
@@ -122,7 +157,8 @@ class OutboxServiceTest {
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
-            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(any()))
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
+                "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123"))
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any()))
                 .thenThrow(new DuplicateKeyException("duplicate key"));

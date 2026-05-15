@@ -32,6 +32,7 @@ public class NotificationService {
 
     private static final String CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER = "Cannot find notification with reference number: ";
     private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
+    private static final Duration LOCK_AT_LEAST_FOR = Duration.ofMillis(50);
 
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
@@ -75,7 +76,7 @@ public class NotificationService {
             Instant.now(),
             "outbox-write:" + aggregateId,
             LOCK_AT_MOST_FOR,
-            Duration.ZERO);
+            LOCK_AT_LEAST_FOR);
 
         try {
             LockingTaskExecutor.TaskResult<Notification> result = lockingTaskExecutor.executeWithLock(

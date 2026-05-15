@@ -176,8 +176,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(OutboxWriteException.class)
     public ResponseEntity<ProblemDetail> handleOutboxWriteException(OutboxWriteException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.error("Outbox write failed: aggregateId={} attemptedVersion={} correlationId={} traceId={} cause={}",
-            ex.getAggregateId(), ex.getAggregateVersion(), ex.getCorrelationId(), traceId,
+        log.error("Outbox write failed (trace: {}): aggregateId={} attemptedVersion={} correlationId={} cause={}",
+            traceId, ex.getAggregateId(), ex.getAggregateVersion(), ex.getCorrelationId(),
             ex.getCause() != null ? ex.getCause().getMessage() : ex.getMessage(), ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(

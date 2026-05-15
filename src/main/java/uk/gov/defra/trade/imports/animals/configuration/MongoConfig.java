@@ -14,7 +14,6 @@ import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.provider.mongo.MongoLockProvider;
-import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -38,7 +37,6 @@ import uk.gov.defra.trade.imports.animals.configuration.tls.TrustStoreConfigurat
 @Configuration
 @EnableMongoAuditing
 @EnableScheduling
-@EnableSchedulerLock(defaultLockAtMostFor = "PT10S")
 @Slf4j
 public class MongoConfig {
 

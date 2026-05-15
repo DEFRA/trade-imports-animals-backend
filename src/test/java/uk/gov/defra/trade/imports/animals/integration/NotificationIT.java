@@ -472,7 +472,7 @@ class NotificationIT extends IntegrationBase {
             .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
         assertThat(event.getAggregateVersion()).isEqualTo(1L);
         assertThat(event.getTimestamp()).isNotNull();
-        assertThat(event.getId()).isNotNull();
+        assertThat(event.getEventId()).isNotNull();
         assertThat(event.getMetadata().getCorrelationId()).isEqualTo("trace-outbox-001");
         assertThat(event.getMetadata().getSchemaVersion()).isEqualTo("1");
         assertThat(event.getData().referenceNumber()).isEqualTo(referenceNumber);

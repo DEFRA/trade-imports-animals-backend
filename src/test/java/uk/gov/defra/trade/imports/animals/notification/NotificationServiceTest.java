@@ -20,7 +20,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
-import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.core.SimpleLock;
@@ -394,10 +393,11 @@ class NotificationServiceTest {
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
+            verify(outboxService).appendEvent(notification, "trace-001");
         }
 
         @Test
-        void submitNotification_shouldWriteOutboxEvent() {
+        void submitNotification_shouldWriteOutboxEvent_afterSavingNotification() {
             // Given
             String referenceNumber = "DRAFT.IMP.2026.abc123";
             Notification notification = Notification.builder()
@@ -414,8 +414,32 @@ class NotificationServiceTest {
             // When
             notificationService.submitNotification(referenceNumber, "trace-001");
 
-            // Then
-            verify(outboxService).appendEvent(notification, "trace-001");
+            // Then — save must happen before the outbox event is written
+            InOrder inOrder = inOrder(notificationRepository, outboxService);
+            inOrder.verify(notificationRepository).save(notification);
+            inOrder.verify(outboxService).appendEvent(notification, "trace-001");
+        }
+
+        @Test
+        void submitNotification_shouldThrowOutboxWriteException_whenAppendEventFails() {
+            // Given
+            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            Notification notification = Notification.builder()
+                .id("notif-id-001")
+                .referenceNumber(referenceNumber)
+                .status(NotificationStatus.DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            org.mockito.Mockito.doThrow(new OutboxWriteException("Forced failure", "agg-id", 1L, "trace-001"))
+                .when(outboxService).appendEvent(any(), any());
+
+            // When / Then — exception propagates out of submitNotification
+            assertThatThrownBy(() -> notificationService.submitNotification(referenceNumber, "trace-001"))
+                .isInstanceOf(OutboxWriteException.class);
         }
 
         @Test
@@ -432,6 +456,8 @@ class NotificationServiceTest {
 
             verify(notificationRepository, never()).save(any());
             verify(outboxService, never()).appendEvent(any(), any());
+            // Lock must never be acquired — the notification lookup fails before the lock scope
+            verify(lockProvider, never()).lock(any());
         }
 
         @Test
@@ -452,7 +478,13 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(() -> notificationService.submitNotification(referenceNumber, "trace-001"))
-                .isInstanceOf(OutboxWriteException.class);
+                .isInstanceOf(OutboxWriteException.class)
+                .satisfies(ex -> {
+                    OutboxWriteException owe = (OutboxWriteException) ex;
+                    assertThat(owe.getAggregateId())
+                        .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
+                    assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
+                });
 
             verify(notificationRepository, never()).save(any());
         }

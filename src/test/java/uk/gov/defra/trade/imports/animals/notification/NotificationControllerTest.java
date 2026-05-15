@@ -208,6 +208,8 @@ class NotificationControllerTest {
                     .header(HEADER_TRACE_ID, "trace-abc")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
+
+            verify(notificationService).submitNotification(referenceNumber, "trace-abc");
         }
 
         @Test
