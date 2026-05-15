@@ -117,8 +117,7 @@ public class CdpUploaderClient {
 
   private MultiValueMap<String, Object> buildMultipartBody(MultipartFile file) {
     HttpHeaders partHeaders = new HttpHeaders();
-    String contentType = file.getContentType() != null
-        ? file.getContentType() : "application/octet-stream";
+    String contentType = Objects.requireNonNullElse(file.getContentType(), "application/octet-stream");
     partHeaders.setContentType(MediaType.parseMediaType(contentType));
     String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload";
     partHeaders.setContentDisposition(
