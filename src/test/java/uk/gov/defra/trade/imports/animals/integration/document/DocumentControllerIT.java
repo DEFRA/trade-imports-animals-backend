@@ -35,6 +35,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.sqs.SqsClient;
+import uk.gov.defra.trade.imports.animals.integration.PortReservation;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
@@ -81,7 +82,8 @@ class DocumentControllerIT extends IntegrationBase {
     private static final Duration SCAN_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(250);
 
-    private static final int BACKEND_PORT = org.springframework.test.util.TestSocketUtils.findAvailableTcpPort();
+    private static final PortReservation BACKEND_PORT_RESERVATION = PortReservation.reserve();
+    private static final int BACKEND_PORT = BACKEND_PORT_RESERVATION.port();
 
     static final Network CONTAINER_NETWORK = Network.newNetwork();
 
@@ -136,6 +138,7 @@ class DocumentControllerIT extends IntegrationBase {
 
     @DynamicPropertySource
     static void registerDocumentITProperties(DynamicPropertyRegistry registry) {
+        BACKEND_PORT_RESERVATION.release();
         registry.add("server.port", () -> BACKEND_PORT);
 
         registry.add("app.base-url",
