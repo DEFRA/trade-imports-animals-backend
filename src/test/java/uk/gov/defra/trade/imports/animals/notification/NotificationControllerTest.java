@@ -36,6 +36,8 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocum
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 @WebMvcTest(NotificationController.class)
 @TestPropertySource(properties = {
@@ -52,6 +54,9 @@ class NotificationControllerTest {
 
     @MockitoBean
     private NotificationService notificationService;
+
+    @MockitoBean
+    private OutboxService outboxService;
 
     @Nested
     class PostNotification {
@@ -554,6 +559,46 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0]").value("DRAFT.IMP.2026.abc123"))
                 .andExpect(jsonPath("$[1]").value("DRAFT.IMP.2026.xyz456"));
+        }
+    }
+
+    @Nested
+    class GetOutboxEvents {
+
+        @Test
+        void getOutboxEvents_shouldReturnEventsForReferenceNumber() throws Exception {
+            // Given
+            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            List<OutboxEvent> events = List.of(
+                OutboxEvent.builder().aggregateVersion(1L)
+                    .eventType("uk.gov.defra.imports.notification.NotificationSubmitted").build(),
+                OutboxEvent.builder().aggregateVersion(2L)
+                    .eventType("uk.gov.defra.imports.notification.NotificationSubmitted").build()
+            );
+            when(outboxService.findByReferenceNumber(referenceNumber)).thenReturn(events);
+
+            // When & Then
+            mockMvc.perform(get("/notifications/{ref}/outbox-events", referenceNumber)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].aggregateVersion").value(1))
+                .andExpect(jsonPath("$[1].aggregateVersion").value(2));
+        }
+
+        @Test
+        void getOutboxEvents_shouldReturnEmptyList_whenNoEventsExist() throws Exception {
+            // Given
+            String referenceNumber = "DRAFT.IMP.2026.unknown";
+            when(outboxService.findByReferenceNumber(referenceNumber)).thenReturn(List.of());
+
+            // When & Then
+            mockMvc.perform(get("/notifications/{ref}/outbox-events", referenceNumber)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$").isEmpty());
         }
     }
 }

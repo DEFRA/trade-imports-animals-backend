@@ -6,7 +6,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -35,7 +39,8 @@ class OutboxServiceTest {
 
     @BeforeEach
     void setUp() {
-        outboxService = new OutboxService(outboxEventRepository);
+        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        outboxService = new OutboxService(outboxEventRepository, objectMapper);
     }
 
     @Nested
@@ -132,19 +137,20 @@ class OutboxServiceTest {
             // When
             outboxService.appendEvent(notification, "trace-001");
 
-            // Then
+            // Then — data is stored as Map<String, Object> (opaque JSON, schema-agnostic)
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
             verify(outboxEventRepository).save(captor.capture());
-            NotificationSubmittedData data = captor.getValue().getData();
-            assertThat(data.referenceNumber()).isEqualTo("DRAFT.IMP.2026.abc123");
-            assertThat(data.origin()).isEqualTo(origin);
-            assertThat(data.commodity()).isEqualTo(commodity);
-            assertThat(data.reasonForImport()).isEqualTo("PERMANENT");
-            assertThat(data.additionalDetails()).isEqualTo(additionalDetails);
-            assertThat(data.cphNumber()).isEqualTo("12/345/6789");
-            assertThat(data.transport()).isEqualTo(transport);
-            assertThat(data.consignor()).isEqualTo(NotificationTestData.consignors().getFirst());
-            assertThat(data.destination()).isEqualTo(NotificationTestData.destinations().getFirst());
+            Map<String, Object> data = captor.getValue().getData();
+            assertThat(data).containsKey("referenceNumber");
+            assertThat(data.get("referenceNumber")).isEqualTo("DRAFT.IMP.2026.abc123");
+            assertThat(data).containsKey("origin");
+            assertThat(data).containsKey("commodity");
+            assertThat(data.get("reasonForImport")).isEqualTo("PERMANENT");
+            assertThat(data).containsKey("additionalDetails");
+            assertThat(data.get("cphNumber")).isEqualTo("12/345/6789");
+            assertThat(data).containsKey("transport");
+            assertThat(data).containsKey("consignor");
+            assertThat(data).containsKey("destination");
         }
 
         @Test
@@ -171,6 +177,47 @@ class OutboxServiceTest {
                     assertThat(owe.getAggregateVersion()).isEqualTo(1L);
                     assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
                 });
+        }
+    }
+
+    @Nested
+    class FindByReferenceNumber {
+
+        @Test
+        void findByReferenceNumber_shouldReturnEventsInAggregateVersionOrder() {
+            // Given
+            OutboxEvent v1 = OutboxEvent.builder()
+                .aggregateId("Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123")
+                .aggregateVersion(1L)
+                .build();
+            OutboxEvent v2 = OutboxEvent.builder()
+                .aggregateId("Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123")
+                .aggregateVersion(2L)
+                .build();
+
+            when(outboxEventRepository.findAllByAggregateIdOrderByAggregateVersionAsc(
+                "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123"))
+                .thenReturn(List.of(v1, v2));
+
+            // When
+            List<OutboxEvent> result = outboxService.findByReferenceNumber("DRAFT.IMP.2026.abc123");
+
+            // Then
+            assertThat(result).containsExactly(v1, v2);
+        }
+
+        @Test
+        void findByReferenceNumber_shouldReturnEmptyList_whenNoEventsExist() {
+            // Given
+            when(outboxEventRepository.findAllByAggregateIdOrderByAggregateVersionAsc(
+                "Imports.Notification.GBN-AG.DRAFT.IMP.2026.unknown"))
+                .thenReturn(List.of());
+
+            // When
+            List<OutboxEvent> result = outboxService.findByReferenceNumber("DRAFT.IMP.2026.unknown");
+
+            // Then
+            assertThat(result).isEmpty();
         }
     }
 
