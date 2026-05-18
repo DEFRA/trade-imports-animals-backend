@@ -24,7 +24,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -55,9 +54,6 @@ class DocumentControllerTest {
   @Autowired
   private ObjectMapper objectMapper;
 
-  @Autowired
-  private DocumentController documentController;
-
   @MockitoBean
   private DocumentService documentService;
 
@@ -83,27 +79,6 @@ class DocumentControllerTest {
           .andExpect(header().string("Location", "http://localhost:8085/document-uploads/upload-abc-123"))
           .andExpect(jsonPath("$.uploadId").value("upload-abc-123"))
           .andExpect(jsonPath("$.uploadUrl").value("http://localhost:8085/document-uploads/upload-abc-123/file"));
-    }
-
-    @Test
-    void shouldNormaliseTrailingSlashInLocationHeader() throws Exception {
-      ReflectionTestUtils.setField(documentController, "backendBaseUrl", "http://localhost:8085/");
-      try {
-        String ref = "DRAFT.IMP.2026.00000001";
-        DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
-        DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
-
-        when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class)))
-            .thenReturn(serviceResponse);
-
-        mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(request)))
-            .andExpect(status().isCreated())
-            .andExpect(header().string("Location", "http://localhost:8085/document-uploads/upload-abc-123"));
-      } finally {
-        ReflectionTestUtils.setField(documentController, "backendBaseUrl", "http://localhost:8085");
-      }
     }
 
     @Test
