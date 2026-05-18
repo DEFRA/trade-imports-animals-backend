@@ -26,6 +26,6 @@ public record PortReservation(ServerSocket socket, int port) {
     }
 
     public void release() {
-        try { socket.close(); } catch (IOException ignored) { }
+        try { socket.close(); } catch (IOException ignored) { /* best-effort cleanup */ }
     }
 }
