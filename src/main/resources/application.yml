@@ -13,7 +13,7 @@ spring:
       uri: ${MONGO_URI:mongodb://localhost:27017/}
       database: ${MONGO_DATABASE:trade-imports-animals-backend}
       auto-index-creation: true
-      read-preference: ${MONGO_READ_PREFERENCE:secondary}
+      read-preference: ${MONGO_READ_PREFERENCE:primary}
       write-concern: ${MONGO_WRITE_CONCERN:majority}
       connection-pool:
         min-size: ${MONGO_POOL_MIN_SIZE:10}
@@ -126,6 +126,11 @@ admin:
 springdoc:
   swagger-ui:
     enabled: false
+
+# Notification submission outbox lock configuration
+notification:
+  submit:
+    lock-at-least-for: 50ms
 
 # Application info (exposed via /info endpoint)
 info:
