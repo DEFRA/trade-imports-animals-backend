@@ -208,7 +208,8 @@ class NotificationServiceTest {
         @Test
         void findAll_shouldReturnEmptyList() {
             // Given
-            when(notificationRepository.findAll()).thenReturn(Collections.emptyList());
+            when(notificationRepository.findAllByOrderByTransport_ArrivalDateDesc())
+                .thenReturn(Collections.emptyList());
 
             // When
             List<Notification> result = notificationService.findAll();
@@ -216,7 +217,7 @@ class NotificationServiceTest {
             // Then
             assertThat(result).isNotNull();
             assertThat(result).isEmpty();
-            verify(notificationRepository, times(1)).findAll();
+            verify(notificationRepository, times(1)).findAllByOrderByTransport_ArrivalDateDesc();
         }
     }
 

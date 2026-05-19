@@ -143,6 +143,136 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void findAll_shouldReturnNotificationsOrderedByArrivalDateDescending() {
+        // Given
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithArrivalDate("GB", LocalDate.of(2026, 1, 10)))
+            .exchange()
+            .expectStatus().isOk();
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, 6, 15)))
+            .exchange()
+            .expectStatus().isOk();
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, 3, 1)))
+            .exchange()
+            .expectStatus().isOk();
+
+        // When
+        List<Notification> notifications = findAllNotifications();
+
+        // Then
+        assertThat(notifications).hasSize(3);
+        assertThat(notifications)
+            .extracting(n -> n.getTransport().getArrivalDate())
+            .containsExactly(
+                LocalDate.of(2026, 6, 15),
+                LocalDate.of(2026, 3, 1),
+                LocalDate.of(2026, 1, 10));
+    }
+
+    @Test
+    void findAll_notifications_without_arrivalDate_list_afterThoseWithDates() {
+        // Given — dated notifications and drafts without transport.arrivalDate
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, 6, 15)))
+            .exchange()
+            .expectStatus().isOk();
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, 1, 10)))
+            .exchange()
+            .expectStatus().isOk();
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange()
+            .expectStatus().isOk();
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithTransportButNoArrivalDate("DE"))
+            .exchange()
+            .expectStatus().isOk();
+
+        // When
+        List<Notification> notifications = findAllNotifications();
+
+        // Then — dated first (desc), then those with no arrival date
+        assertThat(notifications).hasSize(4);
+        assertThat(notifications.subList(0, 2))
+            .extracting(n -> n.getTransport().getArrivalDate())
+            .containsExactly(LocalDate.of(2026, 6, 15), LocalDate.of(2026, 1, 10));
+        assertThat(notifications.subList(2, 4))
+            .extracting(this::extractArrivalDate)
+            .containsOnlyNulls();
+    }
+
+    @Test
+    void findAll_notifications_with_draft_and_submitted_statues() {
+        // Given — mix of DRAFT (with and without arrival date) and SUBMITTED
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange()
+            .expectStatus().isOk();
+
+        String submittedRef = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, 6, 15)))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult()
+            .getResponseBody()
+            .getReferenceNumber();
+
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, 3, 1)))
+            .exchange()
+            .expectStatus().isOk();
+
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", submittedRef)
+            .exchange()
+            .expectStatus().isOk();
+
+        // When
+        List<Notification> notifications = findAllNotifications();
+
+        // Then — no status filter; drafts and submitted both appear, ordered by arrival date desc
+        assertThat(notifications).hasSize(3);
+        assertThat(notifications)
+            .extracting(Notification::getStatus)
+            .containsExactlyInAnyOrder(
+                NotificationStatus.DRAFT,
+                NotificationStatus.DRAFT,
+                NotificationStatus.SUBMITTED);
+        assertThat(notifications.getFirst().getReferenceNumber()).isEqualTo(submittedRef);
+        assertThat(notifications.getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(notifications.getFirst().getTransport().getArrivalDate())
+            .isEqualTo(LocalDate.of(2026, 6, 15));
+        assertThat(notifications.get(1).getTransport().getArrivalDate())
+            .isEqualTo(LocalDate.of(2026, 3, 1));
+        assertThat(extractArrivalDate(notifications.get(2))).isNull();
+    }
+
+    @Test
     void post_shouldAllowMultipleNotificationsWithNullReferenceNumber() {
         // Given - create multiple notifications without explicitly setting referenceNumber
         NotificationDto notificationDto1 = createNotificationDto("GB", "Live cattle");
@@ -820,5 +950,28 @@ class NotificationIT extends IntegrationBase {
             .origin(origin)
             .commodity(Commodity.builder().name(commodity).build())
             .build();
+    }
+
+    private NotificationDto notificationDtoWithArrivalDate(String countryCode, LocalDate arrivalDate) {
+        return NotificationDto.builder()
+            .origin(new Origin(countryCode, null, null))
+            .commodity(Commodity.builder().name("Live animals").build())
+            .transport(Transport.builder().arrivalDate(arrivalDate).build())
+            .build();
+    }
+
+    private NotificationDto notificationDtoWithTransportButNoArrivalDate(String countryCode) {
+        return NotificationDto.builder()
+            .origin(new Origin(countryCode, null, null))
+            .commodity(Commodity.builder().name("Live animals").build())
+            .transport(Transport.builder().portOfEntry("GBFXT").build())
+            .build();
+    }
+
+    private LocalDate extractArrivalDate(Notification notification) {
+        if (notification.getTransport() == null) {
+            return null;
+        }
+        return notification.getTransport().getArrivalDate();
     }
 }

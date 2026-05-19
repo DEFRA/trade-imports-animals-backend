@@ -73,8 +73,9 @@ public class NotificationService {
     }
 
     public List<Notification> findAll() {
-        log.debug("Fetching all notifications");
-        List<Notification> notifications = notificationRepository.findAll();
+        log.debug("Fetching all notifications ordered by transport arrival date descending");
+        List<Notification> notifications =
+            notificationRepository.findAllByOrderByTransport_ArrivalDateDesc();
         log.debug("Found {} notifications", notifications.size());
         return notifications;
     }
