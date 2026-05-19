@@ -21,6 +21,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 @RestController
 @RequestMapping("/notifications")
@@ -34,6 +36,7 @@ public class NotificationController {
     public static final String HEADER_USER_ID = "User-Id";
 
     private final NotificationService notificationService;
+    private final OutboxService outboxService;
 
     @PostMapping
     @Operation(summary = "Post Origin of the Import", description = "Submits an origin to the backend")
@@ -89,6 +92,18 @@ public class NotificationController {
     public List<String> findAllReferenceNumbers() {
         log.debug("GET /notifications/reference-numbers - Fetching all reference numbers");
         return notificationService.findAllReferenceNumbers();
+    }
+
+    @GetMapping("/{referenceNumber}/outbox-events")
+    @Operation(summary = "Get outbox events for a notification",
+        description = "Returns all outbox events for a notification reference number in chronological write order (aggregateVersion ascending)")
+    @ApiResponse(responseCode = "200", description = "Events returned", content = @Content)
+    @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
+    @Timed("controller.getOutboxEvents.time")
+    public List<OutboxEvent> getOutboxEvents(
+        @Pattern(regexp = "^[A-Za-z0-9.]{1,50}$") @PathVariable String referenceNumber) {
+        log.debug("GET /notifications/{}/outbox-events - Fetching outbox events", referenceNumber);
+        return outboxService.findByReferenceNumber(referenceNumber);
     }
 
     @DeleteMapping

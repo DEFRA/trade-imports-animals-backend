@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.outbox;
 
 import java.time.Instant;
+import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -31,6 +32,6 @@ public class OutboxEvent {
     private long aggregateVersion;
     private String eventType;
     private Instant timestamp;
-    private NotificationSubmittedData data;
+    private Map<String, Object> data;
     private OutboxEventMetadata metadata;
 }

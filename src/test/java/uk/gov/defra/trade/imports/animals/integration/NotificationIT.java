@@ -475,7 +475,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getEventId()).isNotNull();
         assertThat(event.getMetadata().getCorrelationId()).isEqualTo("trace-outbox-001");
         assertThat(event.getMetadata().getSchemaVersion()).isEqualTo("1");
-        assertThat(event.getData().referenceNumber()).isEqualTo(referenceNumber);
+        assertThat(event.getData().get("referenceNumber")).isEqualTo(referenceNumber);
     }
 
     @Test
@@ -750,6 +750,66 @@ class NotificationIT extends IntegrationBase {
         assertThat(notification.getTransport())
             .extracting(Transport::getPortOfEntry, Transport::getArrivalDate)
             .containsExactly("GBFXT", LocalDate.of(2026, 4, 22));
+    }
+
+    @Test
+    void getOutboxEvents_shouldReturnEventsInChronologicalOrder() {
+        // Given — create and submit a notification (version 1)
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // Reset status to DRAFT so we can submit again
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        notification.setStatus(NotificationStatus.DRAFT);
+        notificationRepository.save(notification);
+
+        // Submit again (version 2)
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // When
+        List<OutboxEvent> events = webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/outbox-events", referenceNumber)
+            .exchange().expectStatus().isOk()
+            .expectBodyList(OutboxEvent.class).returnResult()
+            .getResponseBody();
+
+        // Then — two events returned in version ascending order
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0).getAggregateVersion()).isEqualTo(1L);
+        assertThat(events.get(1).getAggregateVersion()).isEqualTo(2L);
+        assertThat(events.get(0).getEventType())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
+    }
+
+    @Test
+    void getOutboxEvents_shouldReturnEmptyList_whenNoEventsExist() {
+        // Given — create a notification but do not submit it
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When
+        List<OutboxEvent> events = webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/outbox-events", referenceNumber)
+            .exchange().expectStatus().isOk()
+            .expectBodyList(OutboxEvent.class).returnResult()
+            .getResponseBody();
+
+        // Then
+        assertThat(events).isEmpty();
     }
 
     private NotificationDto createNotificationDto(String countryCode, String commodity) {
