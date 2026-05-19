@@ -34,6 +34,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
@@ -66,6 +67,9 @@ class NotificationServiceTest {
     @Mock
     private LockProvider lockProvider;
 
+    @Mock
+    private ReferenceNumberGenerator referenceNumberGenerator;
+
     private LockingTaskExecutor lockingTaskExecutor;
 
     private NotificationService notificationService;
@@ -74,7 +78,7 @@ class NotificationServiceTest {
     void setUp() {
         lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         notificationService = new NotificationService(notificationRepository, auditRepository,
-            documentService, outboxService, lockingTaskExecutor, Duration.ZERO);
+            documentService, outboxService, lockingTaskExecutor, Duration.ZERO, referenceNumberGenerator);
     }
 
     @Nested
@@ -88,33 +92,75 @@ class NotificationServiceTest {
                 .origin(origin)
                 .build();
 
-            // Simulate MongoDB auto-generating ID on first save
             String generatedId = "507f1f77bcf86cd799439011";
-            Notification savedWithId = new Notification();
-            savedWithId.setId(generatedId);
-            savedWithId.setOrigin(origin);
+            String expectedRef = "GBN-AG-26-ABC123";
 
-            // Simulate second save with reference number
-            Notification savedWithRef = new Notification();
-            savedWithRef.setId(generatedId);
-            savedWithRef.setOrigin(origin);
-            savedWithRef.setReferenceNumber("DRAFT.IMP." + LocalDate.now().getYear() + "." + generatedId);
+            Notification saved = new Notification();
+            saved.setId(generatedId);
+            saved.setOrigin(origin);
+            saved.setReferenceNumber(expectedRef);
 
-            when(notificationRepository.save(any(Notification.class)))
-                .thenReturn(savedWithId)  // First save returns notification with ID
-                .thenReturn(savedWithRef); // Second save returns notification with reference number
+            when(referenceNumberGenerator.generate()).thenReturn(expectedRef);
+            when(notificationRepository.save(any(Notification.class))).thenReturn(saved);
 
             // When
             Notification result = notificationService.saveOriginOfImport(notificationDto);
 
             // Then
-            assertThat(result).isNotNull();
-            assertThat(result.getReferenceNumber()).isNotNull();
-            assertThat(result.getReferenceNumber()).startsWith("DRAFT.IMP." + LocalDate.now().getYear() + ".");
-            assertThat(result.getReferenceNumber()).endsWith(generatedId);
+            assertThat(result.getReferenceNumber()).isEqualTo(expectedRef);
             assertThat(result.getId()).isEqualTo(generatedId);
             assertThat(result.getOrigin()).isEqualTo(origin);
+            verify(referenceNumberGenerator).generate();
+            verify(notificationRepository, times(1)).save(any(Notification.class));
+        }
+
+        @Test
+        void saveOriginOfImport_shouldRetryPersistence_whenDuplicateKeyExceptionOnFirstAttempt() {
+            // Given — first persistence attempt collides, second succeeds
+            Origin origin = new Origin("GB", "true", "REF123");
+            NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
+
+            Notification saved = new Notification();
+            saved.setId("507f1f77bcf86cd799439011");
+            saved.setOrigin(origin);
+            saved.setReferenceNumber("GBN-AG-26-ABC002");
+
+            when(referenceNumberGenerator.generate())
+                .thenReturn("GBN-AG-26-ABC001")  // first attempt — collides
+                .thenReturn("GBN-AG-26-ABC002"); // second attempt — succeeds
+
+            when(notificationRepository.save(any(Notification.class)))
+                .thenThrow(new DuplicateKeyException("duplicate reference number"))
+                .thenReturn(saved);
+
+            // When
+            Notification result = notificationService.saveOriginOfImport(notificationDto);
+
+            // Then
+            assertThat(result.getReferenceNumber()).isEqualTo("GBN-AG-26-ABC002");
+            verify(referenceNumberGenerator, times(2)).generate();
             verify(notificationRepository, times(2)).save(any(Notification.class));
+        }
+
+        @Test
+        void saveOriginOfImport_shouldThrowIllegalStateException_whenAllPersistenceRetriesExhausted() {
+            // Given — all three persistence attempts collide
+            Origin origin = new Origin("GB", "true", "REF123");
+            NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
+
+            when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-ABC001");
+            when(notificationRepository.save(any(Notification.class)))
+                .thenThrow(new DuplicateKeyException("duplicate reference number"))
+                .thenThrow(new DuplicateKeyException("duplicate reference number"))
+                .thenThrow(new DuplicateKeyException("duplicate reference number"));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.saveOriginOfImport(notificationDto))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("3");
+
+            verify(referenceNumberGenerator, times(3)).generate();
+            verify(notificationRepository, times(3)).save(any(Notification.class));
         }
 
         @Test

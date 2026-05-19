@@ -2,7 +2,6 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -13,6 +12,7 @@ import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
@@ -31,13 +31,14 @@ public class NotificationService {
 
     private static final String CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER = "Cannot find notification with reference number: ";
     private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
-
+    private static final int MAX_REF_RETRIES = 3;
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
     private final DocumentService documentService;
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
     private final Duration lockAtLeastFor;
+    private final ReferenceNumberGenerator referenceNumberGenerator;
 
     public NotificationService(
         NotificationRepository notificationRepository,
@@ -45,13 +46,15 @@ public class NotificationService {
         DocumentService documentService,
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
-        @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor) {
+        @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
+        ReferenceNumberGenerator referenceNumberGenerator) {
         this.notificationRepository = notificationRepository;
         this.auditRepository = auditRepository;
         this.documentService = documentService;
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
         this.lockAtLeastFor = lockAtLeastFor;
+        this.referenceNumberGenerator = referenceNumberGenerator;
     }
 
     public Notification saveOriginOfImport(NotificationDto notificationDto) {
@@ -151,20 +154,23 @@ public class NotificationService {
         createNotificationAuditRecord(referenceNumbers, auditContext, Result.SUCCESS);
     }
 
-    private String createReferenceNumber(Notification notification) {
-        return "DRAFT.IMP." + LocalDate.now().getYear() + "." + notification.getId();
-    }
-
     private Notification createNotification(NotificationDto dto) {
         Notification notification = new Notification();
         notification.setCreated(LocalDateTime.now());
         notification.setStatus(NotificationStatus.DRAFT);
         setNotificationDetails(dto, notification);
-        var saved = notificationRepository.save(notification);
-        log.info("Notification saved with id: {}", saved.getId());
-        saved.setReferenceNumber(createReferenceNumber(saved));
-        log.info("Notification reference number set to: {}", saved.getReferenceNumber());
-        return notificationRepository.save(saved);
+        for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
+            notification.setReferenceNumber(referenceNumberGenerator.generate());
+            try {
+                Notification saved = notificationRepository.save(notification);
+                log.info("Notification saved with reference number: {}", saved.getReferenceNumber());
+                return saved;
+            } catch (DuplicateKeyException e) {
+                log.warn("Reference number collision on persistence attempt {}/{}; retrying", attempt, MAX_REF_RETRIES);
+            }
+        }
+        throw new IllegalStateException(
+            "Failed to generate a unique reference number after " + MAX_REF_RETRIES + " attempts");
     }
 
     private Notification updateNotification(NotificationDto dto) {
