@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -17,10 +16,13 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateRequest;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderClient;
+import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
+import org.springframework.web.multipart.MultipartFile;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
 
 /**
  * Business logic for accompanying document uploads.
@@ -30,12 +32,23 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
  */
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class DocumentService {
 
   private final AccompanyingDocumentRepository accompanyingDocumentRepository;
   private final CdpUploaderClient cdpUploaderClient;
+  private final String backendBaseUrl;
   private final CdpConfig cdpConfig;
+
+  public DocumentService(
+      AccompanyingDocumentRepository accompanyingDocumentRepository,
+      CdpUploaderClient cdpUploaderClient,
+      AppConfig appConfig,
+      CdpConfig cdpConfig) {
+    this.accompanyingDocumentRepository = accompanyingDocumentRepository;
+    this.cdpUploaderClient = cdpUploaderClient;
+    this.backendBaseUrl = appConfig.baseUrl();
+    this.cdpConfig = cdpConfig;
+  }
 
   /**
    * cdp-uploader's {@code /initiate} schema requires {@code xor('redirect', 'downloadUrls')}, so
@@ -86,33 +99,39 @@ public class DocumentService {
     String uploadUrl = buildUploadUrl(response.uploadId());
 
     AccompanyingDocument document = buildPendingDocument(
-        notificationRef, request, response, uploadUrl, correlationId);
+        notificationRef, request, response, correlationId);
     saveOrThrowOnDuplicate(document, notificationRef);
 
     return new DocumentUploadResponse(response.uploadId(), uploadUrl);
   }
 
   /**
-   * Constructs the upload URL from {@code cdp.uploader.base-url} and the {@code uploadId}
-   * cdp-uploader minted. Deliberately ignores {@code response.uploadUrl()} — that field's
-   * shape varies (absolute in cdp-uploader's dev mode, relative in production, with hosts
-   * that may not be reachable from this backend), but its content is fully determined by the
-   * documented {@code POST /upload-and-scan/{uploadId}} route, so we can build it ourselves.
+   * Constructs the file-proxy URL returned to the client in {@link DocumentUploadResponse}.
+   * Points at this backend's own {@code POST /document-uploads/{uploadId}/file} endpoint so
+   * the frontend (and the IT test assertions) use the backend as the upload target rather than
+   * reaching cdp-uploader directly.
    *
-   * <p>The tradeoff is a hard dependency on cdp-uploader's URL pattern: a future cdp-uploader
-   * release that changes the route would silently produce broken URLs here. The
-   * {@code DocumentControllerIT} real-scan tests guard against that by uploading to the URL
-   * we constructed against a real cdp-uploader container — a pattern change would surface as
-   * a 404 on upload, not as a silent regression. {@link UriComponentsBuilder#pathSegment}
-   * percent-encodes each path segment individually and appends to any existing path on
-   * {@code cdp.uploader.base-url} (so a base URL with a path prefix is preserved, not
-   * stripped).
+   * <p>{@link UriComponentsBuilder#pathSegment} percent-encodes each segment individually and
+   * appends to any existing path on {@code app.base-url}, preserving path prefixes.
    */
   private String buildUploadUrl(String uploadId) {
-    return UriComponentsBuilder.fromUriString(cdpConfig.uploader().baseUrl())
-        .pathSegment("upload-and-scan", uploadId)
+    return UriComponentsBuilder.fromUriString(backendBaseUrl)
+        .pathSegment("document-uploads", uploadId, "file")
         .build()
         .toUriString();
+  }
+
+  /**
+   * Proxies the uploaded file to cdp-uploader on behalf of the frontend.
+   *
+   * @param uploadId the upload session identifier
+   * @param file     the multipart file received from the frontend
+   * @throws NotFoundException           if no session exists for {@code uploadId}
+   * @throws ServiceUnavailableException if cdp-uploader is unreachable or returns an error
+   */
+  public void proxyFileToUploader(String uploadId, MultipartFile file) {
+    findByUploadId(uploadId);
+    cdpUploaderClient.uploadFile(uploadId, file);
   }
 
   /**
@@ -218,7 +237,7 @@ public class DocumentService {
    * document identity is carried via {@code metadata.correlationId}, not the URL.
    */
   private String buildCallbackUrl() {
-    return cdpConfig.backend().baseUrl() + "/document-uploads/pending/scan-results";
+    return backendBaseUrl + "/document-uploads/pending/scan-results";
   }
 
   /**
@@ -240,13 +259,11 @@ public class DocumentService {
       String notificationRef,
       DocumentUploadRequest request,
       CdpUploaderInitiateResponse response,
-      String absoluteUploadUrl,
       String correlationId) {
     return AccompanyingDocument.builder()
         .notificationReferenceNumber(notificationRef)
         .uploadId(response.uploadId())
         .correlationId(correlationId)
-        .uploadUrl(absoluteUploadUrl)
         .documentType(request.documentType())
         .documentReference(request.documentReference())
         .dateOfIssue(request.dateOfIssue().atStartOfDay(ZoneOffset.UTC).toInstant())

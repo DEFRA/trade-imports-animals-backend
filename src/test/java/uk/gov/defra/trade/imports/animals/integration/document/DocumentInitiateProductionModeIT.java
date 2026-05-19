@@ -60,7 +60,7 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
 
         // Callback URL must end in cdp-int.defra.cloud to satisfy prod-mode Joi schema.
         // Reachability doesn't matter here — /initiate only validates the URL string.
-        registry.add("cdp.backend.base-url", () -> "https://backend.dev.cdp-int.defra.cloud");
+        registry.add("app.base-url", () -> "https://backend.dev.cdp-int.defra.cloud");
     }
 
     @Test
@@ -79,11 +79,11 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
         DocumentUploadResponse body = result.getResponseBody();
         assertThat(body).isNotNull();
         assertThat(body.uploadId()).isNotBlank();
-        assertThat(body.uploadUrl()).contains("/upload-and-scan/" + body.uploadId());
+        assertThat(body.uploadUrl()).contains("/document-uploads/" + body.uploadId() + "/file");
         // Directly pin the absoluteness property the EUDPA-35 fix introduces: the named
         // regression test would otherwise catch the path-only bug only indirectly (via
         // cdp-uploader 400'ing the buggy absolute redirect and isCreated() failing).
-        assertThat(body.uploadUrl()).startsWith("http://");
+        assertThat(body.uploadUrl()).startsWith("https://");
     }
 
     /**

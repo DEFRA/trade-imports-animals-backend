@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,7 +25,6 @@ import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
-import org.springframework.web.reactive.function.client.WebClient;
 import org.testcontainers.Testcontainers;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
@@ -35,6 +35,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.sqs.SqsClient;
+import uk.gov.defra.trade.imports.animals.integration.PortReservation;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
@@ -81,12 +82,8 @@ class DocumentControllerIT extends IntegrationBase {
     private static final Duration SCAN_TIMEOUT = Duration.ofSeconds(20);
     private static final Duration POLL_INTERVAL = Duration.ofMillis(250);
 
-    /**
-     * Pre-allocated TCP port used by the embedded backend so that {@code cdp.backend.base-url} can
-     * be configured before Spring starts. Without a known port up-front cdp-uploader has nowhere
-     * to send the scan-result callback.
-     */
-    private static final int BACKEND_PORT = org.springframework.test.util.TestSocketUtils.findAvailableTcpPort();
+    private static final PortReservation BACKEND_PORT_RESERVATION = PortReservation.reserve();
+    private static final int BACKEND_PORT = BACKEND_PORT_RESERVATION.port();
 
     static final Network CONTAINER_NETWORK = Network.newNetwork();
 
@@ -109,7 +106,6 @@ class DocumentControllerIT extends IntegrationBase {
     static {
         Startables.deepStart(LOCAL_STACK_CONTAINER, REDIS_CONTAINER).join();
 
-        // Resolved at runtime — both env vars need LocalStack's container-internal endpoint.
         CDP_UPLOADER_CONTAINER.withEnv("SQS_ENDPOINT", "http://localstack:4566");
         CDP_UPLOADER_CONTAINER.withEnv(
             "SQS_SCAN_RESULTS_CALLBACK",
@@ -129,9 +125,6 @@ class DocumentControllerIT extends IntegrationBase {
         LOCAL_STACK_CONTAINER.followOutput(
             new Slf4jLogConsumer(LoggerFactory.getLogger("localstack")));
 
-        // Expose the backend's port BEFORE starting cdp-uploader so the port-forwarding ambassador
-        // joins our custom Docker network — otherwise host.testcontainers.internal can't be DNS-
-        // resolved from inside cdp-uploader and scan-result callbacks fail with ENOTFOUND.
         Testcontainers.exposeHostPorts(BACKEND_PORT);
 
         Startables.deepStart(CDP_UPLOADER_CONTAINER).join();
@@ -145,11 +138,10 @@ class DocumentControllerIT extends IntegrationBase {
 
     @DynamicPropertySource
     static void registerDocumentITProperties(DynamicPropertyRegistry registry) {
+        BACKEND_PORT_RESERVATION.release();
         registry.add("server.port", () -> BACKEND_PORT);
 
-        // From cdp-uploader's perspective, the backend lives on the host machine — the port
-        // is tunnelled in via Testcontainers.exposeHostPorts above.
-        registry.add("cdp.backend.base-url",
+        registry.add("app.base-url",
             () -> "http://host.testcontainers.internal:" + BACKEND_PORT);
 
         registry.add("cdp.uploader.base-url",
@@ -174,313 +166,333 @@ class DocumentControllerIT extends IntegrationBase {
     @BeforeEach
     void setUpDocuments() {
         accompanyingDocumentRepository.deleteAll();
-        assertThat(port).isEqualTo(BACKEND_PORT); // sanity: DEFINED_PORT honoured
+        assertThat(port).isEqualTo(BACKEND_PORT);
     }
 
-    // ---------------------------------------------------------------------------
-    // Test: initiate upload — happy path
-    // ---------------------------------------------------------------------------
+    @Nested
+    class Initiate {
 
-    @Test
-    void initiate_shouldReturn201AndPersistPendingDocument() {
-        EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
-            .post()
-            .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
-            .bodyValue(initiateBody())
-            .exchange()
-            .expectStatus().isCreated()
-            .expectBody(DocumentUploadResponse.class)
-            .returnResult();
+        @Test
+        void shouldReturn201AndPersistPendingDocument() {
+            EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
+                .post()
+                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .bodyValue(initiateBody())
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(DocumentUploadResponse.class)
+                .returnResult();
 
-        DocumentUploadResponse responseBody = result.getResponseBody();
-        assertThat(responseBody).isNotNull();
-        String uploadId = responseBody.uploadId();
-        assertThat(uploadId).isNotBlank();
+            DocumentUploadResponse responseBody = result.getResponseBody();
+            assertThat(responseBody).isNotNull();
+            String uploadId = responseBody.uploadId();
+            assertThat(uploadId).isNotBlank();
 
-        assertThat(result.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
-            .endsWith("/document-uploads/" + uploadId);
+            assertThat(result.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
+                .endsWith("/document-uploads/" + uploadId);
 
-        assertThat(responseBody.uploadUrl()).contains("/upload-and-scan/" + uploadId);
+            assertThat(responseBody.uploadUrl()).contains("/document-uploads/" + uploadId + "/file");
 
-        List<AccompanyingDocument> persisted =
-            accompanyingDocumentRepository.findAllByNotificationReferenceNumber(NOTIFICATION_REF);
-        assertThat(persisted).hasSize(1);
-        AccompanyingDocument doc = persisted.get(0);
-        assertThat(doc.getUploadId()).isEqualTo(uploadId);
-        assertThat(doc.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
-        assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.PENDING);
-        assertThat(doc.getDocumentType()).isEqualTo(DocumentType.ITAHC);
-        assertThat(doc.getDocumentReference()).isEqualTo("UKGB2026001234");
-        assertThat(doc.getFiles()).isEmpty();
-        assertThat(doc.getId()).isNotNull();
-        assertThat(doc.getCreated()).isNotNull();
+            List<AccompanyingDocument> persisted =
+                accompanyingDocumentRepository.findAllByNotificationReferenceNumber(NOTIFICATION_REF);
+            assertThat(persisted).hasSize(1);
+            AccompanyingDocument doc = persisted.get(0);
+            assertThat(doc.getUploadId()).isEqualTo(uploadId);
+            assertThat(doc.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+            assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.PENDING);
+            assertThat(doc.getDocumentType()).isEqualTo(DocumentType.ITAHC);
+            assertThat(doc.getDocumentReference()).isEqualTo("UKGB2026001234");
+            assertThat(doc.getFiles()).isEmpty();
+            assertThat(doc.getId()).isNotNull();
+            assertThat(doc.getCreated()).isNotNull();
+        }
     }
 
-    // ---------------------------------------------------------------------------
-    // Test: real scan — clean file
-    // ---------------------------------------------------------------------------
+    @Nested
+    class CleanScan {
 
-    /**
-     * End-to-end CLEAN path: initiate, multipart-upload {@code clean.pdf} to cdp-uploader, await
-     * the autonomous scan-result callback, and assert the persisted document landed at COMPLETE
-     * with file metadata sourced from cdp-uploader's actual response (not a fixture).
-     */
-    @Test
-    void scanResult_cleanFile_shouldEndUpAsCompleteViaRealScan() throws IOException {
-        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
-        byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
+        @Test
+        void shouldEndUpAsCompleteViaRealScan() throws IOException {
+            DocumentUploadResponse initiateResponse = initiateAndGetResponse();
+            byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
-        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "clean.pdf", pdfBytes, "application/pdf");
+            uploadFile(initiateResponse.uploadId(), pdfBytes, "clean.pdf", "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
-        assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
-        assertThat(persisted.getFiles()).hasSize(1);
+            AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
+            assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+            assertThat(persisted.getFiles()).hasSize(1);
 
-        var file = persisted.getFiles().get(0);
-        assertThat(file.filename()).isEqualTo("clean.pdf");
-        assertThat(file.contentType()).isEqualTo("application/pdf");
-        assertThat(file.fileStatus()).isEqualTo(FileStatus.COMPLETE);
-        assertThat(file.contentLength()).isEqualTo(pdfBytes.length);
-        assertThat(file.s3Key()).isNotBlank();
-        assertThat(file.s3Bucket()).isEqualTo(CdpUploaderTestSupport.DOCUMENTS_BUCKET);
+            var file = persisted.getFiles().get(0);
+            assertThat(file.filename()).isEqualTo("clean.pdf");
+            assertThat(file.contentType()).isEqualTo("application/pdf");
+            assertThat(file.fileStatus()).isEqualTo(FileStatus.COMPLETE);
+            assertThat(file.contentLength()).isEqualTo(pdfBytes.length);
+            assertThat(file.s3Key()).isNotBlank();
+            assertThat(file.s3Bucket()).isEqualTo(CdpUploaderTestSupport.DOCUMENTS_BUCKET);
+        }
     }
 
-    // ---------------------------------------------------------------------------
-    // Test: real scan — virus file
-    // ---------------------------------------------------------------------------
+    @Nested
+    class VirusScan {
 
-    /**
-     * End-to-end INFECTED path: cdp-uploader's mock scanner flags any filename matching
-     * {@code MOCK_VIRUS_REGEX} (default {@code .*virus.*}), so {@code virus.pdf} comes back
-     * REJECTED with no s3Key.
-     */
-    @Test
-    void scanResult_virusFile_shouldEndUpAsRejectedViaRealScan() throws IOException {
-        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
-        byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
+        @Test
+        void shouldEndUpAsRejectedViaRealScan() throws IOException {
+            DocumentUploadResponse initiateResponse = initiateAndGetResponse();
+            byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
-        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "virus.pdf", pdfBytes, "application/pdf");
+            uploadFile(initiateResponse.uploadId(), pdfBytes, "virus.pdf", "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
-        assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
-        assertThat(persisted.getFiles()).hasSize(1);
+            AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
+            assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
+            assertThat(persisted.getFiles()).hasSize(1);
 
-        var file = persisted.getFiles().get(0);
-        assertThat(file.filename()).isEqualTo("virus.pdf");
-        assertThat(file.fileStatus()).isEqualTo(FileStatus.REJECTED);
-        assertThat(file.s3Key()).isNull();
+            var file = persisted.getFiles().get(0);
+            assertThat(file.filename()).isEqualTo("virus.pdf");
+            assertThat(file.fileStatus()).isEqualTo(FileStatus.REJECTED);
+            assertThat(file.s3Key()).isNull();
+        }
     }
 
-    // ---------------------------------------------------------------------------
-    // Test: list documents
-    // ---------------------------------------------------------------------------
+    @Nested
+    class ListDocuments {
 
-    @Test
-    void listDocuments_shouldReturnDocumentsForNotification() {
-        String uploadId = initiateAndGetUploadId();
+        @Test
+        void shouldReturnDocumentsForNotification() {
+            String uploadId = initiateAndGetUploadId();
 
-        EntityExchangeResult<DocumentListResponse> result = webClient("NoAuth")
-            .get()
-            .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(DocumentListResponse.class)
-            .returnResult();
+            EntityExchangeResult<DocumentListResponse> result = webClient("NoAuth")
+                .get()
+                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(DocumentListResponse.class)
+                .returnResult();
 
-        DocumentListResponse listResponse = result.getResponseBody();
-        assertThat(listResponse).isNotNull();
-        assertThat(listResponse.items()).hasSize(1);
-        AccompanyingDocumentDto item = listResponse.items().get(0);
-        assertThat(item.uploadId()).isEqualTo(uploadId);
-        assertThat(item.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
-        assertThat(item.scanStatus()).isEqualTo(ScanStatus.PENDING);
-        assertThat(item.id()).isNotNull();
-        assertThat(item.documentType()).isEqualTo(DocumentType.ITAHC);
-        assertThat(item.documentReference()).isEqualTo("UKGB2026001234");
-        assertThat(item.dateOfIssue()).isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
+            DocumentListResponse listResponse = result.getResponseBody();
+            assertThat(listResponse).isNotNull();
+            assertThat(listResponse.items()).hasSize(1);
+            AccompanyingDocumentDto item = listResponse.items().get(0);
+            assertThat(item.uploadId()).isEqualTo(uploadId);
+            assertThat(item.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+            assertThat(item.scanStatus()).isEqualTo(ScanStatus.PENDING);
+            assertThat(item.id()).isNotNull();
+            assertThat(item.documentType()).isEqualTo(DocumentType.ITAHC);
+            assertThat(item.documentReference()).isEqualTo("UKGB2026001234");
+            assertThat(item.dateOfIssue()).isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
+        }
     }
 
-    // ---------------------------------------------------------------------------
-    // Test: get by upload ID
-    // ---------------------------------------------------------------------------
+    @Nested
+    class GetByUploadId {
 
-    @Test
-    void getByUploadId_shouldReturn200WithCorrectDto() {
-        String uploadId = initiateAndGetUploadId();
+        @Test
+        void shouldReturn200WithCorrectDto() {
+            String uploadId = initiateAndGetUploadId();
 
-        EntityExchangeResult<AccompanyingDocumentDto> result = webClient("NoAuth")
-            .get()
-            .uri("/document-uploads/" + uploadId)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(AccompanyingDocumentDto.class)
-            .returnResult();
+            EntityExchangeResult<AccompanyingDocumentDto> result = webClient("NoAuth")
+                .get()
+                .uri("/document-uploads/" + uploadId)
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(AccompanyingDocumentDto.class)
+                .returnResult();
 
-        AccompanyingDocumentDto dto = result.getResponseBody();
-        assertThat(dto).isNotNull();
-        assertThat(dto.uploadId()).isEqualTo(uploadId);
-        assertThat(dto.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
-        assertThat(dto.scanStatus()).isEqualTo(ScanStatus.PENDING);
-        assertThat(dto.id()).isNotNull();
-        assertThat(dto.created()).isNotNull();
+            AccompanyingDocumentDto dto = result.getResponseBody();
+            assertThat(dto).isNotNull();
+            assertThat(dto.uploadId()).isEqualTo(uploadId);
+            assertThat(dto.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+            assertThat(dto.scanStatus()).isEqualTo(ScanStatus.PENDING);
+            assertThat(dto.id()).isNotNull();
+            assertThat(dto.created()).isNotNull();
+        }
+
+        @Test
+        void shouldReturn404_whenUnknownId() {
+            webClient("NoAuth")
+                .get()
+                .uri("/document-uploads/this-upload-id-does-not-exist")
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(404)
+                .jsonPath("$.detail").value((String detail) ->
+                    assertThat(detail).contains("this-upload-id-does-not-exist"));
+        }
     }
 
-    // ---------------------------------------------------------------------------
-    // Test: download streamed file from S3
-    // ---------------------------------------------------------------------------
+    @Nested
+    class DownloadFile {
 
-    @Test
-    void downloadFile_shouldStreamFileFromS3WithCorrectHeaders() throws IOException {
-        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
-        byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
-        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "clean.pdf", pdfBytes, "application/pdf");
+        @Test
+        void shouldStreamFileFromS3WithCorrectHeaders() throws IOException {
+            DocumentUploadResponse initiateResponse = initiateAndGetResponse();
+            byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
+            uploadFile(initiateResponse.uploadId(), pdfBytes, "clean.pdf", "application/pdf");
 
-        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
-        assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+            AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
+            assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
 
-        EntityExchangeResult<byte[]> result = webClient("NoAuth")
-            .get()
-            .uri("/document-uploads/" + initiateResponse.uploadId() + "/file")
-            .exchange()
-            .expectStatus().isOk()
-            .expectHeader().contentType(MediaType.APPLICATION_PDF)
-            .expectHeader().valueMatches(
-                HttpHeaders.CONTENT_DISPOSITION,
-                ".*filename\\*=UTF-8''clean\\.pdf.*")
-            .expectBody(byte[].class)
-            .returnResult();
+            EntityExchangeResult<byte[]> result = webClient("NoAuth")
+                .get()
+                .uri("/document-uploads/" + initiateResponse.uploadId() + "/file")
+                .exchange()
+                .expectStatus().isOk()
+                .expectHeader().contentType(MediaType.APPLICATION_PDF)
+                .expectHeader().valueMatches(
+                    HttpHeaders.CONTENT_DISPOSITION,
+                    ".*filename\\*=UTF-8''clean\\.pdf.*")
+                .expectBody(byte[].class)
+                .returnResult();
 
-        byte[] responseBytes = result.getResponseBody();
-        assertThat(responseBytes).isNotNull().isEqualTo(pdfBytes);
+            byte[] responseBytes = result.getResponseBody();
+            assertThat(responseBytes).isNotNull().isEqualTo(pdfBytes);
+        }
+
+        @Test
+        void shouldReturn404_whenNoFilesPresent() {
+            String uploadId = initiateAndGetUploadId();
+
+            webClient("NoAuth")
+                .get()
+                .uri("/document-uploads/" + uploadId + "/file")
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(404)
+                .jsonPath("$.detail").value((String detail) ->
+                    assertThat(detail).contains(uploadId));
+        }
+
+        @Test
+        void shouldReturn404_whenFileRejected() throws IOException {
+            DocumentUploadResponse initiateResponse = initiateAndGetResponse();
+            byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
+            uploadFile(initiateResponse.uploadId(), pdfBytes, "virus.pdf", "application/pdf");
+
+            AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
+            assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
+
+            webClient("NoAuth")
+                .get()
+                .uri("/document-uploads/" + initiateResponse.uploadId() + "/file")
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(404);
+        }
+
+        @Test
+        void shouldReturn500_whenS3ObjectMissing() throws IOException {
+            DocumentUploadResponse initiateResponse = initiateAndGetResponse();
+            byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
+            uploadFile(initiateResponse.uploadId(), pdfBytes, "clean.pdf", "application/pdf");
+
+            AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
+            assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+            String s3Key = persisted.getFiles().get(0).s3Key();
+
+            localStackS3Client.deleteObject(DeleteObjectRequest.builder()
+                .bucket(CdpUploaderTestSupport.DOCUMENTS_BUCKET)
+                .key(s3Key)
+                .build());
+
+            webClient("NoAuth")
+                .get()
+                .uri("/document-uploads/" + initiateResponse.uploadId() + "/file")
+                .exchange()
+                .expectStatus().is5xxServerError()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(500);
+        }
     }
 
-    @Test
-    void getByUploadId_unknownId_shouldReturn404() {
-        webClient("NoAuth")
-            .get()
-            .uri("/document-uploads/this-upload-id-does-not-exist")
-            .exchange()
-            .expectStatus().isNotFound()
-            .expectBody()
-            .jsonPath("$.status").isEqualTo(404)
-            .jsonPath("$.detail").value((String detail) ->
-                assertThat(detail).contains("this-upload-id-does-not-exist"));
+    @Nested
+    class DateOfIssue {
+
+        @Test
+        void shouldPersistDateOfIssueAsInstant() {
+            EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
+                .post()
+                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .bodyValue(initiateBody())
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(DocumentUploadResponse.class)
+                .returnResult();
+
+            String uploadId = result.getResponseBody().uploadId();
+
+            AccompanyingDocument doc =
+                accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
+            assertThat(doc.getDateOfIssue()).isNotNull();
+            assertThat(doc.getDateOfIssue())
+                .isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
+        }
     }
 
-    @Test
-    void downloadFile_noFilesPresent_shouldReturn404() {
-        String uploadId = initiateAndGetUploadId();
+    @Nested
+    class Delete {
 
-        webClient("NoAuth")
-            .get()
-            .uri("/document-uploads/" + uploadId + "/file")
-            .exchange()
-            .expectStatus().isNotFound()
-            .expectBody()
-            .jsonPath("$.status").isEqualTo(404)
-            .jsonPath("$.detail").value((String detail) ->
-                assertThat(detail).contains(uploadId));
+        @Test
+        void shouldReturn204AndRemoveDocument() {
+            String uploadId = initiateAndGetUploadId();
+
+            webClient("NoAuth")
+                .delete()
+                .uri("/document-uploads/" + uploadId)
+                .exchange()
+                .expectStatus().isNoContent();
+
+            assertThat(accompanyingDocumentRepository.findByUploadId(uploadId)).isEmpty();
+        }
     }
 
-    // ---------------------------------------------------------------------------
-    // Test: dateOfIssue round-trip
-    // ---------------------------------------------------------------------------
+    @Nested
+    class UploadFile {
 
-    @Test
-    void initiate_withDateOfIssue_shouldPersistDateOfIssueAsInstant() {
-        EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
-            .post()
-            .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
-            .bodyValue(initiateBody())
-            .exchange()
-            .expectStatus().isCreated()
-            .expectBody(DocumentUploadResponse.class)
-            .returnResult();
+        @Test
+        void shouldReturn404_whenUnknownUploadId() {
+            MultiValueMap<String, HttpEntity<?>> body = new LinkedMultiValueMap<>();
+            HttpHeaders partHeaders = new HttpHeaders();
+            partHeaders.setContentType(MediaType.TEXT_PLAIN);
+            partHeaders.setContentDisposition(ContentDisposition.formData().name("file").filename("test.txt").build());
+            body.add("file", new HttpEntity<>(new ByteArrayResource("hello".getBytes()) {
+                @Override public String getFilename() { return "test.txt"; }
+            }, partHeaders));
 
-        String uploadId = result.getResponseBody().uploadId();
+            webClient("NoAuth")
+                .post()
+                .uri("/document-uploads/this-upload-id-does-not-exist/file")
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(body))
+                .exchange()
+                .expectStatus().isNotFound()
+                .expectBody()
+                .jsonPath("$.status").isEqualTo(404);
+        }
 
-        AccompanyingDocument doc =
-            accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
-        assertThat(doc.getDateOfIssue()).isNotNull();
-        assertThat(doc.getDateOfIssue())
-            .isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
+        @Test
+        void shouldReturn413_whenOversizeFile() {
+            String uploadId = initiateAndGetUploadId();
+
+            MultiValueMap<String, HttpEntity<?>> body = new LinkedMultiValueMap<>();
+            HttpHeaders partHeaders = new HttpHeaders();
+            partHeaders.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            partHeaders.setContentDisposition(ContentDisposition.formData().name("file").filename("big.bin").build());
+            byte[] oversizeBytes = new byte[(int) (50L * 1024 * 1024) + 1];
+            body.add("file", new HttpEntity<>(new ByteArrayResource(oversizeBytes) {
+                @Override public String getFilename() { return "big.bin"; }
+            }, partHeaders));
+
+            webClient("NoAuth")
+                .post()
+                .uri("/document-uploads/" + uploadId + "/file")
+                .contentType(MediaType.MULTIPART_FORM_DATA)
+                .body(BodyInserters.fromMultipartData(body))
+                .exchange()
+                .expectStatus().isEqualTo(413);
+        }
     }
-
-    // ---------------------------------------------------------------------------
-    // Test: download rejected file (null s3Key) → 404
-    // ---------------------------------------------------------------------------
-
-    @Test
-    void downloadFile_rejectedFile_shouldReturn404() throws IOException {
-        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
-        byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
-        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "virus.pdf", pdfBytes, "application/pdf");
-
-        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
-        assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
-
-        webClient("NoAuth")
-            .get()
-            .uri("/document-uploads/" + initiateResponse.uploadId() + "/file")
-            .exchange()
-            .expectStatus().isNotFound()
-            .expectBody()
-            .jsonPath("$.status").isEqualTo(404);
-    }
-
-    // ---------------------------------------------------------------------------
-    // Test: S3 error during file download → 500
-    // ---------------------------------------------------------------------------
-
-    /**
-     * Simulates "MongoDB says COMPLETE but S3 object has gone missing" by deleting the object
-     * after the real scan completes. The endpoint must return 500 with a structured body rather
-     * than hanging or leaking internals.
-     */
-    @Test
-    void downloadFile_s3ObjectMissing_shouldReturn500() throws IOException {
-        DocumentUploadResponse initiateResponse = initiateAndGetResponse();
-        byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
-        uploadFileViaCdpUploader(initiateResponse.uploadUrl(), "clean.pdf", pdfBytes, "application/pdf");
-
-        AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
-        assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
-        String s3Key = persisted.getFiles().get(0).s3Key();
-
-        localStackS3Client.deleteObject(DeleteObjectRequest.builder()
-            .bucket(CdpUploaderTestSupport.DOCUMENTS_BUCKET)
-            .key(s3Key)
-            .build());
-
-        webClient("NoAuth")
-            .get()
-            .uri("/document-uploads/" + initiateResponse.uploadId() + "/file")
-            .exchange()
-            .expectStatus().is5xxServerError()
-            .expectBody()
-            .jsonPath("$.status").isEqualTo(500);
-    }
-
-    // ---------------------------------------------------------------------------
-    // Test: delete
-    // ---------------------------------------------------------------------------
-
-    @Test
-    void delete_shouldReturn204AndRemoveDocument() {
-        String uploadId = initiateAndGetUploadId();
-
-        webClient("NoAuth")
-            .delete()
-            .uri("/document-uploads/" + uploadId)
-            .exchange()
-            .expectStatus().isNoContent();
-
-        assertThat(accompanyingDocumentRepository.findByUploadId(uploadId)).isEmpty();
-    }
-
-    // ---------------------------------------------------------------------------
-    // Helpers
-    // ---------------------------------------------------------------------------
 
     private static String initiateBody() {
         return """
@@ -509,14 +521,8 @@ class DocumentControllerIT extends IntegrationBase {
         return body;
     }
 
-    /**
-     * POSTs a multipart {@code file} part to the upload URL the backend returned. Driving the
-     * upload via {@code body.uploadUrl()} (rather than re-constructing the URL here) exercises
-     * the backend's relative→absolute resolution end-to-end — a regression that left the URL
-     * relative would fail this fetch with a URL-parse error rather than slipping through.
-     */
-    private void uploadFileViaCdpUploader(
-        String uploadUrl, String filename, byte[] bytes, String contentType) {
+    private void uploadFile(
+        String uploadId, byte[] bytes, String filename, String contentType) {
 
         MultiValueMap<String, HttpEntity<?>> body = new LinkedMultiValueMap<>();
         HttpHeaders partHeaders = new HttpHeaders();
@@ -527,20 +533,15 @@ class DocumentControllerIT extends IntegrationBase {
             @Override public String getFilename() { return filename; }
         }, partHeaders));
 
-        WebClient.create()
+        webClient("NoAuth")
             .post()
-            .uri(uploadUrl)
+            .uri("/document-uploads/" + uploadId + "/file")
             .contentType(MediaType.MULTIPART_FORM_DATA)
             .body(BodyInserters.fromMultipartData(body))
-            .retrieve()
-            .toBodilessEntity()
-            .block(Duration.ofSeconds(30));
+            .exchange()
+            .expectStatus().isAccepted();
     }
 
-    /**
-     * Polls MongoDB until cdp-uploader's autonomous scan-result callback has flipped the document
-     * out of PENDING. Returns the persisted document so the caller can assert on the final state.
-     */
     private AccompanyingDocument awaitScanCallback(String uploadId) {
         await()
             .atMost(SCAN_TIMEOUT)

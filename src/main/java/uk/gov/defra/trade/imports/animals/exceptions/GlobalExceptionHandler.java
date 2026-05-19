@@ -15,20 +15,12 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Global exception handler for REST API error responses.
- *
- * Uses Spring 6 ProblemDetail (RFC 7807) for standardized error responses.
- * Includes request trace ID in error responses for log correlation.
- *
- * CDP Compliance:
- * - Structured error responses with trace ID
- * - Proper HTTP status codes (400, 404, 409, 500)
- * - Validation errors with field-level details
- * - Logs errors with trace ID for troubleshooting
+ * Global exception handler producing RFC 7807 ProblemDetail responses with trace IDs.
  */
 @RestControllerAdvice
 @Slf4j
@@ -168,6 +160,31 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle oversized multipart uploads (413 Payload Too Large).
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ProblemDetail> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Upload size exceeded (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.PAYLOAD_TOO_LARGE,
+            "Uploaded file exceeds the maximum permitted size"
+        );
+
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/payload-too-large"));
+        problemDetail.setTitle("Payload Too Large");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
      * Handle outbox write failures (500 Internal Server Error).
      *
      * Logs full diagnostic detail server-side; returns a generic message to the client
@@ -205,7 +222,7 @@ public class GlobalExceptionHandler {
      * missing endpoints).
      */
     @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ProblemDetail> handleException(Exception ex) {
+    public ResponseEntity<ProblemDetail> handleException(RuntimeException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.error("Unexpected error (trace: {}): {}", traceId, ex.getMessage(), ex);
 

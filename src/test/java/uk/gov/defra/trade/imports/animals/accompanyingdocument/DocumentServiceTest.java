@@ -3,6 +3,8 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,6 +25,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
@@ -31,10 +34,12 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateRequest;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderClient;
+import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
 
 @ExtendWith(MockitoExtension.class)
 class DocumentServiceTest {
@@ -49,32 +54,25 @@ class DocumentServiceTest {
   private CdpConfig cdpConfig;
 
   @Mock
-  private CdpConfig.UploaderConfig uploaderConfig;
-
-  @Mock
-  private CdpConfig.BackendConfig backendConfig;
-
-  @Mock
   private CdpConfig.S3Config s3Config;
 
   private DocumentService documentService;
+
+  private static final String BACKEND_BASE_URL = "http://backend";
 
   @BeforeEach
   void setUp() {
     documentService = new DocumentService(
         accompanyingDocumentRepository,
         cdpUploaderClient,
+        new AppConfig(BACKEND_BASE_URL),
         cdpConfig);
   }
 
   private void stubCdpConfig() {
-    when(cdpConfig.uploader()).thenReturn(uploaderConfig);
-    when(cdpConfig.backend()).thenReturn(backendConfig);
+    when(cdpConfig.uploader()).thenReturn(
+        new CdpConfig.UploaderConfig("http://localhost:7337", 52428800L, List.of("application/pdf")));
     when(cdpConfig.s3()).thenReturn(s3Config);
-    when(uploaderConfig.baseUrl()).thenReturn("https://cdp-uploader");
-    when(uploaderConfig.maxFileSize()).thenReturn(52428800L);
-    when(uploaderConfig.mimeTypes()).thenReturn(List.of("application/pdf"));
-    when(backendConfig.baseUrl()).thenReturn("http://backend");
     when(s3Config.documentsBucket()).thenReturn("documents-bucket");
   }
 
@@ -92,11 +90,8 @@ class DocumentServiceTest {
 
       stubCdpConfig();
 
-      // The uploadUrl in cdp-uploader's response is intentionally bizarre to prove we don't
-      // pass it through — the backend constructs the URL from cdp.uploader.base-url and the
-      // uploadId cdp-uploader minted, ignoring whatever uploadUrl shape cdp-uploader chose.
       CdpUploaderInitiateResponse uploaderResponse =
-          new CdpUploaderInitiateResponse(uploadId, "http://wrong-host:9999/wrong-path", "/status/" + uploadId);
+          new CdpUploaderInitiateResponse(uploadId, "/status/" + uploadId);
       when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
           .thenReturn(uploaderResponse);
 
@@ -110,11 +105,11 @@ class DocumentServiceTest {
       // When
       DocumentUploadResponse response = documentService.initiate(notificationRef, request);
 
-      // Then — uploadUrl is reconstructed from the configured base + the uploadId, not derived
-      // from response.uploadUrl()
+      // Then — uploadUrl is reconstructed from app.base-url + uploadId, pointing at
+      // the backend's own file-proxy endpoint rather than cdp-uploader directly
       assertThat(response).isNotNull();
       assertThat(response.uploadId()).isEqualTo(uploadId);
-      assertThat(response.uploadUrl()).isEqualTo("https://cdp-uploader/upload-and-scan/" + uploadId);
+      assertThat(response.uploadUrl()).isEqualTo("http://backend/document-uploads/" + uploadId + "/file");
 
       // Then — assert on the request sent to cdp-uploader: metadata.correlationId is present
       ArgumentCaptor<CdpUploaderInitiateRequest> initiateCaptor =
@@ -130,7 +125,6 @@ class DocumentServiceTest {
       AccompanyingDocument saved = captor.getValue();
       assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.PENDING);
       assertThat(saved.getNotificationReferenceNumber()).isEqualTo(notificationRef);
-      assertThat(saved.getUploadUrl()).isEqualTo("https://cdp-uploader/upload-and-scan/" + uploadId);
       Instant expectedDateOfIssue = LocalDate.of(2026, 1, 15).atStartOfDay(ZoneOffset.UTC).toInstant();
       assertThat(saved.getDateOfIssue()).isEqualTo(expectedDateOfIssue);
 
@@ -148,12 +142,8 @@ class DocumentServiceTest {
 
       stubCdpConfig();
 
-      // Same decoy shape as the happy-path test: an obviously-wrong host and a relative status path,
-      // to pin uniformly that the backend ignores cdp-uploader's response uploadUrl/statusUrl fields.
       CdpUploaderInitiateResponse uploaderResponse =
-          new CdpUploaderInitiateResponse("upload-id-dup",
-              "http://wrong-host:9999/wrong-path",
-              "/status/upload-id-dup");
+          new CdpUploaderInitiateResponse("upload-id-dup", "/status/upload-id-dup");
       when(cdpUploaderClient.initiate(any(CdpUploaderInitiateRequest.class)))
           .thenReturn(uploaderResponse);
 
@@ -308,6 +298,64 @@ class DocumentServiceTest {
       verify(accompanyingDocumentRepository, never()).findByCorrelationId(siblingCorrelationId);
       assertThat(sibling.getScanStatus()).isEqualTo(ScanStatus.PENDING);
       assertThat(sibling.getFiles()).isEmpty();
+    }
+  }
+
+  @Nested
+  class ProxyFileToUploader {
+
+    @Test
+    void proxyFileToUploader_callsCdpUploaderClient_whenDocumentExists() {
+      // Given
+      String uploadId = "upload-id-proxy-001";
+      MultipartFile file = mock(MultipartFile.class);
+
+      AccompanyingDocument document = AccompanyingDocument.builder().uploadId(uploadId).build();
+      when(accompanyingDocumentRepository.findByUploadId(uploadId))
+          .thenReturn(Optional.of(document));
+
+      // When
+      documentService.proxyFileToUploader(uploadId, file);
+
+      // Then
+      verify(cdpUploaderClient).uploadFile(uploadId, file);
+    }
+
+    @Test
+    void proxyFileToUploader_propagatesServiceUnavailableException_whenUploaderFails() {
+      // Given
+      String uploadId = "upload-id-proxy-fail";
+      MultipartFile file = mock(MultipartFile.class);
+
+      AccompanyingDocument document = AccompanyingDocument.builder().uploadId(uploadId).build();
+      when(accompanyingDocumentRepository.findByUploadId(uploadId))
+          .thenReturn(Optional.of(document));
+
+      ServiceUnavailableException uploaderFailure =
+          new ServiceUnavailableException("cdp-uploader file upload failed at transport level");
+      doThrow(uploaderFailure).when(cdpUploaderClient).uploadFile(uploadId, file);
+
+      // When / Then
+      assertThatThrownBy(() -> documentService.proxyFileToUploader(uploadId, file))
+          .isInstanceOf(ServiceUnavailableException.class)
+          .isSameAs(uploaderFailure);
+    }
+
+    @Test
+    void proxyFileToUploader_throwsNotFound_whenDocumentMissing() {
+      // Given
+      String uploadId = "upload-id-proxy-unknown";
+      MultipartFile file = mock(MultipartFile.class);
+
+      when(accompanyingDocumentRepository.findByUploadId(uploadId))
+          .thenReturn(Optional.empty());
+
+      // When / Then
+      assertThatThrownBy(() -> documentService.proxyFileToUploader(uploadId, file))
+          .isInstanceOf(NotFoundException.class)
+          .hasMessageContaining(uploadId);
+
+      verify(cdpUploaderClient, never()).uploadFile(any(), any());
     }
   }
 

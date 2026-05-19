@@ -1,13 +1,20 @@
 package uk.gov.defra.trade.imports.animals.cdp.uploader;
 
-import static org.springframework.http.MediaType.APPLICATION_JSON;
-
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.multipart.MultipartFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateRequest;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateResponse;
 import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
@@ -43,7 +50,7 @@ public class CdpUploaderClient {
       return cdpUploaderRestClient
           .post()
           .uri("/initiate")
-          .contentType(APPLICATION_JSON)
+          .contentType(MediaType.APPLICATION_JSON)
           .body(request)
           .retrieve()
           .onStatus(
@@ -74,5 +81,67 @@ public class CdpUploaderClient {
       log.error("cdp-uploader request failed at transport level", e);
       throw new ServiceUnavailableException("cdp-uploader is unreachable: " + e.getMessage(), e);
     }
+  }
+
+  /**
+   * Proxies a multipart file to cdp-uploader's {@code /upload-and-scan/{uploadId}} endpoint.
+   * Uses {@link MultipartFile#getResource()} so Spring's {@code ResourceHttpMessageConverter}
+   * streams from the on-disk temp file rather than loading file bytes into heap.
+   *
+   * @param uploadId the upload session identifier
+   * @param file     the multipart file to forward
+   * @throws ServiceUnavailableException if cdp-uploader returns 4xx/5xx or is unreachable
+   */
+  public void uploadFile(String uploadId, MultipartFile file) {
+    Objects.requireNonNull(uploadId, "uploadId");
+    Objects.requireNonNull(file, "file");
+    log.debug("Proxying file upload to cdp-uploader: uploadId={}", uploadId);
+
+    MultiValueMap<String, Object> body = buildMultipartBody(file);
+
+    try {
+      cdpUploaderRestClient
+          .post()
+          .uri("/upload-and-scan/{uploadId}", uploadId)
+          .contentType(MediaType.MULTIPART_FORM_DATA)
+          .body(body)
+          .retrieve()
+          .onStatus(
+              status -> status.is4xxClientError() || status.is5xxServerError(),
+              (req, resp) -> handleUploadError(resp))
+          .toBodilessEntity();
+    } catch (RestClientException e) {
+      throw new ServiceUnavailableException("cdp-uploader file upload failed at transport level", e);
+    }
+  }
+
+  private MultiValueMap<String, Object> buildMultipartBody(MultipartFile file) {
+    HttpHeaders partHeaders = new HttpHeaders();
+    String contentType = Objects.requireNonNullElse(file.getContentType(), "application/octet-stream");
+    partHeaders.setContentType(MediaType.parseMediaType(contentType));
+    String filename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "upload";
+    partHeaders.setContentDisposition(
+        ContentDisposition.formData()
+            .name("file").filename(filename).build());
+
+    MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+    body.add("file", new HttpEntity<>(file.getResource(), partHeaders));
+    return body;
+  }
+
+  private void handleUploadError(org.springframework.http.client.ClientHttpResponse resp)
+      throws IOException {
+    int statusCode = resp.getStatusCode().value();
+    String responseBody;
+    try (var is = resp.getBody()) {
+      responseBody = new String(is.readAllBytes(), StandardCharsets.UTF_8);
+    }
+    String safeBody = responseBody.length() > MAX_LOG_BODY_LENGTH
+        ? responseBody.substring(0, MAX_LOG_BODY_LENGTH) + "..."
+        : responseBody;
+    log.error("cdp-uploader file upload returned non-2xx/3xx: status={}, body={}",
+        statusCode, safeBody);
+    throw new ServiceUnavailableException(
+        "cdp-uploader file upload returned error: HTTP " + statusCode);
   }
 }

@@ -24,7 +24,10 @@ spring:
         enabled: true
   lifecycle:
     timeout-per-shutdown-phase: 30s
-
+  servlet:
+    multipart:
+      max-file-size: ${SPRING_MULTIPART_MAX_FILE_SIZE:50MB}
+      max-request-size: ${SPRING_MULTIPART_MAX_REQUEST_SIZE:51MB}
 
 # CDP platform configuration
 cdp:
@@ -41,13 +44,12 @@ cdp:
     base-url: ${CDP_UPLOADER_BASE_URL:http://localhost:7337}
     max-file-size: ${CDP_UPLOADER_MAX_FILE_SIZE:52428800}
     mime-types: ${CDP_UPLOADER_MIME_TYPES:application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
-  backend:
-    base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:}
   s3:
     documents-bucket: ${CDP_DOCUMENTS_BUCKET:trade-imports-animals-documents}
 
 # Application-level AWS overrides
 app:
+  base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:}
   aws:
     endpoint-override: ${APP_AWS_ENDPOINT_OVERRIDE:}
     # Local development only — set via environment variables or application-local.yml.

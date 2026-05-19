@@ -11,7 +11,6 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.ContentDisposition;
@@ -24,28 +23,38 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
-import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
+import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
 /**
  * REST controller for accompanying document upload endpoints.
  *
- * <p>Exposes five endpoints covering the full upload lifecycle: initiation, listing,
- * retrieval, scan-result callback, and file download.
+ * <p>Exposes endpoints covering the full upload lifecycle: initiation, listing, retrieval,
+ * deletion, scan-result callback, file upload (proxied to cdp-uploader), and file download.
  */
 @RestController
 @Tag(name = "Document Uploads", description = "Operations for accompanying document upload sessions")
 @Slf4j
-@RequiredArgsConstructor
 public class DocumentController {
 
   private final DocumentService documentService;
   private final S3DocumentService s3DocumentService;
-  private final CdpConfig cdpConfig;
+  private final String backendBaseUrl;
+
+  public DocumentController(
+      DocumentService documentService,
+      S3DocumentService s3DocumentService,
+      AppConfig appConfig) {
+    this.documentService = documentService;
+    this.s3DocumentService = s3DocumentService;
+    this.backendBaseUrl = appConfig.baseUrl();
+  }
 
   /**
    * Initiate a new document upload session for a notification.
@@ -167,6 +176,33 @@ public class DocumentController {
   }
 
   /**
+   * Upload the file for a document session, proxying it to cdp-uploader.
+   *
+   * @param uploadId the upload session identifier
+   * @param file     the multipart file to proxy
+   * @return 202 Accepted — the scan is asynchronous; poll GET /document-uploads/{uploadId} for status
+   */
+  @PostMapping(
+      value = "/document-uploads/{upload-id}/file",
+      consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  @Operation(
+      summary = "Upload file for document session",
+      description = "Proxies the multipart file to cdp-uploader. Scan is asynchronous.")
+  @ApiResponse(responseCode = "202", description = "File accepted for scanning", content = @Content)
+  @ApiResponse(responseCode = "404", description = "Upload session not found", content = @Content)
+  @ApiResponse(responseCode = "413", description = "File exceeds maximum size", content = @Content)
+  @ApiResponse(responseCode = "502", description = "cdp-uploader unavailable", content = @Content)
+  @Timed("document.uploadFile")
+  public ResponseEntity<Void> uploadFile(
+      @PathVariable("upload-id") String uploadId,
+      @RequestParam("file") MultipartFile file) {
+
+    log.info("POST /document-uploads/{}/file size={}B", uploadId, file.getSize());
+    documentService.proxyFileToUploader(uploadId, file);
+    return ResponseEntity.accepted().build();
+  }
+
+  /**
    * Download the file associated with a document upload session.
    *
    * <p>Each upload session contains exactly one file. The file is streamed directly from S3.
@@ -198,11 +234,11 @@ public class DocumentController {
   }
 
   private URI buildLocationUri(String uploadId) {
-    String backendBaseUrl = cdpConfig.backend().baseUrl();
-    if (backendBaseUrl.endsWith("/")) {
-      backendBaseUrl = backendBaseUrl.substring(0, backendBaseUrl.length() - 1);
+    String baseUrl = backendBaseUrl;
+    if (baseUrl.endsWith("/")) {
+      baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
     }
-    return URI.create(backendBaseUrl + "/document-uploads/" + uploadId);
+    return URI.create(baseUrl + "/document-uploads/" + uploadId);
   }
 
   /**

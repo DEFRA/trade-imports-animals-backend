@@ -66,9 +66,6 @@ public class AccompanyingDocument {
   @Indexed(unique = true)
   private String correlationId;
 
-  /** The cdp-uploader form URL returned at initiation; stored for idempotent re-requests. */
-  private String uploadUrl;
-
   private DocumentType documentType;
 
   private String documentReference;

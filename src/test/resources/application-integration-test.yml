@@ -21,6 +21,10 @@ spring:
         enabled: false
   lifecycle:
     timeout-per-shutdown-phase: 30s
+  servlet:
+    multipart:
+      max-file-size: ${SPRING_MULTIPART_MAX_FILE_SIZE:50MB}
+      max-request-size: ${SPRING_MULTIPART_MAX_REQUEST_SIZE:51MB}
 
 # CDP platform configuration
 cdp:
@@ -33,10 +37,11 @@ cdp:
   uploader:
     max-file-size: 52428800
     mime-types: application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-  backend:
-    base-url: http://localhost:8085
   s3:
     documents-bucket: trade-imports-animals-documents
+
+app:
+  base-url: http://localhost:8085
 
 # AWS configuration
 aws:
