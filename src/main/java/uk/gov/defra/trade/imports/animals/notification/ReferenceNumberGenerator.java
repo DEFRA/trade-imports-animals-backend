@@ -29,7 +29,7 @@ public class ReferenceNumberGenerator {
      */
     public String generate() {
         String yy = String.format(TWO_DIGIT, LocalDate.now().getYear() % 100);
-        return GBN + COMMODITY + yy + HYPHEN + randomBase32();
+        return String.format("GBN-AG-%s-%s", yy, randomBase32());
     }
 
     private static String randomBase32() {
