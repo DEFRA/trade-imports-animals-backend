@@ -22,12 +22,13 @@ public class ReferenceNumberGenerator {
     public static final String HYPHEN = "-";
     public static final String REFERENCE_NUMBER_PATTERN =
         "^" + GBN + COMMODITY + "\\d{2}" + HYPHEN + "[0-9A-HJ-KM-NP-TV-Z]{6}$";
+    public static final String TWO_DIGIT = "%02d";
 
     /**
      * Generates a reference number in the format {@code GBN-AG-{YY}-{XXXXXX}}.
      */
     public String generate() {
-        String yy = String.format("%02d", LocalDate.now().getYear() % 100);
+        String yy = String.format(TWO_DIGIT, LocalDate.now().getYear() % 100);
         return GBN + COMMODITY + yy + HYPHEN + randomBase32();
     }
 

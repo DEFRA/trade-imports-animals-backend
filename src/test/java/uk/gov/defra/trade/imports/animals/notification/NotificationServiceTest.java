@@ -162,12 +162,12 @@ class NotificationServiceTest {
             verify(referenceNumberGenerator, times(3)).generate();
             verify(notificationRepository, times(3)).save(any(Notification.class));
         }
-
+        
         @Test
         void saveOriginOfImport_shouldUpdateExistingNotification() {
             // Given - existing notification with ID and reference number
             String existingId = "507f191e810c19729de860ea";
-            String referenceNumber = "DRAFT.IMP.2026." + existingId;
+            String referenceNumber = "GBN-AG-26-507F19";
             Origin origin = new Origin("FR", "false", "REF456");
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Species species = species();
@@ -224,7 +224,7 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result).isNotNull();
-            assertThat(result.getReferenceNumber()).isEqualTo("DRAFT.IMP.2026." + existingId);
+            assertThat(result.getReferenceNumber()).isEqualTo("GBN-AG-26-507F19");
             assertThat(result.getId()).isEqualTo(existingId);
             assertThat(result.getOrigin()).isEqualTo(origin);
             assertThat(result.getCommodity().getName()).isEqualTo("Fish");
@@ -287,15 +287,15 @@ class NotificationServiceTest {
         @Test
         void findAllReferenceNumbers_shouldReturnReferenceNumbers_whenNotificationsExist() {
             // Given
-            NotificationReferenceOnly ref1 = () -> "DRAFT.IMP.2026.abc123";
-            NotificationReferenceOnly ref2 = () -> "DRAFT.IMP.2026.xyz456";
+            NotificationReferenceOnly ref1 = () -> "GBN-AG-26-ABC123";
+            NotificationReferenceOnly ref2 = () -> "GBN-AG-26-XYZ456";
             when(notificationRepository.findAllProjectedBy()).thenReturn(List.of(ref1, ref2));
 
             // When
             List<String> result = notificationService.findAllReferenceNumbers();
 
             // Then
-            assertThat(result).containsExactly("DRAFT.IMP.2026.abc123", "DRAFT.IMP.2026.xyz456");
+            assertThat(result).containsExactly("GBN-AG-26-ABC123", "GBN-AG-26-XYZ456");
             verify(notificationRepository, times(1)).findAllProjectedBy();
         }
     }
@@ -306,8 +306,8 @@ class NotificationServiceTest {
         @Test
         void deleteByReferenceNumbers_shouldDeleteAll_whenAllFound() {
             // Given
-            String ref1 = "DRAFT.IMP.2026.111";
-            String ref2 = "DRAFT.IMP.2026.222";
+            String ref1 = "GBN-AG-26-000111";
+            String ref2 = "GBN-AG-26-000222";
             NotificationReferenceOnly n1 = () -> ref1;
             NotificationReferenceOnly n2 = () -> ref2;
 
@@ -338,8 +338,8 @@ class NotificationServiceTest {
         @Test
         void deleteByReferenceNumbers_shouldThrowNotFoundException_whenOneIsMissing() {
             // Given
-            String existingRef = "DRAFT.IMP.2026.111";
-            String missingRef  = "DRAFT.IMP.2026.MISSING";
+            String existingRef = "GBN-AG-26-000111";
+            String missingRef  = "GBN-AG-26-MSNG00";
             NotificationReferenceOnly n1 = () -> existingRef;
 
             when(notificationRepository.findAllByReferenceNumberIn(List.of(existingRef, missingRef)))
@@ -364,8 +364,8 @@ class NotificationServiceTest {
         @Test
         void deleteByReferenceNumbers_shouldListAllMissingRefs_inExceptionMessage() {
             // Given
-            String missing1 = "DRAFT.IMP.2026.AAA";
-            String missing2 = "DRAFT.IMP.2026.BBB";
+            String missing1 = "GBN-AG-26-000AAA";
+            String missing2 = "GBN-AG-26-000BBB";
 
             when(notificationRepository.findAllByReferenceNumberIn(List.of(missing1, missing2)))
                 .thenReturn(Collections.emptyList());
@@ -396,7 +396,7 @@ class NotificationServiceTest {
         @Test
         void deleteByReferenceNumbers_shouldCascadeDeleteDocuments_whenNotificationsDeleted() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.111";
+            String referenceNumber = "GBN-AG-26-000111";
             NotificationReferenceOnly notificationRef = () -> referenceNumber;
 
             when(notificationRepository.findAllByReferenceNumberIn(List.of(referenceNumber)))
@@ -425,7 +425,7 @@ class NotificationServiceTest {
         @Test
         void submitNotification_shouldSetStatusToSubmittedAndSave() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
@@ -450,7 +450,7 @@ class NotificationServiceTest {
         @Test
         void submitNotification_shouldWriteOutboxEvent_afterSavingNotification() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
@@ -474,7 +474,7 @@ class NotificationServiceTest {
         @Test
         void submitNotification_shouldThrowOutboxWriteException_whenAppendEventFails() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
@@ -496,7 +496,7 @@ class NotificationServiceTest {
         @Test
         void submitNotification_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
+            String referenceNumber = "GBN-AG-26-ABSENT";
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.empty());
 
@@ -514,7 +514,7 @@ class NotificationServiceTest {
         @Test
         void submitNotification_shouldThrowOutboxWriteException_whenLockNotAcquired() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
@@ -547,7 +547,7 @@ class NotificationServiceTest {
         @Test
         void findByRef_shouldReturnHydratedNotification_withDocuments() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            String referenceNumber = "GBN-AG-26-ABC123";
             Origin origin = new Origin("GB", "true", "REF-001");
             Notification notification = Notification.builder()
                 .id("notif-id-001")
@@ -587,7 +587,7 @@ class NotificationServiceTest {
         @Test
         void findByRef_shouldReturnNotificationWithEmptyDocuments_whenNoneUploaded() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.xyz456";
+            String referenceNumber = "GBN-AG-26-XYZ456";
             Notification notification = Notification.builder()
                 .id("notif-id-002")
                 .referenceNumber(referenceNumber)
@@ -610,7 +610,7 @@ class NotificationServiceTest {
         @Test
         void findByRef_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
+            String referenceNumber = "GBN-AG-26-ABSENT";
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.empty());
 

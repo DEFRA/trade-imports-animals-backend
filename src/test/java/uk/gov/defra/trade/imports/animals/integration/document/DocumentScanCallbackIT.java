@@ -28,7 +28,7 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
  */
 class DocumentScanCallbackIT extends IntegrationBase {
 
-    private static final String NOTIFICATION_REF = "DRAFT.IMP.2025.IT-CB-001";
+    private static final String NOTIFICATION_REF = "GBN-AG-25-CB0001";
     private static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
     private static final String S3_KEY_FROM_FIXTURE =
         "44f1a20e-0a27-4d61-9aa7-7afa7fb82d85/c1ec2432-54ed-4153-bd6f-d69a35f598f4";

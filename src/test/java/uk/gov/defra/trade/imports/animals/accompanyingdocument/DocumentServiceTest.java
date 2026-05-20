@@ -83,7 +83,7 @@ class DocumentServiceTest {
     void initiate_shouldCallCdpUploaderAndSaveWithPendingStatus() {
       // Given
       final String uploadId = UUID.randomUUID().toString();
-      String notificationRef = "DRAFT.IMP.2026.abc123";
+      String notificationRef = "GBN-AG-26-ABC123";
 
       DocumentUploadRequest request = new DocumentUploadRequest(
           DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
@@ -136,7 +136,7 @@ class DocumentServiceTest {
     @Test
     void initiate_shouldThrowConflictException_whenSaveThrowsDuplicateKeyException() {
       // Given — production code catches DuplicateKeyException and re-throws ConflictException (→ 409)
-      String notificationRef = "DRAFT.IMP.2026.concurrent";
+      String notificationRef = "GBN-AG-26-CNCR00";
 
       DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
 
@@ -253,7 +253,7 @@ class DocumentServiceTest {
     @Test
     void handleScanResult_updatesOnlyMatchingDocument_whenMultiplePendingForSameRef() {
       // Given — two PENDING docs for the same notification ref, each with a distinct correlationId
-      String notificationRef = "DRAFT.IMP.2026.MULTI";
+      String notificationRef = "GBN-AG-26-MXST00";
       String targetCorrelationId = "corr-target";
       String siblingCorrelationId = "corr-sibling";
 
@@ -365,7 +365,7 @@ class DocumentServiceTest {
     @Test
     void deleteForNotificationRefs_shouldDeleteAllDocumentsForGivenRefs() {
       // Given
-      List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111", "DRAFT.IMP.2026.222");
+      List<String> referenceNumbers = List.of("GBN-AG-26-000111", "GBN-AG-26-000222");
 
       // When
       documentService.deleteForNotificationRefs(referenceNumbers);

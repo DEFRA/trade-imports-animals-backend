@@ -50,12 +50,12 @@ class OutboxServiceTest {
         void appendEvent_shouldWriteEventWithVersionOne_whenNoExistingEvents() {
             // Given
             Notification notification = Notification.builder()
-                .referenceNumber("DRAFT.IMP.2026.abc123")
+                .referenceNumber("GBN-AG-26-ABC123")
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123"))
+                "Imports.Notification.GBN-AG.GBN-AG-26-ABC123"))
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -68,7 +68,7 @@ class OutboxServiceTest {
             OutboxEvent saved = captor.getValue();
 
             assertThat(saved.getAggregateVersion()).isEqualTo(1L);
-            assertThat(saved.getAggregateId()).isEqualTo("Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123");
+            assertThat(saved.getAggregateId()).isEqualTo("Imports.Notification.GBN-AG.GBN-AG-26-ABC123");
             assertThat(saved.getAggregateType()).isEqualTo("Notification");
             assertThat(saved.getSubType()).isEqualTo("GBN-AG");
             assertThat(saved.getEventType()).isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
@@ -82,17 +82,17 @@ class OutboxServiceTest {
         void appendEvent_shouldIncrementVersion_whenPriorEventsExist() {
             // Given
             Notification notification = Notification.builder()
-                .referenceNumber("DRAFT.IMP.2026.abc123")
+                .referenceNumber("GBN-AG-26-ABC123")
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
             OutboxEvent existing = OutboxEvent.builder()
-                .aggregateId("Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123")
+                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-ABC123")
                 .aggregateVersion(3L)
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123"))
+                "Imports.Notification.GBN-AG.GBN-AG-26-ABC123"))
                 .thenReturn(Optional.of(existing));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -117,7 +117,7 @@ class OutboxServiceTest {
                 .build();
 
             Notification notification = Notification.builder()
-                .referenceNumber("DRAFT.IMP.2026.abc123")
+                .referenceNumber("GBN-AG-26-ABC123")
                 .status(NotificationStatus.SUBMITTED)
                 .origin(origin)
                 .commodity(commodity)
@@ -130,7 +130,7 @@ class OutboxServiceTest {
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123"))
+                "Imports.Notification.GBN-AG.GBN-AG-26-ABC123"))
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -142,7 +142,7 @@ class OutboxServiceTest {
             verify(outboxEventRepository).save(captor.capture());
             Map<String, Object> data = captor.getValue().getData();
             assertThat(data).containsKey("referenceNumber");
-            assertThat(data.get("referenceNumber")).isEqualTo("DRAFT.IMP.2026.abc123");
+            assertThat(data.get("referenceNumber")).isEqualTo("GBN-AG-26-ABC123");
             assertThat(data).containsKey("origin");
             assertThat(data).containsKey("commodity");
             assertThat(data.get("reasonForImport")).isEqualTo("PERMANENT");
@@ -157,12 +157,12 @@ class OutboxServiceTest {
         void appendEvent_shouldThrowOutboxWriteException_onDuplicateKey() {
             // Given
             Notification notification = Notification.builder()
-                .referenceNumber("DRAFT.IMP.2026.abc123")
+                .referenceNumber("GBN-AG-26-ABC123")
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123"))
+                "Imports.Notification.GBN-AG.GBN-AG-26-ABC123"))
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any()))
                 .thenThrow(new DuplicateKeyException("duplicate key"));
@@ -173,7 +173,7 @@ class OutboxServiceTest {
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;
                     assertThat(owe.getAggregateId())
-                        .isEqualTo("Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123");
+                        .isEqualTo("Imports.Notification.GBN-AG.GBN-AG-26-ABC123");
                     assertThat(owe.getAggregateVersion()).isEqualTo(1L);
                     assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
                 });
@@ -226,8 +226,8 @@ class OutboxServiceTest {
 
         @Test
         void buildAggregateId_shouldPrefixReferenceNumber() {
-            assertThat(OutboxService.buildAggregateId("DRAFT.IMP.2026.abc123"))
-                .isEqualTo("Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123");
+            assertThat(OutboxService.buildAggregateId("GBN-AG-26-ABC123"))
+                .isEqualTo("Imports.Notification.GBN-AG.GBN-AG-26-ABC123");
         }
     }
 }

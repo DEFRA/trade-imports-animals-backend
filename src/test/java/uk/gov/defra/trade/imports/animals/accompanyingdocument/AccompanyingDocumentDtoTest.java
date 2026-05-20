@@ -26,7 +26,7 @@ class AccompanyingDocumentDtoTest {
 
       AccompanyingDocument entity = AccompanyingDocument.builder()
           .id("doc-id-1")
-          .notificationReferenceNumber("DRAFT.IMP.2026.abc123")
+          .notificationReferenceNumber("GBN-AG-26-ABC123")
           .uploadId("upload-uuid-1")
           .documentType(DocumentType.ITAHC)
           .documentReference("ITAHC/2026/001")
@@ -39,7 +39,7 @@ class AccompanyingDocumentDtoTest {
       AccompanyingDocumentDto dto = AccompanyingDocumentDto.from(entity);
 
       assertThat(dto.id()).isEqualTo("doc-id-1");
-      assertThat(dto.notificationReferenceNumber()).isEqualTo("DRAFT.IMP.2026.abc123");
+      assertThat(dto.notificationReferenceNumber()).isEqualTo("GBN-AG-26-ABC123");
       assertThat(dto.uploadId()).isEqualTo("upload-uuid-1");
       assertThat(dto.documentType()).isEqualTo(DocumentType.ITAHC);
       assertThat(dto.documentReference()).isEqualTo("ITAHC/2026/001");

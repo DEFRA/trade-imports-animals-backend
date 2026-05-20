@@ -28,7 +28,7 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 @Slf4j
 class DocumentInitiateProductionModeIT extends IntegrationBase {
 
-    private static final String NOTIFICATION_REF = "DRAFT.IMP.2026.PROD-IT001";
+    private static final String NOTIFICATION_REF = "GBN-AG-26-PD1001";
     private static final String REDIS_ALIAS = "redis-prod-it";
     private static final String CDP_UPLOADER_ALIAS = "cdp-uploader-prod";
 

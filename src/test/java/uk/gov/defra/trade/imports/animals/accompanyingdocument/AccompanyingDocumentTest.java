@@ -35,7 +35,7 @@ class AccompanyingDocumentTest {
       AccompanyingDocument doc = AccompanyingDocument.builder()
           .id("doc-id-1")
           .version(1L)
-          .notificationReferenceNumber("DRAFT.IMP.2026.abc123")
+          .notificationReferenceNumber("GBN-AG-26-ABC123")
           .uploadId("upload-uuid-1")
           .documentType(DocumentType.ITAHC)
           .documentReference("ITAHC/2026/001")
@@ -47,7 +47,7 @@ class AccompanyingDocumentTest {
 
       assertThat(doc.getId()).isEqualTo("doc-id-1");
       assertThat(doc.getVersion()).isEqualTo(1L);
-      assertThat(doc.getNotificationReferenceNumber()).isEqualTo("DRAFT.IMP.2026.abc123");
+      assertThat(doc.getNotificationReferenceNumber()).isEqualTo("GBN-AG-26-ABC123");
       assertThat(doc.getUploadId()).isEqualTo("upload-uuid-1");
       assertThat(doc.getDocumentType()).isEqualTo(DocumentType.ITAHC);
       assertThat(doc.getDocumentReference()).isEqualTo("ITAHC/2026/001");
