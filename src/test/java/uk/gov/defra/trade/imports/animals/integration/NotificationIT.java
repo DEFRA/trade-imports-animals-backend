@@ -41,10 +41,8 @@ class NotificationIT extends IntegrationBase {
     private static final String ADMIN_SECRET_HEADER = "Trade-Imports-Animals-Admin-Secret";
     private static final String VALID_ADMIN_SECRET = "test-admin-secret";
     private static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
-    private static final String REF_FORMAT_REGEX =
-        ReferenceNumberGenerator.GBN + ReferenceNumberGenerator.COMMODITY + "\\d{2}-[0-9A-HJ-KM-NP-TV-Z]{6}";
-    private static final String NONEXISTENT_REF =
-        ReferenceNumberGenerator.GBN + ReferenceNumberGenerator.COMMODITY + "00-000000";
+    private static final String REF_FORMAT_REGEX = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN;
+    private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -134,7 +132,7 @@ class NotificationIT extends IntegrationBase {
             .allMatch(id -> id != null && !id.isEmpty());
         assertThat(notifications)
             .extracting(Notification::getReferenceNumber)
-            .allMatch(ref -> ref != null && ref.startsWith(ReferenceNumberGenerator.GBN + ReferenceNumberGenerator.COMMODITY));
+            .allMatch(ref -> ref != null && ref.startsWith("GBN-AG-"));
     }
 
     @Test
@@ -310,7 +308,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(allNotifications).hasSize(3);
         assertThat(allNotifications)
             .extracting(Notification::getReferenceNumber)
-            .allMatch(ref -> ref != null && ref.startsWith(ReferenceNumberGenerator.GBN + ReferenceNumberGenerator.COMMODITY));
+            .allMatch(ref -> ref != null && ref.startsWith("GBN-AG-"));
         assertThat(allNotifications)
             .extracting(n -> n.getOrigin().getCountryCode())
             .containsExactlyInAnyOrder("GB", "IE", "FR");

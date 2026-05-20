@@ -17,11 +17,7 @@ public class ReferenceNumberGenerator {
     private static final String CROCKFORD_BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
     private static final int REF_RANDOM_LENGTH = 6;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    public static final String GBN = "GBN";
-    public static final String COMMODITY = "-AG-";
-    public static final String HYPHEN = "-";
-    public static final String REFERENCE_NUMBER_PATTERN =
-        "^" + GBN + COMMODITY + "\\d{2}" + HYPHEN + "[0-9A-HJ-KM-NP-TV-Z]{6}$";
+    public static final String REFERENCE_NUMBER_PATTERN = "^GBN-AG-\\d{2}-[0-9A-HJ-KM-NP-TV-Z]{6}$";
     public static final String TWO_DIGIT = "%02d";
 
     /**
