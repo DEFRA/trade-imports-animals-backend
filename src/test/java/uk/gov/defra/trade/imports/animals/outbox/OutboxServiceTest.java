@@ -187,20 +187,20 @@ class OutboxServiceTest {
         void findByReferenceNumber_shouldReturnEventsInAggregateVersionOrder() {
             // Given
             OutboxEvent v1 = OutboxEvent.builder()
-                .aggregateId("Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123")
+                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-ABC123")
                 .aggregateVersion(1L)
                 .build();
             OutboxEvent v2 = OutboxEvent.builder()
-                .aggregateId("Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123")
+                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-ABC123")
                 .aggregateVersion(2L)
                 .build();
 
             when(outboxEventRepository.findAllByAggregateIdOrderByAggregateVersionAsc(
-                "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123"))
+                "Imports.Notification.GBN-AG.GBN-AG-26-ABC123"))
                 .thenReturn(List.of(v1, v2));
 
             // When
-            List<OutboxEvent> result = outboxService.findByReferenceNumber("DRAFT.IMP.2026.abc123");
+            List<OutboxEvent> result = outboxService.findByReferenceNumber("GBN-AG-26-ABC123");
 
             // Then
             assertThat(result).containsExactly(v1, v2);
@@ -210,11 +210,11 @@ class OutboxServiceTest {
         void findByReferenceNumber_shouldReturnEmptyList_whenNoEventsExist() {
             // Given
             when(outboxEventRepository.findAllByAggregateIdOrderByAggregateVersionAsc(
-                "Imports.Notification.GBN-AG.DRAFT.IMP.2026.unknown"))
+                "Imports.Notification.GBN-AG.GBN-AG-26-ABSENT"))
                 .thenReturn(List.of());
 
             // When
-            List<OutboxEvent> result = outboxService.findByReferenceNumber("DRAFT.IMP.2026.unknown");
+            List<OutboxEvent> result = outboxService.findByReferenceNumber("GBN-AG-26-ABSENT");
 
             // Then
             assertThat(result).isEmpty();

@@ -561,7 +561,7 @@ class NotificationControllerTest {
         @Test
         void getOutboxEvents_shouldReturnEventsForReferenceNumber() throws Exception {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            String referenceNumber = "GBN-AG-26-ABC123";
             List<OutboxEvent> events = List.of(
                 OutboxEvent.builder().aggregateVersion(1L)
                     .eventType("uk.gov.defra.imports.notification.NotificationSubmitted").build(),
@@ -583,7 +583,7 @@ class NotificationControllerTest {
         @Test
         void getOutboxEvents_shouldReturnEmptyList_whenNoEventsExist() throws Exception {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.unknown";
+            String referenceNumber = "GBN-AG-26-ABSENT";
             when(outboxService.findByReferenceNumber(referenceNumber)).thenReturn(List.of());
 
             // When & Then

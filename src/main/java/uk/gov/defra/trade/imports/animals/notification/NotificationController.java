@@ -101,7 +101,7 @@ public class NotificationController {
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
     @Timed("controller.getOutboxEvents.time")
     public List<OutboxEvent> getOutboxEvents(
-        @Pattern(regexp = "^[A-Za-z0-9.]{1,50}$") @PathVariable String referenceNumber) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
         log.debug("GET /notifications/{}/outbox-events - Fetching outbox events", referenceNumber);
         return outboxService.findByReferenceNumber(referenceNumber);
     }
