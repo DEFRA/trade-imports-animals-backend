@@ -51,7 +51,7 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
     // Arrange
     AccompanyingDocument doc = AccompanyingDocument.builder()
         .uploadId("repo-test-upload-001")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPO001")
+        .notificationReferenceNumber("GBN-AG-26-REP001")
         .scanStatus(ScanStatus.PENDING)
         .build();
     repository.save(doc);
@@ -62,7 +62,7 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
     // Assert
     assertThat(result).isPresent();
     assertThat(result.get().getUploadId()).isEqualTo("repo-test-upload-001");
-    assertThat(result.get().getNotificationReferenceNumber()).isEqualTo("DRAFT.IMP.2026.REPO001");
+    assertThat(result.get().getNotificationReferenceNumber()).isEqualTo("GBN-AG-26-REP001");
     assertThat(result.get().getScanStatus()).isEqualTo(ScanStatus.PENDING);
   }
 
@@ -92,7 +92,7 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
     AccompanyingDocument doc = AccompanyingDocument.builder()
         .uploadId("repo-test-upload-corr-001")
         .correlationId("corr-id-001")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPO_CORR_A")
+        .notificationReferenceNumber("GBN-AG-26-RPCA00")
         .scanStatus(ScanStatus.PENDING)
         .build();
     repository.save(doc);
@@ -134,25 +134,25 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
     AccompanyingDocument docA1 = AccompanyingDocument.builder()
         .uploadId("repo-test-del-A1")
         .correlationId("repo-test-del-corr-A1")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPA")
+        .notificationReferenceNumber("GBN-AG-26-REPA00")
         .scanStatus(ScanStatus.PENDING)
         .build();
     AccompanyingDocument docA2 = AccompanyingDocument.builder()
         .uploadId("repo-test-del-A2")
         .correlationId("repo-test-del-corr-A2")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPA")
+        .notificationReferenceNumber("GBN-AG-26-REPA00")
         .scanStatus(ScanStatus.COMPLETE)
         .build();
     AccompanyingDocument docB1 = AccompanyingDocument.builder()
         .uploadId("repo-test-del-B1")
         .correlationId("repo-test-del-corr-B1")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPB")
+        .notificationReferenceNumber("GBN-AG-26-REPB00")
         .scanStatus(ScanStatus.PENDING)
         .build();
     repository.saveAll(List.of(docA1, docA2, docB1));
 
     // Act — delete everything under "REPA"
-    repository.deleteAllByNotificationReferenceNumberIn(List.of("DRAFT.IMP.2026.REPA"));
+    repository.deleteAllByNotificationReferenceNumberIn(List.of("GBN-AG-26-REPA00"));
 
     // Assert — REPA documents are gone; REPB document remains
     List<AccompanyingDocument> remaining = repository.findAll();
@@ -170,26 +170,26 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
     AccompanyingDocument docE = AccompanyingDocument.builder()
         .uploadId("repo-test-del-E")
         .correlationId("repo-test-del-corr-E")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPE")
+        .notificationReferenceNumber("GBN-AG-26-REPE00")
         .scanStatus(ScanStatus.PENDING)
         .build();
     AccompanyingDocument docF = AccompanyingDocument.builder()
         .uploadId("repo-test-del-F")
         .correlationId("repo-test-del-corr-F")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPF")
+        .notificationReferenceNumber("GBN-AG-26-REPF00")
         .scanStatus(ScanStatus.PENDING)
         .build();
     AccompanyingDocument docG = AccompanyingDocument.builder()
         .uploadId("repo-test-keep-G")
         .correlationId("repo-test-del-corr-G")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPG")
+        .notificationReferenceNumber("GBN-AG-26-REPG00")
         .scanStatus(ScanStatus.PENDING)
         .build();
     repository.saveAll(List.of(docE, docF, docG));
 
     // Act — delete REPE and REPF together
     repository.deleteAllByNotificationReferenceNumberIn(
-        List.of("DRAFT.IMP.2026.REPE", "DRAFT.IMP.2026.REPF"));
+        List.of("GBN-AG-26-REPE00", "GBN-AG-26-REPF00"));
 
     // Assert — only REPG document remains
     List<AccompanyingDocument> remaining = repository.findAll();
@@ -205,7 +205,7 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
     // Arrange
     AccompanyingDocument doc = AccompanyingDocument.builder()
         .uploadId("repo-test-preserve-001")
-        .notificationReferenceNumber("DRAFT.IMP.2026.REPH")
+        .notificationReferenceNumber("GBN-AG-26-REPH00")
         .scanStatus(ScanStatus.PENDING)
         .build();
     repository.save(doc);
@@ -236,7 +236,7 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
     AccompanyingDocument first = AccompanyingDocument.builder()
         .uploadId("repo-test-duplicate-upload")
         .correlationId("repo-test-uploadid-uniq-corr-A")
-        .notificationReferenceNumber("DRAFT.IMP.2026.UNIQ001")
+        .notificationReferenceNumber("GBN-AG-26-HNQ001")
         .scanStatus(ScanStatus.COMPLETE)
         .build();
     repository.save(first);
@@ -244,7 +244,7 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
     AccompanyingDocument duplicate = AccompanyingDocument.builder()
         .uploadId("repo-test-duplicate-upload")
         .correlationId("repo-test-uploadid-uniq-corr-B")
-        .notificationReferenceNumber("DRAFT.IMP.2026.UNIQ002")
+        .notificationReferenceNumber("GBN-AG-26-HNQ002")
         .scanStatus(ScanStatus.COMPLETE)
         .build();
 
@@ -257,7 +257,7 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
         .isPresent()
         .get()
         .satisfies(stored -> assertThat(stored.getNotificationReferenceNumber())
-            .isEqualTo("DRAFT.IMP.2026.UNIQ001"));
+            .isEqualTo("GBN-AG-26-HNQ001"));
   }
 
   // ---------------------------------------------------------------------------
@@ -278,7 +278,7 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
     AccompanyingDocument first = AccompanyingDocument.builder()
         .uploadId("repo-test-corr-uniq-001")
         .correlationId("repo-test-duplicate-correlation")
-        .notificationReferenceNumber("DRAFT.IMP.2026.UNIQ_CORR_A")
+        .notificationReferenceNumber("GBN-AG-26-HNQCA0")
         .scanStatus(ScanStatus.PENDING)
         .build();
     repository.save(first);
@@ -286,7 +286,7 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
     AccompanyingDocument duplicate = AccompanyingDocument.builder()
         .uploadId("repo-test-corr-uniq-002")
         .correlationId("repo-test-duplicate-correlation")
-        .notificationReferenceNumber("DRAFT.IMP.2026.UNIQ_CORR_B")
+        .notificationReferenceNumber("GBN-AG-26-HNQCB0")
         .scanStatus(ScanStatus.PENDING)
         .build();
 
@@ -299,6 +299,6 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
         .isPresent()
         .get()
         .satisfies(stored -> assertThat(stored.getNotificationReferenceNumber())
-            .isEqualTo("DRAFT.IMP.2026.UNIQ_CORR_A"));
+            .isEqualTo("GBN-AG-26-HNQCA0"));
   }
 }

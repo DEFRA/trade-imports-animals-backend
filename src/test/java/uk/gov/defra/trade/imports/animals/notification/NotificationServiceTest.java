@@ -35,6 +35,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
@@ -67,6 +68,9 @@ class NotificationServiceTest {
     @Mock
     private LockProvider lockProvider;
 
+    @Mock
+    private ReferenceNumberGenerator referenceNumberGenerator;
+
     private LockingTaskExecutor lockingTaskExecutor;
 
     private NotificationService notificationService;
@@ -77,7 +81,8 @@ class NotificationServiceTest {
     void setUp() {
         lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         notificationService = new NotificationService(notificationRepository, auditRepository,
-            documentService, outboxService, lockingTaskExecutor, notificationMapper, Duration.ZERO);
+            documentService, outboxService, lockingTaskExecutor, 
+            notificationMapper, referenceNumberGenerator, Duration.ZERO);
     }
 
     @Nested
@@ -91,40 +96,82 @@ class NotificationServiceTest {
                 .origin(origin)
                 .build();
 
-            // Simulate MongoDB auto-generating ID on first save
             String generatedId = "507f1f77bcf86cd799439011";
-            Notification savedWithId = new Notification();
-            savedWithId.setId(generatedId);
-            savedWithId.setOrigin(origin);
+            String expectedRef = "GBN-AG-26-ABC123";
 
-            // Simulate second save with reference number
-            Notification savedWithRef = new Notification();
-            savedWithRef.setId(generatedId);
-            savedWithRef.setOrigin(origin);
-            savedWithRef.setReferenceNumber("DRAFT.IMP." + LocalDate.now().getYear() + "." + generatedId);
+            Notification saved = new Notification();
+            saved.setId(generatedId);
+            saved.setOrigin(origin);
+            saved.setReferenceNumber(expectedRef);
 
-            when(notificationRepository.save(any(Notification.class)))
-                .thenReturn(savedWithId)  // First save returns notification with ID
-                .thenReturn(savedWithRef); // Second save returns notification with reference number
+            when(referenceNumberGenerator.generate()).thenReturn(expectedRef);
+            when(notificationRepository.save(any(Notification.class))).thenReturn(saved);
 
             // When
             Notification result = notificationService.saveOriginOfImport(notificationDto);
 
             // Then
-            assertThat(result).isNotNull();
-            assertThat(result.getReferenceNumber()).isNotNull();
-            assertThat(result.getReferenceNumber()).startsWith("DRAFT.IMP." + LocalDate.now().getYear() + ".");
-            assertThat(result.getReferenceNumber()).endsWith(generatedId);
+            assertThat(result.getReferenceNumber()).isEqualTo(expectedRef);
             assertThat(result.getId()).isEqualTo(generatedId);
             assertThat(result.getOrigin()).isEqualTo(origin);
+            verify(referenceNumberGenerator).generate();
+            verify(notificationRepository, times(1)).save(any(Notification.class));
+        }
+
+        @Test
+        void saveOriginOfImport_shouldRetryPersistence_whenDuplicateKeyExceptionOnFirstAttempt() {
+            // Given — first persistence attempt collides, second succeeds
+            Origin origin = new Origin("GB", "true", "REF123");
+            NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
+
+            Notification saved = new Notification();
+            saved.setId("507f1f77bcf86cd799439011");
+            saved.setOrigin(origin);
+            saved.setReferenceNumber("GBN-AG-26-ABC002");
+
+            when(referenceNumberGenerator.generate())
+                .thenReturn("GBN-AG-26-ABC001")  // first attempt — collides
+                .thenReturn("GBN-AG-26-ABC002"); // second attempt — succeeds
+
+            when(notificationRepository.save(any(Notification.class)))
+                .thenThrow(new DuplicateKeyException("duplicate reference number"))
+                .thenReturn(saved);
+
+            // When
+            Notification result = notificationService.saveOriginOfImport(notificationDto);
+
+            // Then
+            assertThat(result.getReferenceNumber()).isEqualTo("GBN-AG-26-ABC002");
+            verify(referenceNumberGenerator, times(2)).generate();
             verify(notificationRepository, times(2)).save(any(Notification.class));
         }
 
         @Test
+        void saveOriginOfImport_shouldThrowIllegalStateException_whenAllPersistenceRetriesExhausted() {
+            // Given — all three persistence attempts collide
+            Origin origin = new Origin("GB", "true", "REF123");
+            NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
+
+            when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-ABC001");
+            when(notificationRepository.save(any(Notification.class)))
+                .thenThrow(new DuplicateKeyException("duplicate reference number"))
+                .thenThrow(new DuplicateKeyException("duplicate reference number"))
+                .thenThrow(new DuplicateKeyException("duplicate reference number"));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.saveOriginOfImport(notificationDto))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("3");
+
+            verify(referenceNumberGenerator, times(3)).generate();
+            verify(notificationRepository, times(3)).save(any(Notification.class));
+        }
+        
+        @Test
         void saveOriginOfImport_shouldUpdateExistingNotification() {
             // Given - existing notification with ID and reference number
             String existingId = "507f191e810c19729de860ea";
-            String referenceNumber = "DRAFT.IMP.2026." + existingId;
+            String referenceNumber = "GBN-AG-26-507F19";
             Origin origin = new Origin("FR", "false", "REF456");
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Species species = species();
@@ -181,7 +228,7 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result).isNotNull();
-            assertThat(result.getReferenceNumber()).isEqualTo("DRAFT.IMP.2026." + existingId);
+            assertThat(result.getReferenceNumber()).isEqualTo("GBN-AG-26-507F19");
             assertThat(result.getId()).isEqualTo(existingId);
             assertThat(result.getOrigin()).isEqualTo(origin);
             assertThat(result.getCommodity().getName()).isEqualTo("Fish");
@@ -244,15 +291,15 @@ class NotificationServiceTest {
         @Test
         void findAllReferenceNumbers_shouldReturnReferenceNumbers_whenNotificationsExist() {
             // Given
-            NotificationReferenceOnly ref1 = () -> "DRAFT.IMP.2026.abc123";
-            NotificationReferenceOnly ref2 = () -> "DRAFT.IMP.2026.xyz456";
+            NotificationReferenceOnly ref1 = () -> "GBN-AG-26-ABC123";
+            NotificationReferenceOnly ref2 = () -> "GBN-AG-26-XYZ456";
             when(notificationRepository.findAllProjectedBy()).thenReturn(List.of(ref1, ref2));
 
             // When
             List<String> result = notificationService.findAllReferenceNumbers();
 
             // Then
-            assertThat(result).containsExactly("DRAFT.IMP.2026.abc123", "DRAFT.IMP.2026.xyz456");
+            assertThat(result).containsExactly("GBN-AG-26-ABC123", "GBN-AG-26-XYZ456");
             verify(notificationRepository, times(1)).findAllProjectedBy();
         }
     }
@@ -263,8 +310,8 @@ class NotificationServiceTest {
         @Test
         void deleteByReferenceNumbers_shouldDeleteAll_whenAllFound() {
             // Given
-            String ref1 = "DRAFT.IMP.2026.111";
-            String ref2 = "DRAFT.IMP.2026.222";
+            String ref1 = "GBN-AG-26-000111";
+            String ref2 = "GBN-AG-26-000222";
             NotificationReferenceOnly n1 = () -> ref1;
             NotificationReferenceOnly n2 = () -> ref2;
 
@@ -295,8 +342,8 @@ class NotificationServiceTest {
         @Test
         void deleteByReferenceNumbers_shouldThrowNotFoundException_whenOneIsMissing() {
             // Given
-            String existingRef = "DRAFT.IMP.2026.111";
-            String missingRef  = "DRAFT.IMP.2026.MISSING";
+            String existingRef = "GBN-AG-26-000111";
+            String missingRef  = "GBN-AG-26-MSNG00";
             NotificationReferenceOnly n1 = () -> existingRef;
 
             when(notificationRepository.findAllByReferenceNumberIn(List.of(existingRef, missingRef)))
@@ -321,8 +368,8 @@ class NotificationServiceTest {
         @Test
         void deleteByReferenceNumbers_shouldListAllMissingRefs_inExceptionMessage() {
             // Given
-            String missing1 = "DRAFT.IMP.2026.AAA";
-            String missing2 = "DRAFT.IMP.2026.BBB";
+            String missing1 = "GBN-AG-26-000AAA";
+            String missing2 = "GBN-AG-26-000BBB";
 
             when(notificationRepository.findAllByReferenceNumberIn(List.of(missing1, missing2)))
                 .thenReturn(Collections.emptyList());
@@ -353,7 +400,7 @@ class NotificationServiceTest {
         @Test
         void deleteByReferenceNumbers_shouldCascadeDeleteDocuments_whenNotificationsDeleted() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.111";
+            String referenceNumber = "GBN-AG-26-000111";
             NotificationReferenceOnly notificationRef = () -> referenceNumber;
 
             when(notificationRepository.findAllByReferenceNumberIn(List.of(referenceNumber)))
@@ -382,7 +429,7 @@ class NotificationServiceTest {
         @Test
         void submitNotification_shouldSetStatusToSubmittedAndSave() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
@@ -407,7 +454,7 @@ class NotificationServiceTest {
         @Test
         void submitNotification_shouldWriteOutboxEvent_afterSavingNotification() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
@@ -431,7 +478,7 @@ class NotificationServiceTest {
         @Test
         void submitNotification_shouldThrowOutboxWriteException_whenAppendEventFails() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
@@ -453,7 +500,7 @@ class NotificationServiceTest {
         @Test
         void submitNotification_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
+            String referenceNumber = "GBN-AG-26-ABSENT";
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.empty());
 
@@ -471,7 +518,7 @@ class NotificationServiceTest {
         @Test
         void submitNotification_shouldThrowOutboxWriteException_whenLockNotAcquired() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
@@ -504,7 +551,7 @@ class NotificationServiceTest {
         @Test
         void findByRef_shouldReturnHydratedNotification_withDocuments() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            String referenceNumber = "GBN-AG-26-ABC123";
             Origin origin = new Origin("GB", "true", "REF-001");
             Notification notification = Notification.builder()
                 .id("notif-id-001")
@@ -548,7 +595,7 @@ class NotificationServiceTest {
         @Test
         void findByRef_shouldReturnNotificationWithEmptyDocuments_whenNoneUploaded() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.xyz456";
+            String referenceNumber = "GBN-AG-26-XYZ456";
             Notification notification = Notification.builder()
                 .id("notif-id-002")
                 .referenceNumber(referenceNumber)
@@ -571,7 +618,7 @@ class NotificationServiceTest {
         @Test
         void findByRef_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
+            String referenceNumber = "GBN-AG-26-ABSENT";
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.empty());
 

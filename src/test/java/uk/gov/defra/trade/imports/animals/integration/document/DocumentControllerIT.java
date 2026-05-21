@@ -76,7 +76,7 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class DocumentControllerIT extends IntegrationBase {
 
-    private static final String NOTIFICATION_REF = "DRAFT.IMP.2025.IT001";
+    private static final String NOTIFICATION_REF = "GBN-AG-25-TC0001";
     private static final String AWS_REGION = "eu-west-2";
 
     private static final Duration SCAN_TIMEOUT = Duration.ofSeconds(20);

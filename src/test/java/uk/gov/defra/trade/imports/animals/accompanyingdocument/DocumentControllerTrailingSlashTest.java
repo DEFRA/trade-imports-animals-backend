@@ -42,7 +42,7 @@ class DocumentControllerTrailingSlashTest {
 
   @Test
   void shouldNormaliseTrailingSlashInLocationHeader() throws Exception {
-    String ref = "DRAFT.IMP.2026.00000001";
+    String ref = "GBN-AG-26-000001";
     DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
     DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
 
