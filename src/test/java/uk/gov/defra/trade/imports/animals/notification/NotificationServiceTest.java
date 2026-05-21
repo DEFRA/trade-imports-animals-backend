@@ -27,6 +27,7 @@ import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.core.SimpleLock;
 import org.junit.jupiter.api.BeforeEach;
+import org.mapstruct.factory.Mappers;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -70,11 +71,13 @@ class NotificationServiceTest {
 
     private NotificationService notificationService;
 
+    private final NotificationMapper notificationMapper = Mappers.getMapper(NotificationMapper.class);
+
     @BeforeEach
     void setUp() {
         lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         notificationService = new NotificationService(notificationRepository, auditRepository,
-            documentService, outboxService, lockingTaskExecutor, Duration.ZERO);
+            documentService, outboxService, lockingTaskExecutor, notificationMapper, Duration.ZERO);
     }
 
     @Nested
@@ -508,6 +511,8 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .origin(origin)
                 .commodity(Commodity.builder().name("Live bovine animals").build())
+                .consignor(consignors().getFirst())
+                .destination(destinations().getFirst())
                 .build();
 
             AccompanyingDocument document = AccompanyingDocument.builder()
@@ -533,6 +538,8 @@ class NotificationServiceTest {
             assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
             assertThat(response.origin().getCountryCode()).isEqualTo("GB");
             assertThat(response.commodity().getName()).isEqualTo("Live bovine animals");
+            assertThat(response.consignor().getName()).isEqualTo(consignors().getFirst().getName());
+            assertThat(response.destination().getName()).isEqualTo(destinations().getFirst().getName());
             assertThat(response.accompanyingDocuments()).hasSize(1);
             assertThat(response.accompanyingDocuments().getFirst().uploadId()).isEqualTo("upload-abc-123");
             assertThat(response.accompanyingDocuments().getFirst().scanStatus()).isEqualTo(ScanStatus.COMPLETE);

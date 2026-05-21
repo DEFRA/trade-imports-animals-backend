@@ -16,6 +16,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
@@ -38,6 +39,7 @@ public class NotificationService {
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
     private final Duration lockAtLeastFor;
+    private final NotificationMapper notificationMapper;
 
     public NotificationService(
         NotificationRepository notificationRepository,
@@ -45,12 +47,14 @@ public class NotificationService {
         DocumentService documentService,
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
+        NotificationMapper notificationMapper,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor) {
         this.notificationRepository = notificationRepository;
         this.auditRepository = auditRepository;
         this.documentService = documentService;
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
+        this.notificationMapper = notificationMapper;
         this.lockAtLeastFor = lockAtLeastFor;
     }
 
@@ -69,7 +73,9 @@ public class NotificationService {
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
         List<AccompanyingDocument> documents = documentService.findByNotificationRef(
             referenceNumber);
-        return NotificationResponse.from(notification, documents);
+        return notificationMapper.toResponse(notification).toBuilder()
+            .accompanyingDocuments(documents.stream().map(AccompanyingDocumentDto::from).toList())
+            .build();
     }
 
     public List<Notification> findAll() {

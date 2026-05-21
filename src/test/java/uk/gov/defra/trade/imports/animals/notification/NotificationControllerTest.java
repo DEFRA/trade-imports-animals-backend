@@ -465,6 +465,8 @@ class NotificationControllerTest {
                 .origin(origin)
                 .commodity(Commodity.builder().name("Live bovine animals").build())
                 .reasonForImport("PERMANENT")
+                .consignor(consignors().getFirst())
+                .destination(destinations().getFirst())
                 .accompanyingDocuments(List.of(document))
                 .build();
 
@@ -477,6 +479,8 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.referenceNumber").value(referenceNumber))
                 .andExpect(jsonPath("$.origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
+                .andExpect(jsonPath("$.consignor.name").value(consignors().getFirst().getName()))
+                .andExpect(jsonPath("$.destination.name").value(destinations().getFirst().getName()))
                 .andExpect(jsonPath("$.accompanyingDocuments").isArray())
                 .andExpect(jsonPath("$.accompanyingDocuments.length()").value(1))
                 .andExpect(jsonPath("$.accompanyingDocuments[0].uploadId").value("upload-abc-123"))
