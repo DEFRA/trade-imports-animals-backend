@@ -51,7 +51,7 @@ public class NotificationService {
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
         NotificationMapper notificationMapper,
-        ReferenceNumberGenerator referenceNumberGenerator
+        ReferenceNumberGenerator referenceNumberGenerator,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor) {
         this.notificationRepository = notificationRepository;
         this.auditRepository = auditRepository;
@@ -59,8 +59,8 @@ public class NotificationService {
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
         this.notificationMapper = notificationMapper;
-        this.lockAtLeastFor = lockAtLeastFor;
         this.referenceNumberGenerator = referenceNumberGenerator;
+        this.lockAtLeastFor = lockAtLeastFor;
     }
 
     public Notification saveOriginOfImport(NotificationDto notificationDto) {
