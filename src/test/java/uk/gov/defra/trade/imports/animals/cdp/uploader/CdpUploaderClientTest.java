@@ -268,7 +268,7 @@ class CdpUploaderClientTest {
         "/redirect",
         "https://backend/callback",
         "my-bucket",
-        "DRAFT.IMP.2026.abc",
+        "GBN-AG-26-ABC000",
         20971520L,
         List.of("application/pdf"),
         null);

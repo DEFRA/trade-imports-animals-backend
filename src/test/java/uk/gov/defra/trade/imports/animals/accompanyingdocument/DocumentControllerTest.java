@@ -65,7 +65,7 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn201WithLocationHeader() throws Exception {
-      String ref = "DRAFT.IMP.2026.00000001";
+      String ref = "GBN-AG-26-000001";
       DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
       DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
 
@@ -87,7 +87,7 @@ class DocumentControllerTest {
           {"documentType":"ITAHC","documentReference":"","dateOfIssue":"2026-01-15"}
           """;
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -101,7 +101,7 @@ class DocumentControllerTest {
           "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
           longRef);
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -114,7 +114,7 @@ class DocumentControllerTest {
           {"documentReference":"UKGB2026001","dateOfIssue":"2026-01-15"}
           """;
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -127,7 +127,7 @@ class DocumentControllerTest {
           {"documentType":"ITAHC","documentReference":"UKGB2026001"}
           """;
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", "DRAFT.IMP.2026.00000001")
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -136,7 +136,7 @@ class DocumentControllerTest {
 
     @Test
     void shouldIgnoreUnknownFieldsLikeRedirectUrl() throws Exception {
-      String ref = "DRAFT.IMP.2026.00000001";
+      String ref = "GBN-AG-26-000001";
       String body = """
           {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"/anything"}
           """;
@@ -166,7 +166,7 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn200WithDocumentList() throws Exception {
-      String ref = "DRAFT.IMP.2026.00000001";
+      String ref = "GBN-AG-26-000001";
 
       AccompanyingDocument doc = AccompanyingDocument.builder()
           .id("doc-id-1")
@@ -191,7 +191,7 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn200WithEmptyList() throws Exception {
-      String ref = "DRAFT.IMP.2026.00000001";
+      String ref = "GBN-AG-26-000001";
       when(documentService.findByNotificationRef(ref)).thenReturn(List.of());
 
       mockMvc.perform(get("/notifications/{ref}/document-uploads", ref)
@@ -211,7 +211,7 @@ class DocumentControllerTest {
 
       AccompanyingDocument doc = AccompanyingDocument.builder()
           .id("doc-id-1")
-          .notificationReferenceNumber("DRAFT.IMP.2026.00000001")
+          .notificationReferenceNumber("GBN-AG-26-000001")
           .uploadId(uploadId)
           .documentType(DocumentType.ITAHC)
           .documentReference("UKGB2026001")

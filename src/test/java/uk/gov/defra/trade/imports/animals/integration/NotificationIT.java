@@ -26,6 +26,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.NotificationResponse;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
+import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.notification.Species;
 import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
@@ -40,6 +41,8 @@ class NotificationIT extends IntegrationBase {
     private static final String ADMIN_SECRET_HEADER = "Trade-Imports-Animals-Admin-Secret";
     private static final String VALID_ADMIN_SECRET = "test-admin-secret";
     private static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
+    private static final String REF_FORMAT_REGEX = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN;
+    private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -96,8 +99,7 @@ class NotificationIT extends IntegrationBase {
         // Then — verify response
         assertThat(created).isNotNull();
         assertThat(created.getId()).isNotNull();
-        assertThat(created.getReferenceNumber()).matches("DRAFT\\.IMP\\.\\d{4}\\..+");
-        assertThat(created.getReferenceNumber()).contains(created.getId());
+        assertThat(created.getReferenceNumber()).matches(REF_FORMAT_REGEX);
         assertNotificationMappedFields(created);
 
         // Verify persisted — reload via API
@@ -130,7 +132,7 @@ class NotificationIT extends IntegrationBase {
             .allMatch(id -> id != null && !id.isEmpty());
         assertThat(notifications)
             .extracting(Notification::getReferenceNumber)
-            .allMatch(ref -> ref != null && ref.startsWith("DRAFT.IMP."));
+            .allMatch(ref -> ref != null && ref.startsWith("GBN-AG-"));
     }
 
     @Test
@@ -306,7 +308,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(allNotifications).hasSize(3);
         assertThat(allNotifications)
             .extracting(Notification::getReferenceNumber)
-            .allMatch(ref -> ref != null && ref.startsWith("DRAFT.IMP."));
+            .allMatch(ref -> ref != null && ref.startsWith("GBN-AG-"));
         assertThat(allNotifications)
             .extracting(n -> n.getOrigin().getCountryCode())
             .containsExactlyInAnyOrder("GB", "IE", "FR");
@@ -440,13 +442,13 @@ class NotificationIT extends IntegrationBase {
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
             .header("x-cdp-request-id", "trace-002")
             .header("User-Id", "user-002")
-            .bodyValue(List.of("DRAFT.IMP.2026.DOESNOTEXIST"))
+            .bodyValue(List.of(NONEXISTENT_REF))
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value(
-                Matchers.containsString("DRAFT.IMP.2026.DOESNOTEXIST"));
+                Matchers.containsString(NONEXISTENT_REF));
     }
 
     @Test
@@ -457,7 +459,7 @@ class NotificationIT extends IntegrationBase {
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
             .header("x-cdp-request-id", "trace-audit-failure")
             .header("User-Id", "user-audit-failure")
-            .bodyValue(List.of("DRAFT.IMP.2026.DOESNOTEXIST"))
+            .bodyValue(List.of(NONEXISTENT_REF))
             .exchange()
             .expectStatus().isNotFound();
 
@@ -466,7 +468,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(audits).hasSize(1);
         Audit audit = audits.getFirst();
         assertThat(audit.getResult()).isEqualTo(Result.FAILURE);
-        assertThat(audit.getNotificationReferenceNumbers()).containsExactly("DRAFT.IMP.2026.DOESNOTEXIST");
+        assertThat(audit.getNotificationReferenceNumbers()).containsExactly(NONEXISTENT_REF);
         assertThat(audit.getTraceId()).isEqualTo("trace-audit-failure");
         assertThat(audit.getUserId()).isEqualTo("user-audit-failure");
     }
@@ -487,11 +489,11 @@ class NotificationIT extends IntegrationBase {
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
             .header("x-cdp-request-id", "trace-003")
             .header("User-Id", "user-003")
-            .bodyValue(List.of(existingRef, "DRAFT.IMP.2026.MISSING"))
+            .bodyValue(List.of(existingRef, NONEXISTENT_REF))
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
-            .jsonPath("$.detail").value(Matchers.containsString("DRAFT.IMP.2026.MISSING"));
+            .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
 
         // Then — the existing notification was NOT deleted (all-or-nothing)
         List<Notification> remaining = findAllNotifications();
@@ -518,7 +520,7 @@ class NotificationIT extends IntegrationBase {
         // When — no Trade-Imports-Animals-Admin-Secret header
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(List.of("DRAFT.IMP.2026.ANY"))
+            .bodyValue(List.of(NONEXISTENT_REF))
             .exchange()
             .expectStatus().isUnauthorized();
     }
@@ -529,7 +531,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, "wrong-secret")
-            .bodyValue(List.of("DRAFT.IMP.2026.ANY"))
+            .bodyValue(List.of(NONEXISTENT_REF))
             .exchange()
             .expectStatus().isUnauthorized();
     }
@@ -563,13 +565,13 @@ class NotificationIT extends IntegrationBase {
     void submit_shouldReturn404_whenReferenceNumberDoesNotExist() {
         // When / Then
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", "DRAFT.IMP.2026.DOESNOTEXIST")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", NONEXISTENT_REF)
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value(
-                Matchers.containsString("DRAFT.IMP.2026.DOESNOTEXIST"));
+                Matchers.containsString(NONEXISTENT_REF));
     }
 
     @Test
@@ -647,7 +649,7 @@ class NotificationIT extends IntegrationBase {
     void submit_shouldNotWriteOutboxEvent_whenNotificationDoesNotExist() {
         // When
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", "DRAFT.IMP.2026.MISSING")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", NONEXISTENT_REF)
             .exchange()
             .expectStatus().isNotFound();
 
@@ -765,19 +767,15 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void findByRef_shouldReturn404_whenReferenceNumberDoesNotExist() {
-        // Given
-        // No notification exists for DRAFT.IMP.2026.DOESNOTEXIST
-
-        // When
-        // Then
+        // When / Then — no notification exists for NONEXISTENT_REF
         webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", "DRAFT.IMP.2026.DOESNOTEXIST")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", NONEXISTENT_REF)
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value(
-                Matchers.containsString("DRAFT.IMP.2026.DOESNOTEXIST"));
+                Matchers.containsString(NONEXISTENT_REF));
     }
 
     @Test

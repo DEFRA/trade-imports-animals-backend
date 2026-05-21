@@ -46,6 +46,11 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 })
 class NotificationControllerTest {
 
+    private static final String REF_1 = "GBN-AG-26-ABC001";
+    private static final String REF_2 = "GBN-AG-26-ABC002";
+    private static final String REF_3 = "GBN-AG-26-ABC003";
+    private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -80,10 +85,9 @@ class NotificationControllerTest {
                 .transport(Transport.builder().transporter(transporters().getFirst()).build())
                 .build();
 
-            String expectedReferenceNumber = "DRAFT.IMP.2026.00000001";
             Notification savedNotification = new Notification();
             savedNotification.setId("507f1f77bcf86cd799439011");
-            savedNotification.setReferenceNumber(expectedReferenceNumber);
+            savedNotification.setReferenceNumber(REF_1);
             savedNotification.setOrigin(origin);
             savedNotification.setCommodity(commodity);
             savedNotification.setReasonForImport("PERMANENT");
@@ -100,7 +104,7 @@ class NotificationControllerTest {
                     .content(objectMapper.writeValueAsString(notificationDto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("507f1f77bcf86cd799439011"))
-                .andExpect(jsonPath("$.referenceNumber").value(expectedReferenceNumber))
+                .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$.origin.internalReference").value("CUSTOMER-REF-123"))
                 .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
@@ -129,10 +133,9 @@ class NotificationControllerTest {
                 .origin(origin)
                 .build();
 
-            String expectedReferenceNumber = "DRAFT.IMP.2026.00000042";
             Notification savedNotification = new Notification();
             savedNotification.setId("507f1f77bcf86cd799439012");
-            savedNotification.setReferenceNumber(expectedReferenceNumber);
+            savedNotification.setReferenceNumber(REF_2);
             savedNotification.setOrigin(origin);
 
             when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
@@ -144,7 +147,7 @@ class NotificationControllerTest {
                     .content(objectMapper.writeValueAsString(notificationDto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("507f1f77bcf86cd799439012"))
-                .andExpect(jsonPath("$.referenceNumber").value(expectedReferenceNumber))
+                .andExpect(jsonPath("$.referenceNumber").value(REF_2))
                 .andExpect(jsonPath("$.origin.countryCode").value("FR"))
                 .andExpect(jsonPath("$.origin.internalReference").value("INTERNAL-456"));
         }
@@ -153,16 +156,15 @@ class NotificationControllerTest {
         void post_shouldAcceptNotificationWithExistingId() throws Exception {
             // Given - updating existing notification
             String existingId = "507f1f77bcf86cd799439011";
-            String referenceNumber = "DRAFT.IMP.2026." + existingId;
             Origin origin = new Origin("DE", "true", "UPDATE-REF");
             NotificationDto notificationDto = NotificationDto.builder()
-                .referenceNumber(referenceNumber)
+                .referenceNumber(REF_3)
                 .origin(origin)
                 .build();
 
             Notification savedNotification = new Notification();
             savedNotification.setId(existingId);
-            savedNotification.setReferenceNumber(referenceNumber);
+            savedNotification.setReferenceNumber(REF_3);
             savedNotification.setOrigin(origin);
 
             when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
@@ -174,7 +176,7 @@ class NotificationControllerTest {
                     .content(objectMapper.writeValueAsString(notificationDto)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(existingId))
-                .andExpect(jsonPath("$.referenceNumber").value("DRAFT.IMP.2026." + existingId))
+                .andExpect(jsonPath("$.referenceNumber").value(REF_3))
                 .andExpect(jsonPath("$.origin.countryCode").value("DE"))
                 .andExpect(jsonPath("$.origin.internalReference").value("UPDATE-REF"));
         }
@@ -186,58 +188,55 @@ class NotificationControllerTest {
         @Test
         void submit_shouldReturn200WithSubmittedNotification() throws Exception {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
             Notification submitted = new Notification();
             submitted.setId("notif-id-001");
-            submitted.setReferenceNumber(referenceNumber);
+            submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.submitNotification(eq(referenceNumber), anyString()))
+            when(notificationService.submitNotification(eq(REF_1), anyString()))
                 .thenReturn(submitted);
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/submit", referenceNumber)
+            mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.referenceNumber").value(referenceNumber))
+                .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.status").value("SUBMITTED"));
         }
 
         @Test
         void submit_shouldPassTraceIdAsCorrelationId() throws Exception {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
             Notification submitted = new Notification();
             submitted.setId("notif-id-001");
-            submitted.setReferenceNumber(referenceNumber);
+            submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.submitNotification(eq(referenceNumber), eq("trace-abc")))
+            when(notificationService.submitNotification(eq(REF_1), eq("trace-abc")))
                 .thenReturn(submitted);
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/submit", referenceNumber)
+            mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
                     .header(HEADER_TRACE_ID, "trace-abc")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
-            verify(notificationService).submitNotification(referenceNumber, "trace-abc");
+            verify(notificationService).submitNotification(REF_1, "trace-abc");
         }
 
         @Test
         void submit_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
-            when(notificationService.submitNotification(eq(referenceNumber), anyString()))
+            when(notificationService.submitNotification(eq(NONEXISTENT_REF), anyString()))
                 .thenThrow(new NotFoundException(
-                    "Cannot find notification with reference number: " + referenceNumber));
+                    "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/submit", referenceNumber)
+            mockMvc.perform(post("/notifications/{referenceNumber}/submit", NONEXISTENT_REF)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value(
-                    "Cannot find notification with reference number: " + referenceNumber));
+                    "Cannot find notification with reference number: " + NONEXISTENT_REF));
         }
     }
 
@@ -263,7 +262,7 @@ class NotificationControllerTest {
             Origin origin1 = new Origin("GB", "true", "REF-GB-001");
             Notification notification1 = new Notification();
             notification1.setId("507f1f77bcf86cd799439011");
-            notification1.setReferenceNumber("DRAFT.IMP.2026.507f1f77bcf86cd799439011");
+            notification1.setReferenceNumber(REF_1);
             notification1.setOrigin(origin1);
             notification1.setCommodity(Commodity.builder().name("Live cattle").build());
             notification1.setConsignor(consignors().getFirst());
@@ -274,7 +273,7 @@ class NotificationControllerTest {
             Origin origin2 = new Origin("FR", "false", "REF-FR-002");
             Notification notification2 = new Notification();
             notification2.setId("507f1f77bcf86cd799439012");
-            notification2.setReferenceNumber("DRAFT.IMP.2026.507f1f77bcf86cd799439012");
+            notification2.setReferenceNumber(REF_2);
             notification2.setOrigin(origin2);
             notification2.setCommodity(Commodity.builder().name("Live sheep").build());
             notification2.setConsignor(consignors().getLast());
@@ -292,7 +291,7 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].id").value("507f1f77bcf86cd799439011"))
-                .andExpect(jsonPath("$[0].referenceNumber").value("DRAFT.IMP.2026.507f1f77bcf86cd799439011"))
+                .andExpect(jsonPath("$[0].referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$[0].origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$[0].commodity.name").value("Live cattle"))
                 .andExpect(jsonPath("$[0].consignor.name").value(consignors().getFirst().getName()))
@@ -304,7 +303,7 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$[0].transport.transporter.approvalNumber").value(transporters().getFirst().getApprovalNumber()))
                 .andExpect(jsonPath("$[0].transport.transporter.type").value(transporters().getFirst().getType()))
                 .andExpect(jsonPath("$[1].id").value("507f1f77bcf86cd799439012"))
-                .andExpect(jsonPath("$[1].referenceNumber").value("DRAFT.IMP.2026.507f1f77bcf86cd799439012"))
+                .andExpect(jsonPath("$[1].referenceNumber").value(REF_2))
                 .andExpect(jsonPath("$[1].origin.countryCode").value("FR"))
                 .andExpect(jsonPath("$[1].commodity.name").value("Live sheep"))
                 .andExpect(jsonPath("$[1].consignor.name").value(consignors().getLast().getName()))
@@ -323,7 +322,7 @@ class NotificationControllerTest {
             Origin origin = new Origin("IE", "true", "REF-IE-001");
             Notification notification = new Notification();
             notification.setId("507f1f77bcf86cd799439013");
-            notification.setReferenceNumber("DRAFT.IMP.2026.507f1f77bcf86cd799439013");
+            notification.setReferenceNumber(REF_3);
             notification.setOrigin(origin);
             notification.setCommodity(Commodity.builder().name("Live pigs").build());
             notification.setConsignor(consignors().getFirst());
@@ -341,7 +340,7 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].id").value("507f1f77bcf86cd799439013"))
-                .andExpect(jsonPath("$[0].referenceNumber").value("DRAFT.IMP.2026.507f1f77bcf86cd799439013"))
+                .andExpect(jsonPath("$[0].referenceNumber").value(REF_3))
                 .andExpect(jsonPath("$[0].origin.countryCode").value("IE"))
                 .andExpect(jsonPath("$[0].commodity.name").value("Live pigs"))
                 .andExpect(jsonPath("$[0].consignor.name").value(consignors().getFirst().getName()))
@@ -361,7 +360,7 @@ class NotificationControllerTest {
         @Test
         void delete_shouldReturn204_whenAllReferenceNumbersExist() throws Exception {
             // Given
-            List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111", "DRAFT.IMP.2026.222");
+            List<String> referenceNumbers = List.of(REF_1, REF_2);
             doNothing().when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), any(AuditContext.class));
 
             // When & Then
@@ -379,9 +378,9 @@ class NotificationControllerTest {
         @Test
         void delete_shouldReturn404_whenReferenceNumberNotFound() throws Exception {
             // Given
-            List<String> referenceNumbers = List.of("DRAFT.IMP.2026.MISSING");
+            List<String> referenceNumbers = List.of(NONEXISTENT_REF);
             doThrow(new NotFoundException(
-                "Cannot find notifications with reference numbers: DRAFT.IMP.2026.MISSING"))
+                "Cannot find notifications with reference numbers: " + NONEXISTENT_REF))
                 .when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), any(AuditContext.class));
 
             // When & Then — also validates that NotFoundException resolves to 404 (not 500)
@@ -394,7 +393,7 @@ class NotificationControllerTest {
                     .content(objectMapper.writeValueAsString(referenceNumbers)))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value(
-                    "Cannot find notifications with reference numbers: DRAFT.IMP.2026.MISSING"));
+                    "Cannot find notifications with reference numbers: " + NONEXISTENT_REF));
         }
 
         @Test
@@ -414,7 +413,7 @@ class NotificationControllerTest {
         @Test
         void delete_shouldReturn400_whenTraceIdHeaderIsMissing() throws Exception {
             // Given — x-cdp-request-id absent; Spring rejects with 400 before service is called
-            List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111");
+            List<String> referenceNumbers = List.of(REF_1);
 
             // When & Then
             mockMvc.perform(delete("/notifications")
@@ -430,7 +429,7 @@ class NotificationControllerTest {
         @Test
         void delete_shouldReturn400_whenUserIdHeaderIsMissing() throws Exception {
             // Given — User-Id absent; Spring rejects with 400 before service is called
-            List<String> referenceNumbers = List.of("DRAFT.IMP.2026.111");
+            List<String> referenceNumbers = List.of(REF_1);
 
             // When & Then
             mockMvc.perform(delete("/notifications")
@@ -450,31 +449,30 @@ class NotificationControllerTest {
         @Test
         void findByRef_shouldReturn200WithHydratedNotification() throws Exception {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
             Origin origin = new Origin("GB", "true", "REF-001");
 
             AccompanyingDocumentDto document = new AccompanyingDocumentDto(
-                "doc-id-001", referenceNumber, "upload-abc-123",
+                "doc-id-001", REF_1, "upload-abc-123",
                 DocumentType.ITAHC, "UKGB2026001",
                 /* dateOfIssue */ null, ScanStatus.COMPLETE,
                 /* files */ Collections.emptyList(), /* created */ null, /* updated */ null);
 
             NotificationResponse response = NotificationResponse.builder()
                 .id("notif-id-001")
-                .referenceNumber(referenceNumber)
+                .referenceNumber(REF_1)
                 .origin(origin)
                 .commodity(Commodity.builder().name("Live bovine animals").build())
                 .reasonForImport("PERMANENT")
                 .accompanyingDocuments(List.of(document))
                 .build();
 
-            when(notificationService.findByRef(referenceNumber)).thenReturn(response);
+            when(notificationService.findByRef(REF_1)).thenReturn(response);
 
             // When / Then
-            mockMvc.perform(get("/notifications/{referenceNumber}", referenceNumber)
+            mockMvc.perform(get("/notifications/{referenceNumber}", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.referenceNumber").value(referenceNumber))
+                .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
                 .andExpect(jsonPath("$.accompanyingDocuments").isArray())
@@ -486,25 +484,24 @@ class NotificationControllerTest {
         @Test
         void findByRef_shouldReturn200WithEmptyDocumentsList() throws Exception {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.nodocs";
             Origin origin = new Origin("GB", "true", "REF-002");
 
             NotificationResponse response = NotificationResponse.builder()
                 .id("notif-id-002")
-                .referenceNumber(referenceNumber)
+                .referenceNumber(REF_2)
                 .origin(origin)
                 .commodity(Commodity.builder().name("Live sheep").build())
                 .reasonForImport("PERMANENT")
                 .accompanyingDocuments(Collections.emptyList())
                 .build();
 
-            when(notificationService.findByRef(referenceNumber)).thenReturn(response);
+            when(notificationService.findByRef(REF_2)).thenReturn(response);
 
             // When / Then
-            mockMvc.perform(get("/notifications/{referenceNumber}", referenceNumber)
+            mockMvc.perform(get("/notifications/{referenceNumber}", REF_2)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.referenceNumber").value(referenceNumber))
+                .andExpect(jsonPath("$.referenceNumber").value(REF_2))
                 .andExpect(jsonPath("$.accompanyingDocuments").isArray())
                 .andExpect(jsonPath("$.accompanyingDocuments").isEmpty());
         }
@@ -512,17 +509,16 @@ class NotificationControllerTest {
         @Test
         void findByRef_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.DOESNOTEXIST";
-            when(notificationService.findByRef(referenceNumber))
+            when(notificationService.findByRef(NONEXISTENT_REF))
                 .thenThrow(new NotFoundException(
-                    "Cannot find notification with reference number: " + referenceNumber));
+                    "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
             // When / Then
-            mockMvc.perform(get("/notifications/{referenceNumber}", referenceNumber)
+            mockMvc.perform(get("/notifications/{referenceNumber}", NONEXISTENT_REF)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value(
-                    "Cannot find notification with reference number: " + referenceNumber));
+                    "Cannot find notification with reference number: " + NONEXISTENT_REF));
         }
     }
 
@@ -545,10 +541,7 @@ class NotificationControllerTest {
         @Test
         void findAllReferenceNumbers_shouldReturnListOfReferenceNumbers() throws Exception {
             // Given
-            List<String> referenceNumbers = List.of(
-                "DRAFT.IMP.2026.abc123",
-                "DRAFT.IMP.2026.xyz456"
-            );
+            List<String> referenceNumbers = List.of(REF_1, REF_2);
             when(notificationService.findAllReferenceNumbers()).thenReturn(referenceNumbers);
 
             // When & Then
@@ -557,8 +550,8 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0]").value("DRAFT.IMP.2026.abc123"))
-                .andExpect(jsonPath("$[1]").value("DRAFT.IMP.2026.xyz456"));
+                .andExpect(jsonPath("$[0]").value(REF_1))
+                .andExpect(jsonPath("$[1]").value(REF_2));
         }
     }
 
@@ -568,7 +561,7 @@ class NotificationControllerTest {
         @Test
         void getOutboxEvents_shouldReturnEventsForReferenceNumber() throws Exception {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.abc123";
+            String referenceNumber = "GBN-AG-26-ABC123";
             List<OutboxEvent> events = List.of(
                 OutboxEvent.builder().aggregateVersion(1L)
                     .eventType("uk.gov.defra.imports.notification.NotificationSubmitted").build(),
@@ -590,7 +583,7 @@ class NotificationControllerTest {
         @Test
         void getOutboxEvents_shouldReturnEmptyList_whenNoEventsExist() throws Exception {
             // Given
-            String referenceNumber = "DRAFT.IMP.2026.unknown";
+            String referenceNumber = "GBN-AG-26-ABSENT";
             when(outboxService.findByReferenceNumber(referenceNumber)).thenReturn(List.of());
 
             // When & Then

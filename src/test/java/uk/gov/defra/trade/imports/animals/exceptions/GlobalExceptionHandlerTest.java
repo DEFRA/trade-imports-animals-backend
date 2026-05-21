@@ -145,7 +145,7 @@ class GlobalExceptionHandlerTest {
         // Given
         String traceId = "test-trace-789";
         MDC.put("trace.id", traceId);
-        ConflictException exception = new ConflictException("Notification with reference DRAFT.IMP.2026.001 already exists");
+        ConflictException exception = new ConflictException("Notification with reference GBN-AG-26-000001 already exists");
 
         // When
         ResponseEntity<ProblemDetail> response = exceptionHandler.handleConflictException(exception);
@@ -157,7 +157,7 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Resource Conflict");
-        assertThat(problemDetail.getDetail()).isEqualTo("Notification with reference DRAFT.IMP.2026.001 already exists");
+        assertThat(problemDetail.getDetail()).isEqualTo("Notification with reference GBN-AG-26-000001 already exists");
         assertThat(problemDetail.getType()).isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/conflict"));
         assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
     }
@@ -347,7 +347,7 @@ class GlobalExceptionHandlerTest {
         MDC.put("trace.id", traceId);
         OutboxWriteException exception = new OutboxWriteException(
             "Duplicate aggregateVersion on outbox insert",
-            "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123",
+            "Imports.Notification.GBN-AG.GBN-AG-26-ABC123",
             1L,
             "correlation-abc");
 
@@ -368,7 +368,7 @@ class GlobalExceptionHandlerTest {
         // Internal details must not appear in the response body
         String detail = problemDetail.getDetail();
         assertThat(detail).doesNotContain("aggregateId", "aggregateVersion", "correlationId",
-            "Duplicate", "outbox", "DRAFT.IMP.2026.abc123");
+            "Duplicate", "outbox", "GBN-AG-26-ABC123");
     }
 
     @Test
@@ -376,7 +376,7 @@ class GlobalExceptionHandlerTest {
         // Given - no trace ID in MDC
         OutboxWriteException exception = new OutboxWriteException(
             "Could not acquire outbox lock",
-            "Imports.Notification.GBN-AG.DRAFT.IMP.2026.abc123",
+            "Imports.Notification.GBN-AG.GBN-AG-26-ABC123",
             null,
             "correlation-xyz");
 
