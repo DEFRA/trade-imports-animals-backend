@@ -2,7 +2,9 @@ package uk.gov.defra.trade.imports.animals.utils;
 
 import java.util.List;
 import uk.gov.defra.trade.imports.animals.notification.Address;
+import uk.gov.defra.trade.imports.animals.notification.Consignment;
 import uk.gov.defra.trade.imports.animals.notification.Consignor;
+import uk.gov.defra.trade.imports.animals.notification.ContactAddress;
 import uk.gov.defra.trade.imports.animals.notification.Destination;
 import uk.gov.defra.trade.imports.animals.notification.Species;
 import uk.gov.defra.trade.imports.animals.notification.Transporter;
@@ -63,6 +65,30 @@ public final class NotificationTestData {
         );
     }
     
+    public static List<Consignment> consignments() {
+        return List.of(
+            Consignment.builder()
+                .contact(ContactAddress.builder()
+                    .name("Animal and Plant Health Agency")
+                    .address(Address.builder()
+                        .addressLine1("Woodham Lane")
+                        .addressLine2("New Haw")
+                        .addressLine3("Addlestone")
+                        .country("United Kingdom")
+                        .build())
+                    .build())
+                .build(),
+            Consignment.builder()
+                .contact(ContactAddress.builder()
+                    .name("EuroStore Services")
+                    .address(Address.builder()
+                        .addressLine1("8448 Gleason Creek")
+                        .country("France")
+                        .build())
+                    .build())
+                .build());
+    }
+
     public static List<Transporter> transporters() {
         return List.of(
             Transporter.builder()

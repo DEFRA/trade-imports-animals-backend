@@ -26,7 +26,9 @@ public class NotificationDto {
     private Destination destination;
     
     private String cphNumber;
-    
+
     private Transport transport;
+
+    private Consignment consignment;
 
 }
