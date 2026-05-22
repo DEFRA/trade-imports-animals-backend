@@ -26,6 +26,7 @@ public record NotificationResponse(
     AdditionalDetails additionalDetails,
     String cphNumber,
     Transport transport,
+    Consignment consignment,
     NotificationStatus status,
     LocalDateTime created,
     LocalDateTime updated,
@@ -53,6 +54,7 @@ public record NotificationResponse(
         .additionalDetails(notification.getAdditionalDetails())
         .cphNumber(notification.getCphNumber())
         .transport(notification.getTransport())
+        .consignment(notification.getConsignment())
         .status(notification.getStatus())
         .created(notification.getCreated())
         .updated(notification.getUpdated())

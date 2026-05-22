@@ -191,6 +191,7 @@ public class NotificationService {
         notification.setDestination(dto.getDestination());
         notification.setCphNumber(dto.getCphNumber());
         notification.setTransport(dto.getTransport());
+        notification.setConsignment(dto.getConsignment());
         notification.setUpdated(LocalDateTime.now());
     }
 

@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
@@ -202,6 +203,7 @@ class NotificationServiceTest {
                 .reasonForImport("PERMANENT")
                 .cphNumber(cphNumber)
                 .transport(transport)
+                .consignment(consignments().getFirst())
                 .build();
 
             Notification updatedNotification = Notification.builder()
@@ -215,6 +217,7 @@ class NotificationServiceTest {
                 .reasonForImport("PERMANENT")
                 .cphNumber(cphNumber)
                 .transport(transport)
+                .consignment(consignments().getFirst())
                 .build();
 
             when(notificationRepository.save(any(Notification.class))).thenReturn(updatedNotification);
@@ -244,6 +247,12 @@ class NotificationServiceTest {
             assertThat(result.getDestination().getAddress().getCountry()).isEqualTo("United Kingdom");
             assertThat(result.getCphNumber()).isEqualTo("123456789");
             assertThat(result.getTransport()).isEqualTo(transport);
+            assertThat(result.getConsignment().getContact().getName())
+                .isEqualTo("Animal and Plant Health Agency");
+            assertThat(result.getConsignment().getContact().getAddress().getAddressLine1())
+                .isEqualTo("Woodham Lane");
+            assertThat(result.getConsignment().getContact().getAddress().getCountry())
+                .isEqualTo("United Kingdom");
             verify(notificationRepository, times(1)).save(any(Notification.class));
         }
     }
@@ -554,6 +563,7 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .origin(origin)
                 .commodity(Commodity.builder().name("Live bovine animals").build())
+                .consignment(consignments().getFirst())
                 .build();
 
             AccompanyingDocument document = AccompanyingDocument.builder()
@@ -579,6 +589,7 @@ class NotificationServiceTest {
             assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
             assertThat(response.origin().getCountryCode()).isEqualTo("GB");
             assertThat(response.commodity().getName()).isEqualTo("Live bovine animals");
+            assertThat(response.consignment()).isEqualTo(consignments().getFirst());
             assertThat(response.accompanyingDocuments()).hasSize(1);
             assertThat(response.accompanyingDocuments().getFirst().uploadId()).isEqualTo("upload-abc-123");
             assertThat(response.accompanyingDocuments().getFirst().scanStatus()).isEqualTo(ScanStatus.COMPLETE);
