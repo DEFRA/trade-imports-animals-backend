@@ -24,6 +24,7 @@ public record NotificationResponse(
     Destination destination,
     String cphNumber,
     Transport transport,
+    Consignment consignment,
     NotificationStatus status,
     LocalDateTime created,
     LocalDateTime updated,

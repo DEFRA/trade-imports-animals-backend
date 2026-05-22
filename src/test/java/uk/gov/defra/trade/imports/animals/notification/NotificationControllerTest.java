@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_TRACE_ID;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_USER_ID;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
@@ -83,6 +84,7 @@ class NotificationControllerTest {
                 .consignor(consignors().getFirst())
                 .destination(destinations().getFirst())
                 .transport(Transport.builder().transporter(transporters().getFirst()).build())
+                .consignment(consignments().getFirst())
                 .build();
 
             Notification savedNotification = new Notification();
@@ -94,6 +96,7 @@ class NotificationControllerTest {
             savedNotification.setConsignor(consignors().getFirst());
             savedNotification.setDestination(destinations().getFirst());
             savedNotification.setTransport(Transport.builder().transporter(transporters().getFirst()).build());
+            savedNotification.setConsignment(consignments().getFirst());
 
             when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
                 .thenReturn(savedNotification);
@@ -122,7 +125,13 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.transport.transporter.name").value(transporters().getFirst().getName()))
                 .andExpect(jsonPath("$.transport.transporter.address").value(transporters().getFirst().getAddress()))
                 .andExpect(jsonPath("$.transport.transporter.approvalNumber").value(transporters().getFirst().getApprovalNumber()))
-                .andExpect(jsonPath("$.transport.transporter.type").value(transporters().getFirst().getType()));
+                .andExpect(jsonPath("$.transport.transporter.type").value(transporters().getFirst().getType()))
+                .andExpect(jsonPath("$.consignment.contact.name")
+                    .value(consignments().getFirst().getContact().getName()))
+                .andExpect(jsonPath("$.consignment.contact.address.addressLine1")
+                    .value(consignments().getFirst().getContact().getAddress().getAddressLine1()))
+                .andExpect(jsonPath("$.consignment.contact.address.country")
+                    .value(consignments().getFirst().getContact().getAddress().getCountry()));
         }
 
         @Test
@@ -465,6 +474,7 @@ class NotificationControllerTest {
                 .reasonForImport("PERMANENT")
                 .consignor(consignors().getFirst())
                 .destination(destinations().getFirst())
+                .consignment(consignments().getFirst())
                 .accompanyingDocuments(List.of(document))
                 .build();
 
@@ -479,6 +489,12 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
                 .andExpect(jsonPath("$.consignor.name").value(consignors().getFirst().getName()))
                 .andExpect(jsonPath("$.destination.name").value(destinations().getFirst().getName()))
+                .andExpect(jsonPath("$.consignment.contact.name")
+                    .value(consignments().getFirst().getContact().getName()))
+                .andExpect(jsonPath("$.consignment.contact.address.addressLine1")
+                    .value(consignments().getFirst().getContact().getAddress().getAddressLine1()))
+                .andExpect(jsonPath("$.consignment.contact.address.country")
+                    .value(consignments().getFirst().getContact().getAddress().getCountry()))
                 .andExpect(jsonPath("$.accompanyingDocuments").isArray())
                 .andExpect(jsonPath("$.accompanyingDocuments.length()").value(1))
                 .andExpect(jsonPath("$.accompanyingDocuments[0].uploadId").value("upload-abc-123"))
