@@ -28,6 +28,7 @@ import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.core.SimpleLock;
 import org.junit.jupiter.api.BeforeEach;
+import org.mapstruct.factory.Mappers;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -71,15 +72,17 @@ class NotificationServiceTest {
     @Mock
     private ReferenceNumberGenerator referenceNumberGenerator;
 
-    private LockingTaskExecutor lockingTaskExecutor;
-
     private NotificationService notificationService;
+
+    private final NotificationMapper notificationMapper = Mappers.getMapper(
+        NotificationMapper.class);
 
     @BeforeEach
     void setUp() {
-        lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
+        LockingTaskExecutor lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         notificationService = new NotificationService(notificationRepository, auditRepository,
-            documentService, outboxService, lockingTaskExecutor, Duration.ZERO, referenceNumberGenerator);
+            documentService, outboxService, lockingTaskExecutor,
+            notificationMapper, referenceNumberGenerator, Duration.ZERO);
     }
 
     @Nested
@@ -163,16 +166,18 @@ class NotificationServiceTest {
             verify(referenceNumberGenerator, times(3)).generate();
             verify(notificationRepository, times(3)).save(any(Notification.class));
         }
-        
+
         @Test
         void saveOriginOfImport_shouldUpdateExistingNotification() {
             // Given - existing notification with ID and reference number
             String existingId = "507f191e810c19729de860ea";
             String referenceNumber = "GBN-AG-26-507F19";
             Origin origin = new Origin("FR", "false", "REF456");
-            AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
+            AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION",
+                "true");
             Species species = species();
-            CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species));
+            CommodityComplement complement = new CommodityComplement("LIVE", 5, null,
+                List.of(species));
             Commodity commodity = Commodity.builder()
                 .name("Fish")
                 .commodityComplement(List.of(complement))
@@ -220,7 +225,8 @@ class NotificationServiceTest {
                 .consignment(consignments().getFirst())
                 .build();
 
-            when(notificationRepository.save(any(Notification.class))).thenReturn(updatedNotification);
+            when(notificationRepository.save(any(Notification.class))).thenReturn(
+                updatedNotification);
 
             // When
             Notification result = notificationService.saveOriginOfImport(updateDto);
@@ -232,19 +238,30 @@ class NotificationServiceTest {
             assertThat(result.getOrigin()).isEqualTo(origin);
             assertThat(result.getCommodity().getName()).isEqualTo("Fish");
             assertThat(result.getCommodity().getCommodityComplement()).hasSize(1);
-            assertThat(result.getCommodity().getCommodityComplement().getFirst().getTypeOfCommodity()).isEqualTo("LIVE");
-            assertThat(result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getValue()).isEqualTo("BOV");
-            assertThat(result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getEarTag()).isEqualTo("UK01234567890");
-            assertThat(result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst().getPassport()).isEqualTo("UK0123456700999");
-            assertThat(result.getAdditionalDetails().getCertifiedFor()).isEqualTo("HUMAN_CONSUMPTION");
+            assertThat(result.getCommodity().getCommodityComplement().getFirst()
+                .getTypeOfCommodity()).isEqualTo("LIVE");
+            assertThat(
+                result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst()
+                    .getValue()).isEqualTo("BOV");
+            assertThat(
+                result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst()
+                    .getEarTag()).isEqualTo("UK01234567890");
+            assertThat(
+                result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst()
+                    .getPassport()).isEqualTo("UK0123456700999");
+            assertThat(result.getAdditionalDetails().getCertifiedFor()).isEqualTo(
+                "HUMAN_CONSUMPTION");
             assertThat(result.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
             assertThat(result.getReasonForImport()).isEqualTo("PERMANENT");
             assertThat(result.getConsignor().getName()).isEqualTo("Astra Rosales");
-            assertThat(result.getConsignor().getAddress().getAddressLine1()).isEqualTo("43 East Hague Extension");
+            assertThat(result.getConsignor().getAddress().getAddressLine1()).isEqualTo(
+                "43 East Hague Extension");
             assertThat(result.getConsignor().getAddress().getCountry()).isEqualTo("Switzerland");
             assertThat(result.getDestination().getName()).isEqualTo("United Commerce");
-            assertThat(result.getDestination().getAddress().getAddressLine1()).isEqualTo("446 Church Lane");
-            assertThat(result.getDestination().getAddress().getCountry()).isEqualTo("United Kingdom");
+            assertThat(result.getDestination().getAddress().getAddressLine1()).isEqualTo(
+                "446 Church Lane");
+            assertThat(result.getDestination().getAddress().getCountry()).isEqualTo(
+                "United Kingdom");
             assertThat(result.getCphNumber()).isEqualTo("123456789");
             assertThat(result.getTransport()).isEqualTo(transport);
             assertThat(result.getConsignment().getContact().getName())
@@ -325,7 +342,8 @@ class NotificationServiceTest {
             when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
             // When
-            notificationService.deleteByReferenceNumbers(List.of(ref1, ref2), new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
+            notificationService.deleteByReferenceNumbers(List.of(ref1, ref2),
+                new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
             // Then — deleteAllByReferenceNumberIn is called with the original reference numbers
             verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
@@ -348,16 +366,18 @@ class NotificationServiceTest {
         void deleteByReferenceNumbers_shouldThrowNotFoundException_whenOneIsMissing() {
             // Given
             String existingRef = "GBN-AG-26-000111";
-            String missingRef  = "GBN-AG-26-MSNG00";
+            String missingRef = "GBN-AG-26-MSNG00";
             NotificationReferenceOnly n1 = () -> existingRef;
 
-            when(notificationRepository.findAllByReferenceNumberIn(List.of(existingRef, missingRef)))
+            when(
+                notificationRepository.findAllByReferenceNumberIn(List.of(existingRef, missingRef)))
                 .thenReturn(List.of(n1));
             when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
             // When / Then
             assertThatThrownBy(() ->
-                notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef), new AuditContext(TEST_TRACE_ID, TEST_USER_ID)))
+                notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef),
+                    new AuditContext(TEST_TRACE_ID, TEST_USER_ID)))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(missingRef);
 
@@ -382,7 +402,8 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(() ->
-                notificationService.deleteByReferenceNumbers(List.of(missing1, missing2), new AuditContext(TEST_TRACE_ID, TEST_USER_ID)))
+                notificationService.deleteByReferenceNumbers(List.of(missing1, missing2),
+                    new AuditContext(TEST_TRACE_ID, TEST_USER_ID)))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(missing1)
                 .hasMessageContaining(missing2);
@@ -394,7 +415,8 @@ class NotificationServiceTest {
         @Test
         void deleteByReferenceNumbers_shouldDoNothing_whenListIsEmpty() {
             // When — empty list is passed (defensive guard; controller rejects this before reaching service)
-            notificationService.deleteByReferenceNumbers(Collections.emptyList(), new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
+            notificationService.deleteByReferenceNumbers(Collections.emptyList(),
+                new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
             // Then — repository is never called
             verify(notificationRepository, never()).findAllByReferenceNumberIn(anyList());
@@ -413,11 +435,13 @@ class NotificationServiceTest {
             when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
             // When
-            notificationService.deleteByReferenceNumbers(List.of(referenceNumber), new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
+            notificationService.deleteByReferenceNumbers(List.of(referenceNumber),
+                new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
             // Then — notifications deleted first, then documents cascade deleted (order matters)
             InOrder inOrder = inOrder(notificationRepository, documentService);
-            inOrder.verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(referenceNumber));
+            inOrder.verify(notificationRepository)
+                .deleteAllByReferenceNumberIn(List.of(referenceNumber));
             inOrder.verify(documentService).deleteForNotificationRefs(List.of(referenceNumber));
         }
     }
@@ -428,7 +452,8 @@ class NotificationServiceTest {
         @BeforeEach
         void setUp() {
             // Default: lock is acquired and the task executes
-            lenient().when(lockProvider.lock(any())).thenReturn(Optional.of(mock(SimpleLock.class)));
+            lenient().when(lockProvider.lock(any()))
+                .thenReturn(Optional.of(mock(SimpleLock.class)));
         }
 
         @Test
@@ -447,7 +472,8 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            Notification result = notificationService.submitNotification(referenceNumber, "trace-001");
+            Notification result = notificationService.submitNotification(referenceNumber,
+                "trace-001");
 
             // Then
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
@@ -498,7 +524,8 @@ class NotificationServiceTest {
                 .when(outboxService).appendEvent(any(), any());
 
             // When / Then — exception propagates out of submitNotification
-            assertThatThrownBy(() -> notificationService.submitNotification(referenceNumber, "trace-001"))
+            assertThatThrownBy(
+                () -> notificationService.submitNotification(referenceNumber, "trace-001"))
                 .isInstanceOf(OutboxWriteException.class);
         }
 
@@ -510,7 +537,8 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.submitNotification(referenceNumber, "trace-001"))
+            assertThatThrownBy(
+                () -> notificationService.submitNotification(referenceNumber, "trace-001"))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(referenceNumber);
 
@@ -537,7 +565,8 @@ class NotificationServiceTest {
             when(lockProvider.lock(any())).thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.submitNotification(referenceNumber, "trace-001"))
+            assertThatThrownBy(
+                () -> notificationService.submitNotification(referenceNumber, "trace-001"))
                 .isInstanceOf(OutboxWriteException.class)
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;
@@ -563,6 +592,8 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .origin(origin)
                 .commodity(Commodity.builder().name("Live bovine animals").build())
+                .consignor(consignors().getFirst())
+                .destination(destinations().getFirst())
                 .consignment(consignments().getFirst())
                 .build();
 
@@ -589,10 +620,15 @@ class NotificationServiceTest {
             assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
             assertThat(response.origin().getCountryCode()).isEqualTo("GB");
             assertThat(response.commodity().getName()).isEqualTo("Live bovine animals");
+            assertThat(response.consignor().getName()).isEqualTo(consignors().getFirst().getName());
+            assertThat(response.destination().getName()).isEqualTo(
+                destinations().getFirst().getName());
             assertThat(response.consignment()).isEqualTo(consignments().getFirst());
             assertThat(response.accompanyingDocuments()).hasSize(1);
-            assertThat(response.accompanyingDocuments().getFirst().uploadId()).isEqualTo("upload-abc-123");
-            assertThat(response.accompanyingDocuments().getFirst().scanStatus()).isEqualTo(ScanStatus.COMPLETE);
+            assertThat(response.accompanyingDocuments().getFirst().uploadId()).isEqualTo(
+                "upload-abc-123");
+            assertThat(response.accompanyingDocuments().getFirst().scanStatus()).isEqualTo(
+                ScanStatus.COMPLETE);
         }
 
         @Test

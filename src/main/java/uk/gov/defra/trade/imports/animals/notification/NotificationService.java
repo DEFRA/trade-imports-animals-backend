@@ -16,6 +16,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
@@ -32,13 +33,16 @@ public class NotificationService {
     private static final String CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER = "Cannot find notification with reference number: ";
     private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
     private static final int MAX_REF_RETRIES = 3;
+  
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
     private final DocumentService documentService;
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
-    private final Duration lockAtLeastFor;
+    private final NotificationMapper notificationMapper;
     private final ReferenceNumberGenerator referenceNumberGenerator;
+    private final Duration lockAtLeastFor;
+    
 
     public NotificationService(
         NotificationRepository notificationRepository,
@@ -46,15 +50,17 @@ public class NotificationService {
         DocumentService documentService,
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
-        @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
-        ReferenceNumberGenerator referenceNumberGenerator) {
+        NotificationMapper notificationMapper,
+        ReferenceNumberGenerator referenceNumberGenerator,
+        @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor) {
         this.notificationRepository = notificationRepository;
         this.auditRepository = auditRepository;
         this.documentService = documentService;
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
-        this.lockAtLeastFor = lockAtLeastFor;
+        this.notificationMapper = notificationMapper;
         this.referenceNumberGenerator = referenceNumberGenerator;
+        this.lockAtLeastFor = lockAtLeastFor;
     }
 
     public Notification saveOriginOfImport(NotificationDto notificationDto) {
@@ -72,7 +78,9 @@ public class NotificationService {
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
         List<AccompanyingDocument> documents = documentService.findByNotificationRef(
             referenceNumber);
-        return NotificationResponse.from(notification, documents);
+        return notificationMapper.toResponse(notification).toBuilder()
+            .accompanyingDocuments(documents.stream().map(AccompanyingDocumentDto::from).toList())
+            .build();
     }
 
     public List<Notification> findAll() {
