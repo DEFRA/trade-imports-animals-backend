@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
@@ -77,11 +79,15 @@ public class NotificationController {
     }
 
     @GetMapping
-    @Operation(summary = "List notifications", description = "Returns all import notifications")
+    @Operation(summary = "List notifications",
+        description = "Returns a paginated list of import notifications ordered by arrival date descending")
+    @ApiResponse(responseCode = "200", description = "Paginated notifications returned",
+        content = @Content(schema = @Schema(implementation = NotificationPageResponse.class)))
     @Timed("controller.getAllNotifications.time")
-    public List<Notification> findAll() {
-        log.debug("GET /notifications - Fetching all notifications");
-        return notificationService.findAll();
+    public NotificationPageResponse findAll(
+        @RequestParam(defaultValue = "0") @Min(0) int page) {
+        log.debug("GET /notifications?page={}", page);
+        return notificationService.findAll(page);
     }
 
     @GetMapping("/reference-numbers")

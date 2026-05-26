@@ -253,113 +253,79 @@ class NotificationControllerTest {
     class FindAll {
 
         @Test
-        void findAll_shouldReturnEmptyList() throws Exception {
+        void findAll_shouldReturnEmptyPage() throws Exception {
             // Given
-            when(notificationService.findAll()).thenReturn(Collections.emptyList());
+            when(notificationService.findAll(0)).thenReturn(
+                new NotificationPageResponse(Collections.emptyList(), 0, 54, 0, 0));
 
             // When & Then
             mockMvc.perform(get("/notifications")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(54))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0));
         }
 
         @Test
-        void findAll_shouldReturnListOfNotifications() throws Exception {
+        void findAll_shouldReturnPageOfNotifications() throws Exception {
             // Given
-            Origin origin1 = new Origin("GB", "true", "REF-GB-001");
-            Notification notification1 = new Notification();
-            notification1.setId("507f1f77bcf86cd799439011");
-            notification1.setReferenceNumber(REF_1);
-            notification1.setOrigin(origin1);
-            notification1.setCommodity(Commodity.builder().name("Live cattle").build());
-            notification1.setConsignor(consignors().getFirst());
-            notification1.setDestination(destinations().getFirst());
-            notification1.setTransport(Transport.builder()
-                .transporter(transporters().getFirst()).build());
+            Notification n1 = new Notification();
+            n1.setId("507f1f77bcf86cd799439011");
+            n1.setReferenceNumber(REF_1);
+            n1.setOrigin(new Origin("GB", "true", "REF-GB-001"));
+            n1.setCommodity(Commodity.builder().name("Live cattle").build());
+            n1.setConsignor(consignors().getFirst());
+            n1.setDestination(destinations().getFirst());
+            n1.setTransport(Transport.builder().transporter(transporters().getFirst()).build());
 
-            Origin origin2 = new Origin("FR", "false", "REF-FR-002");
-            Notification notification2 = new Notification();
-            notification2.setId("507f1f77bcf86cd799439012");
-            notification2.setReferenceNumber(REF_2);
-            notification2.setOrigin(origin2);
-            notification2.setCommodity(Commodity.builder().name("Live sheep").build());
-            notification2.setConsignor(consignors().getLast());
-            notification2.setDestination(destinations().getLast());
-            notification2.setTransport(Transport.builder().transporter(
-                transporters().getLast()).build());
+            Notification n2 = new Notification();
+            n2.setId("507f1f77bcf86cd799439012");
+            n2.setReferenceNumber(REF_2);
+            n2.setOrigin(new Origin("FR", "false", "REF-FR-002"));
+            n2.setCommodity(Commodity.builder().name("Live sheep").build());
+            n2.setConsignor(consignors().getLast());
+            n2.setDestination(destinations().getLast());
+            n2.setTransport(Transport.builder().transporter(transporters().getLast()).build());
 
-            List<Notification> notifications = Arrays.asList(notification1, notification2);
-            when(notificationService.findAll()).thenReturn(notifications);
+            when(notificationService.findAll(0)).thenReturn(
+                new NotificationPageResponse(List.of(n1, n2), 0, 54, 2, 1));
 
             // When & Then
             mockMvc.perform(get("/notifications")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].id").value("507f1f77bcf86cd799439011"))
-                .andExpect(jsonPath("$[0].referenceNumber").value(REF_1))
-                .andExpect(jsonPath("$[0].origin.countryCode").value("GB"))
-                .andExpect(jsonPath("$[0].commodity.name").value("Live cattle"))
-                .andExpect(jsonPath("$[0].consignor.name").value(consignors().getFirst().getName()))
-                .andExpect(jsonPath("$[0].consignor.address").value(consignors().getFirst().getAddress()))
-                .andExpect(jsonPath("$[0].destination.name").value(destinations().getFirst().getName()))
-                .andExpect(jsonPath("$[0].destination.address").value(destinations().getFirst().getAddress()))
-                .andExpect(jsonPath("$[0].transport.transporter.name").value(transporters().getFirst().getName()))
-                .andExpect(jsonPath("$[0].transport.transporter.address").value(transporters().getFirst().getAddress()))
-                .andExpect(jsonPath("$[0].transport.transporter.approvalNumber").value(transporters().getFirst().getApprovalNumber()))
-                .andExpect(jsonPath("$[0].transport.transporter.type").value(transporters().getFirst().getType()))
-                .andExpect(jsonPath("$[1].id").value("507f1f77bcf86cd799439012"))
-                .andExpect(jsonPath("$[1].referenceNumber").value(REF_2))
-                .andExpect(jsonPath("$[1].origin.countryCode").value("FR"))
-                .andExpect(jsonPath("$[1].commodity.name").value("Live sheep"))
-                .andExpect(jsonPath("$[1].consignor.name").value(consignors().getLast().getName()))
-                .andExpect(jsonPath("$[1].consignor.address").value(consignors().getLast().getAddress()))
-                .andExpect(jsonPath("$[1].destination.name").value(destinations().getLast().getName()))
-                .andExpect(jsonPath("$[1].destination.address").value(destinations().getLast().getAddress()))
-                .andExpect(jsonPath("$[1].transport.transporter.name").value(transporters().getLast().getName()))
-                .andExpect(jsonPath("$[1].transport.transporter.address").value(transporters().getLast().getAddress()))
-                .andExpect(jsonPath("$[1].transport.transporter.approvalNumber").value(transporters().getLast().getApprovalNumber()))
-                .andExpect(jsonPath("$[1].transport.transporter.type").value(transporters().getLast().getType()));
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[0].id").value("507f1f77bcf86cd799439011"))
+                .andExpect(jsonPath("$.content[0].referenceNumber").value(REF_1))
+                .andExpect(jsonPath("$.content[0].origin.countryCode").value("GB"))
+                .andExpect(jsonPath("$.content[0].commodity.name").value("Live cattle"))
+                .andExpect(jsonPath("$.content[1].id").value("507f1f77bcf86cd799439012"))
+                .andExpect(jsonPath("$.content[1].referenceNumber").value(REF_2))
+                .andExpect(jsonPath("$.content[1].origin.countryCode").value("FR"))
+                .andExpect(jsonPath("$.content[1].commodity.name").value("Live sheep"))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(1));
         }
 
         @Test
-        void findAll_shouldReturnSingleNotification() throws Exception {
+        void findAll_shouldPassPageParam() throws Exception {
             // Given
-            Origin origin = new Origin("IE", "true", "REF-IE-001");
-            Notification notification = new Notification();
-            notification.setId("507f1f77bcf86cd799439013");
-            notification.setReferenceNumber(REF_3);
-            notification.setOrigin(origin);
-            notification.setCommodity(Commodity.builder().name("Live pigs").build());
-            notification.setConsignor(consignors().getFirst());
-            notification.setDestination(destinations().getFirst());
-            notification.setTransport(Transport.builder()
-                .transporter(transporters().getFirst()).build());
-
-            List<Notification> notifications = Collections.singletonList(notification);
-            when(notificationService.findAll()).thenReturn(notifications);
+            when(notificationService.findAll(2)).thenReturn(
+                new NotificationPageResponse(Collections.emptyList(), 2, 54, 120, 3));
 
             // When & Then
             mockMvc.perform(get("/notifications")
+                    .param("page", "2")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].id").value("507f1f77bcf86cd799439013"))
-                .andExpect(jsonPath("$[0].referenceNumber").value(REF_3))
-                .andExpect(jsonPath("$[0].origin.countryCode").value("IE"))
-                .andExpect(jsonPath("$[0].commodity.name").value("Live pigs"))
-                .andExpect(jsonPath("$[0].consignor.name").value(consignors().getFirst().getName()))
-                .andExpect(jsonPath("$[0].consignor.address").value(consignors().getFirst().getAddress()))
-                .andExpect(jsonPath("$[0].destination.name").value(destinations().getFirst().getName()))
-                .andExpect(jsonPath("$[0].destination.address").value(destinations().getFirst().getAddress()))
-                .andExpect(jsonPath("$[0].transport.transporter.name").value(transporters().getFirst().getName()))
-                .andExpect(jsonPath("$[0].transport.transporter.address").value(transporters().getFirst().getAddress()))
-                .andExpect(jsonPath("$[0].transport.transporter.approvalNumber").value(transporters().getFirst().getApprovalNumber()))
-                .andExpect(jsonPath("$[0].transport.transporter.type").value(transporters().getFirst().getType()));
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.totalElements").value(120))
+                .andExpect(jsonPath("$.totalPages").value(3));
         }
     }
 
