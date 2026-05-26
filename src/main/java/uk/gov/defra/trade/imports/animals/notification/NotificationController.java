@@ -85,9 +85,11 @@ public class NotificationController {
         content = @Content(schema = @Schema(implementation = NotificationPageResponse.class)))
     @Timed("controller.getAllNotifications.time")
     public NotificationPageResponse findAll(
-        @RequestParam(defaultValue = "0") @Min(0) int page) {
-        log.debug("GET /notifications?page={}", page);
-        return notificationService.findAll(page);
+        @RequestParam(defaultValue = "0") @Min(0) int page,
+        @RequestParam(defaultValue = "transport.arrivalDate") String sort,
+        @RequestParam(defaultValue = "desc") @Pattern(regexp = "(?i)asc|desc") String direction) {
+        log.debug("GET /notifications?page={}&sort={}&direction={}", page, sort, direction);
+        return notificationService.findAll(page, sort, direction);
     }
 
     @GetMapping("/reference-numbers")

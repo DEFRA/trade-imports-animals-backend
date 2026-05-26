@@ -88,10 +88,11 @@ public class NotificationService {
             .build();
     }
 
-    public NotificationPageResponse findAll(int page) {
-        log.debug("Fetching notifications page {} (size {})", page, listPageSize);
-        Page<Notification> result = notificationRepository.findAllByOrderByTransport_ArrivalDateDesc(
-            PageRequest.of(page, listPageSize, Sort.by(Sort.Direction.DESC, "transport.arrivalDate")));
+    public NotificationPageResponse findAll(int page, String sort, String direction) {
+        log.debug("Fetching notifications page {} (size {}) sorted by {} {}",
+            page, listPageSize, sort, direction);
+        Page<Notification> result = notificationRepository.findAll(
+            PageRequest.of(page, listPageSize, Sort.by(Sort.Direction.fromString(direction), sort)));
         log.debug("Found {} notifications on page {} of {}",
             result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
         return NotificationPageResponse.from(result);
