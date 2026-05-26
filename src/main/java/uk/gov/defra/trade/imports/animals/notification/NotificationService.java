@@ -13,6 +13,9 @@ import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
@@ -42,7 +45,7 @@ public class NotificationService {
     private final NotificationMapper notificationMapper;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final Duration lockAtLeastFor;
-    
+    private final int listPageSize;
 
     public NotificationService(
         NotificationRepository notificationRepository,
@@ -52,7 +55,8 @@ public class NotificationService {
         LockingTaskExecutor lockingTaskExecutor,
         NotificationMapper notificationMapper,
         ReferenceNumberGenerator referenceNumberGenerator,
-        @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor) {
+        @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
+        @Value("${notification.list.page-size}") int listPageSize) {
         this.notificationRepository = notificationRepository;
         this.auditRepository = auditRepository;
         this.documentService = documentService;
@@ -61,6 +65,7 @@ public class NotificationService {
         this.notificationMapper = notificationMapper;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.lockAtLeastFor = lockAtLeastFor;
+        this.listPageSize = listPageSize;
     }
 
     public Notification saveOriginOfImport(NotificationDto notificationDto) {
@@ -83,12 +88,13 @@ public class NotificationService {
             .build();
     }
 
-    public List<Notification> findAll() {
-        log.debug("Fetching all notifications ordered by transport arrival date descending");
-        List<Notification> notifications =
-            notificationRepository.findAllByOrderByTransport_ArrivalDateDesc();
-        log.debug("Found {} notifications", notifications.size());
-        return notifications;
+    public NotificationPageResponse findAll(int page) {
+        log.debug("Fetching notifications page {} (size {})", page, listPageSize);
+        Page<Notification> result = notificationRepository.findAllByOrderByTransport_ArrivalDateDesc(
+            PageRequest.of(page, listPageSize, Sort.by(Sort.Direction.DESC, "transport.arrivalDate")));
+        log.debug("Found {} notifications on page {} of {}",
+            result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
+        return NotificationPageResponse.from(result);
     }
 
     @Transactional

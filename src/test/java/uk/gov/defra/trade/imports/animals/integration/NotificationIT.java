@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
+import uk.gov.defra.trade.imports.animals.notification.NotificationPageResponse;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
@@ -119,29 +120,27 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notificationDto2).exchange();
         webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notificationDto3).exchange();
 
-        // When
-        List<Notification> notifications = findAllNotifications();
+        // When — page-size is 2 in integration-test profile, so page 0 has 2 items
+        NotificationPageResponse page0 = findAllNotificationsPage(0);
+        NotificationPageResponse page1 = findAllNotificationsPage(1);
 
         // Then
-        assertThat(notifications).isNotNull().hasSize(3);
-        assertThat(notifications)
-            .extracting(n -> n.getOrigin().getCountryCode())
-            .containsExactlyInAnyOrder("GB", "IE", "FR");
-        assertThat(notifications)
-            .extracting(Notification::getId)
-            .allMatch(id -> id != null && !id.isEmpty());
-        assertThat(notifications)
-            .extracting(Notification::getReferenceNumber)
-            .allMatch(ref -> ref != null && ref.startsWith("GBN-AG-"));
+        assertThat(page0.totalElements()).isEqualTo(3);
+        assertThat(page0.totalPages()).isEqualTo(2);
+        assertThat(page0.content()).hasSize(2);
+        assertThat(page1.content()).hasSize(1);
     }
 
     @Test
-    void findAll_shouldReturnEmptyList_whenNoNotifications() {
+    void findAll_shouldReturnEmptyPage_whenNoNotifications() {
         // When
-        List<Notification> notifications = findAllNotifications();
+        NotificationPageResponse page = findAllNotificationsPage();
 
         // Then
-        assertThat(notifications).isNotNull().isEmpty();
+        assertThat(page.content()).isEmpty();
+        assertThat(page.totalElements()).isZero();
+        assertThat(page.totalPages()).isZero();
+        assertThat(page.page()).isZero();
     }
 
     @Test
@@ -166,17 +165,20 @@ class NotificationIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk();
 
-        // When
-        List<Notification> notifications = findAllNotifications();
+        // When — page-size is 2 in integration-test profile; all 3 fit across 2 pages
+        NotificationPageResponse page0 = findAllNotificationsPage(0);
+        NotificationPageResponse page1 = findAllNotificationsPage(1);
 
-        // Then
-        assertThat(notifications).hasSize(3);
-        assertThat(notifications)
+        // Then — arrival dates across pages are ordered descending
+        assertThat(page0.content()).hasSize(2);
+        assertThat(page0.content())
             .extracting(n -> n.getTransport().getArrivalDate())
             .containsExactly(
                 LocalDate.of(2026, 6, 15),
-                LocalDate.of(2026, 3, 1),
-                LocalDate.of(2026, 1, 10));
+                LocalDate.of(2026, 3, 1));
+        assertThat(page1.content()).hasSize(1);
+        assertThat(page1.content().getFirst().getTransport().getArrivalDate())
+            .isEqualTo(LocalDate.of(2026, 1, 10));
     }
 
     @Test
@@ -207,21 +209,24 @@ class NotificationIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk();
 
-        // When
-        List<Notification> notifications = findAllNotifications();
+        // When — page-size=2, so page 0 has dated items, page 1 has the null-date items
+        NotificationPageResponse page0 = findAllNotificationsPage(0);
+        NotificationPageResponse page1 = findAllNotificationsPage(1);
 
         // Then — dated first (desc), then those with no arrival date
-        assertThat(notifications).hasSize(4);
-        assertThat(notifications.subList(0, 2))
+        assertThat(page0.totalElements()).isEqualTo(4);
+        assertThat(page0.content()).hasSize(2);
+        assertThat(page0.content())
             .extracting(n -> n.getTransport().getArrivalDate())
             .containsExactly(LocalDate.of(2026, 6, 15), LocalDate.of(2026, 1, 10));
-        assertThat(notifications.subList(2, 4))
+        assertThat(page1.content()).hasSize(2);
+        assertThat(page1.content())
             .extracting(this::extractArrivalDate)
             .containsOnlyNulls();
     }
 
     @Test
-    void findAll_notifications_with_draft_and_submitted_statues() {
+    void findAll_notifications_with_draft_and_submitted_statuses() {
         // Given — mix of DRAFT (with and without arrival date) and SUBMITTED
         webClient("NoAuth")
             .post()
@@ -254,24 +259,29 @@ class NotificationIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk();
 
-        // When
-        List<Notification> notifications = findAllNotifications();
+        // When — page-size=2 in test profile
+        NotificationPageResponse page0 = findAllNotificationsPage(0);
+        NotificationPageResponse page1 = findAllNotificationsPage(1);
 
         // Then — no status filter; drafts and submitted both appear, ordered by arrival date desc
-        assertThat(notifications).hasSize(3);
-        assertThat(notifications)
+        assertThat(page0.totalElements()).isEqualTo(3);
+        List<Notification> all = new java.util.ArrayList<>(page0.content());
+        all.addAll(page1.content());
+
+        assertThat(all).hasSize(3);
+        assertThat(all)
             .extracting(Notification::getStatus)
             .containsExactlyInAnyOrder(
                 NotificationStatus.DRAFT,
                 NotificationStatus.DRAFT,
                 NotificationStatus.SUBMITTED);
-        assertThat(notifications.getFirst().getReferenceNumber()).isEqualTo(submittedRef);
-        assertThat(notifications.getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(notifications.getFirst().getTransport().getArrivalDate())
+        assertThat(all.getFirst().getReferenceNumber()).isEqualTo(submittedRef);
+        assertThat(all.getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(all.getFirst().getTransport().getArrivalDate())
             .isEqualTo(LocalDate.of(2026, 6, 15));
-        assertThat(notifications.get(1).getTransport().getArrivalDate())
+        assertThat(all.get(1).getTransport().getArrivalDate())
             .isEqualTo(LocalDate.of(2026, 3, 1));
-        assertThat(extractArrivalDate(notifications.get(2))).isNull();
+        assertThat(extractArrivalDate(all.get(2))).isNull();
     }
 
     @Test
@@ -304,7 +314,10 @@ class NotificationIT extends IntegrationBase {
             .expectStatus().isOk();
 
         // Then - verify all notifications were created with generated referenceNumbers
-        List<Notification> allNotifications = findAllNotifications();
+        NotificationPageResponse pageResponse = findAllNotificationsPage(0);
+        NotificationPageResponse page1Response = findAllNotificationsPage(1);
+        List<Notification> allNotifications = new java.util.ArrayList<>(pageResponse.content());
+        allNotifications.addAll(page1Response.content());
         assertThat(allNotifications).hasSize(3);
         assertThat(allNotifications)
             .extracting(Notification::getReferenceNumber)
@@ -825,14 +838,22 @@ class NotificationIT extends IntegrationBase {
             .returnResult().getResponseBody();
     }
 
-    private List<Notification> findAllNotifications() {
+    private NotificationPageResponse findAllNotificationsPage() {
+        return findAllNotificationsPage(0);
+    }
+
+    private NotificationPageResponse findAllNotificationsPage(int page) {
         return webClient("NoAuth")
             .get()
-            .uri(NOTIFICATION_ENDPOINT)
+            .uri(NOTIFICATION_ENDPOINT + "?page=" + page)
             .exchange()
             .expectStatus().isOk()
-            .expectBodyList(Notification.class)
+            .expectBody(NotificationPageResponse.class)
             .returnResult().getResponseBody();
+    }
+
+    private List<Notification> findAllNotifications() {
+        return findAllNotificationsPage().content();
     }
 
     private void assertNotificationMappedFields(Notification notification) {

@@ -23,6 +23,10 @@ import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
@@ -82,7 +86,7 @@ class NotificationServiceTest {
         LockingTaskExecutor lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         notificationService = new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            notificationMapper, referenceNumberGenerator, Duration.ZERO);
+            notificationMapper, referenceNumberGenerator, Duration.ZERO, 54);
     }
 
     @Nested
@@ -278,18 +282,25 @@ class NotificationServiceTest {
     class FindAll {
 
         @Test
-        void findAll_shouldReturnEmptyList() {
+        void findAll_shouldReturnEmptyPage() {
             // Given
-            when(notificationRepository.findAllByOrderByTransport_ArrivalDateDesc())
-                .thenReturn(Collections.emptyList());
+            Page<Notification> emptyPage = new PageImpl<>(
+                Collections.emptyList(), PageRequest.of(0, 54), 0);
+            when(notificationRepository.findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class)))
+                .thenReturn(emptyPage);
 
             // When
-            List<Notification> result = notificationService.findAll();
+            NotificationPageResponse result = notificationService.findAll(0);
 
             // Then
-            assertThat(result).isNotNull();
-            assertThat(result).isEmpty();
-            verify(notificationRepository, times(1)).findAllByOrderByTransport_ArrivalDateDesc();
+            assertThat(result.content()).isEmpty();
+            assertThat(result.page()).isZero();
+            assertThat(result.size()).isEqualTo(54);
+            assertThat(result.numberOfElements()).isZero();
+            assertThat(result.totalElements()).isZero();
+            assertThat(result.totalPages()).isZero();
+            verify(notificationRepository, times(1))
+                .findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class));
         }
     }
 
