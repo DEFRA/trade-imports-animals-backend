@@ -16,6 +16,8 @@ public interface NotificationRepository extends MongoRepository<Notification, St
 
     List<Notification> findAllByOrderByTransport_ArrivalDateDesc();
 
+    List<Notification> findAllByStatusInOrderByTransport_ArrivalDateDesc(List<NotificationStatus> statuses);
+
     void deleteAllByReferenceNumberIn(List<String> referenceNumbers);
 
 }

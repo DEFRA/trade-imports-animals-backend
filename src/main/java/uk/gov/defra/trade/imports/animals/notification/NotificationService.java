@@ -22,6 +22,7 @@ import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
+import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
@@ -86,7 +87,8 @@ public class NotificationService {
     public List<Notification> findAll() {
         log.debug("Fetching all notifications ordered by transport arrival date descending");
         List<Notification> notifications =
-            notificationRepository.findAllByOrderByTransport_ArrivalDateDesc();
+            notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
+                List.of(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED));
         log.debug("Found {} notifications", notifications.size());
         return notifications;
     }
@@ -128,6 +130,21 @@ public class NotificationService {
                 "Outbox write failed during submission",
                 aggregateId, null, correlationId, e);
         }
+    }
+
+    @Transactional
+    public Notification softDeleteNotification(String referenceNumber) {
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+        if (notification.getStatus() != NotificationStatus.DRAFT &&
+            notification.getStatus() != NotificationStatus.SUBMITTED) {
+            throw new BadRequestException(
+                "Cannot delete notification with status: " + notification.getStatus());
+        }
+        notification.setStatus(NotificationStatus.DELETED);
+        notification.setUpdated(LocalDateTime.now());
+        return notificationRepository.save(notification);
     }
 
     public List<String> findAllReferenceNumbers() {

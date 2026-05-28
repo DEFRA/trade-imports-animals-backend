@@ -106,6 +106,21 @@ public class NotificationController {
         return outboxService.findByReferenceNumber(referenceNumber);
     }
 
+    @PostMapping("/{referenceNumber}/soft-delete")
+    @Operation(summary = "Soft-delete notification",
+        description = "Transitions notification status to DELETED (soft delete). Only DRAFT and SUBMITTED notifications can be deleted.")
+    @ApiResponse(responseCode = "200", description = "Notification soft-deleted",
+        content = @Content(schema = @Schema(implementation = Notification.class)))
+    @ApiResponse(responseCode = "400", description = "Notification not in a deletable state", content = @Content)
+    @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
+    @Timed("controller.softDeleteNotification.time")
+    public ResponseEntity<Notification> softDelete(
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        log.info("POST /notifications/{}/soft-delete - Soft deleting notification", referenceNumber);
+        return ResponseEntity.ok(notificationService.softDeleteNotification(referenceNumber));
+    }
+
     @DeleteMapping
     @Operation(summary = "Delete notifications", description = "Deletes notifications by reference numbers")
     @Timed("controller.deleteNotifications.time")

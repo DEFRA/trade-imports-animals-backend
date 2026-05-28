@@ -44,6 +44,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
+import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
@@ -280,7 +281,8 @@ class NotificationServiceTest {
         @Test
         void findAll_shouldReturnEmptyList() {
             // Given
-            when(notificationRepository.findAllByOrderByTransport_ArrivalDateDesc())
+            when(notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
+                List.of(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED)))
                 .thenReturn(Collections.emptyList());
 
             // When
@@ -289,7 +291,34 @@ class NotificationServiceTest {
             // Then
             assertThat(result).isNotNull();
             assertThat(result).isEmpty();
-            verify(notificationRepository, times(1)).findAllByOrderByTransport_ArrivalDateDesc();
+            verify(notificationRepository, times(1))
+                .findAllByStatusInOrderByTransport_ArrivalDateDesc(
+                    List.of(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED));
+        }
+
+        @Test
+        void findAll_shouldExcludeDeletedNotifications() {
+            // Given — only DRAFT and SUBMITTED are passed as the allowlist; DELETED is excluded
+            Notification draft = Notification.builder()
+                .referenceNumber("GBN-AG-26-000DFT")
+                .status(NotificationStatus.DRAFT)
+                .build();
+            Notification submitted = Notification.builder()
+                .referenceNumber("GBN-AG-26-000SUB")
+                .status(NotificationStatus.SUBMITTED)
+                .build();
+
+            when(notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
+                List.of(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED)))
+                .thenReturn(List.of(draft, submitted));
+
+            // When
+            List<Notification> result = notificationService.findAll();
+
+            // Then — only DRAFT and SUBMITTED are returned
+            assertThat(result).hasSize(2);
+            assertThat(result).extracting(Notification::getStatus)
+                .containsExactlyInAnyOrder(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED);
         }
     }
 
@@ -667,6 +696,94 @@ class NotificationServiceTest {
                 .hasMessageContaining(referenceNumber);
 
             verify(documentService, never()).findByNotificationRef(any());
+        }
+    }
+
+    @Nested
+    class SoftDeleteNotification {
+
+        @Test
+        void softDeleteNotification_shouldSetStatusToDeletedAndSave_whenDraft() {
+            // Given
+            String referenceNumber = "GBN-AG-26-ABC123";
+            Notification notification = Notification.builder()
+                .id("notif-id-001")
+                .referenceNumber(referenceNumber)
+                .status(NotificationStatus.DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.softDeleteNotification(referenceNumber);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
+            assertThat(result.getUpdated()).isNotNull();
+            verify(notificationRepository).save(notification);
+        }
+
+        @Test
+        void softDeleteNotification_shouldSetStatusToDeletedAndSave_whenSubmitted() {
+            // Given
+            String referenceNumber = "GBN-AG-26-ABC456";
+            Notification notification = Notification.builder()
+                .id("notif-id-002")
+                .referenceNumber(referenceNumber)
+                .status(NotificationStatus.SUBMITTED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.softDeleteNotification(referenceNumber);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
+            assertThat(result.getUpdated()).isNotNull();
+            verify(notificationRepository).save(notification);
+        }
+
+        @Test
+        void softDeleteNotification_shouldThrowBadRequestException_whenAlreadyDeleted() {
+            // Given
+            String referenceNumber = "GBN-AG-26-ABC789";
+            Notification notification = Notification.builder()
+                .id("notif-id-003")
+                .referenceNumber(referenceNumber)
+                .status(NotificationStatus.DELETED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("DELETED");
+
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void softDeleteNotification_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
+            // Given
+            String referenceNumber = "GBN-AG-26-ABSENT";
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.empty());
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining(referenceNumber);
+
+            verify(notificationRepository, never()).save(any());
         }
     }
 }
