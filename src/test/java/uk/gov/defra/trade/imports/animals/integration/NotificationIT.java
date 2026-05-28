@@ -104,7 +104,8 @@ class NotificationIT extends IntegrationBase {
         assertNotificationMappedFields(created);
 
         // Verify persisted — reload via API
-        Notification persisted = findAllNotifications().getFirst();
+        Notification persisted = notificationRepository.findByReferenceNumber(created.getReferenceNumber())
+            .orElseThrow();
         assertThat(persisted.getId()).isEqualTo(created.getId());
         assertNotificationMappedFields(persisted);
     }
@@ -265,12 +266,12 @@ class NotificationIT extends IntegrationBase {
 
         // Then — no status filter; drafts and submitted both appear, ordered by arrival date desc
         assertThat(page0.totalElements()).isEqualTo(3);
-        List<Notification> all = new java.util.ArrayList<>(page0.content());
+        List<NotificationDto> all = new java.util.ArrayList<>(page0.content());
         all.addAll(page1.content());
 
         assertThat(all).hasSize(3);
         assertThat(all)
-            .extracting(Notification::getStatus)
+            .extracting(NotificationDto::getStatus)
             .containsExactlyInAnyOrder(
                 NotificationStatus.DRAFT,
                 NotificationStatus.DRAFT,
@@ -316,11 +317,11 @@ class NotificationIT extends IntegrationBase {
         // Then - verify all notifications were created with generated referenceNumbers
         NotificationPageResponse pageResponse = findAllNotificationsPage(0);
         NotificationPageResponse page1Response = findAllNotificationsPage(1);
-        List<Notification> allNotifications = new java.util.ArrayList<>(pageResponse.content());
+        List<NotificationDto> allNotifications = new java.util.ArrayList<>(pageResponse.content());
         allNotifications.addAll(page1Response.content());
         assertThat(allNotifications).hasSize(3);
         assertThat(allNotifications)
-            .extracting(Notification::getReferenceNumber)
+            .extracting(NotificationDto::getReferenceNumber)
             .allMatch(ref -> ref != null && ref.startsWith("GBN-AG-"));
         assertThat(allNotifications)
             .extracting(n -> n.getOrigin().getCountryCode())
@@ -378,9 +379,10 @@ class NotificationIT extends IntegrationBase {
         assertNotificationMappedFields(updated, "REF-updated");
 
         // Verify only one notification exists and reload via API
-        List<Notification> all = findAllNotifications();
+        List<NotificationDto> all = findAllNotifications();
         assertThat(all).hasSize(1);
-        Notification persisted = all.getFirst();
+        Notification persisted = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow();
         assertNotificationMappedFields(persisted, "REF-updated");
     }
 
@@ -509,7 +511,7 @@ class NotificationIT extends IntegrationBase {
             .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
 
         // Then — the existing notification was NOT deleted (all-or-nothing)
-        List<Notification> remaining = findAllNotifications();
+        List<NotificationDto> remaining = findAllNotifications();
         assertThat(remaining).hasSize(1);
         assertThat(remaining.getFirst().getReferenceNumber()).isEqualTo(existingRef);
     }
@@ -852,7 +854,7 @@ class NotificationIT extends IntegrationBase {
             .returnResult().getResponseBody();
     }
 
-    private List<Notification> findAllNotifications() {
+    private List<NotificationDto> findAllNotifications() {
         return findAllNotificationsPage().content();
     }
 
@@ -987,7 +989,7 @@ class NotificationIT extends IntegrationBase {
             .build();
     }
 
-    private LocalDate extractArrivalDate(Notification notification) {
+    private LocalDate extractArrivalDate(NotificationDto notification) {
         if (notification.getTransport() == null) {
             return null;
         }

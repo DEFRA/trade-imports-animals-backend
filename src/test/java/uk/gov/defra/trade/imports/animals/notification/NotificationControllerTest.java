@@ -255,7 +255,7 @@ class NotificationControllerTest {
         void findAll_shouldReturnEmptyPage() throws Exception {
             // Given
             when(notificationService.findAll(0)).thenReturn(
-                new NotificationPageResponse(Collections.emptyList(), 0, 54, 0, 0, 0));
+                new NotificationPageResponse(Collections.emptyList(), 0, 25, 0, 0, 0));
 
             // When & Then
             mockMvc.perform(get("/notifications")
@@ -264,7 +264,7 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.content").isArray())
                 .andExpect(jsonPath("$.content").isEmpty())
                 .andExpect(jsonPath("$.page").value(0))
-                .andExpect(jsonPath("$.size").value(54))
+                .andExpect(jsonPath("$.size").value(25))
                 .andExpect(jsonPath("$.numberOfElements").value(0))
                 .andExpect(jsonPath("$.totalElements").value(0))
                 .andExpect(jsonPath("$.totalPages").value(0));
@@ -273,41 +273,45 @@ class NotificationControllerTest {
         @Test
         void findAll_shouldReturnPageOfNotifications() throws Exception {
             // Given
-            Notification notification1 = new Notification();
-            notification1.setId("507f1f77bcf86cd799439011");
-            notification1.setReferenceNumber(REF_1);
-            notification1.setOrigin(new Origin("GB", "true", "REF-GB-001"));
-            notification1.setCommodity(Commodity.builder().name("Live cattle").build());
-            notification1.setConsignor(consignors().getFirst());
-            notification1.setDestination(destinations().getFirst());
-            notification1.setTransport(Transport.builder().transporter(transporters().getFirst()).build());
+            NotificationDto notification1 = NotificationDto.builder()
+                .referenceNumber(REF_1)
+                .origin(new Origin("GB", "true", "REF-GB-001"))
+                .commodity(Commodity.builder().name("Live cattle").build())
+                .consignor(consignors().getFirst())
+                .destination(destinations().getFirst())
+                .transport(Transport.builder().transporter(transporters().getFirst()).build())
+                .status(NotificationStatus.DRAFT)
+                .build();
 
-            Notification notification2 = new Notification();
-            notification2.setId("507f1f77bcf86cd799439012");
-            notification2.setReferenceNumber(REF_2);
-            notification2.setOrigin(new Origin("FR", "false", "REF-FR-002"));
-            notification2.setCommodity(Commodity.builder().name("Live sheep").build());
-            notification2.setConsignor(consignors().getLast());
-            notification2.setDestination(destinations().getLast());
-            notification2.setTransport(Transport.builder().transporter(transporters().getLast()).build());
+            NotificationDto notification2 = NotificationDto.builder()
+                .referenceNumber(REF_2)
+                .origin(new Origin("FR", "false", "REF-FR-002"))
+                .commodity(Commodity.builder().name("Live sheep").build())
+                .consignor(consignors().getLast())
+                .destination(destinations().getLast())
+                .transport(Transport.builder().transporter(transporters().getLast()).build())
+                .status(NotificationStatus.SUBMITTED)
+                .build();
 
             when(notificationService.findAll(0)).thenReturn(
-                new NotificationPageResponse(List.of(notification1, notification2), 0, 54, 2, 2, 1));
+                new NotificationPageResponse(List.of(notification1, notification2), 0, 25, 2, 2,
+                    1));
 
             // When & Then
             mockMvc.perform(get("/notifications")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(2))
-                .andExpect(jsonPath("$.content[0].id").value("507f1f77bcf86cd799439011"))
                 .andExpect(jsonPath("$.content[0].referenceNumber").value(REF_1))
+                .andExpect(jsonPath("$.content[0].status").value("DRAFT"))
                 .andExpect(jsonPath("$.content[0].origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$.content[0].commodity.name").value("Live cattle"))
-                .andExpect(jsonPath("$.content[1].id").value("507f1f77bcf86cd799439012"))
                 .andExpect(jsonPath("$.content[1].referenceNumber").value(REF_2))
+                .andExpect(jsonPath("$.content[1].status").value("SUBMITTED"))
                 .andExpect(jsonPath("$.content[1].origin.countryCode").value("FR"))
                 .andExpect(jsonPath("$.content[1].commodity.name").value("Live sheep"))
                 .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(25))
                 .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.totalPages").value(1));
         }
@@ -316,7 +320,7 @@ class NotificationControllerTest {
         void findAll_shouldPassPageParam() throws Exception {
             // Given
             when(notificationService.findAll(2)).thenReturn(
-                new NotificationPageResponse(Collections.emptyList(), 2, 54, 0, 120, 3));
+                new NotificationPageResponse(Collections.emptyList(), 2, 25, 0, 120, 3));
 
             // When & Then
             mockMvc.perform(get("/notifications")
@@ -324,6 +328,7 @@ class NotificationControllerTest {
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.size").value(25))
                 .andExpect(jsonPath("$.totalElements").value(120))
                 .andExpect(jsonPath("$.totalPages").value(3));
         }

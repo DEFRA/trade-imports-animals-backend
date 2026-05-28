@@ -302,6 +302,27 @@ class NotificationServiceTest {
             verify(notificationRepository, times(1))
                 .findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class));
         }
+
+        @Test
+        void findAll_shouldMapStatusToNotificationDto() {
+            // Given
+            Notification notification = Notification.builder()
+                .referenceNumber("GBN-AG-26-ABC123")
+                .origin(new Origin("GB", "true", "REF-1"))
+                .status(NotificationStatus.SUBMITTED)
+                .build();
+            Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54), 1);
+            when(notificationRepository.findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class)))
+                .thenReturn(page);
+
+            // When
+            NotificationPageResponse result = notificationService.findAll(0);
+
+            // Then
+            assertThat(result.content()).hasSize(1);
+            assertThat(result.content().getFirst().getReferenceNumber()).isEqualTo("GBN-AG-26-ABC123");
+            assertThat(result.content().getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        }
     }
 
     @Nested
