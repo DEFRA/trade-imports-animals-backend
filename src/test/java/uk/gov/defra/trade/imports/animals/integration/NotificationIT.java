@@ -275,6 +275,51 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void findAll_shouldExcludeDeletedNotifications() {
+        // Given — create three notifications, submit one, soft-delete one
+        String draftRef = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        String submittedRef = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("IE", "Live sheep"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        String deletedRef = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("FR", "Live pigs"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", submittedRef)
+            .exchange().expectStatus().isOk();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", deletedRef)
+            .exchange().expectStatus().isOk();
+
+        // When
+        List<Notification> notifications = findAllNotifications();
+
+        // Then — only DRAFT and SUBMITTED are returned; DELETED is excluded
+        assertThat(notifications).hasSize(2);
+        assertThat(notifications)
+            .extracting(Notification::getReferenceNumber)
+            .containsExactlyInAnyOrder(draftRef, submittedRef);
+        assertThat(notifications)
+            .extracting(Notification::getStatus)
+            .doesNotContain(NotificationStatus.DELETED);
+    }
+
+    @Test
     void post_shouldAllowMultipleNotificationsWithNullReferenceNumber() {
         // Given - create multiple notifications without explicitly setting referenceNumber
         NotificationDto notificationDto1 = createNotificationDto("GB", "Live cattle");
@@ -667,6 +712,94 @@ class NotificationIT extends IntegrationBase {
 
         // Then — no outbox events written
         assertThat(outboxEventRepository.findAll()).isEmpty();
+    }
+
+    @Test
+    void softDelete_shouldTransitionStatusToDeleted_whenNotificationIsDraft() {
+        // Given — create a notification (starts as DRAFT)
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When — soft-delete the notification
+        Notification result = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult().getResponseBody();
+
+        // Then — status transitions to DELETED
+        assertThat(result).isNotNull();
+        assertThat(result.getReferenceNumber()).isEqualTo(referenceNumber);
+        assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
+        assertThat(result.getUpdated()).isNotNull();
+    }
+
+    @Test
+    void softDelete_shouldTransitionStatusToDeleted_whenNotificationIsSubmitted() {
+        // Given — create and submit a notification
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // When — soft-delete the submitted notification
+        Notification result = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult().getResponseBody();
+
+        // Then — status transitions to DELETED
+        assertThat(result).isNotNull();
+        assertThat(result.getReferenceNumber()).isEqualTo(referenceNumber);
+        assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
+        assertThat(result.getUpdated()).isNotNull();
+    }
+
+    @Test
+    void softDelete_shouldReturn404_whenReferenceNumberDoesNotExist() {
+        // When / Then
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", NONEXISTENT_REF)
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(404)
+            .jsonPath("$.detail").value(
+                Matchers.containsString(NONEXISTENT_REF));
+    }
+
+    @Test
+    void softDelete_shouldReturn400_whenNotificationIsAlreadyDeleted() {
+        // Given — create and soft-delete a notification
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // When — attempt to soft-delete again
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .exchange()
+            .expectStatus().isBadRequest();
     }
 
     @Test
