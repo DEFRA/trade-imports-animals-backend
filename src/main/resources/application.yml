@@ -130,7 +130,7 @@ springdoc:
 # Notification submission outbox lock configuration
 notification:
   list:
-    page-size: ${NOTIFICATION_LIST_PAGE_SIZE:25}
+    page-size: 25
   submit:
     lock-at-least-for: 50ms
 
