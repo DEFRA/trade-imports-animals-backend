@@ -25,6 +25,7 @@ import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
+import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
@@ -90,8 +91,9 @@ public class NotificationService {
 
     public NotificationPageResponse findAll(int page) {
         log.debug("Fetching notifications page {} (size {})", page, listPageSize);
-        Page<Notification> result = notificationRepository.findAllByOrderByTransport_ArrivalDateDesc(
-            PageRequest.of(page, listPageSize, Sort.by(Sort.Direction.DESC, "transport.arrivalDate")));
+        Page<Notification> result = notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
+            PageRequest.of(page, listPageSize, Sort.by(Sort.Direction.DESC, "transport.arrivalDate")),
+            List.of(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED));
         log.debug("Found {} notifications on page {} of {}",
             result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
         return NotificationPageResponse.from(result);
@@ -134,6 +136,21 @@ public class NotificationService {
                 "Outbox write failed during submission",
                 aggregateId, null, correlationId, e);
         }
+    }
+
+    @Transactional
+    public Notification softDeleteNotification(String referenceNumber) {
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+        if (notification.getStatus() != NotificationStatus.DRAFT &&
+            notification.getStatus() != NotificationStatus.SUBMITTED) {
+            throw new BadRequestException(
+                "Cannot delete notification with status: " + notification.getStatus());
+        }
+        notification.setStatus(NotificationStatus.DELETED);
+        notification.setUpdated(LocalDateTime.now());
+        return notificationRepository.save(notification);
     }
 
     public List<String> findAllReferenceNumbers() {

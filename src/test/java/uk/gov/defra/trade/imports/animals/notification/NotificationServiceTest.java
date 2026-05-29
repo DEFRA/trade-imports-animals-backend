@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
@@ -12,6 +13,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DRAFT;
+import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.SUBMITTED;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
@@ -48,6 +51,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
+import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
@@ -286,21 +290,52 @@ class NotificationServiceTest {
             // Given
             Page<Notification> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
-            when(notificationRepository.findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class)))
+            when(notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
+                any(Pageable.class), eq(List.of(DRAFT, SUBMITTED))))
                 .thenReturn(emptyPage);
 
             // When
             NotificationPageResponse result = notificationService.findAll(0);
 
             // Then
-            assertThat(result.content()).isEmpty();
+            assertThat(result).isNotNull();
+            verify(notificationRepository, times(1))
+                .findAllByStatusInOrderByTransport_ArrivalDateDesc(any(Pageable.class),
+                    eq(List.of(DRAFT, SUBMITTED)));
+        }
+
+        @Test
+        void findAll_shouldExcludeDeletedNotifications() {
+            // Given — only DRAFT and SUBMITTED are passed as the allowlist; DELETED is excluded
+            Notification draft = Notification.builder()
+                .referenceNumber("GBN-AG-26-000DFT")
+                .status(DRAFT)
+                .build();
+            Notification submitted = Notification.builder()
+                .referenceNumber("GBN-AG-26-000SUB")
+                .status(SUBMITTED)
+                .build();
+
+            Page<Notification> page = new PageImpl<>(
+                List.of(draft, submitted), PageRequest.of(0, 54), 0);
+
+            when(notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
+                any(Pageable.class),
+                eq(List.of(DRAFT, SUBMITTED))))
+                .thenReturn(page);
+
+            // When
+            NotificationPageResponse result = notificationService.findAll(0);
+
+            // Then — only DRAFT and SUBMITTED are returned
+            assertThat(result.content()).hasSize(2);
+            assertThat(result.content()).extracting(NotificationDto::getStatus)
+                .containsExactlyInAnyOrder(DRAFT, SUBMITTED);
             assertThat(result.page()).isZero();
             assertThat(result.size()).isEqualTo(54);
-            assertThat(result.numberOfElements()).isZero();
-            assertThat(result.totalElements()).isZero();
-            assertThat(result.totalPages()).isZero();
             verify(notificationRepository, times(1))
-                .findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class));
+                .findAllByStatusInOrderByTransport_ArrivalDateDesc(any(Pageable.class),
+                    eq(List.of(DRAFT, SUBMITTED)));
         }
 
         @Test
@@ -309,10 +344,13 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .origin(new Origin("GB", "true", "REF-1"))
-                .status(NotificationStatus.SUBMITTED)
+                .status(SUBMITTED)
                 .build();
-            Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54), 1);
-            when(notificationRepository.findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class)))
+            Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54),
+                1);
+            when(notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
+                any(Pageable.class),
+                eq(List.of(DRAFT, SUBMITTED))))
                 .thenReturn(page);
 
             // When
@@ -320,8 +358,10 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result.content()).hasSize(1);
-            assertThat(result.content().getFirst().getReferenceNumber()).isEqualTo("GBN-AG-26-ABC123");
-            assertThat(result.content().getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+            assertThat(result.content().getFirst().getReferenceNumber()).isEqualTo(
+                "GBN-AG-26-ABC123");
+            assertThat(result.content().getFirst().getStatus()).isEqualTo(
+                SUBMITTED);
         }
     }
 
@@ -495,7 +535,7 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
-                .status(NotificationStatus.DRAFT)
+                .status(DRAFT)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -508,7 +548,7 @@ class NotificationServiceTest {
                 "trace-001");
 
             // Then
-            assertThat(result.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
             verify(outboxService).appendEvent(notification, "trace-001");
@@ -521,7 +561,7 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
-                .status(NotificationStatus.DRAFT)
+                .status(DRAFT)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -545,7 +585,7 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
-                .status(NotificationStatus.DRAFT)
+                .status(DRAFT)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -587,7 +627,7 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
-                .status(NotificationStatus.DRAFT)
+                .status(DRAFT)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -699,6 +739,94 @@ class NotificationServiceTest {
                 .hasMessageContaining(referenceNumber);
 
             verify(documentService, never()).findByNotificationRef(any());
+        }
+    }
+
+    @Nested
+    class SoftDeleteNotification {
+
+        @Test
+        void softDeleteNotification_shouldSetStatusToDeletedAndSave_whenDraft() {
+            // Given
+            String referenceNumber = "GBN-AG-26-ABC123";
+            Notification notification = Notification.builder()
+                .id("notif-id-001")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.softDeleteNotification(referenceNumber);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
+            assertThat(result.getUpdated()).isNotNull();
+            verify(notificationRepository).save(notification);
+        }
+
+        @Test
+        void softDeleteNotification_shouldSetStatusToDeletedAndSave_whenSubmitted() {
+            // Given
+            String referenceNumber = "GBN-AG-26-ABC456";
+            Notification notification = Notification.builder()
+                .id("notif-id-002")
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.softDeleteNotification(referenceNumber);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
+            assertThat(result.getUpdated()).isNotNull();
+            verify(notificationRepository).save(notification);
+        }
+
+        @Test
+        void softDeleteNotification_shouldThrowBadRequestException_whenAlreadyDeleted() {
+            // Given
+            String referenceNumber = "GBN-AG-26-ABC789";
+            Notification notification = Notification.builder()
+                .id("notif-id-003")
+                .referenceNumber(referenceNumber)
+                .status(NotificationStatus.DELETED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("DELETED");
+
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void softDeleteNotification_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
+            // Given
+            String referenceNumber = "GBN-AG-26-ABSENT";
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.empty());
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining(referenceNumber);
+
+            verify(notificationRepository, never()).save(any());
         }
     }
 }

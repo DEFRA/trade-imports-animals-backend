@@ -35,6 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
+import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
@@ -583,6 +584,57 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());
+        }
+    }
+
+    @Nested
+    class SoftDelete {
+
+        @Test
+        void softDelete_shouldReturn200WithDeletedNotification() throws Exception {
+            // Given
+            Notification deleted = new Notification();
+            deleted.setId("notif-id-001");
+            deleted.setReferenceNumber(REF_1);
+            deleted.setStatus(NotificationStatus.DELETED);
+
+            when(notificationService.softDeleteNotification(REF_1)).thenReturn(deleted);
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/soft-delete", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.referenceNumber").value(REF_1))
+                .andExpect(jsonPath("$.status").value("DELETED"));
+        }
+
+        @Test
+        void softDelete_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
+            // Given
+            when(notificationService.softDeleteNotification(NONEXISTENT_REF))
+                .thenThrow(new NotFoundException(
+                    "Cannot find notification with reference number: " + NONEXISTENT_REF));
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/soft-delete", NONEXISTENT_REF)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value(
+                    "Cannot find notification with reference number: " + NONEXISTENT_REF));
+        }
+
+        @Test
+        void softDelete_shouldReturn400_whenNotificationNotInDeletableState() throws Exception {
+            // Given
+            when(notificationService.softDeleteNotification(REF_1))
+                .thenThrow(new BadRequestException("Cannot delete notification with status: DELETED"));
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/soft-delete", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(
+                    "Cannot delete notification with status: DELETED"));
         }
     }
 }
