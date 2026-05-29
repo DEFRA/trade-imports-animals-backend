@@ -91,7 +91,7 @@ public class NotificationService {
 
     public NotificationPageResponse findAll(int page) {
         log.debug("Fetching notifications page {} (size {})", page, listPageSize);
-        Page<Notification> result = notificationRepository.findAllByOrderByTransport_ArrivalDateDesc(
+        Page<Notification> result = notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
             PageRequest.of(page, listPageSize, Sort.by(Sort.Direction.DESC, "transport.arrivalDate")),
             List.of(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED));
         log.debug("Found {} notifications on page {} of {}",

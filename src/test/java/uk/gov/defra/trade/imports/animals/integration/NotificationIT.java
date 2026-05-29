@@ -318,15 +318,15 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         // When
-        List<Notification> notifications = findAllNotifications();
+        List<NotificationDto> notifications = findAllNotificationsPage(0).content();
 
         // Then — only DRAFT and SUBMITTED are returned; DELETED is excluded
         assertThat(notifications).hasSize(2);
         assertThat(notifications)
-            .extracting(Notification::getReferenceNumber)
+            .extracting(NotificationDto::getReferenceNumber)
             .containsExactlyInAnyOrder(draftRef, submittedRef);
         assertThat(notifications)
-            .extracting(Notification::getStatus)
+            .extracting(NotificationDto::getStatus)
             .doesNotContain(NotificationStatus.DELETED);
     }
 

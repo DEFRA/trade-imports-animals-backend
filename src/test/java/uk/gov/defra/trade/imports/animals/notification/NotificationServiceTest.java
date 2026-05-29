@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
@@ -12,6 +13,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DRAFT;
+import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.SUBMITTED;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
@@ -287,7 +290,8 @@ class NotificationServiceTest {
             // Given
             Page<Notification> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
-            when(notificationRepository.findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class)))
+            when(notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
+                any(Pageable.class), eq(List.of(DRAFT, SUBMITTED))))
                 .thenReturn(emptyPage);
 
             // When
@@ -295,10 +299,9 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result).isNotNull();
-            assertThat(result).isEmpty();
             verify(notificationRepository, times(1))
-                .findAllByStatusInOrderByTransport_ArrivalDateDesc(
-                    List.of(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED));
+                .findAllByStatusInOrderByTransport_ArrivalDateDesc(any(Pageable.class),
+                    eq(List.of(DRAFT, SUBMITTED)));
         }
 
         @Test
@@ -306,32 +309,33 @@ class NotificationServiceTest {
             // Given — only DRAFT and SUBMITTED are passed as the allowlist; DELETED is excluded
             Notification draft = Notification.builder()
                 .referenceNumber("GBN-AG-26-000DFT")
-                .status(NotificationStatus.DRAFT)
+                .status(DRAFT)
                 .build();
             Notification submitted = Notification.builder()
                 .referenceNumber("GBN-AG-26-000SUB")
-                .status(NotificationStatus.SUBMITTED)
+                .status(SUBMITTED)
                 .build();
 
+            Page<Notification> page = new PageImpl<>(
+                List.of(draft, submitted), PageRequest.of(0, 54), 0);
+
             when(notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
-                List.of(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED)))
-                .thenReturn(List.of(draft, submitted));
+                any(Pageable.class),
+                eq(List.of(DRAFT, SUBMITTED))))
+                .thenReturn(page);
 
             // When
-            List<Notification> result = notificationService.findAll();
+            NotificationPageResponse result = notificationService.findAll(0);
 
             // Then — only DRAFT and SUBMITTED are returned
-            assertThat(result).hasSize(2);
-            assertThat(result).extracting(Notification::getStatus)
-                .containsExactlyInAnyOrder(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED);
-            assertThat(result.content()).isEmpty();
+            assertThat(result.content()).hasSize(2);
+            assertThat(result.content()).extracting(NotificationDto::getStatus)
+                .containsExactlyInAnyOrder(DRAFT, SUBMITTED);
             assertThat(result.page()).isZero();
             assertThat(result.size()).isEqualTo(54);
-            assertThat(result.numberOfElements()).isZero();
-            assertThat(result.totalElements()).isZero();
-            assertThat(result.totalPages()).isZero();
             verify(notificationRepository, times(1))
-                .findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class));
+                .findAllByStatusInOrderByTransport_ArrivalDateDesc(any(Pageable.class),
+                    eq(List.of(DRAFT, SUBMITTED)));
         }
 
         @Test
@@ -340,10 +344,13 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .origin(new Origin("GB", "true", "REF-1"))
-                .status(NotificationStatus.SUBMITTED)
+                .status(SUBMITTED)
                 .build();
-            Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54), 1);
-            when(notificationRepository.findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class)))
+            Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54),
+                1);
+            when(notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
+                any(Pageable.class),
+                eq(List.of(DRAFT, SUBMITTED))))
                 .thenReturn(page);
 
             // When
@@ -351,8 +358,10 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result.content()).hasSize(1);
-            assertThat(result.content().getFirst().getReferenceNumber()).isEqualTo("GBN-AG-26-ABC123");
-            assertThat(result.content().getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+            assertThat(result.content().getFirst().getReferenceNumber()).isEqualTo(
+                "GBN-AG-26-ABC123");
+            assertThat(result.content().getFirst().getStatus()).isEqualTo(
+                SUBMITTED);
         }
     }
 
@@ -526,7 +535,7 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
-                .status(NotificationStatus.DRAFT)
+                .status(DRAFT)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -539,7 +548,7 @@ class NotificationServiceTest {
                 "trace-001");
 
             // Then
-            assertThat(result.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
             verify(outboxService).appendEvent(notification, "trace-001");
@@ -552,7 +561,7 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
-                .status(NotificationStatus.DRAFT)
+                .status(DRAFT)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -576,7 +585,7 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
-                .status(NotificationStatus.DRAFT)
+                .status(DRAFT)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -618,7 +627,7 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
-                .status(NotificationStatus.DRAFT)
+                .status(DRAFT)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -743,7 +752,7 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
-                .status(NotificationStatus.DRAFT)
+                .status(DRAFT)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -767,7 +776,7 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .id("notif-id-002")
                 .referenceNumber(referenceNumber)
-                .status(NotificationStatus.SUBMITTED)
+                .status(SUBMITTED)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
