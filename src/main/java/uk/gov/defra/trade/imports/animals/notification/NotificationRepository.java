@@ -2,6 +2,8 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
@@ -14,7 +16,7 @@ public interface NotificationRepository extends MongoRepository<Notification, St
 
     List<NotificationReferenceOnly> findAllProjectedBy();
 
-    List<Notification> findAllByStatusInOrderByTransport_ArrivalDateDesc(List<NotificationStatus> statuses);
+    Page<Notification> findAllByOrderByTransport_ArrivalDateDesc(Pageable pageable, List<NotificationStatus> statuses);
 
     void deleteAllByReferenceNumberIn(List<String> referenceNumbers);
 

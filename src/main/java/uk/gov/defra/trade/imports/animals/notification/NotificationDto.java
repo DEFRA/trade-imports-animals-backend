@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import java.time.LocalDateTime;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -30,5 +31,11 @@ public class NotificationDto {
     private Transport transport;
 
     private Consignment consignment;
+
+    private NotificationStatus status;
+
+    private LocalDateTime created;
+
+    private LocalDateTime updated;
 
 }

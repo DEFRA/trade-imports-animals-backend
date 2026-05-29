@@ -23,6 +23,10 @@ import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
 import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
@@ -83,7 +87,7 @@ class NotificationServiceTest {
         LockingTaskExecutor lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         notificationService = new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            notificationMapper, referenceNumberGenerator, Duration.ZERO);
+            notificationMapper, referenceNumberGenerator, Duration.ZERO, 54);
     }
 
     @Nested
@@ -279,14 +283,15 @@ class NotificationServiceTest {
     class FindAll {
 
         @Test
-        void findAll_shouldReturnEmptyList() {
+        void findAll_shouldReturnEmptyPage() {
             // Given
-            when(notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
-                List.of(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED)))
-                .thenReturn(Collections.emptyList());
+            Page<Notification> emptyPage = new PageImpl<>(
+                Collections.emptyList(), PageRequest.of(0, 54), 0);
+            when(notificationRepository.findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class)))
+                .thenReturn(emptyPage);
 
             // When
-            List<Notification> result = notificationService.findAll();
+            NotificationPageResponse result = notificationService.findAll(0);
 
             // Then
             assertThat(result).isNotNull();
@@ -319,6 +324,35 @@ class NotificationServiceTest {
             assertThat(result).hasSize(2);
             assertThat(result).extracting(Notification::getStatus)
                 .containsExactlyInAnyOrder(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED);
+            assertThat(result.content()).isEmpty();
+            assertThat(result.page()).isZero();
+            assertThat(result.size()).isEqualTo(54);
+            assertThat(result.numberOfElements()).isZero();
+            assertThat(result.totalElements()).isZero();
+            assertThat(result.totalPages()).isZero();
+            verify(notificationRepository, times(1))
+                .findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class));
+        }
+
+        @Test
+        void findAll_shouldMapStatusToNotificationDto() {
+            // Given
+            Notification notification = Notification.builder()
+                .referenceNumber("GBN-AG-26-ABC123")
+                .origin(new Origin("GB", "true", "REF-1"))
+                .status(NotificationStatus.SUBMITTED)
+                .build();
+            Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54), 1);
+            when(notificationRepository.findAllByOrderByTransport_ArrivalDateDesc(any(Pageable.class)))
+                .thenReturn(page);
+
+            // When
+            NotificationPageResponse result = notificationService.findAll(0);
+
+            // Then
+            assertThat(result.content()).hasSize(1);
+            assertThat(result.content().getFirst().getReferenceNumber()).isEqualTo("GBN-AG-26-ABC123");
+            assertThat(result.content().getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         }
     }
 

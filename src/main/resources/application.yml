@@ -117,7 +117,7 @@ management:
         server:
           requests:
             active: true
-  
+
 # Admin secret for privileged endpoints
 admin:
   secret: ${TRADE_IMPORTS_ANIMALS_ADMIN_SECRET:local-trade-imports-animals-admin-secret}
@@ -129,6 +129,8 @@ springdoc:
 
 # Notification submission outbox lock configuration
 notification:
+  list:
+    page-size: 25
   submit:
     lock-at-least-for: 50ms
 
