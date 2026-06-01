@@ -295,7 +295,7 @@ class NotificationServiceTest {
                 .thenReturn(emptyPage);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(0);
+            NotificationPageResponse result = notificationService.findAll(1);
 
             // Then
             assertThat(result).isNotNull();
@@ -325,13 +325,13 @@ class NotificationServiceTest {
                 .thenReturn(page);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(0);
+            NotificationPageResponse result = notificationService.findAll(1);
 
             // Then — only DRAFT and SUBMITTED are returned
             assertThat(result.content()).hasSize(2);
             assertThat(result.content()).extracting(NotificationDto::getStatus)
                 .containsExactlyInAnyOrder(DRAFT, SUBMITTED);
-            assertThat(result.page()).isZero();
+            assertThat(result.page()).isEqualTo(1);
             assertThat(result.size()).isEqualTo(54);
             verify(notificationRepository, times(1))
                 .findAllByStatusInOrderByTransport_ArrivalDateDesc(any(Pageable.class),
@@ -354,7 +354,7 @@ class NotificationServiceTest {
                 .thenReturn(page);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(0);
+            NotificationPageResponse result = notificationService.findAll(1);
 
             // Then
             assertThat(result.content()).hasSize(1);
