@@ -16,6 +16,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Sort.Direction;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
@@ -47,6 +48,7 @@ public class NotificationService {
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final Duration lockAtLeastFor;
     private final int listPageSize;
+    private final int adminPageSize;
 
     public NotificationService(
         NotificationRepository notificationRepository,
@@ -57,7 +59,8 @@ public class NotificationService {
         NotificationMapper notificationMapper,
         ReferenceNumberGenerator referenceNumberGenerator,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
-        @Value("${notification.list.page-size}") int listPageSize) {
+        @Value("${notification.list.page-size}") int listPageSize,
+        @Value("${notification.admin.page-size}") int adminPageSize) {
         this.notificationRepository = notificationRepository;
         this.auditRepository = auditRepository;
         this.documentService = documentService;
@@ -67,6 +70,7 @@ public class NotificationService {
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.lockAtLeastFor = lockAtLeastFor;
         this.listPageSize = listPageSize;
+        this.adminPageSize = adminPageSize;
     }
 
     public Notification saveOriginOfImport(NotificationDto notificationDto) {
@@ -153,12 +157,13 @@ public class NotificationService {
         return notificationRepository.save(notification);
     }
 
-    public List<String> findAllReferenceNumbers() {
-        log.debug("Fetching all notification reference numbers");
-        return notificationRepository.findAllProjectedBy()
-            .stream()
-            .map(NotificationReferenceOnly::getReferenceNumber)
-            .toList();
+    public ReferenceNumberPageResponse findAllReferenceNumbers(int page) {
+        log.debug("Fetching notification reference numbers page {} (size {})", page, listPageSize);
+        Page<NotificationReferenceOnly> result = notificationRepository.findAllProjectedBy(
+            PageRequest.of(page, adminPageSize, Sort.by(Direction.DESC, "created")));
+        log.debug("Found {} reference numbers on page {} of {}",
+            result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
+        return ReferenceNumberPageResponse.from(result);
     }
 
     @Transactional(noRollbackFor = NotFoundException.class)

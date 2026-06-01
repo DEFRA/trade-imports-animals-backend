@@ -518,32 +518,58 @@ class NotificationControllerTest {
     class FindAllReferenceNumbers {
 
         @Test
-        void findAllReferenceNumbers_shouldReturnEmptyList() throws Exception {
+        void findAllReferenceNumbers_shouldReturnEmptyPage() throws Exception {
             // Given
-            when(notificationService.findAllReferenceNumbers()).thenReturn(Collections.emptyList());
+            when(notificationService.findAllReferenceNumbers(0)).thenReturn(
+                new ReferenceNumberPageResponse(Collections.emptyList(), 0, 25, 0, 0, 0));
 
             // When & Then
             mockMvc.perform(get("/notifications/reference-numbers")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$").isEmpty());
+                .andExpect(jsonPath("$.content").isArray())
+                .andExpect(jsonPath("$.content").isEmpty())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(25))
+                .andExpect(jsonPath("$.numberOfElements").value(0))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0));
         }
 
         @Test
-        void findAllReferenceNumbers_shouldReturnListOfReferenceNumbers() throws Exception {
+        void findAllReferenceNumbers_shouldReturnPageOfReferenceNumbers() throws Exception {
             // Given
-            List<String> referenceNumbers = List.of(REF_1, REF_2);
-            when(notificationService.findAllReferenceNumbers()).thenReturn(referenceNumbers);
+            when(notificationService.findAllReferenceNumbers(0)).thenReturn(
+                new ReferenceNumberPageResponse(List.of(REF_1, REF_2), 0, 25, 2, 2, 1));
 
             // When & Then
             mockMvc.perform(get("/notifications/reference-numbers")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$").isArray())
-                .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0]").value(REF_1))
-                .andExpect(jsonPath("$[1]").value(REF_2));
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.content[0]").value(REF_1))
+                .andExpect(jsonPath("$.content[1]").value(REF_2))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(25))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(1));
+        }
+
+        @Test
+        void findAllReferenceNumbers_shouldPassPageParam() throws Exception {
+            // Given
+            when(notificationService.findAllReferenceNumbers(2)).thenReturn(
+                new ReferenceNumberPageResponse(Collections.emptyList(), 2, 25, 0, 120, 5));
+
+            // When & Then
+            mockMvc.perform(get("/notifications/reference-numbers")
+                    .param("page", "2")
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.size").value(25))
+                .andExpect(jsonPath("$.totalElements").value(120))
+                .andExpect(jsonPath("$.totalPages").value(5));
         }
     }
 
