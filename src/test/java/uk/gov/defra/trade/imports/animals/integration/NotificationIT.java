@@ -122,8 +122,8 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notificationDto3).exchange();
 
         // When — page-size is 2 in integration-test profile, so page 0 has 2 items
-        NotificationPageResponse page0 = findAllNotificationsPage(0);
-        NotificationPageResponse page1 = findAllNotificationsPage(1);
+        NotificationPageResponse page0 = findAllNotificationsPage(1);
+        NotificationPageResponse page1 = findAllNotificationsPage(2);
 
         // Then
         assertThat(page0.totalElements()).isEqualTo(3);
@@ -141,7 +141,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(page.content()).isEmpty();
         assertThat(page.totalElements()).isZero();
         assertThat(page.totalPages()).isZero();
-        assertThat(page.page()).isZero();
+        assertThat(page.page()).isEqualTo(1);
     }
 
     @Test
@@ -167,8 +167,8 @@ class NotificationIT extends IntegrationBase {
             .expectStatus().isOk();
 
         // When — page-size is 2 in integration-test profile; all 3 fit across 2 pages
-        NotificationPageResponse page0 = findAllNotificationsPage(0);
-        NotificationPageResponse page1 = findAllNotificationsPage(1);
+        NotificationPageResponse page0 = findAllNotificationsPage(1);
+        NotificationPageResponse page1 = findAllNotificationsPage(2);
 
         // Then — arrival dates across pages are ordered descending
         assertThat(page0.content()).hasSize(2);
@@ -211,8 +211,8 @@ class NotificationIT extends IntegrationBase {
             .expectStatus().isOk();
 
         // When — page-size=2, so page 0 has dated items, page 1 has the null-date items
-        NotificationPageResponse page0 = findAllNotificationsPage(0);
-        NotificationPageResponse page1 = findAllNotificationsPage(1);
+        NotificationPageResponse page0 = findAllNotificationsPage(1);
+        NotificationPageResponse page1 = findAllNotificationsPage(2);
 
         // Then — dated first (desc), then those with no arrival date
         assertThat(page0.totalElements()).isEqualTo(4);
@@ -261,8 +261,8 @@ class NotificationIT extends IntegrationBase {
             .expectStatus().isOk();
 
         // When — page-size=2 in test profile
-        NotificationPageResponse page0 = findAllNotificationsPage(0);
-        NotificationPageResponse page1 = findAllNotificationsPage(1);
+        NotificationPageResponse page0 = findAllNotificationsPage(1);
+        NotificationPageResponse page1 = findAllNotificationsPage(2);
 
         // Then — no status filter; drafts and submitted both appear, ordered by arrival date desc
         assertThat(page0.totalElements()).isEqualTo(3);
@@ -318,7 +318,7 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         // When
-        List<NotificationDto> notifications = findAllNotificationsPage(0).content();
+        List<NotificationDto> notifications = findAllNotificationsPage(1).content();
 
         // Then — only DRAFT and SUBMITTED are returned; DELETED is excluded
         assertThat(notifications).hasSize(2);
@@ -360,8 +360,8 @@ class NotificationIT extends IntegrationBase {
             .expectStatus().isOk();
 
         // Then - verify all notifications were created with generated referenceNumbers
-        NotificationPageResponse pageResponse = findAllNotificationsPage(0);
-        NotificationPageResponse page1Response = findAllNotificationsPage(1);
+        NotificationPageResponse pageResponse = findAllNotificationsPage(1);
+        NotificationPageResponse page1Response = findAllNotificationsPage(2);
         List<NotificationDto> allNotifications = new java.util.ArrayList<>(pageResponse.content());
         allNotifications.addAll(page1Response.content());
         assertThat(allNotifications).hasSize(3);
@@ -974,7 +974,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     private NotificationPageResponse findAllNotificationsPage() {
-        return findAllNotificationsPage(0);
+        return findAllNotificationsPage(1);
     }
 
     private NotificationPageResponse findAllNotificationsPage(int page) {

@@ -255,8 +255,8 @@ class NotificationControllerTest {
         @Test
         void findAll_shouldReturnEmptyPage() throws Exception {
             // Given
-            when(notificationService.findAll(0)).thenReturn(
-                new NotificationPageResponse(Collections.emptyList(), 0, 25, 0, 0, 0));
+            when(notificationService.findAll(1)).thenReturn(
+                new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
             // When & Then
             mockMvc.perform(get("/notifications")
@@ -264,7 +264,7 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
                 .andExpect(jsonPath("$.content").isEmpty())
-                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.page").value(1))
                 .andExpect(jsonPath("$.size").value(25))
                 .andExpect(jsonPath("$.numberOfElements").value(0))
                 .andExpect(jsonPath("$.totalElements").value(0))
@@ -294,8 +294,8 @@ class NotificationControllerTest {
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
-            when(notificationService.findAll(0)).thenReturn(
-                new NotificationPageResponse(List.of(notification1, notification2), 0, 25, 2, 2,
+            when(notificationService.findAll(1)).thenReturn(
+                new NotificationPageResponse(List.of(notification1, notification2), 1, 25, 2, 2,
                     1));
 
             // When & Then
@@ -311,7 +311,7 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.content[1].status").value("SUBMITTED"))
                 .andExpect(jsonPath("$.content[1].origin.countryCode").value("FR"))
                 .andExpect(jsonPath("$.content[1].commodity.name").value("Live sheep"))
-                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.page").value(1))
                 .andExpect(jsonPath("$.size").value(25))
                 .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.totalPages").value(1));

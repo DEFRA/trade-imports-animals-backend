@@ -30,7 +30,7 @@ public record NotificationPageResponse(
                 .updated(notification.getUpdated())
                 .build())
             .toList(),
-        pageResult.getNumber(),
+        pageResult.getNumber() + 1,
         pageResult.getSize(),
         pageResult.getNumberOfElements(),
         pageResult.getTotalElements(),

@@ -85,7 +85,7 @@ public class NotificationController {
         content = @Content(schema = @Schema(implementation = NotificationPageResponse.class)))
     @Timed("controller.getAllNotifications.time")
     public NotificationPageResponse findAll(
-        @RequestParam(defaultValue = "0") @Min(0) int page) {
+        @RequestParam(defaultValue = "1") @Min(1) int page) {
         log.debug("GET /notifications?page={}", page);
         return notificationService.findAll(page);
     }
