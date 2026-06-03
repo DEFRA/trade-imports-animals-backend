@@ -73,7 +73,7 @@ public class NotificationCopyMapper {
 
     private List<CommodityComplement> mapComplements(List<CommodityComplement> source) {
         if (source == null) {
-            return null;
+            return List.of();
         }
         // totalNoOfAnimals, totalNoOfPackages, species intentionally omitted (AC3)
         return source.stream()

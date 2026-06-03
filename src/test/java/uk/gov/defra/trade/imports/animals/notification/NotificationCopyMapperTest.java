@@ -273,7 +273,7 @@ class NotificationCopyMapperTest {
             NotificationDto result = mapper.toCopyDto(source);
 
             // Then
-            assertThat(result.getCommodity().getCommodityComplement()).isNull();
+            assertThat(result.getCommodity().getCommodityComplement()).isNullOrEmpty();
         }
 
         @Test
