@@ -13,7 +13,9 @@ import lombok.NoArgsConstructor;
 public class NotificationDto {
     
     private String referenceNumber;
-    
+
+    private String sourceReferenceNumber;
+
     private Origin origin;
     
     private Commodity commodity;

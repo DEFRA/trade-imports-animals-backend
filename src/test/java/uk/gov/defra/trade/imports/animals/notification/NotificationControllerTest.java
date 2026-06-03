@@ -22,6 +22,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.spec
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
@@ -188,6 +189,30 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.referenceNumber").value(REF_3))
                 .andExpect(jsonPath("$.origin.countryCode").value("DE"))
                 .andExpect(jsonPath("$.origin.internalReference").value("UPDATE-REF"));
+        }
+
+        @Test
+        void post_shouldCopyNotificationAndReturnNewDraft_whenSourceReferenceNumberProvided() throws Exception {
+            // Given
+            NotificationDto copyRequest = NotificationDto.builder()
+                .sourceReferenceNumber(REF_1)
+                .build();
+
+            Notification newNotification = new Notification();
+            newNotification.setId("507f1f77bcf86cd799439099");
+            newNotification.setReferenceNumber(REF_2);
+            newNotification.setStatus(NotificationStatus.DRAFT);
+
+            when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
+                .thenReturn(newNotification);
+
+            // When & Then
+            mockMvc.perform(post("/notifications")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(copyRequest)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.referenceNumber").value(REF_2))
+                .andExpect(jsonPath("$.status").value("DRAFT"));
         }
     }
 
