@@ -22,11 +22,31 @@ public class NotificationCopyMapper {
             .commodity(mapCommodity(source.getCommodity()))
             .reasonForImport(source.getReasonForImport())
             .additionalDetails(mapAdditionalDetails(source.getAdditionalDetails()))
-            .consignor(source.getConsignor())
-            .destination(source.getDestination())
+            .consignor(mapConsignor(source.getConsignor()))
+            .destination(mapDestination(source.getDestination()))
             .cphNumber(source.getCphNumber())
             // transport intentionally omitted — portOfEntry, arrivalDate, transporter not copied (AC3)
             // consignment intentionally omitted — contact address not copied (AC3)
+            .build();
+    }
+
+    private Consignor mapConsignor(Consignor source) {
+        if (source == null) {
+            return null;
+        }
+        return Consignor.builder()
+            .name(source.getName())
+            .address(source.getAddress())
+            .build();
+    }
+
+    private Destination mapDestination(Destination source) {
+        if (source == null) {
+            return null;
+        }
+        return Destination.builder()
+            .name(source.getName())
+            .address(source.getAddress())
             .build();
     }
 
