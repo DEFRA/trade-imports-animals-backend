@@ -818,6 +818,7 @@ class NotificationServiceTest {
 
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
+                .status(NotificationStatus.DRAFT)
                 .origin(origin)
                 .commodity(commodity)
                 .reasonForImport("internalMarket")
@@ -866,6 +867,7 @@ class NotificationServiceTest {
                 List.of(species()));
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
+                .status(NotificationStatus.DRAFT)
                 .origin(new Origin("FR", "no", "DO-NOT-COPY"))
                 .commodity(Commodity.builder()
                     .name("Cattle")
