@@ -1110,6 +1110,8 @@ class NotificationIT extends IntegrationBase {
             .commodity(commodity)
             .reasonForImport("internalMarket")
             .additionalDetails(new AdditionalDetails("Breeding", "yes"))
+            .consignor(NotificationTestData.consignors().getFirst())
+            .destination(NotificationTestData.destinations().getFirst())
             .cphNumber("12/345/6789")
             .transport(Transport.builder()
                 .portOfEntry("GBDVR")
@@ -1151,6 +1153,8 @@ class NotificationIT extends IntegrationBase {
         assertThat(copy.getCommodity().getName()).isEqualTo("Live bovine animals");
         assertThat(copy.getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
         assertThat(copy.getCphNumber()).isEqualTo("12/345/6789");
+        assertThat(copy.getConsignor()).isEqualTo(NotificationTestData.consignors().getFirst());
+        assertThat(copy.getDestination()).isEqualTo(NotificationTestData.destinations().getFirst());
 
         // Excluded fields
         assertThat(copy.getOrigin().getInternalReference()).isNull();
@@ -1188,6 +1192,47 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
             .exchange()
             .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void copy_shouldCreateNewDraftFromSubmittedNotification() {
+        // Given — create a notification and submit it
+        String sourceRef = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("IE", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", sourceRef)
+            .exchange().expectStatus().isOk();
+
+        // When — copy the submitted notification
+        Notification copy = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult().getResponseBody();
+
+        // Then — copy is a new DRAFT with a different reference number
+        assertThat(copy).isNotNull();
+        assertThat(copy.getReferenceNumber()).isNotEqualTo(sourceRef);
+        assertThat(copy.getReferenceNumber()).matches(REF_FORMAT_REGEX);
+        assertThat(copy.getStatus()).isEqualTo(NotificationStatus.DRAFT);
+    }
+
+    @Test
+    void copy_shouldReturn404_whenSourceNotificationDoesNotExist() {
+        // When / Then
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", NONEXISTENT_REF)
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(404)
+            .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
     }
 
     private NotificationDto createNotificationDto(String countryCode, String commodity) {
