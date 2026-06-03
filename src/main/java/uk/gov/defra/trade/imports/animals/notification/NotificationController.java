@@ -104,13 +104,16 @@ public class NotificationController {
     }
 
     @GetMapping("/reference-numbers")
-    @Operation(summary = "List notification reference numbers", description = "Returns all notification reference numbers without loading full documents")
-    @ApiResponse(responseCode = "200", description = "Reference number list returned", content = @Content)
+    @Operation(summary = "List notification reference numbers",
+        description = "Returns a paginated list of notification reference numbers without loading full documents")
+    @ApiResponse(responseCode = "200", description = "Paginated reference numbers returned",
+        content = @Content(schema = @Schema(implementation = ReferenceNumberPageResponse.class)))
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
     @Timed("controller.getAllReferenceNumbers.time")
-    public List<String> findAllReferenceNumbers() {
-        log.debug("GET /notifications/reference-numbers - Fetching all reference numbers");
-        return notificationService.findAllReferenceNumbers();
+    public ReferenceNumberPageResponse findAllReferenceNumbers(
+        @RequestParam(defaultValue = "0") @Min(0) int page) {
+        log.debug("GET /notifications/reference-numbers?page={}", page);
+        return notificationService.findAllReferenceNumbers(page);
     }
 
     @GetMapping("/{referenceNumber}/outbox-events")

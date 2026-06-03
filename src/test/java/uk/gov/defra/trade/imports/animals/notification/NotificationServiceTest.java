@@ -44,6 +44,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Sort.Direction;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
@@ -90,7 +91,7 @@ class NotificationServiceTest {
         LockingTaskExecutor lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         notificationService = new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            notificationMapper, new NotificationCopyMapper(), referenceNumberGenerator, Duration.ZERO, 54);
+            notificationMapper, new NotificationCopyMapper(), referenceNumberGenerator, Duration.ZERO, 54, 50);
     }
 
     @Nested
@@ -369,32 +370,65 @@ class NotificationServiceTest {
     class FindAllReferenceNumbers {
 
         @Test
-        void findAllReferenceNumbers_shouldReturnEmptyList_whenNoNotificationsExist() {
+        void findAllReferenceNumbers_shouldReturnEmptyPage_whenNoNotificationsExist() {
             // Given
-            when(notificationRepository.findAllProjectedBy()).thenReturn(Collections.emptyList());
+            Page<NotificationReferenceOnly> emptyPage = new PageImpl<>(
+                Collections.emptyList(), PageRequest.of(0, 54), 0);
+            when(notificationRepository.findAllProjectedBy(any(Pageable.class)))
+                .thenReturn(emptyPage);
 
             // When
-            List<String> result = notificationService.findAllReferenceNumbers();
+            ReferenceNumberPageResponse result = notificationService.findAllReferenceNumbers(0);
 
             // Then
-            assertThat(result).isNotNull();
-            assertThat(result).isEmpty();
-            verify(notificationRepository, times(1)).findAllProjectedBy();
+            assertThat(result.content()).isEmpty();
+            assertThat(result.page()).isZero();
+            assertThat(result.size()).isEqualTo(54);
+            assertThat(result.numberOfElements()).isZero();
+            assertThat(result.totalElements()).isZero();
+            assertThat(result.totalPages()).isZero();
+            verify(notificationRepository, times(1)).findAllProjectedBy(any(Pageable.class));
         }
 
         @Test
-        void findAllReferenceNumbers_shouldReturnReferenceNumbers_whenNotificationsExist() {
+        void findAllReferenceNumbers_shouldReturnPagedReferenceNumbers_whenNotificationsExist() {
             // Given
             NotificationReferenceOnly ref1 = () -> "GBN-AG-26-ABC123";
             NotificationReferenceOnly ref2 = () -> "GBN-AG-26-XYZ456";
-            when(notificationRepository.findAllProjectedBy()).thenReturn(List.of(ref1, ref2));
+            Page<NotificationReferenceOnly> page = new PageImpl<>(
+                List.of(ref1, ref2), PageRequest.of(0, 54), 2);
+            when(notificationRepository.findAllProjectedBy(any(Pageable.class))).thenReturn(page);
 
             // When
-            List<String> result = notificationService.findAllReferenceNumbers();
+            ReferenceNumberPageResponse result = notificationService.findAllReferenceNumbers(0);
 
             // Then
-            assertThat(result).containsExactly("GBN-AG-26-ABC123", "GBN-AG-26-XYZ456");
-            verify(notificationRepository, times(1)).findAllProjectedBy();
+            assertThat(result.content()).containsExactly("GBN-AG-26-ABC123", "GBN-AG-26-XYZ456");
+            assertThat(result.totalElements()).isEqualTo(2);
+            assertThat(result.totalPages()).isEqualTo(1);
+            verify(notificationRepository, times(1)).findAllProjectedBy(any(Pageable.class));
+        }
+
+        @Test
+        void findAllReferenceNumbers_shouldPassPageRequestWithConfiguredPageSizeAndAscendingIdSort() {
+            // Given
+            Page<NotificationReferenceOnly> emptyPage = new PageImpl<>(
+                Collections.emptyList(), PageRequest.of(2, 54), 200);
+            when(notificationRepository.findAllProjectedBy(any(Pageable.class)))
+                .thenReturn(emptyPage);
+
+            // When
+            notificationService.findAllReferenceNumbers(2);
+
+            // Then
+            ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+            verify(notificationRepository).findAllProjectedBy(pageableCaptor.capture());
+            Pageable pageable = pageableCaptor.getValue();
+            assertThat(pageable.getPageNumber()).isEqualTo(2);
+            assertThat(pageable.getPageSize()).isEqualTo(50);
+            assertThat(pageable.getSort().getOrderFor("created")).isNotNull();
+            assertThat(pageable.getSort().getOrderFor("created").getDirection())
+                .isEqualTo(Direction.DESC);
         }
     }
 
