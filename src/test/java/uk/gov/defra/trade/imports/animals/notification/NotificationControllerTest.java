@@ -22,7 +22,6 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.spec
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
@@ -38,6 +37,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
@@ -209,6 +209,7 @@ class NotificationControllerTest {
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("507f1f77bcf86cd799439099"))
                 .andExpect(jsonPath("$.referenceNumber").value(REF_2))
                 .andExpect(jsonPath("$.status").value("DRAFT"));
         }
@@ -216,19 +217,21 @@ class NotificationControllerTest {
         @Test
         void copy_shouldReturn404_whenSourceNotFound() throws Exception {
             when(notificationService.copyNotification(REF_1))
-                .thenThrow(new uk.gov.defra.trade.imports.animals.exceptions.NotFoundException("not found"));
+                .thenThrow(new NotFoundException("not found"));
 
             mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("not found"));
         }
 
         @Test
         void copy_shouldReturn400_whenSourceIsNotCopyable() throws Exception {
             when(notificationService.copyNotification(REF_1))
-                .thenThrow(new uk.gov.defra.trade.imports.animals.exceptions.BadRequestException("not copyable"));
+                .thenThrow(new BadRequestException("not copyable"));
 
             mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("not copyable"));
         }
     }
 
