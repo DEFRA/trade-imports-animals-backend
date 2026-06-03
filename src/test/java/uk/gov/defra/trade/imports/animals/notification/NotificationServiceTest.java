@@ -743,6 +743,175 @@ class NotificationServiceTest {
     }
 
     @Nested
+    class CopyNotification {
+
+        @Test
+        void copyNotification_shouldCreateNewDraftWithNewReferenceNumber() {
+            // Given
+            String sourceRef = "GBN-AG-26-SRC001";
+            String newRef = "GBN-AG-26-NEW001";
+            Notification source = Notification.builder()
+                .referenceNumber(sourceRef)
+                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
+                .status(NotificationStatus.DRAFT)
+                .build();
+
+            Notification created = Notification.builder()
+                .referenceNumber(newRef)
+                .status(NotificationStatus.DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+            when(referenceNumberGenerator.generate()).thenReturn(newRef);
+            when(notificationRepository.save(any(Notification.class))).thenReturn(created);
+
+            // When
+            Notification result = notificationService.copyNotification(sourceRef);
+
+            // Then
+            assertThat(result.getReferenceNumber()).isEqualTo(newRef);
+            assertThat(result.getStatus()).isEqualTo(NotificationStatus.DRAFT);
+        }
+
+        @Test
+        void copyNotification_shouldRetainCopiedFields() {
+            // Given
+            String sourceRef = "GBN-AG-26-SRC002";
+            Origin origin = new Origin("DE", "yes", "INTERNAL-REF");
+            AdditionalDetails additionalDetails = new AdditionalDetails("Breeding", "yes");
+            CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
+                List.of(species()));
+            Commodity commodity = Commodity.builder()
+                .name("Live bovine animals")
+                .commodityComplement(List.of(complement))
+                .build();
+
+            Notification source = Notification.builder()
+                .referenceNumber(sourceRef)
+                .origin(origin)
+                .commodity(commodity)
+                .reasonForImport("internalMarket")
+                .additionalDetails(additionalDetails)
+                .consignor(consignors().getFirst())
+                .destination(destinations().getFirst())
+                .cphNumber("12/345/6789")
+                .transport(Transport.builder()
+                    .portOfEntry("GBDVR")
+                    .arrivalDate(LocalDate.of(2026, 5, 1))
+                    .transporter(transporters().getFirst())
+                    .build())
+                .consignment(consignments().getFirst())
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+            when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-CPY002");
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.copyNotification(sourceRef);
+
+            // Then — capture what was saved and assert retained fields
+            ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+            verify(notificationRepository).save(captor.capture());
+            Notification saved = captor.getValue();
+
+            // Retained
+            assertThat(saved.getOrigin().getCountryCode()).isEqualTo("DE");
+            assertThat(saved.getOrigin().getRequiresRegionCode()).isEqualTo("yes");
+            assertThat(saved.getReasonForImport()).isEqualTo("internalMarket");
+            assertThat(saved.getCommodity().getName()).isEqualTo("Live bovine animals");
+            assertThat(saved.getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
+            assertThat(saved.getConsignor()).isEqualTo(consignors().getFirst());
+            assertThat(saved.getDestination()).isEqualTo(destinations().getFirst());
+            assertThat(saved.getCphNumber()).isEqualTo("12/345/6789");
+        }
+
+        @Test
+        void copyNotification_shouldResetExcludedFields() {
+            // Given
+            String sourceRef = "GBN-AG-26-SRC003";
+            CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
+                List.of(species()));
+            Notification source = Notification.builder()
+                .referenceNumber(sourceRef)
+                .origin(new Origin("FR", "no", "DO-NOT-COPY"))
+                .commodity(Commodity.builder()
+                    .name("Cattle")
+                    .commodityComplement(List.of(complement))
+                    .build())
+                .additionalDetails(new AdditionalDetails("Slaughter", "no"))
+                .transport(Transport.builder()
+                    .portOfEntry("GBFXT")
+                    .arrivalDate(LocalDate.of(2026, 6, 1))
+                    .build())
+                .consignment(consignments().getFirst())
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+            when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-CPY003");
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.copyNotification(sourceRef);
+
+            // Then — excluded fields must be null on the saved copy
+            ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+            verify(notificationRepository).save(captor.capture());
+            Notification saved = captor.getValue();
+
+            assertThat(saved.getOrigin().getInternalReference()).isNull();
+            assertThat(saved.getAdditionalDetails().getUnweanedAnimals()).isNull();
+            assertThat(saved.getTransport()).isNull();
+            assertThat(saved.getConsignment()).isNull();
+            // Commodity complement strips per-animal data
+            CommodityComplement cc = saved.getCommodity().getCommodityComplement().getFirst();
+            assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
+            assertThat(cc.getTotalNoOfAnimals()).isNull();
+            assertThat(cc.getTotalNoOfPackages()).isNull();
+            assertThat(cc.getSpecies()).isNull();
+        }
+
+        @Test
+        void copyNotification_shouldThrowNotFoundException_whenSourceNotFound() {
+            // Given
+            String sourceRef = "GBN-AG-26-ABSENT";
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.empty());
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining(sourceRef);
+
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void copyNotification_shouldThrowBadRequestException_whenSourceIsDeleted() {
+            // Given
+            String sourceRef = "GBN-AG-26-DELETED";
+            Notification deleted = Notification.builder()
+                .referenceNumber(sourceRef)
+                .status(NotificationStatus.DELETED)
+                .build();
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(deleted));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("DELETED");
+
+            verify(notificationRepository, never()).save(any());
+        }
+    }
+
+    @Nested
     class SoftDeleteNotification {
 
         @Test

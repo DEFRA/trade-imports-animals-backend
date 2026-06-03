@@ -70,11 +70,72 @@ public class NotificationService {
     }
 
     public Notification saveOriginOfImport(NotificationDto notificationDto) {
+        if (!StringUtils.isBlank(notificationDto.getSourceReferenceNumber())) {
+            return copyNotification(notificationDto.getSourceReferenceNumber());
+        }
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
             return createNotification(notificationDto);
         } else {
             return updateNotification(notificationDto);
         }
+    }
+
+    @Transactional
+    public Notification copyNotification(String referenceNumber) {
+        Notification source = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+        if (source.getStatus() != NotificationStatus.DRAFT && source.getStatus() != NotificationStatus.SUBMITTED) {
+            throw new BadRequestException("Cannot copy notification with status: " + source.getStatus());
+        }
+        log.info("Copying notification {}", referenceNumber);
+        return createNotification(buildCopyDto(source));
+    }
+
+    private NotificationDto buildCopyDto(Notification source) {
+        Origin copiedOrigin = null;
+        if (source.getOrigin() != null) {
+            copiedOrigin = Origin.builder()
+                .countryCode(source.getOrigin().getCountryCode())
+                .requiresRegionCode(source.getOrigin().getRequiresRegionCode())
+                // internalReference intentionally omitted (AC3)
+                .build();
+        }
+
+        Commodity copiedCommodity = null;
+        if (source.getCommodity() != null) {
+            List<CommodityComplement> strippedComplements = null;
+            if (source.getCommodity().getCommodityComplement() != null) {
+                strippedComplements = source.getCommodity().getCommodityComplement().stream()
+                    .map(cc -> new CommodityComplement(cc.getTypeOfCommodity(), null, null, null))
+                    // totalNoOfAnimals, totalNoOfPackages, species intentionally omitted (AC3)
+                    .toList();
+            }
+            copiedCommodity = Commodity.builder()
+                .name(source.getCommodity().getName())
+                .commodityComplement(strippedComplements)
+                .build();
+        }
+
+        AdditionalDetails copiedAdditional = null;
+        if (source.getAdditionalDetails() != null) {
+            copiedAdditional = AdditionalDetails.builder()
+                .certifiedFor(source.getAdditionalDetails().getCertifiedFor())
+                // unweanedAnimals intentionally omitted (AC3)
+                .build();
+        }
+
+        return NotificationDto.builder()
+            .origin(copiedOrigin)
+            .commodity(copiedCommodity)
+            .reasonForImport(source.getReasonForImport())
+            .additionalDetails(copiedAdditional)
+            .consignor(source.getConsignor())
+            .destination(source.getDestination())
+            .cphNumber(source.getCphNumber())
+            // transport intentionally omitted — portOfEntry, arrivalDate, transporter not copied (AC3)
+            // consignment intentionally omitted — contact not copied (AC3)
+            .build();
     }
 
     public NotificationResponse findByRef(String referenceNumber) {
