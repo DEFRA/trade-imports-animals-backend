@@ -3,14 +3,14 @@ package uk.gov.defra.trade.imports.animals.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
+import java.util.stream.Stream;
 import org.hamcrest.Matchers;
-import org.springframework.core.ParameterizedTypeReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
-import uk.gov.defra.trade.imports.animals.notification.NotificationPageResponse;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
@@ -22,14 +22,16 @@ import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
+import uk.gov.defra.trade.imports.animals.notification.NotificationPageResponse;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
-import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.NotificationResponse;
+import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
+import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberPageResponse;
 import uk.gov.defra.trade.imports.animals.notification.Species;
-import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
@@ -818,17 +820,20 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void findAllReferenceNumbers_shouldReturnEmptyList_whenNoNotificationsExist() {
+    void findAllReferenceNumbers_shouldReturnEmptyPage_whenNoNotificationsExist() {
         // When
-        List<String> referenceNumbers = findAllReferenceNumbers();
+        ReferenceNumberPageResponse page = findAllReferenceNumbersPage();
 
         // Then
-        assertThat(referenceNumbers).isNotNull().isEmpty();
+        assertThat(page.content()).isEmpty();
+        assertThat(page.totalElements()).isZero();
+        assertThat(page.totalPages()).isZero();
+        assertThat(page.page()).isZero();
     }
 
     @Test
-    void findAllReferenceNumbers_shouldReturnOnlyReferenceNumbers() {
-        // Given — create two notifications
+    void findAllReferenceNumbers_shouldPageOnlyReferenceNumbersAcrossPages() {
+        // Given — create three notifications; page-size is 2 in integration profile
         String ref1 = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(createNotificationDto("GB", "Live cattle"))
@@ -843,12 +848,50 @@ class NotificationIT extends IntegrationBase {
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
-        // When
-        List<String> referenceNumbers = findAllReferenceNumbers();
+        String ref3 = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("FR", "Live pigs"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
 
-        // Then — only strings returned, no full document fields
-        assertThat(referenceNumbers).hasSize(2);
-        assertThat(referenceNumbers).containsExactlyInAnyOrder(ref1, ref2);
+        // When — fetch page 0 + page 1 + page 2
+        ReferenceNumberPageResponse page0 = findAllReferenceNumbersPage(0);
+        ReferenceNumberPageResponse page1 = findAllReferenceNumbersPage(1);
+        ReferenceNumberPageResponse page2 = findAllReferenceNumbersPage(2);
+
+        // Then
+        assertThat(page0.totalElements()).isEqualTo(3);
+        assertThat(page0.totalPages()).isEqualTo(3);
+        assertThat(page0.content()).hasSize(1);
+        assertThat(page1.content()).hasSize(1);
+        assertThat(page2.content()).hasSize(1);
+        assertThat(page0.content().size() + page1.content().size()
+            + page2.content().size()).isEqualTo(3);
+        
+        // All three refs returned across the three pages, no duplicates
+        List<String> allReferenceNumbers = Stream.of(page0, page1, page2)
+            .map(ReferenceNumberPageResponse::content)
+            .flatMap(Collection::stream)
+            .toList();
+        assertThat(allReferenceNumbers).containsExactlyInAnyOrder(ref1, ref2, ref3);
+    }
+
+    @Test
+    void findAllReferenceNumbers_shouldReturnEmptyContentForOutOfRangePage() {
+        // Given — one notification (page-size 2 ⇒ totalPages 1)
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk();
+
+        // When — request a page beyond the last
+        ReferenceNumberPageResponse page = findAllReferenceNumbersPage(5);
+
+        // Then — empty content, but totals still reflect the real data
+        assertThat(page.content()).isEmpty();
+        assertThat(page.totalElements()).isEqualTo(1);
+        assertThat(page.totalPages()).isEqualTo(1);
     }
 
     @Test
@@ -963,13 +1006,17 @@ class NotificationIT extends IntegrationBase {
             .isEmpty();
     }
 
-    private List<String> findAllReferenceNumbers() {
+    private ReferenceNumberPageResponse findAllReferenceNumbersPage() {
+        return findAllReferenceNumbersPage(0);
+    }
+
+    private ReferenceNumberPageResponse findAllReferenceNumbersPage(int page) {
         return webClient("NoAuth")
             .get()
-            .uri(NOTIFICATION_ENDPOINT + "/reference-numbers")
+            .uri(NOTIFICATION_ENDPOINT + "/reference-numbers?page=" + page)
             .exchange()
             .expectStatus().isOk()
-            .expectBody(new ParameterizedTypeReference<List<String>>() {})
+            .expectBody(ReferenceNumberPageResponse.class)
             .returnResult().getResponseBody();
     }
 

@@ -129,6 +129,8 @@ springdoc:
 
 # Notification submission outbox lock configuration
 notification:
+  admin:
+    page-size: 50
   list:
     page-size: 25
   submit:

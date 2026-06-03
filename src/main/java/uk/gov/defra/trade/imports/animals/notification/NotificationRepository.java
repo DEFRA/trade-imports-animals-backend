@@ -14,7 +14,7 @@ public interface NotificationRepository extends MongoRepository<Notification, St
 
     List<NotificationReferenceOnly> findAllByReferenceNumberIn(List<String> referenceNumbers);
 
-    List<NotificationReferenceOnly> findAllProjectedBy();
+    Page<NotificationReferenceOnly> findAllProjectedBy(Pageable pageable);
 
     Page<Notification> findAllByStatusInOrderByTransport_ArrivalDateDesc(Pageable pageable, List<NotificationStatus> statuses);
 

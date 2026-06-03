@@ -94,6 +94,8 @@ admin:
 
 # Disable ShedLock minimum hold time so rapid re-submissions in tests don't fail to acquire the lock
 notification:
+  admin:
+    page-size: 1
   list:
     page-size: 2
   submit:
