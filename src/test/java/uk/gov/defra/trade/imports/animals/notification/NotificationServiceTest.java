@@ -90,7 +90,7 @@ class NotificationServiceTest {
         LockingTaskExecutor lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         notificationService = new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            notificationMapper, referenceNumberGenerator, Duration.ZERO, 54);
+            notificationMapper, new NotificationCopyMapper(), referenceNumberGenerator, Duration.ZERO, 54);
     }
 
     @Nested

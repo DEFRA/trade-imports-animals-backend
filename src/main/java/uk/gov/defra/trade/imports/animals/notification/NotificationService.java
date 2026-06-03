@@ -44,6 +44,7 @@ public class NotificationService {
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
     private final NotificationMapper notificationMapper;
+    private final NotificationCopyMapper notificationCopyMapper;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final Duration lockAtLeastFor;
     private final int listPageSize;
@@ -55,6 +56,7 @@ public class NotificationService {
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
         NotificationMapper notificationMapper,
+        NotificationCopyMapper notificationCopyMapper,
         ReferenceNumberGenerator referenceNumberGenerator,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
         @Value("${notification.list.page-size}") int listPageSize) {
@@ -64,6 +66,7 @@ public class NotificationService {
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
         this.notificationMapper = notificationMapper;
+        this.notificationCopyMapper = notificationCopyMapper;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.lockAtLeastFor = lockAtLeastFor;
         this.listPageSize = listPageSize;
@@ -86,53 +89,7 @@ public class NotificationService {
             throw new BadRequestException("Cannot copy notification with status: " + source.getStatus());
         }
         log.info("Copying notification {}", referenceNumber);
-        return createNotification(buildCopyDto(source));
-    }
-
-    private NotificationDto buildCopyDto(Notification source) {
-        Origin copiedOrigin = null;
-        if (source.getOrigin() != null) {
-            copiedOrigin = Origin.builder()
-                .countryCode(source.getOrigin().getCountryCode())
-                .requiresRegionCode(source.getOrigin().getRequiresRegionCode())
-                // internalReference intentionally omitted (AC3)
-                .build();
-        }
-
-        Commodity copiedCommodity = null;
-        if (source.getCommodity() != null) {
-            List<CommodityComplement> strippedComplements = null;
-            if (source.getCommodity().getCommodityComplement() != null) {
-                strippedComplements = source.getCommodity().getCommodityComplement().stream()
-                    .map(cc -> new CommodityComplement(cc.getTypeOfCommodity(), null, null, null))
-                    // totalNoOfAnimals, totalNoOfPackages, species intentionally omitted (AC3)
-                    .toList();
-            }
-            copiedCommodity = Commodity.builder()
-                .name(source.getCommodity().getName())
-                .commodityComplement(strippedComplements)
-                .build();
-        }
-
-        AdditionalDetails copiedAdditional = null;
-        if (source.getAdditionalDetails() != null) {
-            copiedAdditional = AdditionalDetails.builder()
-                .certifiedFor(source.getAdditionalDetails().getCertifiedFor())
-                // unweanedAnimals intentionally omitted (AC3)
-                .build();
-        }
-
-        return NotificationDto.builder()
-            .origin(copiedOrigin)
-            .commodity(copiedCommodity)
-            .reasonForImport(source.getReasonForImport())
-            .additionalDetails(copiedAdditional)
-            .consignor(source.getConsignor())
-            .destination(source.getDestination())
-            .cphNumber(source.getCphNumber())
-            // transport intentionally omitted — portOfEntry, arrivalDate, transporter not copied (AC3)
-            // consignment intentionally omitted — contact not copied (AC3)
-            .build();
+        return createNotification(notificationCopyMapper.toCopyDto(source));
     }
 
     public NotificationResponse findByRef(String referenceNumber) {
