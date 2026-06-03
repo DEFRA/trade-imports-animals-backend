@@ -77,7 +77,7 @@ public class NotificationCopyMapper {
         }
         // totalNoOfAnimals, totalNoOfPackages, species intentionally omitted (AC3)
         return source.stream()
-            .map(cc -> new CommodityComplement(cc.getTypeOfCommodity(), null, null, null))
+            .map(cc -> CommodityComplement.builder().typeOfCommodity(cc.getTypeOfCommodity()).build())
             .toList();
     }
 
