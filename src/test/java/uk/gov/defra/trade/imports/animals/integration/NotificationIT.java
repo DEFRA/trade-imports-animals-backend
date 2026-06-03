@@ -1097,7 +1097,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void post_shouldCreateNewDraftFromSourceNotification_whenSourceReferenceNumberProvided() {
+    void copy_shouldCreateNewDraftFromSourceNotification() {
         // Given — create a source notification with a full set of fields
         CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
             List.of(NotificationTestData.species()));
@@ -1129,15 +1129,10 @@ class NotificationIT extends IntegrationBase {
         assertThat(source).isNotNull();
         String sourceRef = source.getReferenceNumber();
 
-        // When — copy the source notification
-        NotificationDto copyRequest = NotificationDto.builder()
-            .sourceReferenceNumber(sourceRef)
-            .build();
-
+        // When — copy via the dedicated copy endpoint
         Notification copy = webClient("NoAuth")
             .post()
-            .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(copyRequest)
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -1175,7 +1170,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void post_shouldReturn400_whenSourceNotificationIsDeleted() {
+    void copy_shouldReturn400_whenSourceNotificationIsDeleted() {
         // Given — create and soft-delete a source notification
         String sourceRef = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
@@ -1188,14 +1183,9 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", sourceRef)
             .exchange().expectStatus().isOk();
 
-        // When — attempt to copy the deleted notification
-        NotificationDto copyRequest = NotificationDto.builder()
-            .sourceReferenceNumber(sourceRef)
-            .build();
-
+        // When — attempt to copy via the dedicated copy endpoint
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(copyRequest)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
             .exchange()
             .expectStatus().isBadRequest();
     }

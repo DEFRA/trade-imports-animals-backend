@@ -70,9 +70,6 @@ public class NotificationService {
     }
 
     public Notification saveOriginOfImport(NotificationDto notificationDto) {
-        if (!StringUtils.isBlank(notificationDto.getSourceReferenceNumber())) {
-            return copyNotification(notificationDto.getSourceReferenceNumber());
-        }
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
             return createNotification(notificationDto);
         } else {
