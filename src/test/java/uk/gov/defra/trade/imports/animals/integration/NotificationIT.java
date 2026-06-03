@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Stream;
@@ -182,6 +183,45 @@ class NotificationIT extends IntegrationBase {
         assertThat(page1.content()).hasSize(1);
         assertThat(page1.content().getFirst().getTransport().getArrivalDate())
             .isEqualTo(LocalDate.of(2026, 1, 10));
+    }
+
+    @Test
+    void findAll_shouldReturnNotificationsOrderedByCreatedAtAscending_whenSortRequested() {
+        String refOlder = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithArrivalDate("GB", LocalDate.of(2026, 1, 10)))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult()
+            .getResponseBody()
+            .getReferenceNumber();
+
+        String refNewer = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, 6, 15)))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult()
+            .getResponseBody()
+            .getReferenceNumber();
+
+        Notification older = notificationRepository.findByReferenceNumber(refOlder).orElseThrow();
+        older.setCreated(LocalDateTime.of(2026, 1, 1, 10, 0));
+        notificationRepository.save(older);
+
+        Notification newer = notificationRepository.findByReferenceNumber(refNewer).orElseThrow();
+        newer.setCreated(LocalDateTime.of(2026, 1, 2, 10, 0));
+        notificationRepository.save(newer);
+
+        NotificationPageResponse page = findAllNotificationsPage(1, "createdAt,asc");
+
+        assertThat(page.content()).hasSize(2);
+        assertThat(page.content().getFirst().getReferenceNumber()).isEqualTo(refOlder);
+        assertThat(page.content().get(1).getReferenceNumber()).isEqualTo(refNewer);
     }
 
     @Test
@@ -1025,9 +1065,17 @@ class NotificationIT extends IntegrationBase {
     }
 
     private NotificationPageResponse findAllNotificationsPage(int page) {
+        return findAllNotificationsPage(page, null);
+    }
+
+    private NotificationPageResponse findAllNotificationsPage(int page, String sort) {
+        String uri = NOTIFICATION_ENDPOINT + "?page=" + page;
+        if (sort != null) {
+            uri += "&sort=" + sort;
+        }
         return webClient("NoAuth")
             .get()
-            .uri(NOTIFICATION_ENDPOINT + "?page=" + page)
+            .uri(uri)
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationPageResponse.class)

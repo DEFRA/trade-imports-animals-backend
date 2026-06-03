@@ -28,8 +28,9 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
@@ -291,18 +292,17 @@ class NotificationServiceTest {
             // Given
             Page<Notification> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
-            when(notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
-                any(Pageable.class), eq(List.of(DRAFT, SUBMITTED))))
+            when(notificationRepository.findAllByStatusIn(
+                eq(List.of(DRAFT, SUBMITTED)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1);
+            NotificationPageResponse result = notificationService.findAll(1, null);
 
             // Then
             assertThat(result).isNotNull();
             verify(notificationRepository, times(1))
-                .findAllByStatusInOrderByTransport_ArrivalDateDesc(any(Pageable.class),
-                    eq(List.of(DRAFT, SUBMITTED)));
+                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED)), any(Pageable.class));
         }
 
         @Test
@@ -320,13 +320,12 @@ class NotificationServiceTest {
             Page<Notification> page = new PageImpl<>(
                 List.of(draft, submitted), PageRequest.of(0, 54), 0);
 
-            when(notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
-                any(Pageable.class),
-                eq(List.of(DRAFT, SUBMITTED))))
+            when(notificationRepository.findAllByStatusIn(
+                eq(List.of(DRAFT, SUBMITTED)), any(Pageable.class)))
                 .thenReturn(page);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1);
+            NotificationPageResponse result = notificationService.findAll(1, null);
 
             // Then — only DRAFT and SUBMITTED are returned
             assertThat(result.content()).hasSize(2);
@@ -335,8 +334,7 @@ class NotificationServiceTest {
             assertThat(result.page()).isEqualTo(1);
             assertThat(result.size()).isEqualTo(54);
             verify(notificationRepository, times(1))
-                .findAllByStatusInOrderByTransport_ArrivalDateDesc(any(Pageable.class),
-                    eq(List.of(DRAFT, SUBMITTED)));
+                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED)), any(Pageable.class));
         }
 
         @Test
@@ -349,13 +347,12 @@ class NotificationServiceTest {
                 .build();
             Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54),
                 1);
-            when(notificationRepository.findAllByStatusInOrderByTransport_ArrivalDateDesc(
-                any(Pageable.class),
-                eq(List.of(DRAFT, SUBMITTED))))
+            when(notificationRepository.findAllByStatusIn(
+                eq(List.of(DRAFT, SUBMITTED)), any(Pageable.class)))
                 .thenReturn(page);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1);
+            NotificationPageResponse result = notificationService.findAll(1, null);
 
             // Then
             assertThat(result.content()).hasSize(1);
@@ -363,6 +360,23 @@ class NotificationServiceTest {
                 "GBN-AG-26-ABC123");
             assertThat(result.content().getFirst().getStatus()).isEqualTo(
                 SUBMITTED);
+        }
+
+        @Test
+        void findAll_shouldUseCreatedAtSort_whenRequested() {
+            Page<Notification> emptyPage = new PageImpl<>(
+                Collections.emptyList(), PageRequest.of(0, 54), 0);
+            when(notificationRepository.findAllByStatusIn(
+                eq(List.of(DRAFT, SUBMITTED)), any(Pageable.class)))
+                .thenReturn(emptyPage);
+
+            notificationService.findAll(1, "createdAt,asc");
+
+            ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+            verify(notificationRepository).findAllByStatusIn(
+                eq(List.of(DRAFT, SUBMITTED)), pageableCaptor.capture());
+            assertThat(pageableCaptor.getValue().getSort().getOrderFor("created").getDirection())
+                .isEqualTo(Sort.Direction.ASC);
         }
     }
 
