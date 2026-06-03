@@ -775,6 +775,35 @@ class NotificationServiceTest {
         }
 
         @Test
+        void copyNotification_shouldCreateNewDraftFromSubmittedSource() {
+            // Given
+            String sourceRef = "GBN-AG-26-SUB001";
+            String newRef = "GBN-AG-26-NEW002";
+            Notification source = Notification.builder()
+                .referenceNumber(sourceRef)
+                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
+                .status(NotificationStatus.SUBMITTED)
+                .build();
+
+            Notification created = Notification.builder()
+                .referenceNumber(newRef)
+                .status(NotificationStatus.DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+            when(referenceNumberGenerator.generate()).thenReturn(newRef);
+            when(notificationRepository.save(any(Notification.class))).thenReturn(created);
+
+            // When
+            Notification result = notificationService.copyNotification(sourceRef);
+
+            // Then
+            assertThat(result.getReferenceNumber()).isEqualTo(newRef);
+            assertThat(result.getStatus()).isEqualTo(NotificationStatus.DRAFT);
+        }
+
+        @Test
         void copyNotification_shouldRetainCopiedFields() {
             // Given
             String sourceRef = "GBN-AG-26-SRC002";
