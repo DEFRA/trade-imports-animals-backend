@@ -849,6 +849,7 @@ class NotificationServiceTest {
             Notification saved = captor.getValue();
 
             // Retained
+            assertThat(saved.getStatus()).isEqualTo(NotificationStatus.DRAFT);
             assertThat(saved.getOrigin().getCountryCode()).isEqualTo("DE");
             assertThat(saved.getOrigin().getRequiresRegionCode()).isEqualTo("yes");
             assertThat(saved.getReasonForImport()).isEqualTo("internalMarket");
