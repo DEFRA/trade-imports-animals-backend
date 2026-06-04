@@ -80,14 +80,16 @@ public class NotificationController {
 
     @GetMapping
     @Operation(summary = "List notifications",
-        description = "Returns a paginated list of import notifications ordered by arrival date descending")
+        description = "Returns a paginated list of import notifications. "
+            + "Optional sort: arrivalDate,desc (default), arrivalDate,asc, createdAt,desc, createdAt,asc")
     @ApiResponse(responseCode = "200", description = "Paginated notifications returned",
         content = @Content(schema = @Schema(implementation = NotificationPageResponse.class)))
     @Timed("controller.getAllNotifications.time")
     public NotificationPageResponse findAll(
-        @RequestParam(defaultValue = "1") @Min(1) int page) {
-        log.debug("GET /notifications?page={}", page);
-        return notificationService.findAll(page);
+        @RequestParam(defaultValue = "1") @Min(1) int page,
+        @RequestParam(required = false) String sort) {
+        log.debug("GET /notifications?page={}&sort={}", page, sort);
+        return notificationService.findAll(page, sort);
     }
 
     @GetMapping("/reference-numbers")

@@ -255,7 +255,7 @@ class NotificationControllerTest {
         @Test
         void findAll_shouldReturnEmptyPage() throws Exception {
             // Given
-            when(notificationService.findAll(1)).thenReturn(
+            when(notificationService.findAll(1, null)).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
             // When & Then
@@ -294,7 +294,7 @@ class NotificationControllerTest {
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
-            when(notificationService.findAll(1)).thenReturn(
+            when(notificationService.findAll(1, null)).thenReturn(
                 new NotificationPageResponse(List.of(notification1, notification2), 1, 25, 2, 2,
                     1));
 
@@ -320,7 +320,7 @@ class NotificationControllerTest {
         @Test
         void findAll_shouldPassPageParam() throws Exception {
             // Given
-            when(notificationService.findAll(2)).thenReturn(
+            when(notificationService.findAll(2, null)).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 2, 25, 0, 120, 3));
 
             // When & Then
@@ -332,6 +332,19 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.size").value(25))
                 .andExpect(jsonPath("$.totalElements").value(120))
                 .andExpect(jsonPath("$.totalPages").value(3));
+        }
+
+        @Test
+        void findAll_shouldPassSortParam() throws Exception {
+            when(notificationService.findAll(1, "createdAt,desc")).thenReturn(
+                new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
+
+            mockMvc.perform(get("/notifications")
+                    .param("sort", "createdAt,desc")
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+            verify(notificationService).findAll(1, "createdAt,desc");
         }
     }
 
