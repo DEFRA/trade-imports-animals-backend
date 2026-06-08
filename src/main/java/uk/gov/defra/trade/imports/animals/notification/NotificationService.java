@@ -45,6 +45,7 @@ public class NotificationService {
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
     private final NotificationMapper notificationMapper;
+    private final NotificationCopyMapper notificationCopyMapper;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final Duration lockAtLeastFor;
     private final int listPageSize;
@@ -57,6 +58,7 @@ public class NotificationService {
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
         NotificationMapper notificationMapper,
+        NotificationCopyMapper notificationCopyMapper,
         ReferenceNumberGenerator referenceNumberGenerator,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
         @Value("${notification.list.page-size}") int listPageSize,
@@ -67,6 +69,7 @@ public class NotificationService {
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
         this.notificationMapper = notificationMapper;
+        this.notificationCopyMapper = notificationCopyMapper;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.lockAtLeastFor = lockAtLeastFor;
         this.listPageSize = listPageSize;
@@ -79,6 +82,18 @@ public class NotificationService {
         } else {
             return updateNotification(notificationDto);
         }
+    }
+
+    @Transactional
+    public Notification copyNotification(String referenceNumber) {
+        Notification source = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+        if (source.getStatus() != NotificationStatus.DRAFT && source.getStatus() != NotificationStatus.SUBMITTED) {
+            throw new BadRequestException("Cannot copy notification with status: " + source.getStatus());
+        }
+        log.info("Copying notification {}", referenceNumber);
+        return createNotification(notificationCopyMapper.toCopyDto(source));
     }
 
     public NotificationResponse findByRef(String referenceNumber) {

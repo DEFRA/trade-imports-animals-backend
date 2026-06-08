@@ -1191,6 +1191,145 @@ class NotificationIT extends IntegrationBase {
         assertThat(events).isEmpty();
     }
 
+    @Test
+    void copy_shouldCreateNewDraftFromSourceNotification() {
+        // Given — create a source notification with a full set of fields
+        CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
+            List.of(NotificationTestData.species()));
+        Commodity commodity = Commodity.builder()
+            .name("Live bovine animals")
+            .commodityComplement(List.of(complement))
+            .build();
+        NotificationDto sourceDto = NotificationDto.builder()
+            .origin(new Origin("DE", "yes", "INTERNAL-DO-NOT-COPY"))
+            .commodity(commodity)
+            .reasonForImport("internalMarket")
+            .additionalDetails(new AdditionalDetails("Breeding", "yes"))
+            .consignor(NotificationTestData.consignors().getFirst())
+            .destination(NotificationTestData.destinations().getFirst())
+            .cphNumber("12/345/6789")
+            .transport(Transport.builder()
+                .portOfEntry("GBDVR")
+                .arrivalDate(LocalDate.of(2026, 6, 1))
+                .build())
+            .build();
+
+        Notification source = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(sourceDto)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult().getResponseBody();
+
+        assertThat(source).isNotNull();
+        String sourceRef = source.getReferenceNumber();
+
+        // When — copy via the dedicated copy endpoint
+        Notification copy = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult().getResponseBody();
+
+        // Then — new reference number, DRAFT status
+        assertThat(copy).isNotNull();
+        assertThat(copy.getReferenceNumber()).isNotEqualTo(sourceRef);
+        assertThat(copy.getReferenceNumber()).matches(REF_FORMAT_REGEX);
+        assertThat(copy.getStatus()).isEqualTo(NotificationStatus.DRAFT);
+
+        // Retained fields
+        assertThat(copy.getOrigin().getCountryCode()).isEqualTo("DE");
+        assertThat(copy.getOrigin().getRequiresRegionCode()).isEqualTo("yes");
+        assertThat(copy.getReasonForImport()).isEqualTo("internalMarket");
+        assertThat(copy.getCommodity().getName()).isEqualTo("Live bovine animals");
+        assertThat(copy.getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
+        assertThat(copy.getCphNumber()).isEqualTo("12/345/6789");
+        assertThat(copy.getConsignor()).isEqualTo(NotificationTestData.consignors().getFirst());
+        assertThat(copy.getDestination()).isEqualTo(NotificationTestData.destinations().getFirst());
+
+        // Excluded fields
+        assertThat(copy.getOrigin().getInternalReference()).isNull();
+        assertThat(copy.getAdditionalDetails().getUnweanedAnimals()).isNull();
+        assertThat(copy.getTransport()).isNull();
+        CommodityComplement cc = copy.getCommodity().getCommodityComplement().getFirst();
+        assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
+        assertThat(cc.getTotalNoOfAnimals()).isNull();
+        assertThat(cc.getTotalNoOfPackages()).isNull();
+        assertThat(cc.getSpecies()).isNull();
+
+        // Original unchanged
+        Notification original = notificationRepository.findByReferenceNumber(sourceRef).orElseThrow();
+        assertThat(original.getOrigin().getInternalReference()).isEqualTo("INTERNAL-DO-NOT-COPY");
+        assertThat(original.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("yes");
+        assertThat(original.getTransport().getPortOfEntry()).isEqualTo("GBDVR");
+    }
+
+    @Test
+    void copy_shouldReturn400_whenSourceNotificationIsDeleted() {
+        // Given — create and soft-delete a source notification
+        String sourceRef = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("DE", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", sourceRef)
+            .exchange().expectStatus().isOk();
+
+        // When — attempt to copy via the dedicated copy endpoint
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void copy_shouldCreateNewDraftFromSubmittedNotification() {
+        // Given — create a notification and submit it
+        String sourceRef = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("IE", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", sourceRef)
+            .exchange().expectStatus().isOk();
+
+        // When — copy the submitted notification
+        Notification copy = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult().getResponseBody();
+
+        // Then — copy is a new DRAFT with a different reference number
+        assertThat(copy).isNotNull();
+        assertThat(copy.getReferenceNumber()).isNotEqualTo(sourceRef);
+        assertThat(copy.getReferenceNumber()).matches(REF_FORMAT_REGEX);
+        assertThat(copy.getStatus()).isEqualTo(NotificationStatus.DRAFT);
+    }
+
+    @Test
+    void copy_shouldReturn404_whenSourceNotificationDoesNotExist() {
+        // When / Then
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", NONEXISTENT_REF)
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(404)
+            .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
+    }
+
     private NotificationDto createNotificationDto(String countryCode, String commodity) {
         Origin origin = new Origin();
         origin.setCountryCode(countryCode);
