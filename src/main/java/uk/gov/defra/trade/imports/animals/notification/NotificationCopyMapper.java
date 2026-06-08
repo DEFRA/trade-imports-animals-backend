@@ -4,12 +4,14 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 /**
- * Maps a source {@link Notification} to a {@link NotificationDto} applying the AC3
- * field-copy rules for the copy-as-new feature.
+ * Maps a source {@link Notification} to a {@link NotificationDto} for the copy-as-new
+ * feature: identification, commodity type, and destination details are retained, while
+ * logistical fields (transport, consignment contact), per-animal counts, and
+ * internal references are reset so the copy starts as a fresh incomplete draft.
  *
  * <p>MapStruct was not used because the {@link CommodityComplement} transformation —
  * retaining only {@code typeOfCommodity} while explicitly nulling all per-animal data —
- * requires a custom element-level mapping method. Encoding the AC3 retain/reset rules
+ * requires a custom element-level mapping method. Encoding the retain/reset rules
  * in plain Java keeps them co-located, explicit, and directly auditable against the
  * acceptance criteria without MapStruct-generated indirection.
  */
@@ -25,8 +27,8 @@ public class NotificationCopyMapper {
             .consignor(mapConsignor(source.getConsignor()))
             .destination(mapDestination(source.getDestination()))
             .cphNumber(source.getCphNumber())
-            // transport intentionally omitted — portOfEntry, arrivalDate, transporter not copied (AC3)
-            // consignment intentionally omitted — contact address not copied (AC3)
+            // transport intentionally omitted — logistical fields (portOfEntry, arrivalDate, transporter) are reset on copy
+            // consignment intentionally omitted — contact address is reset on copy
             .build();
     }
 
@@ -57,7 +59,7 @@ public class NotificationCopyMapper {
         return Origin.builder()
             .countryCode(source.getCountryCode())
             .requiresRegionCode(source.getRequiresRegionCode())
-            // internalReference intentionally omitted (AC3)
+            // internalReference intentionally omitted — per-consignment reference is reset on copy
             .build();
     }
 
@@ -75,7 +77,7 @@ public class NotificationCopyMapper {
         if (source == null) {
             return List.of();
         }
-        // totalNoOfAnimals, totalNoOfPackages, species intentionally omitted (AC3)
+        // totalNoOfAnimals, totalNoOfPackages, species intentionally omitted — per-animal counts are reset on copy; only typeOfCommodity is retained
         return source.stream()
             .map(cc -> CommodityComplement.builder().typeOfCommodity(cc.getTypeOfCommodity()).build())
             .toList();
@@ -87,7 +89,7 @@ public class NotificationCopyMapper {
         }
         return AdditionalDetails.builder()
             .certifiedFor(source.getCertifiedFor())
-            // unweanedAnimals intentionally omitted (AC3)
+            // unweanedAnimals intentionally omitted — animal-specific detail is reset on copy
             .build();
     }
 }
