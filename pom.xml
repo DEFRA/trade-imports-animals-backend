@@ -230,17 +230,9 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.testcontainers</groupId>
-      <artifactId>testcontainers-localstack</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <!-- Override the 2.11.0 version pulled in transitively by mockserver test deps —
-           Testcontainers' LocalStackContainer references org.apache.commons.io.file.attribute.FileTimes,
-           which was added in commons-io 2.12.0. -->
-      <groupId>commons-io</groupId>
-      <artifactId>commons-io</artifactId>
-      <version>2.16.1</version>
+      <groupId>io.floci</groupId>
+      <artifactId>testcontainers-floci</artifactId>
+      <version>2.9.0</version>
       <scope>test</scope>
     </dependency>
     <dependency>
