@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Stream;
@@ -79,7 +80,7 @@ class NotificationIT extends IntegrationBase {
             .build();
         Transport transport = Transport.builder()
             .portOfEntry("GBFXT")
-            .arrivalDate(LocalDate.of(2026, 4, 22))
+            .arrivalDate(LocalDate.of(2026, Month.APRIL, 22))
             .build();
         NotificationDto notificationDto = NotificationDto.builder()
             .origin(new Origin("GB", "true", "REF-001"))
@@ -153,19 +154,19 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("GB", LocalDate.of(2026, 1, 10)))
+            .bodyValue(notificationDtoWithArrivalDate("GB", LocalDate.of(2026, Month.JANUARY, 10)))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, 6, 15)))
+            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15)))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, 3, 1)))
+            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, Month.MARCH, 1)))
             .exchange()
             .expectStatus().isOk();
 
@@ -178,11 +179,11 @@ class NotificationIT extends IntegrationBase {
         assertThat(page0.content())
             .extracting(n -> n.getTransport().getArrivalDate())
             .containsExactly(
-                LocalDate.of(2026, 6, 15),
-                LocalDate.of(2026, 3, 1));
+                LocalDate.of(2026, Month.JUNE, 15),
+                LocalDate.of(2026, Month.MARCH, 1));
         assertThat(page1.content()).hasSize(1);
         assertThat(page1.content().getFirst().getTransport().getArrivalDate())
-            .isEqualTo(LocalDate.of(2026, 1, 10));
+            .isEqualTo(LocalDate.of(2026, Month.JANUARY, 10));
     }
 
     @Test
@@ -190,7 +191,7 @@ class NotificationIT extends IntegrationBase {
         String refOlder = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("GB", LocalDate.of(2026, 1, 10)))
+            .bodyValue(notificationDtoWithArrivalDate("GB", LocalDate.of(2026, Month.JANUARY, 10)))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -201,7 +202,7 @@ class NotificationIT extends IntegrationBase {
         String refNewer = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, 6, 15)))
+            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15)))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -210,11 +211,11 @@ class NotificationIT extends IntegrationBase {
             .getReferenceNumber();
 
         Notification older = notificationRepository.findByReferenceNumber(refOlder).orElseThrow();
-        older.setCreated(LocalDateTime.of(2026, 1, 1, 10, 0));
+        older.setCreated(LocalDateTime.of(2026, Month.JANUARY, 1, 10, 0));
         notificationRepository.save(older);
 
         Notification newer = notificationRepository.findByReferenceNumber(refNewer).orElseThrow();
-        newer.setCreated(LocalDateTime.of(2026, 1, 2, 10, 0));
+        newer.setCreated(LocalDateTime.of(2026, Month.JANUARY, 2, 10, 0));
         notificationRepository.save(newer);
 
         NotificationPageResponse page = findAllNotificationsPage(1, "createdAt,asc");
@@ -225,18 +226,18 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void findAll_notifications_without_arrivalDate_list_afterThoseWithDates() {
-        // Given — dated notifications and drafts without transport.arrivalDate
+    void findAll_notifications_with_null_arrivalDate_list_beforeThoseWithValid_ArrivalDates_whenSortedAscending() {
+        // Given — mix of dated and null/missing transport.arrivalDate notifications
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, 6, 15)))
+            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15)))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, 1, 10)))
+            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, Month.JANUARY, 10)))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
@@ -252,16 +253,60 @@ class NotificationIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk();
 
-        // When — page-size=2, so page 0 has dated items, page 1 has the null-date items
-        NotificationPageResponse page0 = findAllNotificationsPage(1);
-        NotificationPageResponse page1 = findAllNotificationsPage(2);
+        // When — page-size=2; ascending sort must place nulls first (NULLS FIRST)
+        NotificationPageResponse page0 = findAllNotificationsPage(1, "arrivalDate,asc");
+        NotificationPageResponse page1 = findAllNotificationsPage(2, "arrivalDate,asc");
 
-        // Then — dated first (desc), then those with no arrival date
+        // Then — null arrival dates first, then dated items in ascending order
+        assertThat(page0.totalElements()).isEqualTo(4);
+        assertThat(page0.content()).hasSize(2);
+        assertThat(page0.content())
+            .extracting(this::extractArrivalDate)
+            .containsOnlyNulls();
+        assertThat(page1.content()).hasSize(2);
+        assertThat(page1.content())
+            .extracting(n -> n.getTransport().getArrivalDate())
+            .containsExactly(LocalDate.of(2026, Month.JANUARY, 10), LocalDate.of(2026, Month.JUNE, 15));
+    }
+
+    @Test
+    void findAll_notifications_with_null_arrivalDate_list_afterThoseWithValid_ArrivalDates_whenSortedDescending() {
+        // Given — mix of dated and null/missing transport.arrivalDate notifications
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15)))
+            .exchange()
+            .expectStatus().isOk();
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, Month.JANUARY, 10)))
+            .exchange()
+            .expectStatus().isOk();
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange()
+            .expectStatus().isOk();
+        webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDtoWithTransportButNoArrivalDate("DE"))
+            .exchange()
+            .expectStatus().isOk();
+
+        // When — page-size=2; descending sort must place nulls last (NULLS LAST)
+        NotificationPageResponse page0 = findAllNotificationsPage(1, "arrivalDate,desc");
+        NotificationPageResponse page1 = findAllNotificationsPage(2, "arrivalDate,desc");
+
+        // Then — dated items first in descending order, then null arrival dates
         assertThat(page0.totalElements()).isEqualTo(4);
         assertThat(page0.content()).hasSize(2);
         assertThat(page0.content())
             .extracting(n -> n.getTransport().getArrivalDate())
-            .containsExactly(LocalDate.of(2026, 6, 15), LocalDate.of(2026, 1, 10));
+            .containsExactly(LocalDate.of(2026, Month.JUNE, 15), LocalDate.of(2026, Month.JANUARY, 10));
         assertThat(page1.content()).hasSize(2);
         assertThat(page1.content())
             .extracting(this::extractArrivalDate)
@@ -281,7 +326,7 @@ class NotificationIT extends IntegrationBase {
         String submittedRef = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, 6, 15)))
+            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15)))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -292,7 +337,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, 3, 1)))
+            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, Month.MARCH, 1)))
             .exchange()
             .expectStatus().isOk();
 
@@ -321,9 +366,9 @@ class NotificationIT extends IntegrationBase {
         assertThat(all.getFirst().getReferenceNumber()).isEqualTo(submittedRef);
         assertThat(all.getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(all.getFirst().getTransport().getArrivalDate())
-            .isEqualTo(LocalDate.of(2026, 6, 15));
+            .isEqualTo(LocalDate.of(2026, Month.JUNE, 15));
         assertThat(all.get(1).getTransport().getArrivalDate())
-            .isEqualTo(LocalDate.of(2026, 3, 1));
+            .isEqualTo(LocalDate.of(2026, Month.MARCH, 1));
         assertThat(extractArrivalDate(all.get(2))).isNull();
     }
 
@@ -429,7 +474,7 @@ class NotificationIT extends IntegrationBase {
             .reasonForImport("TRANSIT")
             .additionalDetails(new AdditionalDetails("OTHER", "false"))
             .cphNumber("11/111/1111")
-            .transport(Transport.builder().portOfEntry("GBBEL").arrivalDate(LocalDate.of(2026, 1, 1)).build())
+            .transport(Transport.builder().portOfEntry("GBBEL").arrivalDate(LocalDate.of(2026, Month.JANUARY, 1)).build())
             .build();
 
         String referenceNumber = webClient("NoAuth")
@@ -451,7 +496,7 @@ class NotificationIT extends IntegrationBase {
             .reasonForImport("PERMANENT")
             .additionalDetails(new AdditionalDetails("HUMAN_CONSUMPTION", "true"))
             .cphNumber("22/123/4567")
-            .transport(Transport.builder().portOfEntry("GBFXT").arrivalDate(LocalDate.of(2026, 4, 22)).build())
+            .transport(Transport.builder().portOfEntry("GBFXT").arrivalDate(LocalDate.of(2026, Month.APRIL, 22)).build())
             .build();
 
         Notification updated = webClient("NoAuth")
@@ -1128,7 +1173,7 @@ class NotificationIT extends IntegrationBase {
 
         assertThat(notification.getTransport())
             .extracting(Transport::getPortOfEntry, Transport::getArrivalDate)
-            .containsExactly("GBFXT", LocalDate.of(2026, 4, 22));
+            .containsExactly("GBFXT", LocalDate.of(2026, Month.APRIL, 22));
     }
 
     @Test
@@ -1210,7 +1255,7 @@ class NotificationIT extends IntegrationBase {
             .cphNumber("12/345/6789")
             .transport(Transport.builder()
                 .portOfEntry("GBDVR")
-                .arrivalDate(LocalDate.of(2026, 6, 1))
+                .arrivalDate(LocalDate.of(2026, Month.JUNE, 1))
                 .build())
             .build();
 
