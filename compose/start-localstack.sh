@@ -1,10 +1,4 @@
 #!/bin/bash
-# Provisions the LocalStack AWS resources this service needs: two S3 buckets
-# (quarantine and document storage), four SQS queues (ClamAV results, download
-# requests, mock ClamAV, and a FIFO scan-results callback queue), and an S3
-# event notification so files uploaded to the quarantine bucket are forwarded
-# to the mock-clamav queue.
-#
 # Canonical copy — the workspace stack (DEFRA/trade-imports-animals-workspace,
 # docker/stack) stages and runs this in its localstack-init container.
 # Endpoint-driven so it works both from a sidecar container (LOCALSTACK_URL

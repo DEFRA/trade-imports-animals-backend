@@ -24,6 +24,14 @@ workspace stack in
 ./scripts/stack/stop-stack.sh       # tear down and wipe volumes
 ```
 
+To run only the infrastructure this service needs rather than the full stack,
+limit it to the `database` and `infrastructure` profiles (MongoDB, Localstack,
+Redis):
+
+```bash
+./scripts/stack/run-stack.sh --profile database --profile infrastructure
+```
+
 After editing Java source in `-d` mode, pick the change up with
 `./scripts/stack/bounce-backend.sh`.
 
@@ -38,14 +46,8 @@ sparse-fetched from GitHub in CI).
 
 ### MongoDB
 
-#### MongoDB via Docker
-
-Run the workspace stack's infrastructure tiers (MongoDB, Localstack, Redis):
-
-```bash
-# from the workspace root
-./scripts/stack/run-stack.sh --profile database --profile infrastructure
-```
+The workspace stack provides MongoDB via the `database` profile (see
+[Running the local stack](#running-the-local-stack) above).
 
 #### MongoDB locally
 
