@@ -16,6 +16,8 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.S3Configuration;
+import software.amazon.awssdk.services.sns.SnsClient;
+import software.amazon.awssdk.services.sns.SnsClientBuilder;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.model.GetWebIdentityTokenRequest;
 import software.amazon.awssdk.services.sts.model.GetWebIdentityTokenResponse;
@@ -68,6 +70,19 @@ public class AwsConfig {
                 .retryStrategy(RetryMode.ADAPTIVE_V2)
                 .apiCallTimeout(Duration.ofSeconds(30))
                 .apiCallAttemptTimeout(Duration.ofSeconds(10)));
+        applyS3EndpointOverride(builder);
+        return builder.build();
+    }
+
+    @Bean
+    public SnsClient snsClient() {
+        SnsClientBuilder builder = SnsClient.builder()
+            .region(Region.of(region))
+            .credentialsProvider(resolveCredentialsProvider())
+            .overrideConfiguration(c -> c
+                .retryStrategy(RetryMode.ADAPTIVE_V2)
+                .apiCallTimeout(Duration.ofSeconds(30))
+                .apiCallAttemptTimeout(Duration.ofSeconds(10)));
         applyEndpointOverride(builder);
         return builder.build();
     }
@@ -102,7 +117,7 @@ public class AwsConfig {
         return DefaultCredentialsProvider.builder().build();
     }
 
-    private void applyEndpointOverride(S3ClientBuilder builder) {
+    private void applyS3EndpointOverride(S3ClientBuilder builder) {
         if (!hasEndpointOverride()) {
             return;
         }
@@ -111,5 +126,13 @@ public class AwsConfig {
             .serviceConfiguration(S3Configuration.builder()
                 .pathStyleAccessEnabled(true)
                 .build());
+    }
+
+    private void applyEndpointOverride(SnsClientBuilder builder) {
+        if (!hasEndpointOverride()) {
+            return;
+        }
+        log.info("Using SNS endpoint override: {}", appAwsConfig.endpointOverride());
+        builder.endpointOverride(URI.create(appAwsConfig.endpointOverride()));
     }
 }
