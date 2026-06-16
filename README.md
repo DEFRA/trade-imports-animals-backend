@@ -9,50 +9,45 @@ Core delivery Java Spring Boot backend template.
 * [Dependabot](#dependabot)
 
 
-### Docker Compose
+### Running the local stack
 
-A Docker Compose template is in [compose.yml](compose.yml).
-
-A local environment with:
-
-- Localstack for AWS services (S3, SQS)
-- Redis
-- MongoDB
-- `cdp-uploader` — virus-scanning upload service used by accompanying-documents
-- This service.
+The full local environment (MongoDB, Localstack, Redis, `cdp-uploader`, the
+stubs, and every trade-imports-animals service including this one) is the
+workspace stack in
+[DEFRA/trade-imports-animals-workspace](https://github.com/DEFRA/trade-imports-animals-workspace):
 
 ```bash
-docker compose --profile services up --build -d
+# from the workspace root
+./scripts/stack/run-stack.sh        # full stack from published images
+./scripts/stack/run-stack.sh -d     # built from local source under repos/
+./scripts/stack/run-stack.sh -e backend   # everything except this service (run it from your IDE)
+./scripts/stack/stop-stack.sh       # tear down and wipe volumes
 ```
 
-A more extensive setup is available in [github.com/DEFRA/cdp-local-environment](https://github.com/DEFRA/cdp-local-environment)
+To run only the infrastructure this service needs rather than the full stack,
+limit it to the `database` and `infrastructure` profiles (MongoDB, Localstack,
+Redis):
 
-#### Required environment variables
-
-The compose file deliberately has no defaults for the following variables —
-they must be set in every environment (e.g. via a `.env` file or shell export)
-or `docker compose` will surface a missing-var warning and the service will
-fail fast at startup:
-
-- `TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL` — externally reachable base URL for this service
-  (typical local value: `http://host.docker.internal:8085`). Used to construct the cdp-uploader
-  scan-result callback URL.
-
-Example `.env`:
-
+```bash
+./scripts/stack/run-stack.sh --profile database --profile infrastructure
 ```
-TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL=http://host.docker.internal:8085
-```
+
+After editing Java source in `-d` mode, pick the change up with
+`./scripts/stack/bounce-backend.sh`.
+
+#### Localstack init script
+
+This repo owns the Localstack provisioning for the stack —
+[compose/start-localstack.sh](compose/start-localstack.sh) creates the S3
+buckets, SQS queues, and the quarantine-bucket S3 event notification this
+service needs. It is the single canonical copy: the workspace stack stages and
+runs it in its `localstack-init` container (from `repos/` when present,
+sparse-fetched from GitHub in CI).
 
 ### MongoDB
 
-#### MongoDB via Docker
-
-Run infrastructure services (MongoDB, Localstack, Redis):
-
-```bash
-docker compose --profile infra up -d
-```
+The workspace stack provides MongoDB via the `database` profile (see
+[Running the local stack](#running-the-local-stack) above).
 
 #### MongoDB locally
 
