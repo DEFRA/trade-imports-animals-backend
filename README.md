@@ -11,7 +11,7 @@ Core delivery Java Spring Boot backend template.
 
 ### Running the local stack
 
-The full local environment (MongoDB, Localstack, Redis, `cdp-uploader`, the
+The full local environment (MongoDB, Floci, Redis, `cdp-uploader`, the
 stubs, and every trade-imports-animals service including this one) is the
 workspace stack in
 [DEFRA/trade-imports-animals-workspace](https://github.com/DEFRA/trade-imports-animals-workspace):
@@ -25,7 +25,7 @@ workspace stack in
 ```
 
 To run only the infrastructure this service needs rather than the full stack,
-limit it to the `database` and `infrastructure` profiles (MongoDB, Localstack,
+limit it to the `database` and `infrastructure` profiles (MongoDB, Floci,
 Redis):
 
 ```bash
@@ -35,13 +35,13 @@ Redis):
 After editing Java source in `-d` mode, pick the change up with
 `./scripts/stack/bounce-backend.sh`.
 
-#### Localstack init script
+#### Floci init script
 
-This repo owns the Localstack provisioning for the stack —
-[compose/start-localstack.sh](compose/start-localstack.sh) creates the S3
+This repo owns the Floci provisioning for the stack —
+[compose/start-floci.sh](compose/start-floci.sh) creates the S3
 buckets, SQS queues, and the quarantine-bucket S3 event notification this
 service needs. It is the single canonical copy: the workspace stack stages and
-runs it in its `localstack-init` container (from `repos/` when present,
+runs it in its `floci-init` container (from `repos/` when present,
 sparse-fetched from GitHub in CI).
 
 ### MongoDB
