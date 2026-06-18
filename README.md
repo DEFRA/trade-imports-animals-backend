@@ -2,6 +2,7 @@
 
 Core delivery Java Spring Boot backend template.
 
+* [Running the local stack](#running-the-local-stack)
 * [MongoDB](#mongodb)
 * [Inspect MongoDB](#inspect-mongodb)
 * [Testing](#testing)
