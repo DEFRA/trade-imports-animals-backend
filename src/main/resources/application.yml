@@ -136,6 +136,17 @@ notification:
   submit:
     lock-at-least-for: 50ms
 
+# Transactional outbox SNS relay (ADR-EUDP-001)
+outbox:
+  poller:
+    interval-ms: 2000
+    batch-size: 10
+    lock-at-least-for: 1s
+    lock-at-most-for: 30s
+    enabled: true
+  sns:
+    topic-arn: ${OUTBOX_SNS_TOPIC_ARN:arn:aws:sns:eu-west-2:000000000000:test-outbox}
+
 # Application info (exposed via /info endpoint)
 info:
   app:

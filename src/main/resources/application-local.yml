@@ -42,3 +42,7 @@ app:
     access-key-id: test
     secret-access-key: test
   base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:http://host.docker.internal:8085}
+
+outbox:
+  sns:
+    topic-arn: ${OUTBOX_SNS_TOPIC_ARN:arn:aws:sns:eu-west-2:000000000000:trade-imports-animals-outbox}

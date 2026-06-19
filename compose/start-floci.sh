@@ -32,3 +32,6 @@ MOCK_CLAMAV_ARN="arn:aws:sqs:${AWS_REGION}:000000000000:mock-clamav"
 aws s3api put-bucket-notification-configuration \
   --bucket cdp-uploader-quarantine \
   --notification-configuration "{\"QueueConfigurations\":[{\"Id\":\"mock-virus-scan\",\"QueueArn\":\"${MOCK_CLAMAV_ARN}\",\"Events\":[\"s3:ObjectCreated:*\"]}]}"
+
+# SNS topic for outbox event relay (|| true makes creation idempotent on restart)
+aws sns create-topic --name trade-imports-animals-outbox || true

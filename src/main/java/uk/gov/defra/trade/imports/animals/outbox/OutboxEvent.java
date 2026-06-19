@@ -15,6 +15,9 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @CompoundIndex(name = "aggregate_version_uq",
     def = "{'aggregateId': 1, 'aggregateVersion': 1}",
     unique = true)
+@CompoundIndex(name = "unpublished_poll",
+    def = "{'publishedAt': 1, 'aggregateId': 1, 'aggregateVersion': 1}",
+    partialFilter = "{'publishedAt': null}")
 @Data
 @Builder
 @NoArgsConstructor
@@ -34,4 +37,7 @@ public class OutboxEvent {
     private Instant timestamp;
     private Map<String, Object> data;
     private OutboxEventMetadata metadata;
+
+    /** Set when the event has been successfully published to SNS. */
+    private Instant publishedAt;
 }
