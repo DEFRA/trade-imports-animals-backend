@@ -1,5 +1,7 @@
 package uk.gov.defra.trade.imports.animals.integration.document;
 
+import io.floci.testcontainers.FlociContainer;
+import java.net.URI;
 import java.time.Duration;
 import java.util.Map;
 import org.slf4j.LoggerFactory;
@@ -7,7 +9,6 @@ import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
-import org.testcontainers.localstack.LocalStackContainer;
 import org.testcontainers.utility.DockerImageName;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -22,7 +23,7 @@ import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 
 /**
- * Testcontainer factories and LocalStack wiring shared between document-area ITs that exercise
+ * Testcontainer factories and Floci wiring shared between document-area ITs that exercise
  * cdp-uploader (currently {@link DocumentControllerIT} for the dev-mode real-scan flow and
  * {@link DocumentInitiateProductionModeIT} for the production-mode contract pin).
  *
@@ -33,9 +34,9 @@ final class CdpUploaderTestSupport {
 
     static final String CDP_UPLOADER_IMAGE = "defradigital/cdp-uploader:latest";
     static final String REDIS_IMAGE = "redis:7.2.3-alpine3.18";
-    static final String LOCALSTACK_IMAGE = "localstack/localstack:3";
+    static final String FLOCI_IMAGE = "floci/floci:latest";
 
-    static final String LOCALSTACK_ALIAS = "localstack";
+    static final String FLOCI_ALIAS = "floci";
 
     static final int CDP_UPLOADER_PORT = 3000;
 
@@ -83,40 +84,41 @@ final class CdpUploaderTestSupport {
     }
 
     /**
-     * LocalStack Testcontainer with S3 + SQS enabled and the AWS region pinned. Region pinning
-     * is load-bearing: SQS queues are scoped per region in LocalStack, so a queue created via
-     * one region's SDK client is invisible to a client signing as another. Match this to the
-     * cdp-uploader container's {@code AWS_REGION}.
+     * Floci Testcontainer with the AWS region pinned. Region pinning is load-bearing: SQS queues
+     * are scoped per region, so a queue created via one region's SDK client is invisible to a
+     * client signing as another. Match this to the cdp-uploader container's {@code AWS_REGION}.
+     * Floci enables all emulated AWS services by default, so no per-service selector is needed.
      */
-    static LocalStackContainer localStackContainer(Network network, String region) {
-        return new LocalStackContainer(DockerImageName.parse(LOCALSTACK_IMAGE))
-            .withServices("s3", "sqs")
+    static FlociContainer flociContainer(Network network, String region) {
+        return new FlociContainer(DockerImageName.parse(FLOCI_IMAGE))
             .withNetwork(network)
-            .withNetworkAliases(LOCALSTACK_ALIAS)
-            .withEnv("DEFAULT_REGION", region)
-            .withEnv("AWS_DEFAULT_REGION", region);
+            .withNetworkAliases(FLOCI_ALIAS)
+            .withRegion(region);
     }
 
     /**
-     * Builds an AWS S3 client pointed at LocalStack and signing for the given region.
+     * Builds an AWS S3 client pointed at Floci and signing for the given region.
+     * Path-style addressing is forced because virtual-hosted-style attempts to resolve
+     * {@code <bucket>.<host>} which doesn't work against a containerised endpoint.
      */
-    static S3Client s3Client(LocalStackContainer localStack, String region) {
+    static S3Client s3Client(FlociContainer flociContainer, String region) {
         return S3Client.builder()
-            .endpointOverride(localStack.getEndpoint())
+            .endpointOverride(URI.create(flociContainer.getEndpoint()))
             .credentialsProvider(StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(localStack.getAccessKey(), localStack.getSecretKey())))
+                AwsBasicCredentials.create(flociContainer.getAccessKey(), flociContainer.getSecretKey())))
             .region(Region.of(region))
+            .forcePathStyle(true)
             .build();
     }
 
     /**
-     * Builds an AWS SQS client pointed at LocalStack and signing for the given region.
+     * Builds an AWS SQS client pointed at Floci and signing for the given region.
      */
-    static SqsClient sqsClient(LocalStackContainer localStack, String region) {
+    static SqsClient sqsClient(FlociContainer flociContainer, String region) {
         return SqsClient.builder()
-            .endpointOverride(localStack.getEndpoint())
+            .endpointOverride(URI.create(flociContainer.getEndpoint()))
             .credentialsProvider(StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(localStack.getAccessKey(), localStack.getSecretKey())))
+                AwsBasicCredentials.create(flociContainer.getAccessKey(), flociContainer.getSecretKey())))
             .region(Region.of(region))
             .build();
     }
@@ -153,7 +155,7 @@ final class CdpUploaderTestSupport {
                 .bucket(QUARANTINE_BUCKET)
                 .notificationConfiguration(NotificationConfiguration.builder()
                     .queueConfigurations(QueueConfiguration.builder()
-                        .queueArn(localStackSqsArn(region, MOCK_CLAMAV_QUEUE))
+                        .queueArn(flociSqsArn(region, MOCK_CLAMAV_QUEUE))
                         .events(Event.S3_OBJECT_CREATED)
                         .build())
                     .build())
@@ -162,7 +164,7 @@ final class CdpUploaderTestSupport {
 
     /**
      * Adds the full cluster of env vars required to run cdp-uploader in dev mode against
-     * LocalStack with the mock virus scanner end-to-end. Specifically sets:
+     * Floci with the mock virus scanner end-to-end. Specifically sets:
      *
      * <ul>
      *   <li>{@code NODE_ENV=development} — switches cdp-uploader into dev mode (e.g. relaxed
@@ -173,10 +175,10 @@ final class CdpUploaderTestSupport {
      *       download-requests, and mock-clamav queues — cranks SQS long-poll waits down from
      *       the 20s default so the upload→scan→callback round-trip completes inside a normal
      *       IT timeout.</li>
-     *   <li>{@code S3_ENDPOINT} pointing at the LocalStack network alias, plus
-     *       {@code AWS_REGION} matching the {@link #localStackContainer} region pin, plus
+     *   <li>{@code S3_ENDPOINT} pointing at the Floci network alias, plus
+     *       {@code AWS_REGION} matching the {@link #flociContainer} region pin, plus
      *       static {@code AWS_ACCESS_KEY_ID}/{@code AWS_SECRET_ACCESS_KEY=test} credentials —
-     *       so the uploader's AWS SDK clients reach LocalStack and sign for the right region.</li>
+     *       so the uploader's AWS SDK clients reach Floci and sign for the right region.</li>
      * </ul>
      */
     static GenericContainer<?> withDevModeUploaderEnv(GenericContainer<?> container, String region) {
@@ -188,14 +190,14 @@ final class CdpUploaderTestSupport {
             .withEnv("SQS_SCAN_RESULTS_CALLBACK_WAIT_TIME_SECONDS", "1")
             .withEnv("SQS_DOWNLOAD_REQUESTS_WAIT_TIME_SECONDS", "1")
             .withEnv("SQS_MOCK_CLAMAV_WAIT_TIME_SECONDS", "1")
-            .withEnv("S3_ENDPOINT", "http://" + LOCALSTACK_ALIAS + ":4566")
+            .withEnv("S3_ENDPOINT", "http://" + FLOCI_ALIAS + ":4566")
             .withEnv("AWS_REGION", region)
             .withEnv("AWS_ACCESS_KEY_ID", "test")
             .withEnv("AWS_SECRET_ACCESS_KEY", "test");
     }
 
-    private static String localStackSqsArn(String region, String queueName) {
-        // LocalStack uses the literal AWS account id 000000000000
+    private static String flociSqsArn(String region, String queueName) {
+        // Floci uses the literal AWS account id 000000000000
         return "arn:aws:sqs:" + region + ":000000000000:" + queueName;
     }
 }

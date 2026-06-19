@@ -25,11 +25,11 @@ import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
+import io.floci.testcontainers.FlociContainer;
 import org.testcontainers.Testcontainers;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.Network;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
-import org.testcontainers.localstack.LocalStackContainer;
 import org.testcontainers.lifecycle.Startables;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
@@ -50,7 +50,7 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
  * Integration tests for the accompanying document upload flow.
  *
  * <p>Drives the full upload→scan→callback round-trip against a real cdp-uploader Testcontainer:
- * the test posts a multipart file to cdp-uploader; cdp-uploader stores it in the LocalStack
+ * the test posts a multipart file to cdp-uploader; cdp-uploader stores it in the Floci-emulated
  * quarantine bucket; an S3 → SQS notification triggers cdp-uploader's mock virus scanner; the
  * scanner publishes a result to {@code cdp-clamav-results}; cdp-uploader's listener picks it up,
  * promotes the file to the consumer bucket (CLEAN) or marks it rejected (INFECTED), and POSTs the
@@ -69,7 +69,7 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
  *   <li>MongoDB — real Testcontainer from {@link IntegrationBase}
  *   <li>cdp-uploader — real {@code defradigital/cdp-uploader} Testcontainer
  *   <li>Redis — real Testcontainer (required by cdp-uploader)
- *   <li>LocalStack — S3 + SQS, with a quarantine→mock-clamav bucket notification wired up
+ *   <li>Floci — emulates S3 + SQS, with a quarantine→mock-clamav bucket notification wired up
  * </ul>
  */
 @Slf4j
@@ -87,8 +87,8 @@ class DocumentControllerIT extends IntegrationBase {
 
     static final Network CONTAINER_NETWORK = Network.newNetwork();
 
-    static final LocalStackContainer LOCAL_STACK_CONTAINER =
-        CdpUploaderTestSupport.localStackContainer(CONTAINER_NETWORK, AWS_REGION);
+    static final FlociContainer FLOCI_CONTAINER =
+        CdpUploaderTestSupport.flociContainer(CONTAINER_NETWORK, AWS_REGION);
 
     static final GenericContainer<?> REDIS_CONTAINER =
         CdpUploaderTestSupport.redisContainer(CONTAINER_NETWORK, "redis");
@@ -100,37 +100,37 @@ class DocumentControllerIT extends IntegrationBase {
                 CdpUploaderTestSupport.DOCUMENTS_BUCKET + "," + CdpUploaderTestSupport.QUARANTINE_BUCKET),
             AWS_REGION);
 
-    private static final S3Client localStackS3Client;
-    private static final SqsClient localStackSqsClient;
+    private static final S3Client flociS3Client;
+    private static final SqsClient flociSqsClient;
 
     static {
-        Startables.deepStart(LOCAL_STACK_CONTAINER, REDIS_CONTAINER).join();
+        Startables.deepStart(FLOCI_CONTAINER, REDIS_CONTAINER).join();
 
-        CDP_UPLOADER_CONTAINER.withEnv("SQS_ENDPOINT", "http://localstack:4566");
+        CDP_UPLOADER_CONTAINER.withEnv("SQS_ENDPOINT", "http://floci:4566");
         CDP_UPLOADER_CONTAINER.withEnv(
             "SQS_SCAN_RESULTS_CALLBACK",
-            "http://localstack:4566/000000000000/" + CdpUploaderTestSupport.SCAN_RESULTS_CALLBACK_QUEUE);
+            "http://floci:4566/000000000000/" + CdpUploaderTestSupport.SCAN_RESULTS_CALLBACK_QUEUE);
 
-        localStackS3Client = CdpUploaderTestSupport.s3Client(LOCAL_STACK_CONTAINER, AWS_REGION);
-        localStackSqsClient = CdpUploaderTestSupport.sqsClient(LOCAL_STACK_CONTAINER, AWS_REGION);
+        flociS3Client = CdpUploaderTestSupport.s3Client(FLOCI_CONTAINER, AWS_REGION);
+        flociSqsClient = CdpUploaderTestSupport.sqsClient(FLOCI_CONTAINER, AWS_REGION);
 
-        localStackS3Client.createBucket(
+        flociS3Client.createBucket(
             CreateBucketRequest.builder().bucket(CdpUploaderTestSupport.DOCUMENTS_BUCKET).build());
-        localStackS3Client.createBucket(
+        flociS3Client.createBucket(
             CreateBucketRequest.builder().bucket(CdpUploaderTestSupport.QUARANTINE_BUCKET).build());
 
         CdpUploaderTestSupport.wireScanQueuesAndBucketNotification(
-            localStackSqsClient, localStackS3Client, AWS_REGION);
+            flociSqsClient, flociS3Client, AWS_REGION);
 
-        LOCAL_STACK_CONTAINER.followOutput(
-            new Slf4jLogConsumer(LoggerFactory.getLogger("localstack")));
+        FLOCI_CONTAINER.followOutput(
+            new Slf4jLogConsumer(LoggerFactory.getLogger("floci")));
 
         Testcontainers.exposeHostPorts(BACKEND_PORT);
 
         Startables.deepStart(CDP_UPLOADER_CONTAINER).join();
 
-        log.info("LocalStack started; endpoint={}; buckets + queues + S3 notification ready",
-            LOCAL_STACK_CONTAINER.getEndpoint());
+        log.info("Floci started; endpoint={}; buckets + queues + S3 notification ready",
+            FLOCI_CONTAINER.getEndpoint());
         log.info("Backend will bind to port {} (host.testcontainers.internal:{})",
             BACKEND_PORT, BACKEND_PORT);
         log.info("cdp-uploader started on port {}", CDP_UPLOADER_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT));
@@ -149,10 +149,10 @@ class DocumentControllerIT extends IntegrationBase {
                 + ":" + CDP_UPLOADER_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT));
 
         registry.add("app.aws.endpoint-override",
-            () -> LOCAL_STACK_CONTAINER.getEndpoint().toString());
-        registry.add("aws.region", LOCAL_STACK_CONTAINER::getRegion);
-        registry.add("app.aws.access-key-id", LOCAL_STACK_CONTAINER::getAccessKey);
-        registry.add("app.aws.secret-access-key", LOCAL_STACK_CONTAINER::getSecretKey);
+            FLOCI_CONTAINER::getEndpoint);
+        registry.add("aws.region", FLOCI_CONTAINER::getRegion);
+        registry.add("app.aws.access-key-id", FLOCI_CONTAINER::getAccessKey);
+        registry.add("app.aws.secret-access-key", FLOCI_CONTAINER::getSecretKey);
 
         registry.add("cdp.s3.documents-bucket", () -> CdpUploaderTestSupport.DOCUMENTS_BUCKET);
 
@@ -391,7 +391,7 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
             String s3Key = persisted.getFiles().get(0).s3Key();
 
-            localStackS3Client.deleteObject(DeleteObjectRequest.builder()
+            flociS3Client.deleteObject(DeleteObjectRequest.builder()
                 .bucket(CdpUploaderTestSupport.DOCUMENTS_BUCKET)
                 .key(s3Key)
                 .build());

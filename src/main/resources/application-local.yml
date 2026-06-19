@@ -31,7 +31,7 @@ springdoc:
     enabled: true
 
 # App-level overrides for local development
-# AWS credentials are dummy values accepted by LocalStack — never use real keys here
+# AWS credentials are dummy values accepted by Floci — never use real keys here
 # base-url: cdp-uploader (inside Docker) POSTs scan-result callbacks here, so
 # host.docker.internal is required; plain localhost is unreachable from inside the
 # cdp-uploader container. Kept out of application.yml so deployed environments fail

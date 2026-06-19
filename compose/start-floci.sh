@@ -1,11 +1,11 @@
 #!/bin/bash
 # Canonical copy — the workspace stack (DEFRA/trade-imports-animals-workspace,
-# docker/stack) stages and runs this in its localstack-init container.
-# Endpoint-driven so it works both from a sidecar container (LOCALSTACK_URL
-# set) and inside a localstack container ready.d hook (defaults to localhost).
+# docker/stack) stages and runs this in its floci-init container.
+# Endpoint-driven so it works both from a sidecar container (FLOCI_URL
+# set) and inside a floci container (defaults to localhost).
 set -euo pipefail
 
-ENDPOINT="${LOCALSTACK_URL:-http://localhost:4566}"
+ENDPOINT="${FLOCI_URL:-http://localhost:4566}"
 export AWS_REGION="${AWS_REGION:-eu-west-2}"
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-$AWS_REGION}"
 export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-test}"
