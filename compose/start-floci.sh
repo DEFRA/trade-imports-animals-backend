@@ -33,5 +33,7 @@ aws s3api put-bucket-notification-configuration \
   --bucket cdp-uploader-quarantine \
   --notification-configuration "{\"QueueConfigurations\":[{\"Id\":\"mock-virus-scan\",\"QueueArn\":\"${MOCK_CLAMAV_ARN}\",\"Events\":[\"s3:ObjectCreated:*\"]}]}"
 
-# SNS topic for outbox event relay (|| true makes creation idempotent on restart)
-aws sns create-topic --name trade-imports-animals-outbox || true
+# SNS FIFO topic for outbox event relay — consumed by trade-imports-dynamics-gateway (EUDPA-208)
+# (|| true makes creation idempotent on restart)
+aws sns create-topic --name trade_imports_animals_eu_notifications.fifo \
+  --attributes FifoTopic=true,ContentBasedDeduplication=true || true
