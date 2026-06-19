@@ -145,7 +145,7 @@ outbox:
     lock-at-most-for: 30s
     enabled: true
   sns:
-    topic-arn: ${OUTBOX_SNS_TOPIC_ARN:}
+    topic-arn: ${OUTBOX_SNS_TOPIC_ARN:arn:aws:sns:eu-west-2:000000000000:test-outbox}
 
 # Application info (exposed via /info endpoint)
 info:
