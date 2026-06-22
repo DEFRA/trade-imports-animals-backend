@@ -35,5 +35,8 @@ aws s3api put-bucket-notification-configuration \
 
 # SNS FIFO topic for outbox event relay — consumed by trade-imports-dynamics-gateway (EUDPA-208)
 # (|| true makes creation idempotent on restart)
+# ContentBasedDeduplication=false matches the CDP platform default and real dev.
+# The outbox publisher (OutboxPublishService) supplies an explicit MessageDeduplicationId
+# (event id) per send, so content-based dedup is not needed — keeping local like-for-like.
 aws sns create-topic --name trade_imports_animals_eu_notifications.fifo \
-  --attributes FifoTopic=true,ContentBasedDeduplication=true || true
+  --attributes FifoTopic=true,ContentBasedDeduplication=false || true
