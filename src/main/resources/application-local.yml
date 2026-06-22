@@ -24,6 +24,15 @@ spring:
     mongodb:
       ssl:
         enabled: false
+  # Hot-reload for the docker-compose-dev `dev-run` stage. The in-container
+  # compile loop (docker/dev-run.sh) rebuilds target/classes on save and
+  # touches the trigger file; DevTools then restarts the Spring context.
+  devtools:
+    livereload:
+      enabled: false          # browser-refresh server; useless for a headless JSON API
+    restart:
+      enabled: true
+      trigger-file: .reloadtrigger   # restart once per compile batch, not mid-build
 
 # SpringDoc — enable Swagger UI locally
 springdoc:
