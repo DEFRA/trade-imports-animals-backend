@@ -25,9 +25,8 @@ touch "$marker"
 
 watch_and_compile() {
   while true; do
-    if find src -type f \( -name '*.java' -o -name '*.yml' -o -name '*.yaml' \
-         -o -name '*.properties' -o -name '*.xml' \) -newer "$marker" 2>/dev/null \
-         | grep -q .; then
+    if [ -n "$(find src -type f \( -name '*.java' -o -name '*.yml' -o -name '*.yaml' \
+         -o -name '*.properties' -o -name '*.xml' \) -newer "$marker" 2>/dev/null)" ]; then
       # Stamp the marker before compiling so edits made mid-compile are caught
       # on the next pass rather than being lost.
       touch "$marker"
