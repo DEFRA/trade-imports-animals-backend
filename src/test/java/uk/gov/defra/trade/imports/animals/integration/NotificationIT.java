@@ -1239,29 +1239,7 @@ class NotificationIT extends IntegrationBase {
     @Test
     void copy_shouldCreateNewDraftFromSourceNotification() {
         // Given — create a source notification with a full set of fields
-        CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
-            List.of(NotificationTestData.species()));
-        Commodity commodity = Commodity.builder()
-            .name("Live bovine animals")
-            .commodityComplement(List.of(complement))
-            .build();
-        NotificationDto sourceDto = NotificationDto.builder()
-            .origin(new Origin("DE", "yes", "INTERNAL-DO-NOT-COPY"))
-            .commodity(commodity)
-            .reasonForImport("internalMarket")
-            .additionalDetails(new AdditionalDetails("Breeding", "yes"))
-            .placeOfOrigin(NotificationTestData.placesOfOrigin().getFirst())
-            .consignor(NotificationTestData.consignors().getFirst())
-            .consignee(NotificationTestData.consignees().getFirst())
-            .importer(NotificationTestData.importers().getFirst())
-            .destination(NotificationTestData.destinations().getFirst())
-            .consignment(NotificationTestData.consignments().getFirst())
-            .cphNumber("12/345/6789")
-            .transport(Transport.builder()
-                .portOfEntry("GBDVR")
-                .arrivalDate(LocalDate.of(2026, Month.JUNE, 1))
-                .build())
-            .build();
+        NotificationDto sourceDto = sourceNotificationWithAllOperators();
 
         Notification source = webClient("NoAuth")
             .post()
@@ -1297,11 +1275,6 @@ class NotificationIT extends IntegrationBase {
         assertThat(copy.getCommodity().getName()).isEqualTo("Live bovine animals");
         assertThat(copy.getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
         assertThat(copy.getCphNumber()).isEqualTo("12/345/6789");
-        assertThat(copy.getPlaceOfOrigin()).isEqualTo(NotificationTestData.placesOfOrigin().getFirst());
-        assertThat(copy.getConsignor()).isEqualTo(NotificationTestData.consignors().getFirst());
-        assertThat(copy.getConsignee()).isEqualTo(NotificationTestData.consignees().getFirst());
-        assertThat(copy.getImporter()).isEqualTo(NotificationTestData.importers().getFirst());
-        assertThat(copy.getDestination()).isEqualTo(NotificationTestData.destinations().getFirst());
 
         // Excluded fields
         assertThat(copy.getOrigin().getInternalReference()).isNull();
@@ -1319,6 +1292,30 @@ class NotificationIT extends IntegrationBase {
         assertThat(original.getOrigin().getInternalReference()).isEqualTo("INTERNAL-DO-NOT-COPY");
         assertThat(original.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("yes");
         assertThat(original.getTransport().getPortOfEntry()).isEqualTo("GBDVR");
+    }
+
+    @Test
+    void copy_shouldRetainAllOperatorAddresses() {
+        NotificationDto sourceDto = sourceNotificationWithAllOperators();
+
+        Notification source = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(sourceDto)
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult().getResponseBody();
+
+        assertThat(source).isNotNull();
+
+        Notification copy = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", source.getReferenceNumber())
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult().getResponseBody();
+
+        assertThat(copy).isNotNull();
+        assertThat(copy.getPlaceOfOrigin()).isEqualTo(NotificationTestData.placesOfOrigin().getFirst());
+        assertThat(copy.getConsignor()).isEqualTo(NotificationTestData.consignors().getFirst());
+        assertThat(copy.getConsignee()).isEqualTo(NotificationTestData.consignees().getFirst());
+        assertThat(copy.getImporter()).isEqualTo(NotificationTestData.importers().getFirst());
+        assertThat(copy.getDestination()).isEqualTo(NotificationTestData.destinations().getFirst());
     }
 
     @Test
@@ -1406,6 +1403,31 @@ class NotificationIT extends IntegrationBase {
             .origin(new Origin(countryCode, null, null))
             .commodity(Commodity.builder().name("Live animals").build())
             .transport(Transport.builder().portOfEntry("GBFXT").build())
+            .build();
+    }
+
+    private NotificationDto sourceNotificationWithAllOperators() {
+        CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
+            List.of(NotificationTestData.species()));
+        return NotificationDto.builder()
+            .origin(new Origin("DE", "yes", "INTERNAL-DO-NOT-COPY"))
+            .commodity(Commodity.builder()
+                .name("Live bovine animals")
+                .commodityComplement(List.of(complement))
+                .build())
+            .reasonForImport("internalMarket")
+            .additionalDetails(new AdditionalDetails("Breeding", "yes"))
+            .placeOfOrigin(NotificationTestData.placesOfOrigin().getFirst())
+            .consignor(NotificationTestData.consignors().getFirst())
+            .consignee(NotificationTestData.consignees().getFirst())
+            .importer(NotificationTestData.importers().getFirst())
+            .destination(NotificationTestData.destinations().getFirst())
+            .consignment(NotificationTestData.consignments().getFirst())
+            .cphNumber("12/345/6789")
+            .transport(Transport.builder()
+                .portOfEntry("GBDVR")
+                .arrivalDate(LocalDate.of(2026, Month.JUNE, 1))
+                .build())
             .build();
     }
 

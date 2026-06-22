@@ -23,122 +23,38 @@ public final class NotificationTestData {
 
     public static List<Operator> consignors() {
         return List.of(
-            Operator.builder()
-                .name("Astra Rosales")
-                .address(Address.builder()
-                    .addressLine1("43 East Hague Extension")
-                    .addressLine2("Quasoccaecat ut ear, 30055")
-                    .country("Switzerland")
-                    .build())
-                .build(),
-            Operator.builder()
-                .name("EuroStore Services")
-                .address(Address.builder()
-                    .addressLine1("Rue de la Loi 200")
-                    .addressLine2("1040 Brussels")
-                    .country("Belgium")
-                    .build())
-                .build());
+            operator("Astra Rosales", "43 East Hague Extension", "Quasoccaecat ut ear, 30055", "Switzerland"),
+            operator("EuroStore Services", "Rue de la Loi 200", "1040 Brussels", "Belgium"));
     }
 
     public static List<Operator> destinations() {
         return List.of(
-            Operator.builder()
-                .name("United Commerce")
-                .address(Address.builder()
-                    .addressLine1("446 Church Lane")
-                    .addressLine2("Manchester S1 2JE")
-                    .country("United Kingdom")
-                    .build())
-                .build(),
-            Operator.builder()
-                .name("Global Trading Co")
-                .address(Address.builder()
-                    .addressLine1("945 Main Street")
-                    .addressLine2("London LS1 5AB")
-                    .country("United Kingdom")
-                    .build())
-                .build());
+            operator("United Commerce", "446 Church Lane", "Manchester S1 2JE", "United Kingdom"),
+            operator("Global Trading Co", "945 Main Street", "London LS1 5AB", "United Kingdom"));
     }
 
     public static List<Operator> consignments() {
         return List.of(
-            Operator.builder()
-                .name("Animal and Plant Health Agency")
-                .address(Address.builder()
-                    .addressLine1("Woodham Lane")
-                    .addressLine2("New Haw")
-                    .addressLine3("Addlestone")
-                    .country("United Kingdom")
-                    .build())
-                .build(),
-            Operator.builder()
-                .name("EuroStore Services")
-                .address(Address.builder()
-                    .addressLine1("8448 Gleason Creek")
-                    .country("France")
-                    .build())
-                .build());
+            operator("Animal and Plant Health Agency", "Woodham Lane", "New Haw, Addlestone", "United Kingdom"),
+            operator("EuroStore Services", "8448 Gleason Creek", null, "France"));
     }
 
     public static List<Operator> placesOfOrigin() {
         return List.of(
-            Operator.builder()
-                .name("Origin Farm")
-                .address(Address.builder()
-                    .addressLine1("1 Farm Lane")
-                    .addressLine2("County Clare")
-                    .country("Ireland")
-                    .build())
-                .build(),
-            Operator.builder()
-                .name("Nordic Livestock AS")
-                .address(Address.builder()
-                    .addressLine1("Fjordveien 12")
-                    .addressLine2("4010 Stavanger")
-                    .country("Norway")
-                    .build())
-                .build());
+            operator("Origin Farm", "1 Farm Lane", "County Clare", "Ireland"),
+            operator("Nordic Livestock AS", "Fjordveien 12", "4010 Stavanger", "Norway"));
     }
 
     public static List<Operator> consignees() {
         return List.of(
-            Operator.builder()
-                .name("British Livestock Ltd")
-                .address(Address.builder()
-                    .addressLine1("10 Market Street")
-                    .addressLine2("Leeds LS1 6HB")
-                    .country("United Kingdom")
-                    .build())
-                .build(),
-            Operator.builder()
-                .name("Northern Farms Co")
-                .address(Address.builder()
-                    .addressLine1("22 Barn Road")
-                    .addressLine2("York YO1 8AB")
-                    .country("United Kingdom")
-                    .build())
-                .build());
+            operator("British Livestock Ltd", "10 Market Street", "Leeds LS1 6HB", "United Kingdom"),
+            operator("Northern Farms Co", "22 Barn Road", "York YO1 8AB", "United Kingdom"));
     }
 
     public static List<Operator> importers() {
         return List.of(
-            Operator.builder()
-                .name("Import Co UK")
-                .address(Address.builder()
-                    .addressLine1("20 Trade Road")
-                    .addressLine2("London EC1A 1BB")
-                    .country("United Kingdom")
-                    .build())
-                .build(),
-            Operator.builder()
-                .name("GB Animal Imports")
-                .address(Address.builder()
-                    .addressLine1("5 Port Way")
-                    .addressLine2("Dover CT16 3AQ")
-                    .country("United Kingdom")
-                    .build())
-                .build());
+            operator("Import Co UK", "20 Trade Road", "London EC1A 1BB", "United Kingdom"),
+            operator("GB Animal Imports", "5 Port Way", "Dover CT16 3AQ", "United Kingdom"));
     }
 
     public static List<Transporter> transporters() {
@@ -174,5 +90,18 @@ public final class NotificationTestData {
                 .type("Private")
                 .build()
         );
+    }
+
+    private static Operator operator(String name, String addressLine1, String addressLine2, String country) {
+        Address.AddressBuilder address = Address.builder()
+            .addressLine1(addressLine1)
+            .country(country);
+        if (addressLine2 != null) {
+            address.addressLine2(addressLine2);
+        }
+        return Operator.builder()
+            .name(name)
+            .address(address.build())
+            .build();
     }
 }
