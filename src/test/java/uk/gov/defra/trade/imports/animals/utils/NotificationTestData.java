@@ -2,10 +2,7 @@ package uk.gov.defra.trade.imports.animals.utils;
 
 import java.util.List;
 import uk.gov.defra.trade.imports.animals.notification.Address;
-import uk.gov.defra.trade.imports.animals.notification.Consignment;
-import uk.gov.defra.trade.imports.animals.notification.Consignor;
-import uk.gov.defra.trade.imports.animals.notification.ContactAddress;
-import uk.gov.defra.trade.imports.animals.notification.Destination;
+import uk.gov.defra.trade.imports.animals.notification.Operator;
 import uk.gov.defra.trade.imports.animals.notification.Species;
 import uk.gov.defra.trade.imports.animals.notification.Transporter;
 
@@ -23,18 +20,18 @@ public final class NotificationTestData {
             .passport("UK0123456700999")
             .build();
     }
-    
-    public static List<Consignor> consignors() {
+
+    public static List<Operator> consignors() {
         return List.of(
-            Consignor.builder()
+            Operator.builder()
                 .name("Astra Rosales")
                 .address(Address.builder()
                     .addressLine1("43 East Hague Extension")
                     .addressLine2("Quasoccaecat ut ear, 30055")
                     .country("Switzerland")
                     .build())
-                .build(), 
-            Consignor.builder()
+                .build(),
+            Operator.builder()
                 .name("EuroStore Services")
                 .address(Address.builder()
                     .addressLine1("Rue de la Loi 200")
@@ -43,10 +40,10 @@ public final class NotificationTestData {
                     .build())
                 .build());
     }
-    
-    public static List<Destination> destinations() {
+
+    public static List<Operator> destinations() {
         return List.of(
-            Destination.builder()
+            Operator.builder()
                 .name("United Commerce")
                 .address(Address.builder()
                     .addressLine1("446 Church Lane")
@@ -54,37 +51,92 @@ public final class NotificationTestData {
                     .country("United Kingdom")
                     .build())
                 .build(),
-            Destination.builder()
+            Operator.builder()
                 .name("Global Trading Co")
                 .address(Address.builder()
                     .addressLine1("945 Main Street")
                     .addressLine2("London LS1 5AB")
                     .country("United Kingdom")
                     .build())
-                .build()
-        );
+                .build());
     }
-    
-    public static List<Consignment> consignments() {
+
+    public static List<Operator> consignments() {
         return List.of(
-            Consignment.builder()
-                .contact(ContactAddress.builder()
-                    .name("Animal and Plant Health Agency")
-                    .address(Address.builder()
-                        .addressLine1("Woodham Lane")
-                        .addressLine2("New Haw")
-                        .addressLine3("Addlestone")
-                        .country("United Kingdom")
-                        .build())
+            Operator.builder()
+                .name("Animal and Plant Health Agency")
+                .address(Address.builder()
+                    .addressLine1("Woodham Lane")
+                    .addressLine2("New Haw")
+                    .addressLine3("Addlestone")
+                    .country("United Kingdom")
                     .build())
                 .build(),
-            Consignment.builder()
-                .contact(ContactAddress.builder()
-                    .name("EuroStore Services")
-                    .address(Address.builder()
-                        .addressLine1("8448 Gleason Creek")
-                        .country("France")
-                        .build())
+            Operator.builder()
+                .name("EuroStore Services")
+                .address(Address.builder()
+                    .addressLine1("8448 Gleason Creek")
+                    .country("France")
+                    .build())
+                .build());
+    }
+
+    public static List<Operator> placesOfOrigin() {
+        return List.of(
+            Operator.builder()
+                .name("Origin Farm")
+                .address(Address.builder()
+                    .addressLine1("1 Farm Lane")
+                    .addressLine2("County Clare")
+                    .country("Ireland")
+                    .build())
+                .build(),
+            Operator.builder()
+                .name("Nordic Livestock AS")
+                .address(Address.builder()
+                    .addressLine1("Fjordveien 12")
+                    .addressLine2("4010 Stavanger")
+                    .country("Norway")
+                    .build())
+                .build());
+    }
+
+    public static List<Operator> consignees() {
+        return List.of(
+            Operator.builder()
+                .name("British Livestock Ltd")
+                .address(Address.builder()
+                    .addressLine1("10 Market Street")
+                    .addressLine2("Leeds LS1 6HB")
+                    .country("United Kingdom")
+                    .build())
+                .build(),
+            Operator.builder()
+                .name("Northern Farms Co")
+                .address(Address.builder()
+                    .addressLine1("22 Barn Road")
+                    .addressLine2("York YO1 8AB")
+                    .country("United Kingdom")
+                    .build())
+                .build());
+    }
+
+    public static List<Operator> importers() {
+        return List.of(
+            Operator.builder()
+                .name("Import Co UK")
+                .address(Address.builder()
+                    .addressLine1("20 Trade Road")
+                    .addressLine2("London EC1A 1BB")
+                    .country("United Kingdom")
+                    .build())
+                .build(),
+            Operator.builder()
+                .name("GB Animal Imports")
+                .address(Address.builder()
+                    .addressLine1("5 Port Way")
+                    .addressLine2("Dover CT16 3AQ")
+                    .country("United Kingdom")
                     .build())
                 .build());
     }

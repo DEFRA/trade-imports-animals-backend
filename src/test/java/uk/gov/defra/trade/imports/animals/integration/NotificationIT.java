@@ -1250,8 +1250,12 @@ class NotificationIT extends IntegrationBase {
             .commodity(commodity)
             .reasonForImport("internalMarket")
             .additionalDetails(new AdditionalDetails("Breeding", "yes"))
+            .placeOfOrigin(NotificationTestData.placesOfOrigin().getFirst())
             .consignor(NotificationTestData.consignors().getFirst())
+            .consignee(NotificationTestData.consignees().getFirst())
+            .importer(NotificationTestData.importers().getFirst())
             .destination(NotificationTestData.destinations().getFirst())
+            .consignment(NotificationTestData.consignments().getFirst())
             .cphNumber("12/345/6789")
             .transport(Transport.builder()
                 .portOfEntry("GBDVR")
@@ -1293,13 +1297,17 @@ class NotificationIT extends IntegrationBase {
         assertThat(copy.getCommodity().getName()).isEqualTo("Live bovine animals");
         assertThat(copy.getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
         assertThat(copy.getCphNumber()).isEqualTo("12/345/6789");
+        assertThat(copy.getPlaceOfOrigin()).isEqualTo(NotificationTestData.placesOfOrigin().getFirst());
         assertThat(copy.getConsignor()).isEqualTo(NotificationTestData.consignors().getFirst());
+        assertThat(copy.getConsignee()).isEqualTo(NotificationTestData.consignees().getFirst());
+        assertThat(copy.getImporter()).isEqualTo(NotificationTestData.importers().getFirst());
         assertThat(copy.getDestination()).isEqualTo(NotificationTestData.destinations().getFirst());
 
         // Excluded fields
         assertThat(copy.getOrigin().getInternalReference()).isNull();
         assertThat(copy.getAdditionalDetails().getUnweanedAnimals()).isNull();
         assertThat(copy.getTransport()).isNull();
+        assertThat(copy.getConsignment()).isNull();
         CommodityComplement cc = copy.getCommodity().getCommodityComplement().getFirst();
         assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
         assertThat(cc.getTotalNoOfAnimals()).isNull();

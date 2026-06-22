@@ -20,15 +20,17 @@ public record NotificationResponse(
     Commodity commodity,
     String reasonForImport,
     AdditionalDetails additionalDetails,
-    Consignor consignor,
-    Destination destination,
+    Operator placeOfOrigin,
+    Operator consignor,
+    Operator consignee,
+    Operator importer,
+    Operator destination,
+    Operator consignment,
     String cphNumber,
     Transport transport,
-    Consignment consignment,
     NotificationStatus status,
     LocalDateTime created,
     LocalDateTime updated,
     List<AccompanyingDocumentDto> accompanyingDocuments) {
-
 
 }

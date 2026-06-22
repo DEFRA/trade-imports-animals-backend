@@ -17,27 +17,33 @@ import org.springframework.data.mongodb.core.mapping.Document;
 public class Notification {
     @Id
     private String id;
-    
+
     @Indexed(unique = true, sparse = true)
     private String referenceNumber;
-    
+
     private Origin origin;
-    
+
     private Commodity commodity;
-    
+
     private String reasonForImport;
-    
+
     private AdditionalDetails additionalDetails;
-    
-    private Consignor consignor;
-    
-    private Destination destination;
+
+    private Operator placeOfOrigin;
+
+    private Operator consignor;
+
+    private Operator consignee;
+
+    private Operator importer;
+
+    private Operator destination;
+
+    private Operator consignment;
 
     private String cphNumber;
 
     private Transport transport;
-
-    private Consignment consignment;
 
     private NotificationStatus status;
 
