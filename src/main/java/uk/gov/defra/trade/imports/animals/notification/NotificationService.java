@@ -29,6 +29,7 @@ import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 @Service
@@ -89,7 +90,9 @@ public class NotificationService {
         Notification source = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        if (source.getStatus() != NotificationStatus.DRAFT && source.getStatus() != NotificationStatus.SUBMITTED) {
+        if (source.getStatus() != NotificationStatus.DRAFT
+            && source.getStatus() != NotificationStatus.SUBMITTED
+            && source.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException("Cannot copy notification with status: " + source.getStatus());
         }
         log.info("Copying notification {}", referenceNumber);
@@ -111,7 +114,7 @@ public class NotificationService {
     public NotificationPageResponse findAll(int page, String sort) {
         log.debug("Fetching notifications page {} (size {}) with sort {}", page, listPageSize, sort);
         Page<Notification> result = notificationRepository.findAllByStatusIn(
-            List.of(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED),
+            List.of(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND),
             PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort)));
         log.debug("Found {} notifications on page {} of {}",
             result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
@@ -124,6 +127,48 @@ public class NotificationService {
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
 
+        if (notification.getStatus() != NotificationStatus.DRAFT
+            && notification.getStatus() != NotificationStatus.AMEND) {
+            throw new BadRequestException(
+                "Cannot submit notification with status: " + notification.getStatus());
+        }
+
+        return writeWithOutbox(
+            notification,
+            referenceNumber,
+            correlationId,
+            NotificationStatus.SUBMITTED,
+            OutboxEventType.NOTIFICATION_SUBMITTED,
+            "submission");
+    }
+
+    @Transactional
+    public Notification amendNotification(String referenceNumber, String correlationId) {
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+
+        if (notification.getStatus() != NotificationStatus.SUBMITTED) {
+            throw new BadRequestException(
+                "Cannot amend notification with status: " + notification.getStatus());
+        }
+
+        return writeWithOutbox(
+            notification,
+            referenceNumber,
+            correlationId,
+            NotificationStatus.AMEND,
+            OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED,
+            "amend");
+    }
+
+    private Notification writeWithOutbox(
+        Notification notification,
+        String referenceNumber,
+        String correlationId,
+        NotificationStatus targetStatus,
+        OutboxEventType eventType,
+        String operationLabel) {
         String aggregateId = OutboxService.buildAggregateId(referenceNumber);
         LockConfiguration lockConfig = new LockConfiguration(
             Instant.now(),
@@ -134,17 +179,17 @@ public class NotificationService {
         try {
             LockingTaskExecutor.TaskResult<Notification> result = lockingTaskExecutor.executeWithLock(
                 (LockingTaskExecutor.TaskWithResult<Notification>) () -> {
-                    notification.setStatus(NotificationStatus.SUBMITTED);
+                    notification.setStatus(targetStatus);
                     notification.setUpdated(LocalDateTime.now());
                     Notification saved = notificationRepository.save(notification);
-                    outboxService.appendEvent(saved, correlationId);
+                    outboxService.appendEvent(saved, eventType, correlationId);
                     return saved;
                 },
                 lockConfig);
 
             if (!result.wasExecuted()) {
                 throw new OutboxWriteException(
-                    "Could not acquire outbox lock for submission",
+                    "Could not acquire outbox lock for " + operationLabel,
                     aggregateId, null, correlationId);
             }
             return result.getResult();
@@ -152,7 +197,7 @@ public class NotificationService {
             throw e;
         } catch (Throwable e) {
             throw new OutboxWriteException(
-                "Outbox write failed during submission",
+                "Outbox write failed during " + operationLabel,
                 aggregateId, null, correlationId, e);
         }
     }
@@ -162,8 +207,9 @@ public class NotificationService {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        if (notification.getStatus() != NotificationStatus.DRAFT &&
-            notification.getStatus() != NotificationStatus.SUBMITTED) {
+        if (notification.getStatus() != NotificationStatus.DRAFT
+            && notification.getStatus() != NotificationStatus.SUBMITTED
+            && notification.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException(
                 "Cannot delete notification with status: " + notification.getStatus());
         }

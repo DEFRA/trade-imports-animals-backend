@@ -60,7 +60,7 @@ class OutboxServiceTest {
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            outboxService.appendEvent(notification, "trace-001");
+            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001");
 
             // Then
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
@@ -97,7 +97,7 @@ class OutboxServiceTest {
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            outboxService.appendEvent(notification, "trace-002");
+            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-002");
 
             // Then
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
@@ -135,7 +135,7 @@ class OutboxServiceTest {
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            outboxService.appendEvent(notification, "trace-001");
+            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001");
 
             // Then — data is stored as Map<String, Object> (opaque JSON, schema-agnostic)
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
@@ -154,6 +154,56 @@ class OutboxServiceTest {
         }
 
         @Test
+        void appendEvent_shouldStoreEventTypeFromArgument_whenAmendType() {
+            Notification notification = Notification.builder()
+                .referenceNumber("GBN-AG-26-AMD009")
+                .status(NotificationStatus.AMEND)
+                .build();
+
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
+                "Imports.Notification.GBN-AG.GBN-AG-26-AMD009"))
+                .thenReturn(Optional.empty());
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            outboxService.appendEvent(
+                notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-9");
+
+            ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+            verify(outboxEventRepository).save(captor.capture());
+            assertThat(captor.getValue().getEventType())
+                .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmissionAmended");
+        }
+
+        @Test
+        void appendEvent_shouldIncrementFromHighestVersion_whenPriorEventsExistForAmendedNotification() {
+            // Regression for the EUDPA-171 amend flow: a notification can have
+            // more than one outbox event (initial submit, then amend, etc.). The
+            // derived findTopBy…OrderBy…Desc method returns the single highest
+            // version (or empty); appendEvent must compute nextVersion from it
+            // without exception.
+            Notification notification = Notification.builder()
+                .referenceNumber("GBN-AG-26-AMD007")
+                .status(NotificationStatus.SUBMITTED)
+                .build();
+
+            OutboxEvent latest = OutboxEvent.builder()
+                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-AMD007")
+                .aggregateVersion(2L)
+                .build();
+
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
+                "Imports.Notification.GBN-AG.GBN-AG-26-AMD007"))
+                .thenReturn(Optional.of(latest));
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-7");
+
+            ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+            verify(outboxEventRepository).save(captor.capture());
+            assertThat(captor.getValue().getAggregateVersion()).isEqualTo(3L);
+        }
+
+        @Test
         void appendEvent_shouldThrowOutboxWriteException_onDuplicateKey() {
             // Given
             Notification notification = Notification.builder()
@@ -168,7 +218,7 @@ class OutboxServiceTest {
                 .thenThrow(new DuplicateKeyException("duplicate key"));
 
             // When / Then
-            assertThatThrownBy(() -> outboxService.appendEvent(notification, "trace-001"))
+            assertThatThrownBy(() -> outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001"))
                 .isInstanceOf(OutboxWriteException.class)
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;

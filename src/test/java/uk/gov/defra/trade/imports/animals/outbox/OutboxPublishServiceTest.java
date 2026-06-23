@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -76,7 +75,7 @@ class OutboxPublishServiceTest {
             assertThat(request.topicArn()).isEqualTo(TOPIC_ARN);
             assertThat(request.message()).contains("\"referenceNumber\":\"ref-001\"");
             assertThat(request.messageAttributes().get(OutboxPublishService.ATTR_EVENT_TYPE).stringValue())
-                .isEqualTo(OutboxService.EVENT_TYPE);
+                .isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.value());
             assertThat(request.messageAttributes().get(OutboxPublishService.ATTR_CORRELATION_ID).stringValue())
                 .isEqualTo("trace-001");
             assertThat(request.messageAttributes().get(OutboxPublishService.ATTR_SCHEMA_VERSION).stringValue())
@@ -186,7 +185,7 @@ class OutboxPublishServiceTest {
                 .eventId("event-1")
                 .aggregateId("agg-a")
                 .aggregateVersion(1L)
-                .eventType(OutboxService.EVENT_TYPE)
+                .eventType(OutboxEventType.NOTIFICATION_SUBMITTED.value())
                 .data(Map.of("referenceNumber", "ref-001"))
                 .metadata(null)
                 .build();
@@ -267,7 +266,7 @@ class OutboxPublishServiceTest {
             .eventId("event-" + version)
             .aggregateId(aggregateId)
             .aggregateVersion(version)
-            .eventType(OutboxService.EVENT_TYPE)
+            .eventType(OutboxEventType.NOTIFICATION_SUBMITTED.value())
             .data(Map.of("referenceNumber", referenceNumber))
             .metadata(OutboxEventMetadata.builder()
                 .correlationId(correlationId)

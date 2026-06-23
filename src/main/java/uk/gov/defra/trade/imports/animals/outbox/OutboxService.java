@@ -22,14 +22,13 @@ public class OutboxService {
 
     static final String AGGREGATE_TYPE = "Notification";
     static final String SUB_TYPE = "GBN-AG";
-    static final String EVENT_TYPE = "uk.gov.defra.imports.notification.NotificationSubmitted";
     static final String SCHEMA_VERSION = "1";
     static final String AGGREGATE_ID_PREFIX = "Imports.Notification.GBN-AG.";
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
 
-    public void appendEvent(Notification notification, String correlationId) {
+    public void appendEvent(Notification notification, OutboxEventType eventType, String correlationId) {
         String aggregateId = buildAggregateId(notification.getReferenceNumber());
 
         long nextVersion = outboxEventRepository
@@ -46,7 +45,7 @@ public class OutboxService {
             .aggregateType(AGGREGATE_TYPE)
             .subType(SUB_TYPE)
             .aggregateVersion(nextVersion)
-            .eventType(EVENT_TYPE)
+            .eventType(eventType.value())
             .timestamp(Instant.now())
             .data(data)
             .metadata(OutboxEventMetadata.builder()
