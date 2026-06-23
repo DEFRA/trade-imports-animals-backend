@@ -13,6 +13,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.AMEND;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DRAFT;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.SUBMITTED;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
@@ -56,6 +57,7 @@ import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 @ExtendWith(MockitoExtension.class)
@@ -293,7 +295,7 @@ class NotificationServiceTest {
             Page<Notification> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
             when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED)), any(Pageable.class)))
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
             // When
@@ -302,7 +304,7 @@ class NotificationServiceTest {
             // Then
             assertThat(result).isNotNull();
             verify(notificationRepository, times(1))
-                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED)), any(Pageable.class));
+                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
         }
 
         @Test
@@ -321,7 +323,7 @@ class NotificationServiceTest {
                 List.of(draft, submitted), PageRequest.of(0, 54), 0);
 
             when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED)), any(Pageable.class)))
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
             // When
@@ -334,7 +336,7 @@ class NotificationServiceTest {
             assertThat(result.page()).isEqualTo(1);
             assertThat(result.size()).isEqualTo(54);
             verify(notificationRepository, times(1))
-                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED)), any(Pageable.class));
+                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
         }
 
         @Test
@@ -348,7 +350,7 @@ class NotificationServiceTest {
             Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54),
                 1);
             when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED)), any(Pageable.class)))
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
             // When
@@ -363,18 +365,41 @@ class NotificationServiceTest {
         }
 
         @Test
+        void findAll_shouldIncludeAmendNotifications() {
+            // Regression: notifications in AMEND were silently excluded from the
+            // dashboard before AMEND was added to the allow-list (EUDPA-171).
+            Notification amend = Notification.builder()
+                .referenceNumber("GBN-AG-26-000AMD")
+                .status(AMEND)
+                .build();
+
+            Page<Notification> page = new PageImpl<>(
+                List.of(amend), PageRequest.of(0, 54), 0);
+
+            when(notificationRepository.findAllByStatusIn(
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
+                .thenReturn(page);
+
+            NotificationPageResponse result = notificationService.findAll(1, null);
+
+            assertThat(result.content()).hasSize(1);
+            assertThat(result.content()).extracting(NotificationDto::getStatus)
+                .containsExactly(AMEND);
+        }
+
+        @Test
         void findAll_shouldUseCreatedAtSort_whenRequested() {
             Page<Notification> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
             when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED)), any(Pageable.class)))
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
             notificationService.findAll(1, "createdAt,asc");
 
             ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
             verify(notificationRepository).findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED)), pageableCaptor.capture());
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), pageableCaptor.capture());
             assertThat(pageableCaptor.getValue().getSort().getOrderFor("created").getDirection())
                 .isEqualTo(Sort.Direction.ASC);
         }
@@ -599,7 +624,7 @@ class NotificationServiceTest {
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
-            verify(outboxService).appendEvent(notification, "trace-001");
+            verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001");
         }
 
         @Test
@@ -623,7 +648,7 @@ class NotificationServiceTest {
             // Then — save must happen before the outbox event is written
             InOrder inOrder = inOrder(notificationRepository, outboxService);
             inOrder.verify(notificationRepository).save(notification);
-            inOrder.verify(outboxService).appendEvent(notification, "trace-001");
+            inOrder.verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001");
         }
 
         @Test
@@ -641,7 +666,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
             doThrow(new OutboxWriteException("Forced failure", "agg-id", 1L, "trace-001"))
-                .when(outboxService).appendEvent(any(), any());
+                .when(outboxService).appendEvent(any(), any(), any());
 
             // When / Then — exception propagates out of submitNotification
             assertThatThrownBy(
@@ -663,7 +688,7 @@ class NotificationServiceTest {
                 .hasMessageContaining(referenceNumber);
 
             verify(notificationRepository, never()).save(any());
-            verify(outboxService, never()).appendEvent(any(), any());
+            verify(outboxService, never()).appendEvent(any(), any(), any());
             // Lock must never be acquired — the notification lookup fails before the lock scope
             verify(lockProvider, never()).lock(any());
         }
@@ -696,6 +721,257 @@ class NotificationServiceTest {
                 });
 
             verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void submitNotification_shouldSetStatusToSubmittedAndSave_whenAmend() {
+            // Given
+            String referenceNumber = "GBN-AG-26-AMEND1";
+            Notification notification = Notification.builder()
+                .id("notif-id-amend-1")
+                .referenceNumber(referenceNumber)
+                .status(AMEND)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.submitNotification(referenceNumber,
+                "trace-002");
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
+            assertThat(result.getUpdated()).isNotNull();
+            verify(notificationRepository).save(notification);
+            verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-002");
+        }
+
+        @Test
+        void submitNotification_shouldThrowBadRequest_whenAlreadySubmitted() {
+            // Given
+            String referenceNumber = "GBN-AG-26-ALREADY";
+            Notification notification = Notification.builder()
+                .id("notif-id-already")
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+
+            // When / Then
+            assertThatThrownBy(
+                () -> notificationService.submitNotification(referenceNumber, "trace-003"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("SUBMITTED");
+
+            verify(notificationRepository, never()).save(any());
+            verify(outboxService, never()).appendEvent(any(), any(), any());
+            verify(lockProvider, never()).lock(any());
+        }
+
+        @Test
+        void submitNotification_shouldThrowBadRequest_whenDeleted() {
+            // Given
+            String referenceNumber = "GBN-AG-26-DELETED";
+            Notification notification = Notification.builder()
+                .id("notif-id-deleted")
+                .referenceNumber(referenceNumber)
+                .status(NotificationStatus.DELETED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+
+            // When / Then
+            assertThatThrownBy(
+                () -> notificationService.submitNotification(referenceNumber, "trace-004"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("DELETED");
+
+            verify(notificationRepository, never()).save(any());
+            verify(outboxService, never()).appendEvent(any(), any(), any());
+        }
+    }
+
+    @Nested
+    class AmendNotification {
+
+        @BeforeEach
+        void setUp() {
+            // Default: lock is acquired and the task executes
+            lenient().when(lockProvider.lock(any()))
+                .thenReturn(Optional.of(mock(SimpleLock.class)));
+        }
+
+        @Test
+        void amendNotification_shouldSetStatusToAmendAndSave_whenSubmitted() {
+            // Given
+            String referenceNumber = "GBN-AG-26-AMD001";
+            Notification notification = Notification.builder()
+                .id("notif-id-amd-1")
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.amendNotification(referenceNumber,
+                "trace-amd-1");
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(AMEND);
+            assertThat(result.getUpdated()).isNotNull();
+            verify(notificationRepository).save(notification);
+            verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-1");
+        }
+
+        @Test
+        void amendNotification_shouldWriteOutboxEvent_afterSavingNotification() {
+            // Given
+            String referenceNumber = "GBN-AG-26-AMD002";
+            Notification notification = Notification.builder()
+                .id("notif-id-amd-2")
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.amendNotification(referenceNumber, "trace-amd-2");
+
+            // Then — save must happen before the outbox event is written
+            InOrder inOrder = inOrder(notificationRepository, outboxService);
+            inOrder.verify(notificationRepository).save(notification);
+            inOrder.verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-2");
+        }
+
+        @Test
+        void amendNotification_shouldThrowBadRequest_whenDraft() {
+            // Given
+            String referenceNumber = "GBN-AG-26-AMD003";
+            Notification notification = Notification.builder()
+                .id("notif-id-amd-3")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+
+            // When / Then
+            assertThatThrownBy(
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-3"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("DRAFT");
+
+            verify(notificationRepository, never()).save(any());
+            verify(outboxService, never()).appendEvent(any(), any(), any());
+            verify(lockProvider, never()).lock(any());
+        }
+
+        @Test
+        void amendNotification_shouldThrowBadRequest_whenAlreadyAmend() {
+            // Given
+            String referenceNumber = "GBN-AG-26-AMD004";
+            Notification notification = Notification.builder()
+                .id("notif-id-amd-4")
+                .referenceNumber(referenceNumber)
+                .status(AMEND)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+
+            // When / Then
+            assertThatThrownBy(
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-4"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("AMEND");
+
+            verify(notificationRepository, never()).save(any());
+            verify(outboxService, never()).appendEvent(any(), any(), any());
+        }
+
+        @Test
+        void amendNotification_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
+            // Given
+            String referenceNumber = "GBN-AG-26-ABSENT";
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.empty());
+
+            // When / Then
+            assertThatThrownBy(
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-5"))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining(referenceNumber);
+
+            verify(notificationRepository, never()).save(any());
+            verify(outboxService, never()).appendEvent(any(), any(), any());
+            verify(lockProvider, never()).lock(any());
+        }
+
+        @Test
+        void amendNotification_shouldThrowOutboxWriteException_whenLockNotAcquired() {
+            // Given
+            String referenceNumber = "GBN-AG-26-AMD006";
+            Notification notification = Notification.builder()
+                .id("notif-id-amd-6")
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+
+            when(lockProvider.lock(any())).thenReturn(Optional.empty());
+
+            // When / Then
+            assertThatThrownBy(
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-6"))
+                .isInstanceOf(OutboxWriteException.class)
+                .satisfies(ex -> {
+                    OutboxWriteException owe = (OutboxWriteException) ex;
+                    assertThat(owe.getAggregateId())
+                        .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
+                    assertThat(owe.getCorrelationId()).isEqualTo("trace-amd-6");
+                });
+
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void amendNotification_shouldThrowOutboxWriteException_whenAppendEventFails() {
+            // Given
+            String referenceNumber = "GBN-AG-26-AMD007";
+            Notification notification = Notification.builder()
+                .id("notif-id-amd-7")
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            doThrow(new OutboxWriteException("Forced failure", "agg-id", 1L, "trace-amd-7"))
+                .when(outboxService).appendEvent(any(), any(), any());
+
+            // When / Then
+            assertThatThrownBy(
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-7"))
+                .isInstanceOf(OutboxWriteException.class);
         }
     }
 
@@ -957,6 +1233,34 @@ class NotificationServiceTest {
         }
 
         @Test
+        void copyNotification_shouldCreateNewDraftFromAmendSource() {
+            // Regression: AMEND notifications were rejected by copyNotification's
+            // status guard before AMEND was added to the allow-list (EUDPA-171).
+            String sourceRef = "GBN-AG-26-AMD001";
+            String newRef = "GBN-AG-26-NEW-AMD";
+            Notification source = Notification.builder()
+                .referenceNumber(sourceRef)
+                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
+                .status(AMEND)
+                .build();
+
+            Notification created = Notification.builder()
+                .referenceNumber(newRef)
+                .status(DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+            when(referenceNumberGenerator.generate()).thenReturn(newRef);
+            when(notificationRepository.save(any(Notification.class))).thenReturn(created);
+
+            Notification result = notificationService.copyNotification(sourceRef);
+
+            assertThat(result.getReferenceNumber()).isEqualTo(newRef);
+            assertThat(result.getStatus()).isEqualTo(DRAFT);
+        }
+
+        @Test
         void copyNotification_shouldThrowNotFoundException_whenSourceNotFound() {
             // Given
             String sourceRef = "GBN-AG-26-ABSENT";
@@ -1037,6 +1341,30 @@ class NotificationServiceTest {
             Notification result = notificationService.softDeleteNotification(referenceNumber);
 
             // Then
+            assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
+            assertThat(result.getUpdated()).isNotNull();
+            verify(notificationRepository).save(notification);
+        }
+
+        @Test
+        void softDeleteNotification_shouldSetStatusToDeletedAndSave_whenAmend() {
+            // Regression: AMEND notifications were rejected by softDelete's
+            // status guard before AMEND was added to the allow-list (EUDPA-171).
+            // The AMEND view page renders a Delete button (AC4) that reaches here.
+            String referenceNumber = "GBN-AG-26-ABCAMD";
+            Notification notification = Notification.builder()
+                .id("notif-id-amend-del")
+                .referenceNumber(referenceNumber)
+                .status(AMEND)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            Notification result = notificationService.softDeleteNotification(referenceNumber);
+
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
