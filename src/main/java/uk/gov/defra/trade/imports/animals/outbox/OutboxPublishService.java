@@ -76,7 +76,7 @@ public class OutboxPublishService {
     }
 
     void publishToSns(OutboxEvent event, String topicArn) throws JsonProcessingException {
-        String messageBody = objectMapper.writeValueAsString(event.getData());
+        String messageBody = objectMapper.writeValueAsString(OutboxPublishedMessage.from(event));
         PublishRequest.Builder requestBuilder = PublishRequest.builder()
             .topicArn(topicArn)
             .message(messageBody)

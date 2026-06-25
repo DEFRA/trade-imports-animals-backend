@@ -162,8 +162,20 @@ class OutboxPollerIT extends IntegrationBase {
 
         Message sqsMessage = awaitSqsMessage();
         JsonNode snsEnvelope = objectMapper.readTree(sqsMessage.body());
-        JsonNode payload = objectMapper.readTree(snsEnvelope.get("Message").asText());
-        assertThat(payload.get("referenceNumber").asText()).isEqualTo(referenceNumber);
+        JsonNode publishedMessage = objectMapper.readTree(snsEnvelope.get("Message").asText());
+        assertThat(publishedMessage.get("aggregateVersion").asLong()).isEqualTo(1L);
+        assertThat(publishedMessage.get("eventId").asText()).isEqualTo(event.getEventId());
+        assertThat(publishedMessage.get("aggregateId").asText()).isEqualTo(event.getAggregateId());
+        assertThat(publishedMessage.get("aggregateType").asText()).isEqualTo("Notification");
+        assertThat(publishedMessage.get("subType").asText()).isEqualTo("GBN-AG");
+        assertThat(publishedMessage.get("eventType").asText())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
+        assertThat(publishedMessage.get("timestamp")).isNotNull();
+        assertThat(publishedMessage.get("metadata").get("correlationId").asText())
+            .isEqualTo(TRACE_PREFIX + "001");
+        assertThat(publishedMessage.get("metadata").get("schemaVersion").asText()).isEqualTo("1");
+        assertThat(publishedMessage.get("data").get("referenceNumber").asText()).isEqualTo(referenceNumber);
+        assertThat(publishedMessage.has("publishedAt")).isFalse();
 
         JsonNode attributes = snsEnvelope.get("MessageAttributes");
         assertThat(attributes.get("eventType").get("Value").asText())
@@ -215,8 +227,8 @@ class OutboxPollerIT extends IntegrationBase {
         assertThat(publishedEvents).allMatch(e -> e.getPublishedAt() != null);
 
         List<Message> messages = awaitSqsMessages(2);
-        JsonNode firstEnvelope = objectMapper.readTree(messages.get(0).body());
-        JsonNode secondEnvelope = objectMapper.readTree(messages.get(1).body());
+        JsonNode firstEnvelope = snsEnvelopeByAggregateVersion(messages, 1L);
+        JsonNode secondEnvelope = snsEnvelopeByAggregateVersion(messages, 2L);
         assertThat(firstEnvelope.get("MessageAttributes").get("correlationId").get("Value").asText())
             .isEqualTo("trace-v1");
         assertThat(secondEnvelope.get("MessageAttributes").get("correlationId").get("Value").asText())
@@ -224,8 +236,12 @@ class OutboxPollerIT extends IntegrationBase {
 
         JsonNode firstPayload = objectMapper.readTree(firstEnvelope.get("Message").asText());
         JsonNode secondPayload = objectMapper.readTree(secondEnvelope.get("Message").asText());
-        assertThat(firstPayload.get("referenceNumber").asText()).isEqualTo(referenceNumber);
-        assertThat(secondPayload.get("referenceNumber").asText()).isEqualTo(referenceNumber);
+        assertThat(firstPayload.get("aggregateVersion").asLong()).isEqualTo(1L);
+        assertThat(secondPayload.get("aggregateVersion").asLong()).isEqualTo(2L);
+        assertThat(firstPayload.get("data").get("referenceNumber").asText()).isEqualTo(referenceNumber);
+        assertThat(secondPayload.get("data").get("referenceNumber").asText()).isEqualTo(referenceNumber);
+        assertThat(firstPayload.has("publishedAt")).isFalse();
+        assertThat(secondPayload.has("publishedAt")).isFalse();
     }
 
     private String createAndSubmitNotification(String traceId) {
@@ -252,6 +268,18 @@ class OutboxPollerIT extends IntegrationBase {
                 .name("Live cattle")
                 .build())
             .build();
+    }
+
+    private JsonNode snsEnvelopeByAggregateVersion(List<Message> messages, long aggregateVersion)
+        throws Exception {
+        for (Message message : messages) {
+            JsonNode snsEnvelope = objectMapper.readTree(message.body());
+            JsonNode payload = objectMapper.readTree(snsEnvelope.get("Message").asText());
+            if (payload.get("aggregateVersion").asLong() == aggregateVersion) {
+                return snsEnvelope;
+            }
+        }
+        throw new AssertionError("No SNS message found for aggregateVersion " + aggregateVersion);
     }
 
     private Message awaitSqsMessage() {
