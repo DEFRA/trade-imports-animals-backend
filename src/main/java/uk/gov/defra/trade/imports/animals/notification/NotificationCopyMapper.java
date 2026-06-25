@@ -5,9 +5,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Maps a source {@link Notification} to a {@link NotificationDto} for the copy-as-new
- * feature: identification, commodity type, and destination details are retained, while
- * logistical fields (transport, consignment contact), per-animal counts, and
- * internal references are reset so the copy starts as a fresh incomplete draft.
+ * feature: identification, commodity type, and address details are retained, while
+ * logistical fields (transport, consignment contact) and per-animal counts are reset
+ * so the copy starts as a fresh incomplete draft.
  *
  * <p>MapStruct was not used because the {@link CommodityComplement} transformation —
  * retaining only {@code typeOfCommodity} while explicitly nulling all per-animal data —
@@ -24,29 +24,22 @@ public class NotificationCopyMapper {
             .commodity(mapCommodity(source.getCommodity()))
             .reasonForImport(source.getReasonForImport())
             .additionalDetails(mapAdditionalDetails(source.getAdditionalDetails()))
-            .consignor(mapConsignor(source.getConsignor()))
-            .destination(mapDestination(source.getDestination()))
+            .placeOfOrigin(mapOperator(source.getPlaceOfOrigin()))
+            .consignor(mapOperator(source.getConsignor()))
+            .consignee(mapOperator(source.getConsignee()))
+            .importer(mapOperator(source.getImporter()))
+            .destination(mapOperator(source.getDestination()))
             .cphNumber(source.getCphNumber())
             // transport intentionally omitted — logistical fields (portOfEntry, arrivalDate, transporter) are reset on copy
             // consignment intentionally omitted — contact address is reset on copy
             .build();
     }
 
-    private Consignor mapConsignor(Consignor source) {
+    private Operator mapOperator(Operator source) {
         if (source == null) {
             return null;
         }
-        return Consignor.builder()
-            .name(source.getName())
-            .address(source.getAddress())
-            .build();
-    }
-
-    private Destination mapDestination(Destination source) {
-        if (source == null) {
-            return null;
-        }
-        return Destination.builder()
+        return Operator.builder()
             .name(source.getName())
             .address(source.getAddress())
             .build();

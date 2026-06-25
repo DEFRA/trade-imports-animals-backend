@@ -126,12 +126,12 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.transport.transporter.address").value(transporters().getFirst().getAddress()))
                 .andExpect(jsonPath("$.transport.transporter.approvalNumber").value(transporters().getFirst().getApprovalNumber()))
                 .andExpect(jsonPath("$.transport.transporter.type").value(transporters().getFirst().getType()))
-                .andExpect(jsonPath("$.consignment.contact.name")
-                    .value(consignments().getFirst().getContact().getName()))
-                .andExpect(jsonPath("$.consignment.contact.address.addressLine1")
-                    .value(consignments().getFirst().getContact().getAddress().getAddressLine1()))
-                .andExpect(jsonPath("$.consignment.contact.address.country")
-                    .value(consignments().getFirst().getContact().getAddress().getCountry()));
+                .andExpect(jsonPath("$.consignment.name")
+                    .value(consignments().getFirst().getName()))
+                .andExpect(jsonPath("$.consignment.address.addressLine1")
+                    .value(consignments().getFirst().getAddress().getAddressLine1()))
+                .andExpect(jsonPath("$.consignment.address.country")
+                    .value(consignments().getFirst().getAddress().getCountry()));
         }
 
         @Test
@@ -605,12 +605,12 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
                 .andExpect(jsonPath("$.consignor.name").value(consignors().getFirst().getName()))
                 .andExpect(jsonPath("$.destination.name").value(destinations().getFirst().getName()))
-                .andExpect(jsonPath("$.consignment.contact.name")
-                    .value(consignments().getFirst().getContact().getName()))
-                .andExpect(jsonPath("$.consignment.contact.address.addressLine1")
-                    .value(consignments().getFirst().getContact().getAddress().getAddressLine1()))
-                .andExpect(jsonPath("$.consignment.contact.address.country")
-                    .value(consignments().getFirst().getContact().getAddress().getCountry()))
+                .andExpect(jsonPath("$.consignment.name")
+                    .value(consignments().getFirst().getName()))
+                .andExpect(jsonPath("$.consignment.address.addressLine1")
+                    .value(consignments().getFirst().getAddress().getAddressLine1()))
+                .andExpect(jsonPath("$.consignment.address.country")
+                    .value(consignments().getFirst().getAddress().getCountry()))
                 .andExpect(jsonPath("$.accompanyingDocuments").isArray())
                 .andExpect(jsonPath("$.accompanyingDocuments.length()").value(1))
                 .andExpect(jsonPath("$.accompanyingDocuments[0].uploadId").value("upload-abc-123"))

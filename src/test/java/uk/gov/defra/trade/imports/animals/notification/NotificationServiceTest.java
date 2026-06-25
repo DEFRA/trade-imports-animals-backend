@@ -276,11 +276,11 @@ class NotificationServiceTest {
                 "United Kingdom");
             assertThat(result.getCphNumber()).isEqualTo("123456789");
             assertThat(result.getTransport()).isEqualTo(transport);
-            assertThat(result.getConsignment().getContact().getName())
+            assertThat(result.getConsignment().getName())
                 .isEqualTo("Animal and Plant Health Agency");
-            assertThat(result.getConsignment().getContact().getAddress().getAddressLine1())
+            assertThat(result.getConsignment().getAddress().getAddressLine1())
                 .isEqualTo("Woodham Lane");
-            assertThat(result.getConsignment().getContact().getAddress().getCountry())
+            assertThat(result.getConsignment().getAddress().getCountry())
                 .isEqualTo("United Kingdom");
             verify(notificationRepository, times(1)).save(any(Notification.class));
         }
