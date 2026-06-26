@@ -126,12 +126,12 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.transport.transporter.address").value(transporters().getFirst().getAddress()))
                 .andExpect(jsonPath("$.transport.transporter.approvalNumber").value(transporters().getFirst().getApprovalNumber()))
                 .andExpect(jsonPath("$.transport.transporter.type").value(transporters().getFirst().getType()))
-                .andExpect(jsonPath("$.consignment.contact.name")
-                    .value(consignments().getFirst().getContact().getName()))
-                .andExpect(jsonPath("$.consignment.contact.address.addressLine1")
-                    .value(consignments().getFirst().getContact().getAddress().getAddressLine1()))
-                .andExpect(jsonPath("$.consignment.contact.address.country")
-                    .value(consignments().getFirst().getContact().getAddress().getCountry()));
+                .andExpect(jsonPath("$.consignment.name")
+                    .value(consignments().getFirst().getName()))
+                .andExpect(jsonPath("$.consignment.address.addressLine1")
+                    .value(consignments().getFirst().getAddress().getAddressLine1()))
+                .andExpect(jsonPath("$.consignment.address.country")
+                    .value(consignments().getFirst().getAddress().getCountry()));
         }
 
         @Test
@@ -264,7 +264,7 @@ class NotificationControllerTest {
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.submitNotification(eq(REF_1), eq("trace-abc")))
+            when(notificationService.submitNotification(REF_1, "trace-abc"))
                 .thenReturn(submitted);
 
             // When & Then
@@ -289,6 +289,94 @@ class NotificationControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
+        }
+
+        @Test
+        void submit_shouldReturn400_whenNotificationNotInSubmittableState() throws Exception {
+            // Given
+            when(notificationService.submitNotification(eq(REF_1), anyString()))
+                .thenThrow(new BadRequestException(
+                    "Cannot submit notification with status: DELETED"));
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(
+                    "Cannot submit notification with status: DELETED"));
+        }
+    }
+
+    @Nested
+    class AmendNotification {
+
+        @Test
+        void amend_shouldReturn200WithAmendNotification() throws Exception {
+            // Given
+            Notification amended = new Notification();
+            amended.setId("notif-id-001");
+            amended.setReferenceNumber(REF_1);
+            amended.setStatus(NotificationStatus.AMEND);
+
+            when(notificationService.amendNotification(eq(REF_1), anyString()))
+                .thenReturn(amended);
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/amend", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.referenceNumber").value(REF_1))
+                .andExpect(jsonPath("$.status").value("AMEND"));
+        }
+
+        @Test
+        void amend_shouldPassTraceIdAsCorrelationId() throws Exception {
+            // Given
+            Notification amended = new Notification();
+            amended.setId("notif-id-001");
+            amended.setReferenceNumber(REF_1);
+            amended.setStatus(NotificationStatus.AMEND);
+
+            when(notificationService.amendNotification(REF_1, "trace-xyz"))
+                .thenReturn(amended);
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/amend", REF_1)
+                    .header(HEADER_TRACE_ID, "trace-xyz")
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+            verify(notificationService).amendNotification(REF_1, "trace-xyz");
+        }
+
+        @Test
+        void amend_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
+            // Given
+            when(notificationService.amendNotification(eq(NONEXISTENT_REF), anyString()))
+                .thenThrow(new NotFoundException(
+                    "Cannot find notification with reference number: " + NONEXISTENT_REF));
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/amend", NONEXISTENT_REF)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value(
+                    "Cannot find notification with reference number: " + NONEXISTENT_REF));
+        }
+
+        @Test
+        void amend_shouldReturn400_whenNotificationNotInAmendableState() throws Exception {
+            // Given
+            when(notificationService.amendNotification(eq(REF_1), anyString()))
+                .thenThrow(new BadRequestException(
+                    "Cannot amend notification with status: DRAFT"));
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/amend", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(
+                    "Cannot amend notification with status: DRAFT"));
         }
     }
 
@@ -517,12 +605,12 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
                 .andExpect(jsonPath("$.consignor.name").value(consignors().getFirst().getName()))
                 .andExpect(jsonPath("$.destination.name").value(destinations().getFirst().getName()))
-                .andExpect(jsonPath("$.consignment.contact.name")
-                    .value(consignments().getFirst().getContact().getName()))
-                .andExpect(jsonPath("$.consignment.contact.address.addressLine1")
-                    .value(consignments().getFirst().getContact().getAddress().getAddressLine1()))
-                .andExpect(jsonPath("$.consignment.contact.address.country")
-                    .value(consignments().getFirst().getContact().getAddress().getCountry()))
+                .andExpect(jsonPath("$.consignment.name")
+                    .value(consignments().getFirst().getName()))
+                .andExpect(jsonPath("$.consignment.address.addressLine1")
+                    .value(consignments().getFirst().getAddress().getAddressLine1()))
+                .andExpect(jsonPath("$.consignment.address.country")
+                    .value(consignments().getFirst().getAddress().getCountry()))
                 .andExpect(jsonPath("$.accompanyingDocuments").isArray())
                 .andExpect(jsonPath("$.accompanyingDocuments.length()").value(1))
                 .andExpect(jsonPath("$.accompanyingDocuments[0].uploadId").value("upload-abc-123"))

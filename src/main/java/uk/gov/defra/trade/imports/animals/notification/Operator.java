@@ -9,9 +9,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
-public class Destination {
-    
+public class Operator {
+
     private String name;
     private Address address;
-
 }

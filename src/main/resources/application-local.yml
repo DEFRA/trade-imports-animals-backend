@@ -54,4 +54,4 @@ app:
 
 outbox:
   sns:
-    topic-arn: ${OUTBOX_SNS_TOPIC_ARN:arn:aws:sns:eu-west-2:000000000000:trade-imports-animals-outbox}
+    topic-arn: ${OUTBOX_SNS_TOPIC_ARN:arn:aws:sns:eu-west-2:000000000000:trade_imports_animals_eu_notifications.fifo}

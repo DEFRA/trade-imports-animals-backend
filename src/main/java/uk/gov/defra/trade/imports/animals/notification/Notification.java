@@ -1,48 +1,21 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
-import java.time.LocalDateTime;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
+import lombok.experimental.SuperBuilder;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Document(collection = "notification")
 @Data
-@Builder
-@AllArgsConstructor
+@SuperBuilder
 @NoArgsConstructor
-public class Notification {
+@EqualsAndHashCode(callSuper = true)
+@ToString(callSuper = true)
+public class Notification extends NotificationBase {
+
     @Id
     private String id;
-    
-    @Indexed(unique = true, sparse = true)
-    private String referenceNumber;
-    
-    private Origin origin;
-    
-    private Commodity commodity;
-    
-    private String reasonForImport;
-    
-    private AdditionalDetails additionalDetails;
-    
-    private Consignor consignor;
-    
-    private Destination destination;
-
-    private String cphNumber;
-
-    private Transport transport;
-
-    private Consignment consignment;
-
-    private NotificationStatus status;
-
-    private LocalDateTime created;
-
-    private LocalDateTime updated;
-
 }
