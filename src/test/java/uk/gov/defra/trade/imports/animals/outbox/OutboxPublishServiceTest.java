@@ -8,8 +8,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,7 +56,7 @@ class OutboxPublishServiceTest {
     class PublishUnpublishedEvents {
 
         @Test
-        void shouldPublishPayloadWithMessageAttributes_andSetPublishedAt() {
+        void shouldPublishFullEnvelopeWithMessageAttributes_andSetPublishedAt() throws Exception {
             // Given
             OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
             when(outboxEventRepository
@@ -73,7 +75,7 @@ class OutboxPublishServiceTest {
             verify(snsClient).publish(captor.capture());
             PublishRequest request = captor.getValue();
             assertThat(request.topicArn()).isEqualTo(TOPIC_ARN);
-            assertThat(request.message()).contains("\"referenceNumber\":\"ref-001\"");
+            assertPublishedEnvelope(request.message(), event);
             assertThat(request.messageAttributes().get(OutboxPublishService.ATTR_EVENT_TYPE).stringValue())
                 .isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.value());
             assertThat(request.messageAttributes().get(OutboxPublishService.ATTR_CORRELATION_ID).stringValue())
@@ -265,13 +267,38 @@ class OutboxPublishServiceTest {
         return OutboxEvent.builder()
             .eventId("event-" + version)
             .aggregateId(aggregateId)
+            .aggregateType(OutboxService.AGGREGATE_TYPE)
+            .subType(OutboxService.SUB_TYPE)
             .aggregateVersion(version)
             .eventType(OutboxEventType.NOTIFICATION_SUBMITTED.value())
+            .timestamp(Instant.parse("2026-01-15T10:00:00Z"))
             .data(Map.of("referenceNumber", referenceNumber))
             .metadata(OutboxEventMetadata.builder()
                 .correlationId(correlationId)
                 .schemaVersion("1")
                 .build())
             .build();
+    }
+
+    private static void assertPublishedEnvelope(String messageJson, OutboxEvent event) throws Exception {
+        ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        JsonNode body = mapper.readTree(messageJson);
+        assertThat(body.get("eventId").asText()).isEqualTo(event.getEventId());
+        assertThat(body.get("aggregateId").asText()).isEqualTo(event.getAggregateId());
+        assertThat(body.get("aggregateType").asText()).isEqualTo(event.getAggregateType());
+        assertThat(body.get("subType").asText()).isEqualTo(event.getSubType());
+        assertThat(body.get("aggregateVersion").asLong()).isEqualTo(event.getAggregateVersion());
+        assertThat(body.get("eventType").asText()).isEqualTo(event.getEventType());
+        Instant publishedTimestamp = body.get("timestamp").isNumber()
+            ? Instant.ofEpochSecond((long) body.get("timestamp").asDouble())
+            : Instant.parse(body.get("timestamp").asText());
+        assertThat(publishedTimestamp).isEqualTo(event.getTimestamp());
+        assertThat(body.get("metadata").get("correlationId").asText())
+            .isEqualTo(event.getMetadata().getCorrelationId());
+        assertThat(body.get("metadata").get("schemaVersion").asText())
+            .isEqualTo(event.getMetadata().getSchemaVersion());
+        assertThat(body.get("data").get("referenceNumber").asText())
+            .isEqualTo(event.getData().get("referenceNumber"));
+        assertThat(body.has("publishedAt")).isFalse();
     }
 }
