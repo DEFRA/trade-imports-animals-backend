@@ -96,6 +96,21 @@ public class NotificationController {
         return ResponseEntity.ok(notificationService.amendNotification(referenceNumber, traceId));
     }
 
+    @PostMapping("/{referenceNumber}/cancel-amend")
+    @Operation(summary = "Cancel notification amendment",
+        description = "Restores the submitted notification content and transitions status from AMEND to SUBMITTED.")
+    @ApiResponse(responseCode = "200", description = "Amendment cancelled",
+        content = @Content(schema = @Schema(implementation = Notification.class)))
+    @ApiResponse(responseCode = "400", description = "Notification not in AMEND status or baseline missing", content = @Content)
+    @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
+    @Timed("controller.cancelAmendNotification.time")
+    public ResponseEntity<Notification> cancelAmend(
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        log.info("POST /notifications/{}/cancel-amend - Cancelling amendment", referenceNumber);
+        return ResponseEntity.ok(notificationService.cancelAmendNotification(referenceNumber));
+    }
+
     @GetMapping("/{referenceNumber}")
     @Operation(summary = "Get notification by reference number",
         description = "Returns a single notification with its accompanying documents")
