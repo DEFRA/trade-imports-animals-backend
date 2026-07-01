@@ -381,6 +381,54 @@ class NotificationControllerTest {
     }
 
     @Nested
+    class CancelAmendNotification {
+
+        @Test
+        void cancelAmend_shouldReturn200WithSubmittedNotification() throws Exception {
+            // Given
+            Notification restored = new Notification();
+            restored.setId("notif-id-001");
+            restored.setReferenceNumber(REF_1);
+            restored.setStatus(NotificationStatus.SUBMITTED);
+
+            when(notificationService.cancelAmendNotification(REF_1)).thenReturn(restored);
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/cancel-amend", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.referenceNumber").value(REF_1))
+                .andExpect(jsonPath("$.status").value("SUBMITTED"));
+
+            verify(notificationService).cancelAmendNotification(REF_1);
+        }
+
+        @Test
+        void cancelAmend_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
+            when(notificationService.cancelAmendNotification(NONEXISTENT_REF))
+                .thenThrow(new NotFoundException(
+                    "Cannot find notification with reference number: " + NONEXISTENT_REF));
+
+            mockMvc.perform(post("/notifications/{referenceNumber}/cancel-amend", NONEXISTENT_REF)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void cancelAmend_shouldReturn400_whenNotificationNotInAmendStatus() throws Exception {
+            when(notificationService.cancelAmendNotification(REF_1))
+                .thenThrow(new BadRequestException(
+                    "Cannot cancel amendment for notification with status: SUBMITTED"));
+
+            mockMvc.perform(post("/notifications/{referenceNumber}/cancel-amend", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(
+                    "Cannot cancel amendment for notification with status: SUBMITTED"));
+        }
+    }
+
+    @Nested
     class FindAll {
 
         @Test

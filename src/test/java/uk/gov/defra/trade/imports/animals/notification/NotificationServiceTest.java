@@ -829,8 +829,35 @@ class NotificationServiceTest {
             // Then
             assertThat(result.getStatus()).isEqualTo(AMEND);
             assertThat(result.getUpdated()).isNotNull();
+            assertThat(result.getSubmittedBaseline()).isNotNull();
             verify(notificationRepository).save(notification);
             verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-1");
+        }
+
+        @Test
+        void amendNotification_shouldCaptureSubmittedBaseline_beforeStatusChange() {
+            // Given
+            String referenceNumber = "GBN-AG-26-AMD008";
+            Origin originalOrigin = new Origin("GB", "true", "BASELINE-REF");
+            Notification notification = Notification.builder()
+                .id("notif-id-amd-8")
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .origin(originalOrigin)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.amendNotification(referenceNumber, "trace-amd-8");
+
+            // Then
+            assertThat(notification.getSubmittedBaseline()).isNotNull();
+            assertThat(notification.getSubmittedBaseline().getOrigin().getInternalReference())
+                .isEqualTo("BASELINE-REF");
         }
 
         @Test
@@ -972,6 +999,97 @@ class NotificationServiceTest {
             assertThatThrownBy(
                 () -> notificationService.amendNotification(referenceNumber, "trace-amd-7"))
                 .isInstanceOf(OutboxWriteException.class);
+        }
+    }
+
+    @Nested
+    class CancelAmendNotification {
+
+        @Test
+        void cancelAmendNotification_shouldRestoreBaselineAndSetSubmitted() {
+            // Given
+            String referenceNumber = "GBN-AG-26-CAN001";
+            NotificationContentSnapshot baseline = NotificationContentSnapshot.builder()
+                .origin(new Origin("GB", "true", "ORIGINAL-REF"))
+                .build();
+            Notification notification = Notification.builder()
+                .id("notif-id-can-1")
+                .referenceNumber(referenceNumber)
+                .status(AMEND)
+                .origin(new Origin("FR", "false", "EDITED-REF"))
+                .submittedBaseline(baseline)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.cancelAmendNotification(referenceNumber);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
+            assertThat(result.getSubmittedBaseline()).isNull();
+            assertThat(result.getOrigin().getInternalReference()).isEqualTo("ORIGINAL-REF");
+            assertThat(result.getUpdated()).isNotNull();
+            verify(notificationRepository).save(notification);
+            verify(outboxService, never()).appendEvent(any(), any(), any());
+        }
+
+        @Test
+        void cancelAmendNotification_shouldThrowBadRequest_whenNotAmend() {
+            // Given
+            String referenceNumber = "GBN-AG-26-CAN002";
+            Notification notification = Notification.builder()
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.cancelAmendNotification(referenceNumber))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("SUBMITTED");
+
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void cancelAmendNotification_shouldThrowBadRequest_whenBaselineMissing() {
+            // Given
+            String referenceNumber = "GBN-AG-26-CAN003";
+            Notification notification = Notification.builder()
+                .referenceNumber(referenceNumber)
+                .status(AMEND)
+                .submittedBaseline(null)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.cancelAmendNotification(referenceNumber))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("baseline");
+
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void cancelAmendNotification_shouldThrowNotFound_whenReferenceNumberUnknown() {
+            // Given
+            when(notificationRepository.findByReferenceNumber("GBN-AG-26-ABSENT"))
+                .thenReturn(Optional.empty());
+
+            // When / Then
+            assertThatThrownBy(
+                () -> notificationService.cancelAmendNotification("GBN-AG-26-ABSENT"))
+                .isInstanceOf(NotFoundException.class);
+
+            verify(notificationRepository, never()).save(any());
         }
     }
 
