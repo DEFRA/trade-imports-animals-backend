@@ -59,14 +59,16 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 ################################################################################
 # Stage 3: Dev-run (Maven source mount)
 # - Maven present; no pre-built JAR
-# - Mount src/ from host for live recompile via `docker compose restart`
+# - Mount src/ from host; docker/dev-run.sh recompiles on save and Spring Boot
+#   DevTools restarts the running context, so .java edits hot-reload with no
+#   image rebuild or container bounce
 # - Usage: make docker-compose-dev (backend variant)
 ################################################################################
 FROM amazoncorretto:25-alpine AS dev-run
 
 WORKDIR /app
 
-# Maven + curl for healthcheck
+# Maven + curl for healthcheck; bash for the dev-run entrypoint
 RUN apk add --no-cache maven curl bash
 
 # Pre-fetch dependencies (cached layer; invalidated only when pom.xml changes)
@@ -76,12 +78,16 @@ RUN mvn dependency:go-offline -B
 # Source is volume-mounted at runtime; copy here only so the image builds
 COPY src ./src
 
+# Hot-reload entrypoint: mtime-poll compile loop + `mvn spring-boot:run`
+COPY docker/dev-run.sh /usr/local/bin/dev-run.sh
+RUN chmod +x /usr/local/bin/dev-run.sh
+
 EXPOSE 8085
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
   CMD curl -f http://localhost:8085/health || exit 1
 
-CMD ["mvn", "spring-boot:run", "-Dspring-boot.run.profiles=local"]
+CMD ["dev-run.sh"]
 
 ################################################################################
 # Stage 4: Production
