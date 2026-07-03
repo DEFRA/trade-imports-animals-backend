@@ -153,6 +153,8 @@ public class NotificationService {
                 "Cannot amend notification with status: " + notification.getStatus());
         }
 
+        notification.setSubmittedBaseline(NotificationContentSnapshot.from(notification));
+
         return writeWithOutbox(
             notification,
             referenceNumber,
@@ -160,6 +162,29 @@ public class NotificationService {
             NotificationStatus.AMEND,
             OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED,
             "amend");
+    }
+
+    @Transactional
+    public Notification cancelAmendNotification(String referenceNumber) {
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+
+        if (notification.getStatus() != NotificationStatus.AMEND) {
+            throw new BadRequestException(
+                "Cannot cancel amendment for notification with status: " + notification.getStatus());
+        }
+        if (notification.getSubmittedBaseline() == null) {
+            throw new BadRequestException(
+                "Cannot cancel amendment: no submitted baseline stored for notification");
+        }
+
+        notification.getSubmittedBaseline().applyTo(notification);
+        notification.setSubmittedBaseline(null);
+        notification.setStatus(NotificationStatus.SUBMITTED);
+        notification.setUpdated(LocalDateTime.now());
+        log.info("Cancelled amendment for notification {}", referenceNumber);
+        return notificationRepository.save(notification);
     }
 
     private Notification writeWithOutbox(
@@ -179,6 +204,10 @@ public class NotificationService {
         try {
             LockingTaskExecutor.TaskResult<Notification> result = lockingTaskExecutor.executeWithLock(
                 (LockingTaskExecutor.TaskWithResult<Notification>) () -> {
+                    if (targetStatus == NotificationStatus.SUBMITTED
+                        && notification.getStatus() == NotificationStatus.AMEND) {
+                        notification.setSubmittedBaseline(null);
+                    }
                     notification.setStatus(targetStatus);
                     notification.setUpdated(LocalDateTime.now());
                     Notification saved = notificationRepository.save(notification);

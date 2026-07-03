@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
@@ -16,6 +17,7 @@ import org.mapstruct.ReportingPolicy;
 @Mapper(unmappedTargetPolicy = ReportingPolicy.ERROR, unmappedSourcePolicy = ReportingPolicy.ERROR)
 public interface NotificationMapper {
 
+    @BeanMapping(ignoreUnmappedSourceProperties = "submittedBaseline")
     @Mapping(target = "accompanyingDocuments", ignore = true)
     NotificationResponse toResponse(Notification notification);
 }
