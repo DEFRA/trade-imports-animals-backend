@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.outbox;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -55,17 +56,20 @@ public class OutboxPublishService {
                 continue;
             }
             try {
+                Instant publishedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+                event.setPublishedAt(publishedAt);
                 publishToSns(event, topicArn);
-                event.setPublishedAt(Instant.now());
                 outboxEventRepository.save(event);
                 published++;
             } catch (JsonProcessingException e) {
+                event.setPublishedAt(null);
                 log.error(
                     "Outbox event payload is not serializable; manual investigation required: "
                         + "eventId={} aggregateId={} version={}",
                     event.getEventId(), event.getAggregateId(), event.getAggregateVersion(), e);
                 break;
             } catch (SnsException e) {
+                event.setPublishedAt(null);
                 log.error("Failed to publish outbox event eventId={} aggregateId={} version={}: {}",
                     event.getEventId(), event.getAggregateId(), event.getAggregateVersion(),
                     e.getMessage(), e);
@@ -76,7 +80,7 @@ public class OutboxPublishService {
     }
 
     void publishToSns(OutboxEvent event, String topicArn) throws JsonProcessingException {
-        String messageBody = objectMapper.writeValueAsString(OutboxPublishedMessage.from(event));
+        String messageBody = objectMapper.writeValueAsString(event);
         PublishRequest.Builder requestBuilder = PublishRequest.builder()
             .topicArn(topicArn)
             .message(messageBody)
