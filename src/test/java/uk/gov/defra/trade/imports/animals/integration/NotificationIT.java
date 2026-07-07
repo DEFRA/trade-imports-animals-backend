@@ -24,6 +24,7 @@ import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationContentSnapshot;
 import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationPageResponse;
@@ -709,6 +710,233 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void amend_shouldTransitionStatusFromSubmittedToAmend() {
+        // Given — submitted notification
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
+
+        // When
+        Notification amended = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult().getResponseBody();
+
+        // Then
+        assertThat(amended).isNotNull();
+        assertThat(amended.getReferenceNumber()).isEqualTo(referenceNumber);
+        assertThat(amended.getStatus()).isEqualTo(NotificationStatus.AMEND);
+        assertThat(amended.getUpdated()).isNotNull();
+    }
+
+    @Test
+    void amend_shouldPersistSubmittedBaselineInMongo() {
+        // Given — submitted notification with identifiable content
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
+        Notification beforeAmend = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+
+        // When
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .exchange()
+            .expectStatus().isOk();
+
+        // Then — baseline captured in Mongo, separate from live content
+        Notification reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(NotificationStatus.AMEND);
+        assertThat(reloaded.getSubmittedBaseline()).isNotNull();
+        assertThat(reloaded.getSubmittedBaseline().getOrigin().getInternalReference())
+            .isEqualTo("INTERNAL-DO-NOT-COPY");
+        assertThat(reloaded.getSubmittedBaseline().getOrigin()).isNotSameAs(reloaded.getOrigin());
+        assertThat(reloaded.getSubmittedBaseline().getCommodity().getName())
+            .isEqualTo(beforeAmend.getCommodity().getName());
+    }
+
+    @Test
+    void amend_shouldWriteOutboxEventWithCorrectEnvelope() {
+        // Given — create and submit a notification
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
+
+        // When — amend with a trace ID
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .header(HEADER_TRACE_ID, "trace-amend-001")
+            .exchange()
+            .expectStatus().isOk();
+
+        // Then — submit + amend events exist with correct types and versions
+        List<OutboxEvent> events = outboxEventRepository.findAll()
+            .stream()
+            .sorted(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
+            .toList();
+
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0).getEventType())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
+        assertThat(events.get(0).getAggregateVersion()).isEqualTo(1L);
+
+        OutboxEvent amendEvent = events.get(1);
+        assertThat(amendEvent.getAggregateId())
+            .isEqualTo(OutboxService.buildAggregateId(referenceNumber));
+        assertThat(amendEvent.getEventType())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmissionAmended");
+        assertThat(amendEvent.getAggregateVersion()).isEqualTo(2L);
+        assertThat(amendEvent.getMetadata().getCorrelationId()).isEqualTo("trace-amend-001");
+        assertThat(amendEvent.getData()).containsEntry("referenceNumber", referenceNumber);
+    }
+
+    @Test
+    void amend_shouldReturn404_whenReferenceNumberDoesNotExist() {
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", NONEXISTENT_REF)
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(404)
+            .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
+    }
+
+    @Test
+    void amend_shouldReturn400_whenNotificationNotSubmitted() {
+        // Given — draft notification
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When / Then
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail").value(Matchers.containsString("DRAFT"));
+    }
+
+    @Test
+    void cancelAmend_shouldRestoreBaselineAndRevertStatusInMongo() {
+        // Given — submitted notification reloaded from Mongo as the golden baseline
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
+        Notification submittedInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow();
+        assertThat(submittedInMongo.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+
+        // When — start amendment (baseline written to Mongo via the real amend path)
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        Notification inAmendInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow();
+        assertThat(inAmendInMongo.getStatus()).isEqualTo(NotificationStatus.AMEND);
+        assertThat(inAmendInMongo.getSubmittedBaseline()).isNotNull();
+        assertAmendableContentMatches(submittedInMongo, inAmendInMongo.getSubmittedBaseline());
+
+        // Simulate trader edits persisted to Mongo during AMEND
+        inAmendInMongo.getOrigin().setInternalReference("EDITED-REF");
+        inAmendInMongo.getOrigin().setCountryCode("FR");
+        inAmendInMongo.getCommodity().setName("Changed commodity");
+        inAmendInMongo.setReasonForImport("changedReason");
+        inAmendInMongo.setCphNumber("99/999/9999");
+        notificationRepository.save(inAmendInMongo);
+
+        Notification editedInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow();
+        assertThat(editedInMongo.getOrigin().getInternalReference()).isEqualTo("EDITED-REF");
+        assertThat(editedInMongo.getSubmittedBaseline()).isNotNull();
+
+        // When — cancel amendment via API
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/cancel-amend", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // Then — reload from Mongo: status reverted, baseline cleared, all amendable fields restored
+        Notification restoredInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow();
+        assertThat(restoredInMongo.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(restoredInMongo.getSubmittedBaseline()).isNull();
+        assertAmendableContentMatches(submittedInMongo, restoredInMongo);
+    }
+
+    @Test
+    void cancelAmend_shouldReturn404_whenReferenceNumberDoesNotExist() {
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/cancel-amend", NONEXISTENT_REF)
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(404)
+            .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
+    }
+
+    @Test
+    void cancelAmend_shouldReturn400_whenNotificationNotInAmendStatus() {
+        // Given — submitted notification (not in AMEND)
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
+
+        // When / Then
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/cancel-amend", referenceNumber)
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail").value(Matchers.containsString("SUBMITTED"));
+    }
+
+    @Test
+    void cancelAmend_shouldNotWriteOutboxEvent() {
+        // Given — notification in AMEND with edited content
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        long eventsBeforeCancel = outboxEventRepository.count();
+
+        // When
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/cancel-amend", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // Then — no additional outbox event written
+        assertThat(outboxEventRepository.count()).isEqualTo(eventsBeforeCancel);
+    }
+
+    @Test
+    void submitFromAmend_shouldClearSubmittedBaseline() {
+        // Given — notification amended with edited content
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        Notification inAmend = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        inAmend.getOrigin().setInternalReference("EDITED-AND-KEPT");
+        notificationRepository.save(inAmend);
+        assertThat(inAmend.getSubmittedBaseline()).isNotNull();
+
+        // When — resubmit amended notification
+        Notification resubmitted = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult().getResponseBody();
+
+        // Then — edited content kept, baseline cleared
+        assertThat(resubmitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(resubmitted.getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
+
+        Notification reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        assertThat(reloaded.getSubmittedBaseline()).isNull();
+        assertThat(reloaded.getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
+    }
+
+    @Test
     void submit_shouldReturn404_whenReferenceNumberDoesNotExist() {
         // When / Then
         webClient("NoAuth")
@@ -1176,6 +1404,36 @@ class NotificationIT extends IntegrationBase {
             .containsExactly("GBFXT", LocalDate.of(2026, Month.APRIL, 22));
     }
 
+    private void assertAmendableContentMatches(Notification expected, Notification actual) {
+        assertThat(actual.getOrigin()).isEqualTo(expected.getOrigin());
+        assertThat(actual.getReasonForImport()).isEqualTo(expected.getReasonForImport());
+        assertThat(actual.getCommodity()).isEqualTo(expected.getCommodity());
+        assertThat(actual.getAdditionalDetails()).isEqualTo(expected.getAdditionalDetails());
+        assertThat(actual.getPlaceOfOrigin()).isEqualTo(expected.getPlaceOfOrigin());
+        assertThat(actual.getConsignor()).isEqualTo(expected.getConsignor());
+        assertThat(actual.getConsignee()).isEqualTo(expected.getConsignee());
+        assertThat(actual.getImporter()).isEqualTo(expected.getImporter());
+        assertThat(actual.getDestination()).isEqualTo(expected.getDestination());
+        assertThat(actual.getConsignment()).isEqualTo(expected.getConsignment());
+        assertThat(actual.getCphNumber()).isEqualTo(expected.getCphNumber());
+        assertThat(actual.getTransport()).isEqualTo(expected.getTransport());
+    }
+
+    private void assertAmendableContentMatches(Notification expected, NotificationContentSnapshot actual) {
+        assertThat(actual.getOrigin()).isEqualTo(expected.getOrigin());
+        assertThat(actual.getReasonForImport()).isEqualTo(expected.getReasonForImport());
+        assertThat(actual.getCommodity()).isEqualTo(expected.getCommodity());
+        assertThat(actual.getAdditionalDetails()).isEqualTo(expected.getAdditionalDetails());
+        assertThat(actual.getPlaceOfOrigin()).isEqualTo(expected.getPlaceOfOrigin());
+        assertThat(actual.getConsignor()).isEqualTo(expected.getConsignor());
+        assertThat(actual.getConsignee()).isEqualTo(expected.getConsignee());
+        assertThat(actual.getImporter()).isEqualTo(expected.getImporter());
+        assertThat(actual.getDestination()).isEqualTo(expected.getDestination());
+        assertThat(actual.getConsignment()).isEqualTo(expected.getConsignment());
+        assertThat(actual.getCphNumber()).isEqualTo(expected.getCphNumber());
+        assertThat(actual.getTransport()).isEqualTo(expected.getTransport());
+    }
+
     @Test
     void getOutboxEvents_shouldReturnEventsInChronologicalOrder() {
         // Given — create and submit a notification (version 1)
@@ -1378,6 +1636,21 @@ class NotificationIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
+    }
+
+    private String createAndSubmitNotificationWithFullContent() {
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(sourceNotificationWithAllOperators())
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        return referenceNumber;
     }
 
     private NotificationDto createNotificationDto(String countryCode, String commodity) {
