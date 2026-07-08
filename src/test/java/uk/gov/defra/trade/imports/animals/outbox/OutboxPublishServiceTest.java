@@ -2,6 +2,8 @@ package uk.gov.defra.trade.imports.animals.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -10,8 +12,10 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,7 +37,7 @@ class OutboxPublishServiceTest {
     private static final String TOPIC_ARN = "arn:aws:sns:eu-west-2:000000000000:test-topic";
     private static final String FIFO_TOPIC_ARN =
         "arn:aws:sns:eu-west-2:000000000000:test-topic.fifo";
-
+    
     @Mock
     private OutboxEventRepository outboxEventRepository;
 
@@ -44,7 +48,7 @@ class OutboxPublishServiceTest {
 
     @BeforeEach
     void setUp() {
-        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        ObjectMapper objectMapper = createObjectMapper();
         OutboxConfig properties = new OutboxConfig(
             new OutboxConfig.Poller(2000, 10, null, null, true),
             new OutboxConfig.Sns(TOPIC_ARN));
@@ -82,6 +86,67 @@ class OutboxPublishServiceTest {
                 .isEqualTo("trace-001");
             assertThat(request.messageAttributes().get(OutboxPublishService.ATTR_SCHEMA_VERSION).stringValue())
                 .isEqualTo("1");
+        }
+
+        @Test
+        void shouldSetPublishedAtBeforePublishingToSns() throws Exception {
+            // Given
+            OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
+            when(outboxEventRepository
+                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .thenReturn(List.of(event));
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            ArgumentCaptor<PublishRequest> publishCaptor = ArgumentCaptor.forClass(PublishRequest.class);
+
+            // When
+            outboxPublishService.publishUnpublishedEvents();
+
+            // Then
+            verify(snsClient).publish(publishCaptor.capture());
+            assertThat(event.getPublishedAt()).isNotNull();
+            JsonNode envelope = createObjectMapper().readTree(publishCaptor.getValue().message());
+            assertThat(Instant.parse(envelope.get("publishedAt").asText()))
+                .isEqualTo(event.getPublishedAt());
+        }
+
+        @Test
+        void shouldUseMillisecondPrecisionForPublishedAt() throws Exception {
+            // Given
+            OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
+            when(outboxEventRepository
+                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .thenReturn(List.of(event));
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            outboxPublishService.publishUnpublishedEvents();
+
+            // Then
+            assertThat(event.getPublishedAt().getNano() % 1_000_000).isZero();
+            ArgumentCaptor<PublishRequest> captor = ArgumentCaptor.forClass(PublishRequest.class);
+            verify(snsClient).publish(captor.capture());
+            JsonNode body = createObjectMapper().readTree(captor.getValue().message());
+            assertThat(body.get("publishedAt").asText())
+                .matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z");
+        }
+
+        @Test
+        void shouldPublishBeforePersistingPublishedAt() {
+            // Given
+            OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
+            when(outboxEventRepository
+                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .thenReturn(List.of(event));
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            outboxPublishService.publishUnpublishedEvents();
+
+            // Then
+            var order = inOrder(snsClient, outboxEventRepository);
+            order.verify(snsClient).publish(any(PublishRequest.class));
+            order.verify(outboxEventRepository).save(event);
         }
 
         @Test
@@ -146,7 +211,7 @@ class OutboxPublishServiceTest {
         @Test
         void shouldSkipWhenTopicArnNotConfigured() {
             // Given
-            ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+            ObjectMapper objectMapper = createObjectMapper();
             OutboxConfig noTopic = new OutboxConfig(
                 new OutboxConfig.Poller(2000, 10, null, null, true),
                 new OutboxConfig.Sns(" "));
@@ -216,7 +281,7 @@ class OutboxPublishServiceTest {
             when(outboxEventRepository
                 .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
                 .thenReturn(List.of(event));
-            ObjectMapper failingMapper = org.mockito.Mockito.mock(ObjectMapper.class);
+            ObjectMapper failingMapper = mock(ObjectMapper.class);
             when(failingMapper.writeValueAsString(any()))
                 .thenThrow(new JsonProcessingException("not serializable") {});
             OutboxPublishService service = new OutboxPublishService(
@@ -238,7 +303,7 @@ class OutboxPublishServiceTest {
         @Test
         void shouldSetFifoFields_whenTopicIsFifo() {
             // Given
-            ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+            ObjectMapper objectMapper = createObjectMapper();
             OutboxPublishService fifoService = new OutboxPublishService(
                 outboxEventRepository, snsClient, objectMapper,
                 new OutboxConfig(
@@ -280,8 +345,14 @@ class OutboxPublishServiceTest {
             .build();
     }
 
+    private static ObjectMapper createObjectMapper() {
+        return new ObjectMapper()
+            .registerModule(new JavaTimeModule())
+            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+    }
+
     private static void assertPublishedEnvelope(String messageJson, OutboxEvent event) throws Exception {
-        ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        ObjectMapper mapper = createObjectMapper();
         JsonNode body = mapper.readTree(messageJson);
         assertThat(body.get("eventId").asText()).isEqualTo(event.getEventId());
         assertThat(body.get("aggregateId").asText()).isEqualTo(event.getAggregateId());
@@ -299,6 +370,12 @@ class OutboxPublishServiceTest {
             .isEqualTo(event.getMetadata().getSchemaVersion());
         assertThat(body.get("data").get("referenceNumber").asText())
             .isEqualTo(event.getData().get("referenceNumber"));
-        assertThat(body.has("publishedAt")).isFalse();
+        assertThat(body.has("publishedAt")).isTrue();
+        Instant envelopePublishedAt = Instant.parse(body.get("publishedAt").asText());
+        assertThat(envelopePublishedAt).isEqualTo(event.getPublishedAt());
+        assertThat(envelopePublishedAt).isEqualTo(
+            event.getPublishedAt().truncatedTo(ChronoUnit.MILLIS));
+        assertThat(body.get("publishedAt").asText())
+            .matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z");
     }
 }

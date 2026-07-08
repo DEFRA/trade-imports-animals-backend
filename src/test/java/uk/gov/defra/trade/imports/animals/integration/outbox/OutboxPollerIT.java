@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -175,7 +176,11 @@ class OutboxPollerIT extends IntegrationBase {
             .isEqualTo(TRACE_PREFIX + "001");
         assertThat(publishedMessage.get("metadata").get("schemaVersion").asText()).isEqualTo("1");
         assertThat(publishedMessage.get("data").get("referenceNumber").asText()).isEqualTo(referenceNumber);
-        assertThat(publishedMessage.has("publishedAt")).isFalse();
+        assertThat(publishedMessage.has("publishedAt")).isTrue();
+        assertThat(Instant.parse(publishedMessage.get("publishedAt").asText()))
+            .isEqualTo(event.getPublishedAt());
+        assertThat(publishedMessage.get("publishedAt").asText())
+            .matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z");
 
         JsonNode attributes = snsEnvelope.get("MessageAttributes");
         assertThat(attributes.get("eventType").get("Value").asText())
@@ -240,8 +245,12 @@ class OutboxPollerIT extends IntegrationBase {
         assertThat(secondPayload.get("aggregateVersion").asLong()).isEqualTo(2L);
         assertThat(firstPayload.get("data").get("referenceNumber").asText()).isEqualTo(referenceNumber);
         assertThat(secondPayload.get("data").get("referenceNumber").asText()).isEqualTo(referenceNumber);
-        assertThat(firstPayload.has("publishedAt")).isFalse();
-        assertThat(secondPayload.has("publishedAt")).isFalse();
+        assertThat(firstPayload.has("publishedAt")).isTrue();
+        assertThat(secondPayload.has("publishedAt")).isTrue();
+        assertThat(Instant.parse(firstPayload.get("publishedAt").asText()))
+            .isEqualTo(publishedEvents.get(0).getPublishedAt());
+        assertThat(Instant.parse(secondPayload.get("publishedAt").asText()))
+            .isEqualTo(publishedEvents.get(1).getPublishedAt());
     }
 
     private String createAndSubmitNotification(String traceId) {

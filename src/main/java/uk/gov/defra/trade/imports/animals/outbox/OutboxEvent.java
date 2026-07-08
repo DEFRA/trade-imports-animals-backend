@@ -38,6 +38,6 @@ public class OutboxEvent {
     private Map<String, Object> data;
     private OutboxEventMetadata metadata;
 
-    /** Set when the event has been successfully published to SNS. */
+    /** Publish timestamp set before SNS publish and included in the published envelope. */
     private Instant publishedAt;
 }
