@@ -23,6 +23,7 @@ import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
+import uk.gov.defra.trade.imports.animals.notification.MeansOfTransport;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationContentSnapshot;
 import uk.gov.defra.trade.imports.animals.notification.NotificationController;
@@ -82,6 +83,9 @@ class NotificationIT extends IntegrationBase {
         Transport transport = Transport.builder()
             .portOfEntry("GBFXT")
             .arrivalDate(LocalDate.of(2026, Month.APRIL, 22))
+            .meansOfTransport(MeansOfTransport.VESSEL)
+            .transportIdentification("Vessel Poseidon, voyage 42")
+            .transportDocumentReference("BILL-OF-LADING-001")
             .build();
         NotificationDto notificationDto = NotificationDto.builder()
             .origin(new Origin("GB", "true", "REF-001"))
@@ -497,7 +501,13 @@ class NotificationIT extends IntegrationBase {
             .reasonForImport("PERMANENT")
             .additionalDetails(new AdditionalDetails("HUMAN_CONSUMPTION", "true"))
             .cphNumber("22/123/4567")
-            .transport(Transport.builder().portOfEntry("GBFXT").arrivalDate(LocalDate.of(2026, Month.APRIL, 22)).build())
+            .transport(Transport.builder()
+                .portOfEntry("GBFXT")
+                .arrivalDate(LocalDate.of(2026, Month.APRIL, 22))
+                .meansOfTransport(MeansOfTransport.VESSEL)
+                .transportIdentification("Vessel Poseidon, voyage 42")
+                .transportDocumentReference("BILL-OF-LADING-001")
+                .build())
             .build();
 
         Notification updated = webClient("NoAuth")
@@ -1400,8 +1410,18 @@ class NotificationIT extends IntegrationBase {
             .containsExactly("HUMAN_CONSUMPTION", "true");
 
         assertThat(notification.getTransport())
-            .extracting(Transport::getPortOfEntry, Transport::getArrivalDate)
-            .containsExactly("GBFXT", LocalDate.of(2026, Month.APRIL, 22));
+            .extracting(
+                Transport::getPortOfEntry,
+                Transport::getArrivalDate,
+                Transport::getMeansOfTransport,
+                Transport::getTransportIdentification,
+                Transport::getTransportDocumentReference)
+            .containsExactly(
+                "GBFXT",
+                LocalDate.of(2026, Month.APRIL, 22),
+                MeansOfTransport.VESSEL,
+                "Vessel Poseidon, voyage 42",
+                "BILL-OF-LADING-001");
     }
 
     private void assertAmendableContentMatches(Notification expected, Notification actual) {

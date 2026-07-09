@@ -14,6 +14,9 @@ public class Transport {
     
     private String portOfEntry;
     private LocalDate arrivalDate;
+    private MeansOfTransport meansOfTransport;
+    private String transportIdentification;
+    private String transportDocumentReference;
     private Transporter transporter;
 
 }
