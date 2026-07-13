@@ -38,6 +38,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxReplayService;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 @WebMvcTest(NotificationController.class)
@@ -63,6 +64,9 @@ class NotificationControllerTest {
 
     @MockitoBean
     private OutboxService outboxService;
+
+    @MockitoBean
+    private OutboxReplayService outboxReplayService;
 
     @Nested
     class PostNotification {
@@ -853,6 +857,56 @@ class NotificationControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
                     "Cannot delete notification with status: DELETED"));
+        }
+    }
+
+    @Nested
+    class ReplayOutboxEvents {
+
+        @Test
+        void replay_shouldReturn200WithEventCount_whenEventsExist() throws Exception {
+            when(outboxReplayService.replay(eq(REF_1), any(AuditContext.class))).thenReturn(2);
+
+            mockMvc.perform(post("/notifications/{referenceNumber}/replay", REF_1)
+                    .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
+                    .header(HEADER_TRACE_ID, "trace-abc")
+                    .header(HEADER_USER_ID, "user-123"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eventsReplayed").value(2));
+
+            verify(outboxReplayService).replay(REF_1, new AuditContext("trace-abc", "user-123"));
+        }
+
+        @Test
+        void replay_shouldReturn404_whenNoEventsFound() throws Exception {
+            when(outboxReplayService.replay(eq(REF_1), any(AuditContext.class)))
+                .thenThrow(new NotFoundException("No outbox events found for: " + REF_1));
+
+            mockMvc.perform(post("/notifications/{referenceNumber}/replay", REF_1)
+                    .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
+                    .header(HEADER_TRACE_ID, "trace-abc")
+                    .header(HEADER_USER_ID, "user-123"))
+                .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void replay_shouldReturn401_whenAdminSecretIsMissing() throws Exception {
+            mockMvc.perform(post("/notifications/{referenceNumber}/replay", REF_1)
+                    .header(HEADER_TRACE_ID, "trace-abc")
+                    .header(HEADER_USER_ID, "user-123"))
+                .andExpect(status().isUnauthorized());
+
+            verify(outboxReplayService, never()).replay(any(), any());
+        }
+
+        @Test
+        void replay_shouldReturn400_whenUserIdHeaderIsMissing() throws Exception {
+            mockMvc.perform(post("/notifications/{referenceNumber}/replay", REF_1)
+                    .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
+                    .header(HEADER_TRACE_ID, "trace-abc"))
+                .andExpect(status().isBadRequest());
+
+            verify(outboxReplayService, never()).replay(any(), any());
         }
     }
 }

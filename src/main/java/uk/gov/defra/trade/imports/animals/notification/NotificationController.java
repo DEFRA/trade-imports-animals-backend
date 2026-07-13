@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxReplayService;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 @RestController
@@ -39,6 +41,7 @@ public class NotificationController {
 
     private final NotificationService notificationService;
     private final OutboxService outboxService;
+    private final OutboxReplayService outboxReplayService;
 
     @PostMapping
     @Operation(summary = "Post Origin of the Import", description = "Submits an origin to the backend")
@@ -162,6 +165,25 @@ public class NotificationController {
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
         log.debug("GET /notifications/{}/outbox-events - Fetching outbox events", referenceNumber);
         return outboxService.findByReferenceNumber(referenceNumber);
+    }
+
+    @PostMapping("/{referenceNumber}/replay")
+    @Operation(summary = "Replay outbox events",
+        description = "Re-publishes all outbox events for a notification to SNS FIFO in aggregate version order. "
+            + "The outbox is read-only — no data is mutated. Each event is re-published with the same "
+            + "MessageGroupId (aggregateId) and MessageDeduplicationId (eventId) as the original publish.")
+    @ApiResponse(responseCode = "200", description = "Replay complete",
+        content = @Content(schema = @Schema(implementation = ReplayResponse.class)))
+    @ApiResponse(responseCode = "404", description = "No outbox events found for this notification", content = @Content)
+    @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
+    @Timed("controller.replayOutboxEvents.time")
+    public ResponseEntity<ReplayResponse> replay(
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestHeader(value = HEADER_USER_ID, required = true) String userId) throws JsonProcessingException {
+        log.info("POST /notifications/{}/replay - userId={}", referenceNumber, userId);
+        int count = outboxReplayService.replay(referenceNumber, new AuditContext(traceId, userId));
+        return ResponseEntity.ok(new ReplayResponse(count));
     }
 
     @PostMapping("/{referenceNumber}/soft-delete")
