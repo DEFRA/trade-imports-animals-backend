@@ -94,7 +94,7 @@ class OutboxReplayServiceTest {
         }
 
         @Test
-        void replay_shouldThrowNotFoundException_whenNoEventsExist() {
+        void replay_shouldThrowNotFoundException_whenNoEventsExist() throws JsonProcessingException {
             when(outboxService.findByReferenceNumber(REF)).thenReturn(List.of());
 
             assertThatThrownBy(() -> outboxReplayService.replay(REF, AUDIT_CTX))
