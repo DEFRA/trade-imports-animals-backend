@@ -18,6 +18,8 @@ public record NotificationResponse(
     String referenceNumber,
     Origin origin,
     Commodity commodity,
+    String purpose,
+    List<Document> documents,
     String reasonForImport,
     AdditionalDetails additionalDetails,
     Operator placeOfOrigin,

@@ -70,9 +70,9 @@ class NotificationControllerTest {
         @Test
         void post_shouldCreateNotificationAndReturnReferenceNumber() throws Exception {
             // Given
-            Origin origin = new Origin("GB", "true", "CUSTOMER-REF-123");
+            Origin origin = new Origin("GB", "true", "CUSTOMER-REF-123", null);
             Species species = species();
-            CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species));
+            CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species), null, null);
             Commodity commodity = Commodity.builder()
                 .name("Live bovine animals")
                 .commodityComplement(List.of(complement))
@@ -137,7 +137,7 @@ class NotificationControllerTest {
         @Test
         void post_shouldAcceptNotificationWithAllOriginFields() throws Exception {
             // Given
-            Origin origin = new Origin("FR", "false", "INTERNAL-456");
+            Origin origin = new Origin("FR", "false", "INTERNAL-456", null);
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(origin)
                 .build();
@@ -165,7 +165,7 @@ class NotificationControllerTest {
         void post_shouldAcceptNotificationWithExistingId() throws Exception {
             // Given - updating existing notification
             String existingId = "507f1f77bcf86cd799439011";
-            Origin origin = new Origin("DE", "true", "UPDATE-REF");
+            Origin origin = new Origin("DE", "true", "UPDATE-REF", null);
             NotificationDto notificationDto = NotificationDto.builder()
                 .referenceNumber(REF_3)
                 .origin(origin)
@@ -407,7 +407,7 @@ class NotificationControllerTest {
             // Given
             NotificationDto notification1 = NotificationDto.builder()
                 .referenceNumber(REF_1)
-                .origin(new Origin("GB", "true", "REF-GB-001"))
+                .origin(new Origin("GB", "true", "REF-GB-001", null))
                 .commodity(Commodity.builder().name("Live cattle").build())
                 .consignor(consignors().getFirst())
                 .destination(destinations().getFirst())
@@ -417,7 +417,7 @@ class NotificationControllerTest {
 
             NotificationDto notification2 = NotificationDto.builder()
                 .referenceNumber(REF_2)
-                .origin(new Origin("FR", "false", "REF-FR-002"))
+                .origin(new Origin("FR", "false", "REF-FR-002", null))
                 .commodity(Commodity.builder().name("Live sheep").build())
                 .consignor(consignors().getLast())
                 .destination(destinations().getLast())
@@ -574,7 +574,7 @@ class NotificationControllerTest {
         @Test
         void findByRef_shouldReturn200WithHydratedNotification() throws Exception {
             // Given
-            Origin origin = new Origin("GB", "true", "REF-001");
+            Origin origin = new Origin("GB", "true", "REF-001", null);
 
             AccompanyingDocumentDto document = new AccompanyingDocumentDto(
                 "doc-id-001", REF_1, "upload-abc-123",
@@ -620,7 +620,7 @@ class NotificationControllerTest {
         @Test
         void findByRef_shouldReturn200WithEmptyDocumentsList() throws Exception {
             // Given
-            Origin origin = new Origin("GB", "true", "REF-002");
+            Origin origin = new Origin("GB", "true", "REF-002", null);
 
             NotificationResponse response = NotificationResponse.builder()
                 .id("notif-id-002")

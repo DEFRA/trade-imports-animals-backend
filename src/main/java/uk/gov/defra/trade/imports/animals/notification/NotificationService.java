@@ -282,6 +282,8 @@ public class NotificationService {
     private void setNotificationDetails(NotificationDto dto, Notification notification) {
         notification.setOrigin(dto.getOrigin());
         notification.setCommodity(dto.getCommodity());
+        notification.setPurpose(dto.getPurpose());
+        notification.setDocuments(dto.getDocuments());
         notification.setReasonForImport(dto.getReasonForImport());
         notification.setAdditionalDetails(dto.getAdditionalDetails());
         notification.setPlaceOfOrigin(dto.getPlaceOfOrigin());

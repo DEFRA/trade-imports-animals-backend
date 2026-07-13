@@ -263,7 +263,7 @@ class OutboxPollerIT extends IntegrationBase {
 
     private static NotificationDto createNotificationDto() {
         return NotificationDto.builder()
-            .origin(new Origin("GB", "true", "REF123"))
+            .origin(new Origin("GB", "true", "REF123", null))
             .commodity(uk.gov.defra.trade.imports.animals.notification.Commodity.builder()
                 .name("Live cattle")
                 .build())

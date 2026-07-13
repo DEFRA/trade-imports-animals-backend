@@ -30,7 +30,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldRetainCountryOfOriginAndRequiresRegionCode() {
             Notification source = Notification.builder()
-                .origin(new Origin("DE", "yes", "INTERNAL-REF"))
+                .origin(new Origin("DE", "yes", "INTERNAL-REF", null))
                 .build();
 
             NotificationDto result = mapper.toCopyDto(source);
@@ -52,7 +52,7 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldRetainCommodityNameAndTypeOfCommodity() {
-            CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species()));
+            CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species()), null, null);
             Notification source = Notification.builder()
                 .commodity(Commodity.builder()
                     .name("Live bovine animals")
@@ -152,7 +152,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldOmitInternalReference() {
             Notification source = Notification.builder()
-                .origin(new Origin("FR", "no", "DO-NOT-COPY"))
+                .origin(new Origin("FR", "no", "DO-NOT-COPY", null))
                 .build();
 
             NotificationDto result = mapper.toCopyDto(source);
@@ -162,7 +162,7 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldOmitPerAnimalDataFromCommodityComplement() {
-            CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species()));
+            CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species()), null, null);
             Notification source = Notification.builder()
                 .commodity(Commodity.builder()
                     .commodityComplement(List.of(complement))
@@ -180,8 +180,8 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldOmitPerAnimalDataFromAllComplements() {
             List<CommodityComplement> complements = List.of(
-                new CommodityComplement("LIVE", 3, 1, List.of(species())),
-                new CommodityComplement("GERM", 7, 2, List.of(species()))
+                new CommodityComplement("LIVE", 3, 1, List.of(species()), null, null),
+                new CommodityComplement("GERM", 7, 2, List.of(species()), null, null)
             );
             Notification source = Notification.builder()
                 .commodity(Commodity.builder().commodityComplement(complements).build())

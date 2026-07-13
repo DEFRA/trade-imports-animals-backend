@@ -16,5 +16,7 @@ public class CommodityComplement {
     private Integer totalNoOfAnimals;
     private Integer totalNoOfPackages;
     private List<Species> species;
+    private String commodityCode;
+    private List<AnimalIdentifier> animalIdentifiers;
 
 }

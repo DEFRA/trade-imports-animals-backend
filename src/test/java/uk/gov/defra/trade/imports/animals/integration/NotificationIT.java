@@ -73,7 +73,7 @@ class NotificationIT extends IntegrationBase {
     void post_shouldMapAllFieldsToNotificationAndSave() {
         // Given
         Species species = NotificationTestData.species();
-        CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species));
+        CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species), null, null);
         Commodity commodity = Commodity.builder()
             .name("Live bovine animals")
             .commodityComplement(List.of(complement))
@@ -83,7 +83,7 @@ class NotificationIT extends IntegrationBase {
             .arrivalDate(LocalDate.of(2026, Month.APRIL, 22))
             .build();
         NotificationDto notificationDto = NotificationDto.builder()
-            .origin(new Origin("GB", "true", "REF-001"))
+            .origin(new Origin("GB", "true", "REF-001", null))
             .commodity(commodity)
             .reasonForImport("PERMANENT")
             .additionalDetails(new AdditionalDetails("HUMAN_CONSUMPTION", "true"))
@@ -464,9 +464,9 @@ class NotificationIT extends IntegrationBase {
     void post_shouldUpdateAllFieldsOnExistingNotification() {
         // Given — create a notification with initial values for all fields
         Species initialSpecies = new Species("OVI", "Ovine", 5, 2, "UK09876543210", "UK0987654300888");
-        CommodityComplement initialComplement = new CommodityComplement("LIVE", 5, 2, List.of(initialSpecies));
+        CommodityComplement initialComplement = new CommodityComplement("LIVE", 5, 2, List.of(initialSpecies), null, null);
         NotificationDto initial = NotificationDto.builder()
-            .origin(new Origin("IE", "false", "REF-initial"))
+            .origin(new Origin("IE", "false", "REF-initial", null))
             .commodity(Commodity.builder()
                 .name("Live ovine animals")
                 .commodityComplement(List.of(initialComplement))
@@ -485,10 +485,10 @@ class NotificationIT extends IntegrationBase {
 
         // When — update every field with new values
         Species updatedSpecies = NotificationTestData.species();
-        CommodityComplement updatedComplement = new CommodityComplement("LIVE", 10, 5, List.of(updatedSpecies));
+        CommodityComplement updatedComplement = new CommodityComplement("LIVE", 10, 5, List.of(updatedSpecies), null, null);
         NotificationDto updateDto = NotificationDto.builder()
             .referenceNumber(referenceNumber)
-            .origin(new Origin("GB", "true", "REF-updated"))
+            .origin(new Origin("GB", "true", "REF-updated", null))
             .commodity(Commodity.builder()
                 .name("Live bovine animals")
                 .commodityComplement(List.of(updatedComplement))
@@ -1392,7 +1392,7 @@ class NotificationIT extends IntegrationBase {
 
     private NotificationDto notificationDtoWithArrivalDate(String countryCode, LocalDate arrivalDate) {
         return NotificationDto.builder()
-            .origin(new Origin(countryCode, null, null))
+            .origin(new Origin(countryCode, null, null, null))
             .commodity(Commodity.builder().name("Live animals").build())
             .transport(Transport.builder().arrivalDate(arrivalDate).build())
             .build();
@@ -1400,7 +1400,7 @@ class NotificationIT extends IntegrationBase {
 
     private NotificationDto notificationDtoWithTransportButNoArrivalDate(String countryCode) {
         return NotificationDto.builder()
-            .origin(new Origin(countryCode, null, null))
+            .origin(new Origin(countryCode, null, null, null))
             .commodity(Commodity.builder().name("Live animals").build())
             .transport(Transport.builder().portOfEntry("GBFXT").build())
             .build();
@@ -1408,9 +1408,9 @@ class NotificationIT extends IntegrationBase {
 
     private NotificationDto sourceNotificationWithAllOperators() {
         CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
-            List.of(NotificationTestData.species()));
+            List.of(NotificationTestData.species()), null, null);
         return NotificationDto.builder()
-            .origin(new Origin("DE", "yes", "INTERNAL-DO-NOT-COPY"))
+            .origin(new Origin("DE", "yes", "INTERNAL-DO-NOT-COPY", null))
             .commodity(Commodity.builder()
                 .name("Live bovine animals")
                 .commodityComplement(List.of(complement))

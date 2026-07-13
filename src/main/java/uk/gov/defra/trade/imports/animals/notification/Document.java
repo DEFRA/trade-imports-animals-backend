@@ -9,11 +9,11 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Origin {
-    
-    private String countryCode;
-    private String requiresRegionCode;
-    private String internalReference;
-    private String regionCode;
-    
+public class Document {
+
+    private String documentType;
+    private String attachmentType;
+    private String reference;
+    private String dateOfIssue;
+
 }

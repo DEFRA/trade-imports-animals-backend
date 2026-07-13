@@ -103,7 +103,7 @@ class NotificationServiceTest {
         @Test
         void saveOriginOfImport_shouldCreateNotificationWithGeneratedReferenceNumber() {
             // Given - new notification without referenceNumber
-            Origin origin = new Origin("GB", "true", "REF123");
+            Origin origin = new Origin("GB", "true", "REF123", null);
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(origin)
                 .build();
@@ -133,7 +133,7 @@ class NotificationServiceTest {
         @Test
         void saveOriginOfImport_shouldRetryPersistence_whenDuplicateKeyExceptionOnFirstAttempt() {
             // Given — first persistence attempt collides, second succeeds
-            Origin origin = new Origin("GB", "true", "REF123");
+            Origin origin = new Origin("GB", "true", "REF123", null);
             NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
 
             Notification saved = new Notification();
@@ -161,7 +161,7 @@ class NotificationServiceTest {
         @Test
         void saveOriginOfImport_shouldThrowIllegalStateException_whenAllPersistenceRetriesExhausted() {
             // Given — all three persistence attempts collide
-            Origin origin = new Origin("GB", "true", "REF123");
+            Origin origin = new Origin("GB", "true", "REF123", null);
             NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
 
             when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-ABC001");
@@ -184,12 +184,12 @@ class NotificationServiceTest {
             // Given - existing notification with ID and reference number
             String existingId = "507f191e810c19729de860ea";
             String referenceNumber = "GBN-AG-26-507F19";
-            Origin origin = new Origin("FR", "false", "REF456");
+            Origin origin = new Origin("FR", "false", "REF456", null);
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION",
                 "true");
             Species species = species();
             CommodityComplement complement = new CommodityComplement("LIVE", 5, null,
-                List.of(species));
+                List.of(species), null, null);
             Commodity commodity = Commodity.builder()
                 .name("Fish")
                 .commodityComplement(List.of(complement))
@@ -344,7 +344,7 @@ class NotificationServiceTest {
             // Given
             Notification notification = Notification.builder()
                 .referenceNumber("GBN-AG-26-ABC123")
-                .origin(new Origin("GB", "true", "REF-1"))
+                .origin(new Origin("GB", "true", "REF-1", null))
                 .status(SUBMITTED)
                 .build();
             Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54),
@@ -982,7 +982,7 @@ class NotificationServiceTest {
         void findByRef_shouldReturnHydratedNotification_withDocuments() {
             // Given
             String referenceNumber = "GBN-AG-26-ABC123";
-            Origin origin = new Origin("GB", "true", "REF-001");
+            Origin origin = new Origin("GB", "true", "REF-001", null);
             Notification notification = Notification.builder()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
@@ -1034,7 +1034,7 @@ class NotificationServiceTest {
             Notification notification = Notification.builder()
                 .id("notif-id-002")
                 .referenceNumber(referenceNumber)
-                .origin(new Origin("IE", "false", null))
+                .origin(new Origin("IE", "false", null, null))
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1076,7 +1076,7 @@ class NotificationServiceTest {
             String newRef = "GBN-AG-26-NEW001";
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
-                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
+                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY", null))
                 .status(NotificationStatus.DRAFT)
                 .build();
 
@@ -1105,7 +1105,7 @@ class NotificationServiceTest {
             String newRef = "GBN-AG-26-NEW002";
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
-                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
+                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY", null))
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
@@ -1131,10 +1131,10 @@ class NotificationServiceTest {
         void copyNotification_shouldRetainCopiedFields() {
             // Given
             String sourceRef = "GBN-AG-26-SRC002";
-            Origin origin = new Origin("DE", "yes", "INTERNAL-REF");
+            Origin origin = new Origin("DE", "yes", "INTERNAL-REF", null);
             AdditionalDetails additionalDetails = new AdditionalDetails("Breeding", "yes");
             CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
-                List.of(species()));
+                List.of(species()), null, null);
             Commodity commodity = Commodity.builder()
                 .name("Live bovine animals")
                 .commodityComplement(List.of(complement))
@@ -1189,11 +1189,11 @@ class NotificationServiceTest {
             // Given
             String sourceRef = "GBN-AG-26-SRC003";
             CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
-                List.of(species()));
+                List.of(species()), null, null);
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
-                .origin(new Origin("FR", "no", "DO-NOT-COPY"))
+                .origin(new Origin("FR", "no", "DO-NOT-COPY", null))
                 .commodity(Commodity.builder()
                     .name("Cattle")
                     .commodityComplement(List.of(complement))
@@ -1240,7 +1240,7 @@ class NotificationServiceTest {
             String newRef = "GBN-AG-26-NEW-AMD";
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
-                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
+                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY", null))
                 .status(AMEND)
                 .build();
 
