@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -14,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
@@ -32,7 +34,9 @@ import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.exceptions.OperatorValidationException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
 import uk.gov.defra.trade.imports.animals.operators.OperatorExistence;
 import uk.gov.defra.trade.imports.animals.operators.OperatorsApiClient;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
@@ -46,6 +50,11 @@ public class NotificationService {
     private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
     private static final int MAX_REF_RETRIES = 3;
     private static final String METRIC_OPERATOR_CHECK_FAILURE = "OperatorCheckFailure";
+    private static final String METRIC_SUBMIT_BLOCKED_DELETED = "SubmitBlockedDeletedOperator";
+    private static final String METRIC_SUBMIT_BLOCKED_UNRESOLVED = "SubmitBlockedUnresolvedOperator";
+    private static final String MDC_CRN = "crn";
+    private static final String DELETED_MESSAGE = "Operator has been deleted — select a replacement";
+    private static final String UNRESOLVED_MESSAGE = "Operator could not be verified — select it again";
 
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
@@ -223,6 +232,8 @@ public class NotificationService {
                 "Cannot submit notification with status: " + notification.getStatus());
         }
 
+        guardOperatorExistenceForSubmit(notification);
+
         return writeWithOutbox(
             notification,
             referenceNumber,
@@ -230,6 +241,66 @@ public class NotificationService {
             NotificationStatus.SUBMITTED,
             OutboxEventType.NOTIFICATION_SUBMITTED,
             "submission");
+    }
+
+    /**
+     * The integrity backstop before a DRAFT|AMEND→SUBMITTED transition (design §4.5, c-013, c-018).
+     * Unlike the read check, which degrades open, this <em>fails closed</em>: a reference we cannot
+     * verify must never be frozen into a SUBMITTED record. It runs only against parties that carry an
+     * {@code operatorId}, so it is naturally inert for legacy/E2E notifications (leg 1). When operator
+     * ids are present the caller's {@code Trade-Imports-Crn} identity is required (leg 2, no silent
+     * bypass); a tombstoned party (leg 3, DELETED) and an unresolved party (leg 3, 404) each yield a
+     * 400 validation problem keyed by the party field but with distinct copy — a 404 is not a deletion
+     * (c-018); an operators-service outage yields a 502 (leg 4). On success the guard consumes only
+     * the existence classification and returns: the embedded copies are never re-hydrated or re-frozen
+     * (c-017, leg 5) — the caller then transitions the status and nothing else.
+     */
+    private void guardOperatorExistenceForSubmit(Notification notification) {
+        List<PartyOperator> parties = operatorParties(notification);
+        if (parties.isEmpty()) {
+            return;
+        }
+        if (StringUtils.isBlank(MDC.get(MDC_CRN))) {
+            throw new BadRequestException("identity header required to verify operators");
+        }
+        Map<String, OperatorExistence> classifications = new HashMap<>();
+        for (String operatorId : parties.stream().map(PartyOperator::operatorId).distinct().toList()) {
+            OperatorExistence existence = operatorsApiClient.classify(operatorId);
+            if (existence == OperatorExistence.UNAVAILABLE) {
+                throw new ServiceUnavailableException(
+                    "Operators service unavailable while verifying notification "
+                        + notification.getReferenceNumber());
+            }
+            classifications.put(operatorId, existence);
+        }
+        Map<String, List<String>> errors = new LinkedHashMap<>();
+        boolean anyDeleted = false;
+        boolean anyUnresolved = false;
+        for (PartyOperator party : parties) {
+            switch (classifications.get(party.operatorId())) {
+                case DELETED -> {
+                    errors.put(party.key(), List.of(DELETED_MESSAGE));
+                    anyDeleted = true;
+                }
+                case NOT_FOUND -> {
+                    errors.put(party.key(), List.of(UNRESOLVED_MESSAGE));
+                    anyUnresolved = true;
+                }
+                default -> { /* ACTIVE — nothing to block */ }
+            }
+        }
+        if (errors.isEmpty()) {
+            return;
+        }
+        if (anyDeleted) {
+            meterRegistry.counter(METRIC_SUBMIT_BLOCKED_DELETED).increment();
+        }
+        if (anyUnresolved) {
+            meterRegistry.counter(METRIC_SUBMIT_BLOCKED_UNRESOLVED).increment();
+        }
+        log.warn("Submit blocked for notification {} — operator verification failed: {}",
+            notification.getReferenceNumber(), errors.keySet());
+        throw new OperatorValidationException(errors);
     }
 
     @Transactional

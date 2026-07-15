@@ -1,6 +1,8 @@
 package uk.gov.defra.trade.imports.animals.integration.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockserver.model.HttpRequest.request;
+import static org.mockserver.model.HttpResponse.response;
 
 import java.time.LocalDate;
 import java.time.Month;
@@ -35,6 +37,8 @@ class OutboxPayloadIT extends IntegrationBase {
 
     private static final String NOTIFICATION_ENDPOINT = "/notifications";
     private static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
+    private static final String CRN_HEADER = "Trade-Imports-Crn";
+    private static final String CRN = "GBCRN123";
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -46,6 +50,21 @@ class OutboxPayloadIT extends IntegrationBase {
     void setUp() {
         notificationRepository.deleteAll();
         outboxEventRepository.deleteAll();
+        // This payload carries operatorIds, so the submit guard (design §4.5) is live: stub the
+        // referenced operators ACTIVE and supply the caller crn so submit proceeds. The guard
+        // consumes only the ACTIVE classification and discards the values (c-017), so the extended
+        // operator model asserted below is the stored selection-time copy, not the stubbed body.
+        stubActiveOperator("OP-CONSIGNOR-1");
+        stubActiveOperator("OP-TRANSPORTER-1");
+    }
+
+    private void stubActiveOperator(String operatorId) {
+        usingStub()
+            .when(request().withMethod("GET").withPath(".*/" + operatorId))
+            .respond(response()
+                .withStatusCode(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{\"id\":\"" + operatorId + "\",\"status\":\"ACTIVE\"}"));
     }
 
     @Test
@@ -55,6 +74,7 @@ class OutboxPayloadIT extends IntegrationBase {
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
             .header(HEADER_TRACE_ID, "trace-outbox-payload-submit")
+            .header(CRN_HEADER, CRN)
             .exchange()
             .expectStatus().isOk();
 
@@ -74,6 +94,7 @@ class OutboxPayloadIT extends IntegrationBase {
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .header(CRN_HEADER, CRN)
             .exchange()
             .expectStatus().isOk();
 

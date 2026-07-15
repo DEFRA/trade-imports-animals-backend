@@ -56,9 +56,12 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
+import org.slf4j.MDC;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.exceptions.OperatorValidationException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
 import uk.gov.defra.trade.imports.animals.operators.OperatorExistence;
 import uk.gov.defra.trade.imports.animals.operators.OperatorsApiClient;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
@@ -106,6 +109,11 @@ class NotificationServiceTest {
             documentService, outboxService, lockingTaskExecutor,
             notificationMapper, new NotificationCopyMapper(), referenceNumberGenerator,
             operatorsApiClient, meterRegistry, Duration.ZERO, 54, 50);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearMdc() {
+        MDC.clear();
     }
 
     @Nested
@@ -805,6 +813,185 @@ class NotificationServiceTest {
 
             verify(notificationRepository, never()).save(any());
             verify(outboxService, never()).appendEvent(any(), any(), any());
+        }
+
+        private Operator operatorWithId(String operatorId, String name) {
+            return Operator.builder()
+                .operatorId(operatorId)
+                .name(name)
+                .address(Address.builder().addressLine1("1 Test Street").country("United Kingdom")
+                    .build())
+                .build();
+        }
+
+        @Test
+        void submitNotification_shouldBeInert_whenNoOperatorIdsPresent() {
+            // Given — a DRAFT whose consignor carries no operatorId (legacy / E2E fixture). No crn
+            // header is set. The guard must skip entirely (leg 1) so old data still submits.
+            String referenceNumber = "GBN-AG-26-INE001";
+            Notification notification = Notification.builder()
+                .id("notif-id-inert")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .consignor(consignors().getFirst()) // no operatorId
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.submitNotification(referenceNumber,
+                "trace-inert");
+
+            // Then — submit proceeds and the operators service is never consulted (the inertness pin)
+            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
+            verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED,
+                "trace-inert");
+            verify(operatorsApiClient, never()).classify(any());
+        }
+
+        @Test
+        void submitNotification_shouldRejectWith400_whenOperatorIdsPresentButNoCrnHeader() {
+            // Given — operatorIds present but the Trade-Imports-Crn identity is absent (MDC empty)
+            String referenceNumber = "GBN-AG-26-NOH001";
+            Notification notification = Notification.builder()
+                .id("notif-id-nohdr")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .consignor(operatorWithId("OP-1", "Some Co"))
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+
+            // When / Then — fail closed: 400 bad-request, no silent bypass
+            assertThatThrownBy(
+                () -> notificationService.submitNotification(referenceNumber, "trace-nohdr"))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("identity");
+
+            // Status not transitioned and the operators service never consulted
+            verify(notificationRepository, never()).save(any());
+            verify(operatorsApiClient, never()).classify(any());
+        }
+
+        @Test
+        void submitNotification_shouldProceedWithoutHydration_whenAllOperatorsActive() {
+            // Given — a DRAFT whose consignor references an ACTIVE operator; crn present
+            MDC.put("crn", "GBCRN123");
+            String referenceNumber = "GBN-AG-26-ACT001";
+            Operator storedConsignor = operatorWithId("OP-ACT", "Original Name");
+            Notification notification = Notification.builder()
+                .id("notif-id-active")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .consignor(storedConsignor)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            when(operatorsApiClient.classify("OP-ACT")).thenReturn(OperatorExistence.ACTIVE);
+
+            // When
+            Notification result = notificationService.submitNotification(referenceNumber,
+                "trace-active");
+
+            // Then — submit proceeds AND the embedded copy is byte-identical (c-017: no re-hydration)
+            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
+            assertThat(result.getConsignor()).isEqualTo(storedConsignor);
+            assertThat(result.getConsignor().getName()).isEqualTo("Original Name");
+            assertThat(result.getConsignor().getOperatorId()).isEqualTo("OP-ACT");
+            verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED,
+                "trace-active");
+        }
+
+        @Test
+        void submitNotification_shouldRejectWith400_keyedByParty_whenOperatorDeleted() {
+            // Given — a DRAFT whose consignor references a tombstoned operator
+            MDC.put("crn", "GBCRN123");
+            String referenceNumber = "GBN-AG-26-DEL010";
+            Notification notification = Notification.builder()
+                .id("notif-id-del")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .consignor(operatorWithId("OP-DEL", "Deleted Co"))
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(operatorsApiClient.classify("OP-DEL")).thenReturn(OperatorExistence.DELETED);
+
+            // When / Then — 400 validation problem keyed by the party field with the deleted message
+            assertThatThrownBy(
+                () -> notificationService.submitNotification(referenceNumber, "trace-del"))
+                .isInstanceOf(OperatorValidationException.class)
+                .satisfies(ex -> assertThat(((OperatorValidationException) ex).getErrors())
+                    .containsEntry("consignor",
+                        List.of("Operator has been deleted — select a replacement")));
+
+            // Status NOT transitioned; the deleted metric ticks, the unresolved one does not
+            verify(notificationRepository, never()).save(any());
+            assertThat(meterRegistry.get("SubmitBlockedDeletedOperator").counter().count())
+                .isEqualTo(1.0);
+            assertThat(meterRegistry.find("SubmitBlockedUnresolvedOperator").counter()).isNull();
+        }
+
+        @Test
+        void submitNotification_shouldRejectWith400_withDistinctMessage_whenOperatorUnresolved() {
+            // Given — a DRAFT whose importer 404s (unknown / another crn's operator)
+            MDC.put("crn", "GBCRN123");
+            String referenceNumber = "GBN-AG-26-U40410";
+            Notification notification = Notification.builder()
+                .id("notif-id-u404")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .importer(operatorWithId("OP-404", "Unknown Co"))
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(operatorsApiClient.classify("OP-404")).thenReturn(OperatorExistence.NOT_FOUND);
+
+            // When / Then — 400 keyed by party with the UNRESOLVED message (NOT the deleted one)
+            assertThatThrownBy(
+                () -> notificationService.submitNotification(referenceNumber, "trace-u404"))
+                .isInstanceOf(OperatorValidationException.class)
+                .satisfies(ex -> assertThat(((OperatorValidationException) ex).getErrors())
+                    .containsEntry("importer",
+                        List.of("Operator could not be verified — select it again")));
+
+            verify(notificationRepository, never()).save(any());
+            assertThat(meterRegistry.get("SubmitBlockedUnresolvedOperator").counter().count())
+                .isEqualTo(1.0);
+            assertThat(meterRegistry.find("SubmitBlockedDeletedOperator").counter()).isNull();
+        }
+
+        @Test
+        void submitNotification_shouldFailClosedWith502_whenOperatorsServiceUnavailable() {
+            // Given — the operators service is unreachable for the referenced operator
+            MDC.put("crn", "GBCRN123");
+            String referenceNumber = "GBN-AG-26-OUT010";
+            Notification notification = Notification.builder()
+                .id("notif-id-out")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .consignor(operatorWithId("OP-OUT", "Some Co"))
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(operatorsApiClient.classify("OP-OUT")).thenReturn(OperatorExistence.UNAVAILABLE);
+
+            // When / Then — fail closed on submit: 502 upstream-error, status untransitioned
+            assertThatThrownBy(
+                () -> notificationService.submitNotification(referenceNumber, "trace-out"))
+                .isInstanceOf(ServiceUnavailableException.class);
+
+            verify(notificationRepository, never()).save(any());
         }
     }
 

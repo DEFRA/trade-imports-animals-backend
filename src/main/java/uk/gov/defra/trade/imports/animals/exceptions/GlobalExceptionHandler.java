@@ -60,6 +60,35 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle submit-guard operator validation failures (400 Bad Request). Renders the party-keyed
+     * {@code errors} map in the same shape as a bean-validation failure so the frontend review page
+     * can attach per-party inline messages and error-summary anchors (design §4.5, c-018).
+     */
+    @ExceptionHandler(OperatorValidationException.class)
+    public ResponseEntity<ProblemDetail> handleOperatorValidationException(OperatorValidationException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Operator validation failed (trace: {}): {}", traceId, ex.getErrors());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST,
+            "Validation failed for one or more fields"
+        );
+
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
+        problemDetail.setTitle("Validation Error");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        problemDetail.setProperty("errors", ex.getErrors());
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
      * Handle application-level bad-request errors (400 Bad Request).
      */
     @ExceptionHandler(BadRequestException.class)
