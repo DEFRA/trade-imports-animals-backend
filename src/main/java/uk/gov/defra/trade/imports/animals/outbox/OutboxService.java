@@ -22,7 +22,7 @@ public class OutboxService {
 
     static final String AGGREGATE_TYPE = "Notification";
     static final String SUB_TYPE = "GBN-AG";
-    static final String SCHEMA_VERSION = "1";
+    static final String SCHEMA_VERSION = "2";
     static final String AGGREGATE_ID_PREFIX = "Imports.Notification.GBN-AG.";
 
     private final OutboxEventRepository outboxEventRepository;

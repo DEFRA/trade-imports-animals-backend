@@ -1043,7 +1043,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getTimestamp()).isNotNull();
         assertThat(event.getEventId()).isNotNull();
         assertThat(event.getMetadata().getCorrelationId()).isEqualTo("trace-outbox-001");
-        assertThat(event.getMetadata().getSchemaVersion()).isEqualTo("1");
+        assertThat(event.getMetadata().getSchemaVersion()).isEqualTo("2");
         assertThat(event.getData().get("referenceNumber")).isEqualTo(referenceNumber);
     }
 

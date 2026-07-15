@@ -73,7 +73,7 @@ class OutboxServiceTest {
             assertThat(saved.getSubType()).isEqualTo("GBN-AG");
             assertThat(saved.getEventType()).isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
             assertThat(saved.getMetadata().getCorrelationId()).isEqualTo("trace-001");
-            assertThat(saved.getMetadata().getSchemaVersion()).isEqualTo("1");
+            assertThat(saved.getMetadata().getSchemaVersion()).isEqualTo("2");
             assertThat(saved.getEventId()).isNotNull();
             assertThat(saved.getTimestamp()).isNotNull();
         }
@@ -172,6 +172,7 @@ class OutboxServiceTest {
             verify(outboxEventRepository).save(captor.capture());
             assertThat(captor.getValue().getEventType())
                 .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmissionAmended");
+            assertThat(captor.getValue().getMetadata().getSchemaVersion()).isEqualTo("2");
         }
 
         @Test
