@@ -11,6 +11,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class Operator {
 
+    private String operatorId;
     private String name;
+    private String telephone;
+    private String email;
     private Address address;
 }

@@ -11,7 +11,10 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class Transporter {
 
+    private String operatorId;
     private String name;
+    private String telephone;
+    private String email;
     private Address address;
     private String approvalNumber;
     private String type;
