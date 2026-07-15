@@ -174,7 +174,7 @@ class OutboxPollerIT extends IntegrationBase {
         assertThat(publishedMessage.get("timestamp")).isNotNull();
         assertThat(publishedMessage.get("metadata").get("correlationId").asText())
             .isEqualTo(TRACE_PREFIX + "001");
-        assertThat(publishedMessage.get("metadata").get("schemaVersion").asText()).isEqualTo("1");
+        assertThat(publishedMessage.get("metadata").get("schemaVersion").asText()).isEqualTo("2");
         assertThat(publishedMessage.get("data").get("referenceNumber").asText()).isEqualTo(referenceNumber);
         assertThat(publishedMessage.has("publishedAt")).isTrue();
         assertThat(Instant.parse(publishedMessage.get("publishedAt").asText()))
@@ -187,7 +187,7 @@ class OutboxPollerIT extends IntegrationBase {
             .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
         assertThat(attributes.get("correlationId").get("Value").asText())
             .isEqualTo(TRACE_PREFIX + "001");
-        assertThat(attributes.get("schemaVersion").get("Value").asText()).isEqualTo("1");
+        assertThat(attributes.get("schemaVersion").get("Value").asText()).isEqualTo("2");
     }
 
     @Test
