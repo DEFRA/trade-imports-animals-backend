@@ -19,5 +19,7 @@ public interface NotificationMapper {
 
     @BeanMapping(ignoreUnmappedSourceProperties = "submittedBaseline")
     @Mapping(target = "accompanyingDocuments", ignore = true)
+    @Mapping(target = "deletedOperatorFields", ignore = true)
+    @Mapping(target = "unresolvedOperatorFields", ignore = true)
     NotificationResponse toResponse(Notification notification);
 }

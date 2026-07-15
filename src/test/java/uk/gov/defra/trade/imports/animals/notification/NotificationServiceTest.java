@@ -22,6 +22,8 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.dest
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.Collections;
@@ -57,6 +59,8 @@ import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.operators.OperatorExistence;
+import uk.gov.defra.trade.imports.animals.operators.OperatorsApiClient;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
@@ -84,6 +88,11 @@ class NotificationServiceTest {
     @Mock
     private ReferenceNumberGenerator referenceNumberGenerator;
 
+    @Mock
+    private OperatorsApiClient operatorsApiClient;
+
+    private MeterRegistry meterRegistry;
+
     private NotificationService notificationService;
 
     private final NotificationMapper notificationMapper = Mappers.getMapper(
@@ -92,9 +101,11 @@ class NotificationServiceTest {
     @BeforeEach
     void setUp() {
         LockingTaskExecutor lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
+        meterRegistry = new SimpleMeterRegistry();
         notificationService = new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            notificationMapper, new NotificationCopyMapper(), referenceNumberGenerator, Duration.ZERO, 54, 50);
+            notificationMapper, new NotificationCopyMapper(), referenceNumberGenerator,
+            operatorsApiClient, meterRegistry, Duration.ZERO, 54, 50);
     }
 
     @Nested
@@ -1181,6 +1192,186 @@ class NotificationServiceTest {
                 .hasMessageContaining(referenceNumber);
 
             verify(documentService, never()).findByNotificationRef(any());
+        }
+
+        private Operator operatorWithId(String operatorId, String name, String country) {
+            return Operator.builder()
+                .operatorId(operatorId)
+                .name(name)
+                .address(Address.builder().addressLine1("1 Test Street").country(country).build())
+                .build();
+        }
+
+        private Notification draftWith(String referenceNumber) {
+            return Notification.builder()
+                .id("notif-id-" + referenceNumber)
+                .referenceNumber(referenceNumber)
+                .origin(new Origin("GB", "true", "REF"))
+                .status(DRAFT)
+                .build();
+        }
+
+        @Test
+        void findByRef_shouldFlagDeletedOperator_underPartyKey() {
+            // Given — a DRAFT whose consignor references a tombstoned operator
+            String referenceNumber = "GBN-AG-26-DEL001";
+            Notification notification = draftWith(referenceNumber);
+            notification.setConsignor(operatorWithId("OP-DEL", "Deleted Co", "United Kingdom"));
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(documentService.findByNotificationRef(referenceNumber))
+                .thenReturn(Collections.emptyList());
+            when(operatorsApiClient.classify("OP-DEL")).thenReturn(OperatorExistence.DELETED);
+
+            // When
+            NotificationResponse response = notificationService.findByRef(referenceNumber);
+
+            // Then — the party key is surfaced under deleted, and unresolved is empty (not null:
+            // the check ran)
+            assertThat(response.deletedOperatorFields()).containsExactly("consignor");
+            assertThat(response.unresolvedOperatorFields()).isEmpty();
+        }
+
+        @Test
+        void findByRef_shouldFlag404OperatorAsUnresolved_notDeleted() {
+            // Given — a DRAFT whose importer references a 404 operator (unknown / another crn)
+            String referenceNumber = "GBN-AG-26-U40401";
+            Notification notification = draftWith(referenceNumber);
+            notification.setImporter(operatorWithId("OP-404", "Unknown Co", "United Kingdom"));
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(documentService.findByNotificationRef(referenceNumber))
+                .thenReturn(Collections.emptyList());
+            when(operatorsApiClient.classify("OP-404")).thenReturn(OperatorExistence.NOT_FOUND);
+
+            // When
+            NotificationResponse response = notificationService.findByRef(referenceNumber);
+
+            // Then — 404 is NOT a deletion: it goes to unresolved, and deleted stays EMPTY
+            assertThat(response.unresolvedOperatorFields()).containsExactly("importer");
+            assertThat(response.deletedOperatorFields()).isEmpty();
+        }
+
+        @Test
+        void findByRef_shouldFlagDeletedTransporter_underTransporterKey() {
+            // Given — the transporter (transport.transporter, not a NotificationBase party) is deleted
+            String referenceNumber = "GBN-AG-26-TRA001";
+            Notification notification = draftWith(referenceNumber);
+            notification.setTransport(Transport.builder()
+                .portOfEntry("GBFXT")
+                .transporter(Transporter.builder()
+                    .operatorId("OP-T")
+                    .name("Haulage Co")
+                    .address(Address.builder().addressLine1("2 Depot Road").country("UK").build())
+                    .build())
+                .build());
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(documentService.findByNotificationRef(referenceNumber))
+                .thenReturn(Collections.emptyList());
+            when(operatorsApiClient.classify("OP-T")).thenReturn(OperatorExistence.DELETED);
+
+            // When
+            NotificationResponse response = notificationService.findByRef(referenceNumber);
+
+            // Then — keyed under the explicit 'transporter' key
+            assertThat(response.deletedOperatorFields()).containsExactly("transporter");
+            assertThat(response.unresolvedOperatorFields()).isEmpty();
+        }
+
+        @Test
+        void findByRef_shouldNotHydrateOperatorValues_afterCheck() {
+            // Given — the c-017 no-hydration pin: the check consumes only the classification and
+            // never writes the operator's values back into the response or the document
+            String referenceNumber = "GBN-AG-26-NOH001";
+            Operator storedConsignor = operatorWithId("OP-DEL", "Original Name", "United Kingdom");
+            Notification notification = draftWith(referenceNumber);
+            notification.setConsignor(storedConsignor);
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(documentService.findByNotificationRef(referenceNumber))
+                .thenReturn(Collections.emptyList());
+            when(operatorsApiClient.classify("OP-DEL")).thenReturn(OperatorExistence.DELETED);
+
+            // When
+            NotificationResponse response = notificationService.findByRef(referenceNumber);
+
+            // Then — the returned consignor values are byte-identical to what was stored
+            assertThat(response.consignor()).isEqualTo(storedConsignor);
+            assertThat(response.consignor().getName()).isEqualTo("Original Name");
+            assertThat(response.consignor().getOperatorId()).isEqualTo("OP-DEL");
+            // And the read never persists anything (no decorate-on-read write-back)
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void findByRef_shouldNotCheckSubmitted_leavingArraysAbsent() {
+            // Given — a SUBMITTED notification is frozen by status (c-003): never checked
+            String referenceNumber = "GBN-AG-26-SUB001";
+            Notification notification = Notification.builder()
+                .id("notif-id-sub")
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .consignor(operatorWithId("OP-DEL", "Deleted Co", "United Kingdom"))
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(documentService.findByNotificationRef(referenceNumber))
+                .thenReturn(Collections.emptyList());
+
+            // When
+            NotificationResponse response = notificationService.findByRef(referenceNumber);
+
+            // Then — both arrays are ABSENT (null), proving no check ran despite the deleted operator
+            assertThat(response.deletedOperatorFields()).isNull();
+            assertThat(response.unresolvedOperatorFields()).isNull();
+        }
+
+        @Test
+        void findByRef_shouldBeInert_whenNoOperatorIdsPresent() {
+            // Given — a DRAFT whose parties carry no operatorId (pre-address-book / hand-typed data)
+            String referenceNumber = "GBN-AG-26-INE001";
+            Notification notification = draftWith(referenceNumber);
+            notification.setConsignor(consignors().getFirst()); // no operatorId
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(documentService.findByNotificationRef(referenceNumber))
+                .thenReturn(Collections.emptyList());
+
+            // When
+            NotificationResponse response = notificationService.findByRef(referenceNumber);
+
+            // Then — no check runs; both arrays are ABSENT (the inertness pin)
+            assertThat(response.deletedOperatorFields()).isNull();
+            assertThat(response.unresolvedOperatorFields()).isNull();
+        }
+
+        @Test
+        void findByRef_shouldDegradeOpen_whenOperatorsServiceUnavailable() {
+            // Given — the operators service is unreachable for the referenced operator
+            String referenceNumber = "GBN-AG-26-OUT001";
+            Notification notification = draftWith(referenceNumber);
+            notification.setConsignor(operatorWithId("OP-1", "Some Co", "United Kingdom"));
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(documentService.findByNotificationRef(referenceNumber))
+                .thenReturn(Collections.emptyList());
+            when(operatorsApiClient.classify("OP-1")).thenReturn(OperatorExistence.UNAVAILABLE);
+
+            // When
+            NotificationResponse response = notificationService.findByRef(referenceNumber);
+
+            // Then — degrade open: both arrays ABSENT (no claim), and the outage metric increments
+            assertThat(response.deletedOperatorFields()).isNull();
+            assertThat(response.unresolvedOperatorFields()).isNull();
+            assertThat(meterRegistry.get("OperatorCheckFailure").counter().count()).isEqualTo(1.0);
         }
     }
 

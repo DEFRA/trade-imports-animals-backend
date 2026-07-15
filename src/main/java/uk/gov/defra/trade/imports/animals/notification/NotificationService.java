@@ -1,9 +1,13 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +33,8 @@ import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.operators.OperatorExistence;
+import uk.gov.defra.trade.imports.animals.operators.OperatorsApiClient;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
@@ -39,7 +45,8 @@ public class NotificationService {
     private static final String CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER = "Cannot find notification with reference number: ";
     private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
     private static final int MAX_REF_RETRIES = 3;
-  
+    private static final String METRIC_OPERATOR_CHECK_FAILURE = "OperatorCheckFailure";
+
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
     private final DocumentService documentService;
@@ -48,6 +55,8 @@ public class NotificationService {
     private final NotificationMapper notificationMapper;
     private final NotificationCopyMapper notificationCopyMapper;
     private final ReferenceNumberGenerator referenceNumberGenerator;
+    private final OperatorsApiClient operatorsApiClient;
+    private final MeterRegistry meterRegistry;
     private final Duration lockAtLeastFor;
     private final int listPageSize;
     private final int adminPageSize;
@@ -61,6 +70,8 @@ public class NotificationService {
         NotificationMapper notificationMapper,
         NotificationCopyMapper notificationCopyMapper,
         ReferenceNumberGenerator referenceNumberGenerator,
+        OperatorsApiClient operatorsApiClient,
+        MeterRegistry meterRegistry,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
         @Value("${notification.list.page-size}") int listPageSize,
         @Value("${notification.admin.page-size}") int adminPageSize) {
@@ -72,6 +83,8 @@ public class NotificationService {
         this.notificationMapper = notificationMapper;
         this.notificationCopyMapper = notificationCopyMapper;
         this.referenceNumberGenerator = referenceNumberGenerator;
+        this.operatorsApiClient = operatorsApiClient;
+        this.meterRegistry = meterRegistry;
         this.lockAtLeastFor = lockAtLeastFor;
         this.listPageSize = listPageSize;
         this.adminPageSize = adminPageSize;
@@ -106,10 +119,87 @@ public class NotificationService {
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
         List<AccompanyingDocument> documents = documentService.findByNotificationRef(
             referenceNumber);
-        return notificationMapper.toResponse(notification).toBuilder()
+        NotificationResponse response = notificationMapper.toResponse(notification).toBuilder()
             .accompanyingDocuments(documents.stream().map(AccompanyingDocumentDto::from).toList())
             .build();
+        return applyOperatorExistenceCheck(notification, response);
     }
+
+    /**
+     * Adds the EUDPA-293 detection surface to a read (design §4.3/§4.4). Consumes only the
+     * existence classification of each referenced operator — the operator's field values are never
+     * read into the response or the stored document (c-017: no hydration, no re-sync). A tombstoned
+     * operator (200 + status DELETED) surfaces under {@code deletedOperatorFields}; a 404 (unknown,
+     * or another crn's operator) surfaces under {@code unresolvedOperatorFields}. The two states are
+     * kept apart (c-018): a 404 is not a deletion. The check degrades open — if the operators service
+     * is unavailable, both arrays are left absent, a WARN is logged and {@code OperatorCheckFailure}
+     * increments. SUBMITTED copies are frozen by status (c-003) and never checked; parties without an
+     * {@code operatorId} are skipped, so this is inert until address-book data appears.
+     */
+    private NotificationResponse applyOperatorExistenceCheck(
+        Notification notification, NotificationResponse response) {
+        if (notification.getStatus() != NotificationStatus.DRAFT
+            && notification.getStatus() != NotificationStatus.AMEND) {
+            return response;
+        }
+        List<PartyOperator> parties = operatorParties(notification);
+        if (parties.isEmpty()) {
+            return response;
+        }
+        Map<String, OperatorExistence> classifications = new HashMap<>();
+        for (String operatorId : parties.stream().map(PartyOperator::operatorId).distinct().toList()) {
+            OperatorExistence existence = operatorsApiClient.classify(operatorId);
+            if (existence == OperatorExistence.UNAVAILABLE) {
+                log.warn("Operators existence check unavailable for notification {}; degrading open",
+                    notification.getReferenceNumber());
+                meterRegistry.counter(METRIC_OPERATOR_CHECK_FAILURE).increment();
+                return response;
+            }
+            classifications.put(operatorId, existence);
+        }
+        List<String> deletedOperatorFields = new ArrayList<>();
+        List<String> unresolvedOperatorFields = new ArrayList<>();
+        for (PartyOperator party : parties) {
+            switch (classifications.get(party.operatorId())) {
+                case DELETED -> deletedOperatorFields.add(party.key());
+                case NOT_FOUND -> unresolvedOperatorFields.add(party.key());
+                default -> { /* ACTIVE — no detection surface */ }
+            }
+        }
+        return response.toBuilder()
+            .deletedOperatorFields(deletedOperatorFields)
+            .unresolvedOperatorFields(unresolvedOperatorFields)
+            .build();
+    }
+
+    private List<PartyOperator> operatorParties(Notification notification) {
+        List<PartyOperator> parties = new ArrayList<>();
+        addOperator(parties, "placeOfOrigin", notification.getPlaceOfOrigin());
+        addOperator(parties, "consignor", notification.getConsignor());
+        addOperator(parties, "consignee", notification.getConsignee());
+        addOperator(parties, "importer", notification.getImporter());
+        addOperator(parties, "destination", notification.getDestination());
+        addOperator(parties, "consignment", notification.getConsignment());
+        if (notification.getTransport() != null && notification.getTransport().getTransporter() != null) {
+            addOperatorId(parties, "transporter",
+                notification.getTransport().getTransporter().getOperatorId());
+        }
+        return parties;
+    }
+
+    private void addOperator(List<PartyOperator> parties, String key, Operator operator) {
+        if (operator != null) {
+            addOperatorId(parties, key, operator.getOperatorId());
+        }
+    }
+
+    private void addOperatorId(List<PartyOperator> parties, String key, String operatorId) {
+        if (StringUtils.isNotBlank(operatorId)) {
+            parties.add(new PartyOperator(key, operatorId));
+        }
+    }
+
+    private record PartyOperator(String key, String operatorId) {}
 
     public NotificationPageResponse findAll(int page, String sort) {
         log.debug("Fetching notifications page {} (size {}) with sort {}", page, listPageSize, sort);
