@@ -47,6 +47,10 @@ cdp:
   s3:
     documents-bucket: ${CDP_DOCUMENTS_BUCKET:trade-imports-animals-documents}
 
+# Operators service (address book) — existence check only (c-017/c-018)
+operators:
+  url: ${TRADE_IMPORTS_OPERATORS_URL:http://localhost:8091}
+
 # Application-level AWS overrides
 app:
   base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:}

@@ -33,8 +33,12 @@ import uk.gov.defra.trade.imports.animals.interceptor.TraceIdPropagationIntercep
 @Slf4j
 public class RestClientConfig {
 
+  private static final Duration OPERATORS_CONNECT_TIMEOUT = Duration.ofSeconds(1);
+  private static final Duration OPERATORS_READ_TIMEOUT = Duration.ofSeconds(2);
+
   private final ClientHttpRequestFactory customRequestFactory;
   private final TraceIdPropagationInterceptor traceIdInterceptor;
+  private final SSLContext customSslContext;
 
   public RestClientConfig(
       TraceIdPropagationInterceptor traceIdInterceptor,
@@ -54,6 +58,7 @@ public class RestClientConfig {
 
     this.customRequestFactory = factory;
     this.traceIdInterceptor = traceIdInterceptor;
+    this.customSslContext = customSslContext;
   }
 
   /**
@@ -127,5 +132,25 @@ public class RestClientConfig {
   public RestClient cdpUploaderRestClient(RestClient.Builder builder, CdpConfig cdpConfig) {
     log.debug("Creating cdpUploaderRestClient with base URL: {}", cdpConfig.uploader().baseUrl());
     return builder.baseUrl(cdpConfig.uploader().baseUrl()).build();
+  }
+
+  /**
+   * RestClient pre-configured with the operators-service base URL and tight timeouts (1s connect,
+   * 2s read). The existence check is on the critical read/submit path, so it must fail fast rather
+   * than hang; a longer budget would let an operators outage stall every notification read.
+   *
+   * <p>Inherits trace-id propagation from the shared builder; the custom SSL context is reused via a
+   * dedicated request factory so the shorter timeouts apply only to operators calls.
+   */
+  @Bean
+  public RestClient operatorsRestClient(RestClient.Builder builder, OperatorsConfig operatorsConfig) {
+    log.debug("Creating operatorsRestClient with base URL: {}", operatorsConfig.url());
+    HttpClient httpClient = HttpClient.newBuilder()
+        .sslContext(customSslContext)
+        .connectTimeout(OPERATORS_CONNECT_TIMEOUT)
+        .build();
+    JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+    factory.setReadTimeout(OPERATORS_READ_TIMEOUT);
+    return builder.baseUrl(operatorsConfig.url()).requestFactory(factory).build();
   }
 }

@@ -55,7 +55,7 @@ import org.testcontainers.utility.DockerImageName;
 @ActiveProfiles("integration-test")
 public abstract class IntegrationBase {
 
-    static final List<String> SERVICES_TO_MOCK = List.of();
+    static final List<String> SERVICES_TO_MOCK = List.of("operators");
 
     @LocalServerPort
     protected int port;

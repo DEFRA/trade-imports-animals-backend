@@ -7,10 +7,11 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import uk.gov.defra.trade.imports.animals.configuration.AppAwsConfig;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
+import uk.gov.defra.trade.imports.animals.configuration.OperatorsConfig;
 import uk.gov.defra.trade.imports.animals.configuration.OutboxConfig;
 
 @SpringBootApplication
-@EnableConfigurationProperties({AppAwsConfig.class, AppConfig.class, CdpConfig.class, OutboxConfig.class})
+@EnableConfigurationProperties({AppAwsConfig.class, AppConfig.class, CdpConfig.class, OperatorsConfig.class, OutboxConfig.class})
 @EnableScheduling
 public class Application {
 

@@ -27,6 +27,8 @@ public class RequestTracingFilter implements Filter {
     private static final String MDC_HTTP_METHOD = "http.request.method";
     private static final String MDC_HTTP_STATUS = "http.response.status_code";
     private static final String MDC_URL_FULL = "url.full";
+    private static final String MDC_CRN = "crn";
+    private static final String CRN_HEADER = "Trade-Imports-Crn";
 
     @Value("${cdp.tracing.header-name}")
     private String header;
@@ -45,6 +47,13 @@ public class RequestTracingFilter implements Filter {
             String traceId = httpRequest.getHeader(header);
             if (traceId != null && !traceId.isBlank()) {
                 MDC.put(MDC_TRACE_ID, traceId);
+            }
+
+            // Caller identity: stash the crn request-scoped so outbound operators calls can
+            // forward it. Absent header is tolerated (the check simply cannot run).
+            String crn = httpRequest.getHeader(CRN_HEADER);
+            if (crn != null && !crn.isBlank()) {
+                MDC.put(MDC_CRN, crn);
             }
 
             // Populate request metadata
