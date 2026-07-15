@@ -12,6 +12,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.outbox.gbnag.GbnAgEventDataMapper;
 
 @Service
 @Slf4j
@@ -27,6 +28,7 @@ public class OutboxService {
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
+    private final GbnAgEventDataMapper gbnAgEventDataMapper;
 
     public void appendEvent(Notification notification, OutboxEventType eventType, String correlationId) {
         String aggregateId = buildAggregateId(notification.getReferenceNumber());
@@ -37,7 +39,7 @@ public class OutboxService {
             .orElse(1L);
 
         Map<String, Object> data = objectMapper.convertValue(
-            NotificationSubmittedData.from(notification), MAP_TYPE);
+            gbnAgEventDataMapper.toGbnAgEventData(notification), MAP_TYPE);
 
         OutboxEvent event = OutboxEvent.builder()
             .eventId(UUID.randomUUID().toString())
@@ -51,6 +53,7 @@ public class OutboxService {
             .metadata(OutboxEventMetadata.builder()
                 .correlationId(correlationId)
                 .schemaVersion(SCHEMA_VERSION)
+                .schemaUri(eventType.schemaUri())
                 .build())
             .build();
 

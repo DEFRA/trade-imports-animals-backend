@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,6 +39,7 @@ import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberPageRespon
 import uk.gov.defra.trade.imports.animals.notification.Species;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
@@ -792,7 +794,8 @@ class NotificationIT extends IntegrationBase {
             .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmissionAmended");
         assertThat(amendEvent.getAggregateVersion()).isEqualTo(2L);
         assertThat(amendEvent.getMetadata().getCorrelationId()).isEqualTo("trace-amend-001");
-        assertThat(amendEvent.getData()).containsEntry("referenceNumber", referenceNumber);
+        assertThat(amendEvent.getMetadata().getSchemaUri()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED.schemaUri());
+        assertThat(gbnAgIdentifier(amendEvent)).isEqualTo(referenceNumber);
     }
 
     @Test
@@ -992,7 +995,15 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getEventId()).isNotNull();
         assertThat(event.getMetadata().getCorrelationId()).isEqualTo("trace-outbox-001");
         assertThat(event.getMetadata().getSchemaVersion()).isEqualTo("1");
-        assertThat(event.getData().get("referenceNumber")).isEqualTo(referenceNumber);
+        assertThat(event.getMetadata().getSchemaUri()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUri());
+        assertThat(gbnAgIdentifier(event)).isEqualTo(referenceNumber);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Object gbnAgIdentifier(OutboxEvent event) {
+        Map<String, Object> exchangedDocument =
+            (Map<String, Object>) event.getData().get("exchangedDocument");
+        return exchangedDocument.get("identifier");
     }
 
     @Test

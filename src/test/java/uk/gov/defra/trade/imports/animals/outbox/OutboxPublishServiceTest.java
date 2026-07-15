@@ -86,6 +86,7 @@ class OutboxPublishServiceTest {
                 .isEqualTo("trace-001");
             assertThat(request.messageAttributes().get(OutboxPublishService.ATTR_SCHEMA_VERSION).stringValue())
                 .isEqualTo("1");
+            assertThat(request.messageAttributes().get(OutboxPublishService.ATTR_SCHEMA_URI).stringValue()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUri());
         }
 
         @Test
@@ -341,6 +342,7 @@ class OutboxPublishServiceTest {
             .metadata(OutboxEventMetadata.builder()
                 .correlationId(correlationId)
                 .schemaVersion("1")
+                .schemaUri(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUri())
                 .build())
             .build();
     }

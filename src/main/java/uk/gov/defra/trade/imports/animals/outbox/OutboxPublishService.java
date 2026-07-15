@@ -24,6 +24,7 @@ public class OutboxPublishService {
     static final String ATTR_EVENT_TYPE = "eventType";
     static final String ATTR_CORRELATION_ID = "correlationId";
     static final String ATTR_SCHEMA_VERSION = "schemaVersion";
+    static final String ATTR_SCHEMA_URI = "schemaUri";
 
     private final OutboxEventRepository outboxEventRepository;
     private final SnsClient snsClient;
@@ -99,10 +100,12 @@ public class OutboxPublishService {
         OutboxEventMetadata metadata = event.getMetadata();
         String correlationId = metadata != null ? metadata.getCorrelationId() : "";
         String schemaVersion = metadata != null ? metadata.getSchemaVersion() : "";
+        String schemaUri = metadata != null ? metadata.getSchemaUri() : "";
         return Map.of(
             ATTR_EVENT_TYPE, stringAttribute(event.getEventType()),
             ATTR_CORRELATION_ID, stringAttribute(correlationId),
-            ATTR_SCHEMA_VERSION, stringAttribute(schemaVersion));
+            ATTR_SCHEMA_VERSION, stringAttribute(schemaVersion),
+            ATTR_SCHEMA_URI, stringAttribute(schemaUri));
     }
 
     private static MessageAttributeValue stringAttribute(String value) {

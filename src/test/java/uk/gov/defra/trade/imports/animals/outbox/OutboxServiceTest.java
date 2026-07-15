@@ -27,6 +27,7 @@ import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
+import uk.gov.defra.trade.imports.animals.outbox.gbnag.GbnAgEventDataMapper;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,7 +41,7 @@ class OutboxServiceTest {
     @BeforeEach
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        outboxService = new OutboxService(outboxEventRepository, objectMapper);
+        outboxService = new OutboxService(outboxEventRepository, objectMapper, new GbnAgEventDataMapper());
     }
 
     @Nested
@@ -74,6 +75,7 @@ class OutboxServiceTest {
             assertThat(saved.getEventType()).isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
             assertThat(saved.getMetadata().getCorrelationId()).isEqualTo("trace-001");
             assertThat(saved.getMetadata().getSchemaVersion()).isEqualTo("1");
+            assertThat(saved.getMetadata().getSchemaUri()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUri());
             assertThat(saved.getEventId()).isNotNull();
             assertThat(saved.getTimestamp()).isNotNull();
         }
@@ -106,7 +108,8 @@ class OutboxServiceTest {
         }
 
         @Test
-        void appendEvent_shouldIncludeAllNotificationDataInEvent() {
+        @SuppressWarnings("unchecked")
+        void appendEvent_shouldStoreGbnAgPayloadInDataField() {
             // Given
             Origin origin = new Origin("GB", "true", "REF123");
             Commodity commodity = Commodity.builder().name("Live bovine animals").build();
@@ -137,20 +140,24 @@ class OutboxServiceTest {
             // When
             outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001");
 
-            // Then — data is stored as Map<String, Object> (opaque JSON, schema-agnostic)
+            // Then — data is the GBN-AG payload (mapped from the Notification), stored as
+            // Map<String, Object>. Field-level mapping is covered by GbnAgMapperTest; here we
+            // assert the service stores the GBN-AG shape rather than the raw notification.
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
             verify(outboxEventRepository).save(captor.capture());
             Map<String, Object> data = captor.getValue().getData();
-            assertThat(data).containsKey("referenceNumber");
-            assertThat(data.get("referenceNumber")).isEqualTo("GBN-AG-26-ABC123");
-            assertThat(data).containsKey("origin");
-            assertThat(data).containsKey("commodity");
-            assertThat(data.get("reasonForImport")).isEqualTo("PERMANENT");
-            assertThat(data).containsKey("additionalDetails");
-            assertThat(data.get("cphNumber")).isEqualTo("12/345/6789");
-            assertThat(data).containsKey("transport");
-            assertThat(data).containsKey("consignor");
-            assertThat(data).containsKey("destination");
+            assertThat(data).containsKeys("$model", "$type", "exchangedDocument", "specifiedConsignment");
+            assertThat(data.get("$type")).isEqualTo("gbn-ag");
+            assertThat(data).doesNotContainKey("referenceNumber");
+
+            Map<String, Object> exchangedDocument = (Map<String, Object>) data.get("exchangedDocument");
+            assertThat(exchangedDocument.get("identifier")).isEqualTo("GBN-AG-26-ABC123");
+            assertThat(exchangedDocument.get("notificationStatusCode")).isEqualTo("SUBMITTED");
+
+            Map<String, Object> specifiedConsignment =
+                (Map<String, Object>) data.get("specifiedConsignment");
+            assertThat(specifiedConsignment).containsKey("consignorParty");
+            assertThat(specifiedConsignment).containsKey("deliveryParty");
         }
 
         @Test

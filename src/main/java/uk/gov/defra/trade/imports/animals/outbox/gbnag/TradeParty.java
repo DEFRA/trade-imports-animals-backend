@@ -1,0 +1,49 @@
+package uk.gov.defra.trade.imports.animals.outbox.gbnag;
+
+import java.util.List;
+import uk.gov.defra.trade.imports.animals.notification.Operator;
+import uk.gov.defra.trade.imports.animals.notification.Transporter;
+
+public record TradeParty(
+    String identifier,
+    String urlId,
+    String name,
+    CodedValue partyRoleCode,
+    List<CodedValue> partyTypeCode,
+    TradeAddress postalAddress,
+    List<DefinedContact> definedContact
+) {
+
+    private static final String OPERATOR_ACTIVITY_TYPE =
+        "https://traces-codelists.ec.europa.eu/operator_activity_type";
+    private static final String UK_TRANSPORTER_AUTHORISATION =
+        "https://refdata.tbc.defra.gov.uk/uk_transporter_authorisation";
+    static TradeParty from(Operator operator) {
+        if (operator == null) {
+            return null;
+        }
+        return new TradeParty(
+            null, null, operator.getName(),
+            null,
+            null, TradeAddress.from(operator.getAddress()), null);
+    }
+
+    static TradeParty from(Transporter transporter) {
+        if (transporter == null) {
+            return null;
+        }
+        // TODO: transporter.type passed through raw; confirm whether it
+        // needs mapping to an operator_activity_type codelist value.
+        List<CodedValue> partyTypeCode = transporter.getType() != null
+            ? List.of(CodedValue.of(transporter.getType(), OPERATOR_ACTIVITY_TYPE))
+            : null;
+        return new TradeParty(
+            transporter.getApprovalNumber(),
+            transporter.getApprovalNumber() != null ? UK_TRANSPORTER_AUTHORISATION : null,
+            transporter.getName(),
+            null,
+            partyTypeCode,
+            TradeAddress.from(transporter.getAddress()),
+            null);
+    }
+}

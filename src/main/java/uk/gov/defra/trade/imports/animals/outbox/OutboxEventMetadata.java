@@ -9,4 +9,5 @@ public class OutboxEventMetadata {
 
     String correlationId;
     String schemaVersion;
+    String schemaUri;
 }
