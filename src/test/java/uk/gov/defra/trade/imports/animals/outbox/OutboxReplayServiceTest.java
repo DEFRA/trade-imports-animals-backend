@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -88,6 +89,7 @@ class OutboxReplayServiceTest {
             assertThat(audit.getResult()).isEqualTo(Result.SUCCESS);
             assertThat(audit.getNotificationReferenceNumbers()).containsExactly(REF);
             assertThat(audit.getNumberOfNotifications()).isEqualTo(1);
+            assertThat(audit.getNumberOfEvents()).isEqualTo(1);
             assertThat(audit.getTraceId()).isEqualTo("trace-001");
             assertThat(audit.getUserId()).isEqualTo("user-abc");
             assertThat(audit.getTimestamp()).isNotNull();
@@ -103,6 +105,58 @@ class OutboxReplayServiceTest {
 
             verify(outboxPublishService, never()).publishToSns(any(), any());
             verify(auditRepository, never()).save(any());
+        }
+
+        @Test
+        void replay_shouldStopPublishingAndStillWriteAuditRecord_whenFirstEventIsNotSerializable()
+            throws JsonProcessingException {
+            // Given — two events; the first throws JsonProcessingException
+            OutboxEvent v1 = OutboxEvent.builder().eventId("evt-1").aggregateVersion(1L).build();
+            OutboxEvent v2 = OutboxEvent.builder().eventId("evt-2").aggregateVersion(2L).build();
+            when(outboxService.findByReferenceNumber(REF)).thenReturn(List.of(v1, v2));
+            doThrow(new JsonProcessingException("bad payload") {})
+                .when(outboxPublishService).publishToSns(eq(v1), eq(TOPIC_ARN));
+
+            // When
+            int result = outboxReplayService.replay(REF, AUDIT_CTX);
+
+            // Then — loop breaks after the failed event; v2 is never attempted
+            verify(outboxPublishService).publishToSns(v1, TOPIC_ARN);
+            verify(outboxPublishService, never()).publishToSns(eq(v2), any());
+
+            // Audit record is written with FAILURE result and full event count
+            ArgumentCaptor<Audit> captor = ArgumentCaptor.forClass(Audit.class);
+            verify(auditRepository).save(captor.capture());
+            assertThat(captor.getValue().getResult()).isEqualTo(Result.FAILURE);
+            assertThat(captor.getValue().getNumberOfEvents()).isEqualTo(2);
+
+            // Return value reflects the total number of events found, not just those published
+            assertThat(result).isEqualTo(2);
+        }
+
+        @Test
+        void replay_shouldStopPublishingAndWriteFailureAuditRecord_whenLaterEventIsNotSerializable()
+            throws JsonProcessingException {
+            // Given — two events; the second throws JsonProcessingException
+            OutboxEvent v1 = OutboxEvent.builder().eventId("evt-1").aggregateVersion(1L).build();
+            OutboxEvent v2 = OutboxEvent.builder().eventId("evt-2").aggregateVersion(2L).build();
+            when(outboxService.findByReferenceNumber(REF)).thenReturn(List.of(v1, v2));
+            // lenient: strict stubbing would complain that v1 is called without a matching stub
+            lenient().doThrow(new JsonProcessingException("bad payload") {})
+                .when(outboxPublishService).publishToSns(eq(v2), eq(TOPIC_ARN));
+
+            // When
+            outboxReplayService.replay(REF, AUDIT_CTX);
+
+            // Then — v1 published successfully; v2 fails and breaks the loop
+            InOrder order = inOrder(outboxPublishService);
+            order.verify(outboxPublishService).publishToSns(v1, TOPIC_ARN);
+            order.verify(outboxPublishService).publishToSns(v2, TOPIC_ARN);
+
+            // Audit record is written with FAILURE result
+            ArgumentCaptor<Audit> captor = ArgumentCaptor.forClass(Audit.class);
+            verify(auditRepository).save(captor.capture());
+            assertThat(captor.getValue().getResult()).isEqualTo(Result.FAILURE);
         }
 
         @Test

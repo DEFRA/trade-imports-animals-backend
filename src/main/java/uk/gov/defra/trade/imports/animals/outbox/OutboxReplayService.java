@@ -31,6 +31,7 @@ public class OutboxReplayService {
         }
 
         String topicArn = outboxConfig.sns().topicArn();
+        boolean failed = false;
         for (OutboxEvent event : events) {
             try {
                 outboxPublishService.publishToSns(event, topicArn);
@@ -39,20 +40,21 @@ public class OutboxReplayService {
                     "Outbox event payload is not serializable; manual investigation required: "
                         + "eventId={} aggregateId={} version={}",
                     event.getEventId(), event.getAggregateId(), event.getAggregateVersion(), e);
+                failed = true;
                 break;
             }
         }
 
-        writeAuditRecord(referenceNumber, events.size(), auditContext);
+        writeAuditRecord(referenceNumber, events.size(), auditContext, failed ? Result.FAILURE : Result.SUCCESS);
         log.info("Replayed {} event(s) for referenceNumber={} by userId={}",
             events.size(), referenceNumber, auditContext.userId());
         return events.size();
     }
 
-    private void writeAuditRecord(String referenceNumber, int count, AuditContext auditContext) {
+    private void writeAuditRecord(String referenceNumber, int count, AuditContext auditContext, Result result) {
         auditRepository.save(Audit.builder()
             .action(Action.REPLAY_EVENTS)
-            .result(Result.SUCCESS)
+            .result(result)
             .notificationReferenceNumbers(List.of(referenceNumber))
             .numberOfNotifications(1)
             .numberOfEvents(count)
