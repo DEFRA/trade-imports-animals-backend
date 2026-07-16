@@ -10,6 +10,10 @@ public record TradeProductInstance(
     TradeParty permanentLocation
 ) {
 
+    public TradeProductInstance {
+        identifier = identifier == null ? null : List.copyOf(identifier);
+    }
+
     private static final String EAR_TAG = "EAR_TAG";
     private static final String PASSPORT = "PASSPORT";
 

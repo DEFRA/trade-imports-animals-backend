@@ -32,8 +32,7 @@ public record TradeParty(
         if (transporter == null) {
             return null;
         }
-        // TODO: transporter.type passed through raw; confirm whether it
-        // needs mapping to an operator_activity_type codelist value.
+        // TODO(EUDPA-274 gap G9): transporter type is passed through raw - confirm the operator_activity_type codelist mapping is correct.
         List<CodedValue> partyTypeCode = transporter.getType() != null
             ? List.of(CodedValue.of(transporter.getType(), OPERATOR_ACTIVITY_TYPE))
             : null;

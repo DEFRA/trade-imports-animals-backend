@@ -794,7 +794,7 @@ class NotificationIT extends IntegrationBase {
             .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmissionAmended");
         assertThat(amendEvent.getAggregateVersion()).isEqualTo(2L);
         assertThat(amendEvent.getMetadata().getCorrelationId()).isEqualTo("trace-amend-001");
-        assertThat(amendEvent.getMetadata().getSchemaUri()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED.schemaUri());
+        assertThat(amendEvent.getMetadata().getSchemaUrl()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED.schemaUrl());
         assertThat(gbnAgIdentifier(amendEvent)).isEqualTo(referenceNumber);
     }
 
@@ -995,7 +995,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getEventId()).isNotNull();
         assertThat(event.getMetadata().getCorrelationId()).isEqualTo("trace-outbox-001");
         assertThat(event.getMetadata().getSchemaVersion()).isEqualTo("1");
-        assertThat(event.getMetadata().getSchemaUri()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUri());
+        assertThat(event.getMetadata().getSchemaUrl()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUrl());
         assertThat(gbnAgIdentifier(event)).isEqualTo(referenceNumber);
     }
 

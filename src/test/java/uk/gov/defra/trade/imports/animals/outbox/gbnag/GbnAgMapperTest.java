@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -90,6 +91,19 @@ class GbnAgMapperTest {
         }
 
         @Test
+        void shouldMapConsigneeAndImporterParties() {
+            TradeParty consignee = result.specifiedConsignment().consigneeParty();
+            assertThat(consignee.name()).isEqualTo("Linus George Ltd");
+            assertThat(consignee.postalAddress().lineOne()).isEqualTo("558 Oak Street");
+            assertThat(consignee.postalAddress().countryId()).isEqualTo("CH");
+
+            TradeParty importer = result.specifiedConsignment().importer();
+            assertThat(importer.name()).isEqualTo("GB Animal Imports");
+            assertThat(importer.postalAddress().lineOne()).isEqualTo("5 Port Way");
+            assertThat(importer.postalAddress().countryId()).isEqualTo("GB");
+        }
+
+        @Test
         void shouldMapCarrierFromTransporter() {
             TradeParty carrier = result.specifiedConsignment().carrier();
             assertThat(carrier.name()).isEqualTo("Acme Transport Ltd");
@@ -138,6 +152,8 @@ class GbnAgMapperTest {
             assertThat(items).hasSize(1);
             TradeLineItem line = items.getFirst().includedTradeLineItem().getFirst();
 
+            // description is a required gbnAgTradeLineItem field; commodity.name -> description
+            // deferred/unmapped pending the A3 team decision (schema anomaly A3)
             assertThat(line.description()).isNull();
             assertThat(line.commonName()).isNull();
             assertThat(line.scientificName()).isNull(); // gap G18
@@ -173,6 +189,27 @@ class GbnAgMapperTest {
                 });
             assertThat(instances.getFirst().name()).isNull();              // gap G20
             assertThat(instances.getFirst().permanentLocation()).isNull(); // gap G20
+        }
+
+        @Test
+        void shouldNotYetSurfaceSourceFieldsLackingAGbnAgSlot() {
+            // fullyPopulatedNotification() sets transport.transportDocumentReference, cphNumber
+            // and consignment, but none has a live GBN-AG output slot yet. Kept visible here so
+            // these assertions flip when the mappings land.
+
+            // transport.transportDocumentReference -> mainCarriage movement's
+            // transportContractRelatedReferencedDocument, currently dropped (candidate anomaly B1).
+            LogisticsTransportMovement movement =
+                result.specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst();
+            assertThat(movement.transportContractRelatedReferencedDocument()).isNull();
+
+            // cphNumber -> finalDestinationLocation.identifier (candidate anomaly B4): the
+            // finalDestinationLocation slot is absent from SpecifiedConsignment, so cphNumber is
+            // dropped entirely — no reachable output field carries it today.
+
+            // consignment (competent-authority Operator): no GBN-AG party slot exists, so it is
+            // dropped entirely; its nearest observable output, exchangedDocument().issuer(), is
+            // already asserted null as gap G1.
         }
     }
 
@@ -245,11 +282,49 @@ class GbnAgMapperTest {
         assertThat(modeCode).isEqualTo(expectedCode);
     }
 
+    @Test
+    void shouldMapLogisticsPackageToNull_whenTotalNoOfPackagesNull() {
+        Notification notification = Notification.builder()
+            .referenceNumber("GBN-AG-26-PKG001")
+            .commodity(Commodity.builder()
+                .commodityComplement(List.of(CommodityComplement.builder()
+                    .typeOfCommodity("01020000")
+                    .totalNoOfPackages(null)
+                    .build()))
+                .build())
+            .build();
+
+        TradeLineItem line = mapper.toGbnAgEventData(notification)
+            .specifiedConsignment().includedConsignmentItem().getFirst()
+            .includedTradeLineItem().getFirst();
+
+        assertThat(line.physicalReferencedLogisticsPackage()).isNull();
+    }
+
+    @Test
+    void shouldMapIndividualTradeProductInstanceToNull_whenSpeciesAbsent() {
+        Notification notification = Notification.builder()
+            .referenceNumber("GBN-AG-26-SPC001")
+            .commodity(Commodity.builder()
+                .commodityComplement(List.of(CommodityComplement.builder()
+                    .typeOfCommodity("01020000")
+                    .species(null)
+                    .build()))
+                .build())
+            .build();
+
+        TradeLineItem line = mapper.toGbnAgEventData(notification)
+            .specifiedConsignment().includedConsignmentItem().getFirst()
+            .includedTradeLineItem().getFirst();
+
+        assertThat(line.individualTradeProductInstance()).isNull();
+    }
+
     private static Notification fullyPopulatedNotification() {
         return Notification.builder()
             .referenceNumber("GBN-AG-26-7K8M2P")
             .status(NotificationStatus.SUBMITTED)
-            .updated(LocalDateTime.of(2026, 5, 21, 10, 15, 0))
+            .updated(LocalDateTime.of(2026, Month.MAY, 21, 10, 15, 0))
             .origin(new Origin("FR", "true", "Imports456_GB"))
             .reasonForImport("INTERNAL_MARKET")
             .additionalDetails(new AdditionalDetails("BREEDING_AND_PRODUCTION", "true"))
@@ -283,7 +358,7 @@ class GbnAgMapperTest {
                 .build())
             .transport(Transport.builder()
                 .portOfEntry("GBDVR")
-                .arrivalDate(LocalDate.of(2026, 5, 6))
+                .arrivalDate(LocalDate.of(2026, Month.MAY, 6))
                 .meansOfTransport(MeansOfTransport.ROAD_VEHICLE)
                 .transportIdentification("AB-1234")
                 .transportDocumentReference("BOL-2026-884721")

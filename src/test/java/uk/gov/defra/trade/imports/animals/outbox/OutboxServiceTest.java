@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -75,7 +76,7 @@ class OutboxServiceTest {
             assertThat(saved.getEventType()).isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
             assertThat(saved.getMetadata().getCorrelationId()).isEqualTo("trace-001");
             assertThat(saved.getMetadata().getSchemaVersion()).isEqualTo("1");
-            assertThat(saved.getMetadata().getSchemaUri()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUri());
+            assertThat(saved.getMetadata().getSchemaUrl()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUrl());
             assertThat(saved.getEventId()).isNotNull();
             assertThat(saved.getTimestamp()).isNotNull();
         }
@@ -116,7 +117,7 @@ class OutboxServiceTest {
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()
                 .portOfEntry("GBFXT")
-                .arrivalDate(LocalDate.of(2026, 4, 22))
+                .arrivalDate(LocalDate.of(2026, Month.APRIL, 22))
                 .build();
 
             Notification notification = Notification.builder()
@@ -146,18 +147,19 @@ class OutboxServiceTest {
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
             verify(outboxEventRepository).save(captor.capture());
             Map<String, Object> data = captor.getValue().getData();
-            assertThat(data).containsKeys("$model", "$type", "exchangedDocument", "specifiedConsignment");
-            assertThat(data.get("$type")).isEqualTo("gbn-ag");
-            assertThat(data).doesNotContainKey("referenceNumber");
+            assertThat(data)
+                .containsKeys("$model", "$type", "exchangedDocument", "specifiedConsignment")
+                .containsEntry("$type", "gbn-ag")
+                .doesNotContainKey("referenceNumber");
 
             Map<String, Object> exchangedDocument = (Map<String, Object>) data.get("exchangedDocument");
-            assertThat(exchangedDocument.get("identifier")).isEqualTo("GBN-AG-26-ABC123");
-            assertThat(exchangedDocument.get("notificationStatusCode")).isEqualTo("SUBMITTED");
+            assertThat(exchangedDocument)
+                .containsEntry("identifier", "GBN-AG-26-ABC123")
+                .containsEntry("notificationStatusCode", "SUBMITTED");
 
             Map<String, Object> specifiedConsignment =
                 (Map<String, Object>) data.get("specifiedConsignment");
-            assertThat(specifiedConsignment).containsKey("consignorParty");
-            assertThat(specifiedConsignment).containsKey("deliveryParty");
+            assertThat(specifiedConsignment).containsKeys("consignorParty", "deliveryParty");
         }
 
         @Test

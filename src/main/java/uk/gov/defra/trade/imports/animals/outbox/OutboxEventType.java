@@ -5,7 +5,7 @@ package uk.gov.defra.trade.imports.animals.outbox;
  * The wire value (the string downstream consumers see) is held on the enum;
  * the on-disk schema stores it as a plain String on {@link OutboxEvent}.
  *
- * <p>Each type also carries the {@code schemaUri} of its governing event schema in
+ * <p>Each type also carries the {@code schemaUrl} of its governing event schema in
  * {@code DEFRA/trade-imports-schemas} — surfaced on {@link OutboxEventMetadata} so
  * downstream consumers can discover and validate against the schema.
  */
@@ -21,18 +21,18 @@ public enum OutboxEventType {
             + "schemas/profiles/imports/gb/events/gbn-ag-event-notification-submission-amended-v1.schema.json");
 
     private final String value;
-    private final String schemaUri;
+    private final String schemaUrl;
 
-    OutboxEventType(String value, String schemaUri) {
+    OutboxEventType(String value, String schemaUrl) {
         this.value = value;
-        this.schemaUri = schemaUri;
+        this.schemaUrl = schemaUrl;
     }
 
     public String value() {
         return value;
     }
 
-    public String schemaUri() {
-        return schemaUri;
+    public String schemaUrl() {
+        return schemaUrl;
     }
 }

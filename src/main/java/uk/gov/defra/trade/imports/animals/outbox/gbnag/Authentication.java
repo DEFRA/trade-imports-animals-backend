@@ -7,6 +7,10 @@ import uk.gov.defra.trade.imports.animals.notification.Notification;
 
 public record Authentication(List<Clause> includedClause) {
 
+    public Authentication {
+        includedClause = List.copyOf(includedClause);
+    }
+
     static Authentication from(Notification notification) {
         String reasonForImport = notification.getReasonForImport();
         AdditionalDetails additionalDetails = notification.getAdditionalDetails();

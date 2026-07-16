@@ -20,9 +20,9 @@ public record TradeAddress(
             address.getAddressLine1(),
             address.getAddressLine2(),
             address.getCity(),
-            null,
+            null, // postcodeCode - not yet in domain model
             address.getCountry(),
-            null,
-            null);
+            null, // countryName - not yet in domain model
+            null); // countrySubDivisionName - not yet in domain model
     }
 }

@@ -22,6 +22,12 @@ public record SpecifiedConsignment(
 
     static SpecifiedConsignment from(Notification notification) {
         Transport transport = notification.getTransport();
+        AdditionalDetails additionalDetails = notification.getAdditionalDetails();
+        // Tri-state: TRUE / FALSE when supplied, null when the field is absent upstream.
+        Boolean isOrHasUnweanedAnimals =
+            additionalDetails == null || additionalDetails.getUnweanedAnimals() == null
+                ? null
+                : Boolean.valueOf(additionalDetails.getUnweanedAnimals());
         return new SpecifiedConsignment(
             TradeParty.from(notification.getConsignor()),
             TradeParty.from(notification.getConsignee()),
@@ -33,14 +39,7 @@ public record SpecifiedConsignment(
             LogisticsLocation.from(transport != null ? transport.getPortOfEntry() : null),
             LogisticsTransportMovement.from(transport),
             null,
-            unweanedAnimals(notification.getAdditionalDetails()),
+            isOrHasUnweanedAnimals,
             ConsignmentItem.from(notification.getCommodity()));
-    }
-
-    private static Boolean unweanedAnimals(AdditionalDetails additionalDetails) {
-        if (additionalDetails == null || additionalDetails.getUnweanedAnimals() == null) {
-            return null;
-        }
-        return Boolean.parseBoolean(additionalDetails.getUnweanedAnimals());
     }
 }

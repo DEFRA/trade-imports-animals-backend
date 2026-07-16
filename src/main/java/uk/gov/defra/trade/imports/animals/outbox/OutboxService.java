@@ -53,7 +53,7 @@ public class OutboxService {
             .metadata(OutboxEventMetadata.builder()
                 .correlationId(correlationId)
                 .schemaVersion(SCHEMA_VERSION)
-                .schemaUri(eventType.schemaUri())
+                .schemaUrl(eventType.schemaUrl())
                 .build())
             .build();
 

@@ -86,7 +86,7 @@ class OutboxPublishServiceTest {
                 .isEqualTo("trace-001");
             assertThat(request.messageAttributes().get(OutboxPublishService.ATTR_SCHEMA_VERSION).stringValue())
                 .isEqualTo("1");
-            assertThat(request.messageAttributes().get(OutboxPublishService.ATTR_SCHEMA_URI).stringValue()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUri());
+            assertThat(request.messageAttributes().get(OutboxPublishService.ATTR_SCHEMA_URL).stringValue()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUrl());
         }
 
         @Test
@@ -273,6 +273,8 @@ class OutboxPublishServiceTest {
                 .get(OutboxPublishService.ATTR_CORRELATION_ID).stringValue()).isEmpty();
             assertThat(captor.getValue().messageAttributes()
                 .get(OutboxPublishService.ATTR_SCHEMA_VERSION).stringValue()).isEmpty();
+            assertThat(captor.getValue().messageAttributes()
+                .get(OutboxPublishService.ATTR_SCHEMA_URL).stringValue()).isEmpty();
         }
 
         @Test
@@ -342,7 +344,7 @@ class OutboxPublishServiceTest {
             .metadata(OutboxEventMetadata.builder()
                 .correlationId(correlationId)
                 .schemaVersion("1")
-                .schemaUri(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUri())
+                .schemaUrl(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUrl())
                 .build())
             .build();
     }

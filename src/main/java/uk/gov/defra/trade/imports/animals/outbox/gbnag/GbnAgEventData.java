@@ -10,16 +10,16 @@ public record GbnAgEventData(
     SpecifiedConsignment specifiedConsignment
 ) {
 
-    public static final String MODEL = "defra/certificate-internal/1";
-    public static final String TYPE = "gbn-ag";
+    public static final String MODEL_VALUE = "defra/certificate-internal/1";
+    public static final String TYPE_VALUE = "gbn-ag";
 
     public static GbnAgEventData from(Notification notification) {
         if (notification == null) {
             return null;
         }
         return new GbnAgEventData(
-            MODEL,
-            TYPE,
+            MODEL_VALUE,
+            TYPE_VALUE,
             ExchangedDocument.from(notification),
             SpecifiedConsignment.from(notification));
     }
