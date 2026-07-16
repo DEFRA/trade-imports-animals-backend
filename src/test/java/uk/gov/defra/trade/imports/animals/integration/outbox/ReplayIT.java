@@ -137,6 +137,7 @@ class ReplayIT extends OutboxIntegrationBase {
         assertThat(audit.getResult()).isEqualTo(Result.SUCCESS);
         assertThat(audit.getNotificationReferenceNumbers()).containsExactly(referenceNumber);
         assertThat(audit.getNumberOfNotifications()).isEqualTo(1);
+        assertThat(audit.getNumberOfEvents()).isEqualTo(1);
         assertThat(audit.getTraceId()).isEqualTo("trace-audit");
         assertThat(audit.getUserId()).isEqualTo("user-audit-001");
         assertThat(audit.getTimestamp()).isNotNull();

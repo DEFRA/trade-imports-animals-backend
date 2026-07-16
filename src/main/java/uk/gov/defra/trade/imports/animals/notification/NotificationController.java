@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -180,7 +179,7 @@ public class NotificationController {
     public ResponseEntity<ReplayResponse> replay(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
-        @RequestHeader(value = HEADER_USER_ID, required = true) String userId) throws JsonProcessingException {
+        @RequestHeader(value = HEADER_USER_ID, required = true) String userId) {
         log.info("POST /notifications/{}/replay - userId={}", referenceNumber, userId);
         int count = outboxReplayService.replay(referenceNumber, new AuditContext(traceId, userId));
         return ResponseEntity.ok(new ReplayResponse(count));

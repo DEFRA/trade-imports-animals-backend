@@ -24,7 +24,7 @@ public class OutboxReplayService {
     private final AuditRepository auditRepository;
     private final OutboxConfig outboxConfig;
 
-    public int replay(String referenceNumber, AuditContext auditContext) throws JsonProcessingException {
+    public int replay(String referenceNumber, AuditContext auditContext) {
         List<OutboxEvent> events = outboxService.findByReferenceNumber(referenceNumber);
         if (events.isEmpty()) {
             throw new NotFoundException("No outbox events found for: " + referenceNumber);
@@ -32,7 +32,15 @@ public class OutboxReplayService {
 
         String topicArn = outboxConfig.sns().topicArn();
         for (OutboxEvent event : events) {
-            outboxPublishService.publishToSns(event, topicArn);
+            try {
+                outboxPublishService.publishToSns(event, topicArn);
+            } catch (JsonProcessingException e) {
+                log.error(
+                    "Outbox event payload is not serializable; manual investigation required: "
+                        + "eventId={} aggregateId={} version={}",
+                    event.getEventId(), event.getAggregateId(), event.getAggregateVersion(), e);
+                break;
+            }
         }
 
         writeAuditRecord(referenceNumber, events.size(), auditContext);
@@ -46,7 +54,8 @@ public class OutboxReplayService {
             .action(Action.REPLAY_EVENTS)
             .result(Result.SUCCESS)
             .notificationReferenceNumbers(List.of(referenceNumber))
-            .numberOfNotifications(count)
+            .numberOfNotifications(1)
+            .numberOfEvents(count)
             .traceId(auditContext.traceId())
             .userId(auditContext.userId())
             .timestamp(LocalDateTime.now())
