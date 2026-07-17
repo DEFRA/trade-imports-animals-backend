@@ -20,6 +20,7 @@ public record LogisticsTransportMovement(
         }
     }
 
+    @SuppressWarnings("java:S1168")
     static List<LogisticsTransportMovement> from(Transport transport) {
         if (transport == null) {
             return null;

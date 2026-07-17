@@ -11,6 +11,7 @@ public record TransportEvent(
     LogisticsLocation occurrenceLogisticsLocation
 ) {
 
+    @SuppressWarnings("java:S1168")
     static List<TransportEvent> from(Transport transport) {
         if (transport.getArrivalDate() == null) {
             return null;

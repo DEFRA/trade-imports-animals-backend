@@ -19,6 +19,7 @@ public record TradeProductInstance(
 
     public record AnimalIdentifier(String typeCode, String content, String urlId) {}
 
+    @SuppressWarnings("java:S1168")
     static List<TradeProductInstance> instancesFrom(List<Species> species) {
         if (species == null) {
             return null;

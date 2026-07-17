@@ -6,6 +6,7 @@ public record LineTradeDelivery(ProductUnitQuantity productUnitQuantity) {
 
     public record ProductUnitQuantity(Integer content, String unitCode) {}
 
+    @SuppressWarnings("java:S1168")
     static List<LineTradeDelivery> headCount(Integer totalNoOfAnimals) {
         if (totalNoOfAnimals == null) {
             return null;
