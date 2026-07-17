@@ -46,10 +46,14 @@ public class AdminSecretFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        if (!"DELETE".equalsIgnoreCase(request.getMethod())) {
-            return true;
-        }
+        String method = request.getMethod();
         String uri = request.getRequestURI();
-        return !uri.startsWith("/notifications");
+
+        boolean isDeleteNotifications = "DELETE".equalsIgnoreCase(method)
+            && uri.startsWith("/notifications");
+        boolean isReplayEndpoint = "POST".equalsIgnoreCase(method)
+            && uri.matches("/notifications/[^/]+/replay");
+
+        return !isDeleteNotifications && !isReplayEndpoint;
     }
 }

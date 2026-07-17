@@ -85,9 +85,10 @@ class NotificationIT extends IntegrationBase {
         Transport transport = Transport.builder()
             .portOfEntry("GBFXT")
             .arrivalDate(LocalDate.of(2026, Month.APRIL, 22))
-            .meansOfTransport(MeansOfTransport.VESSEL)
-            .transportIdentification("Vessel Poseidon, voyage 42")
-            .transportDocumentReference("BILL-OF-LADING-001")
+            .meansOfTransport(MeansOfTransport.RAILWAY)
+            .transportIdentification("Train 4471, wagon 12")
+            .transportDocumentReference("CIM-CONSIGNMENT-001")
+            .transitedCountries(List.of("FR", "DE"))
             .build();
         NotificationDto notificationDto = NotificationDto.builder()
             .origin(new Origin("GB", "true", "REF-001"))
@@ -506,9 +507,10 @@ class NotificationIT extends IntegrationBase {
             .transport(Transport.builder()
                 .portOfEntry("GBFXT")
                 .arrivalDate(LocalDate.of(2026, Month.APRIL, 22))
-                .meansOfTransport(MeansOfTransport.VESSEL)
-                .transportIdentification("Vessel Poseidon, voyage 42")
-                .transportDocumentReference("BILL-OF-LADING-001")
+                .meansOfTransport(MeansOfTransport.RAILWAY)
+                .transportIdentification("Train 4471, wagon 12")
+                .transportDocumentReference("CIM-CONSIGNMENT-001")
+                .transitedCountries(List.of("FR", "DE"))
                 .build())
             .build();
 
@@ -529,6 +531,56 @@ class NotificationIT extends IntegrationBase {
         Notification persisted = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertNotificationMappedFields(persisted, "REF-updated");
+    }
+
+    @Test
+    void post_shouldClearTransitedCountries_whenUpdatedToMeansThatDoesNotRequireTransit() {
+        NotificationDto initial = NotificationDto.builder()
+            .origin(new Origin("GB", "true", "REF-001"))
+            .commodity(Commodity.builder().name("Live bovine animals").build())
+            .transport(Transport.builder()
+                .portOfEntry("GBFXT")
+                .arrivalDate(LocalDate.of(2026, Month.APRIL, 22))
+                .meansOfTransport(MeansOfTransport.ROAD_VEHICLE)
+                .transportIdentification("HG12 ABC")
+                .transportDocumentReference("CMR-001")
+                .transitedCountries(List.of("FR", "DE"))
+                .build())
+            .build();
+
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(initial)
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        NotificationDto updateDto = NotificationDto.builder()
+            .referenceNumber(referenceNumber)
+            .origin(new Origin("GB", "true", "REF-001"))
+            .commodity(Commodity.builder().name("Live bovine animals").build())
+            .transport(Transport.builder()
+                .portOfEntry("GBFXT")
+                .arrivalDate(LocalDate.of(2026, Month.APRIL, 22))
+                .meansOfTransport(MeansOfTransport.VESSEL)
+                .transportIdentification("Vessel Poseidon, voyage 42")
+                .transportDocumentReference("BILL-OF-LADING-001")
+                .transitedCountries(null)
+                .build())
+            .build();
+
+        Notification updated = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(updateDto)
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody();
+
+        assertThat(updated).isNotNull();
+        assertThat(updated.getTransport().getMeansOfTransport()).isEqualTo(MeansOfTransport.VESSEL);
+        assertThat(updated.getTransport().getTransitedCountries()).isNullOrEmpty();
+
+        Notification persisted = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow();
+        assertThat(persisted.getTransport().getTransitedCountries()).isNullOrEmpty();
     }
 
     @Test
@@ -1426,13 +1478,15 @@ class NotificationIT extends IntegrationBase {
                 Transport::getArrivalDate,
                 Transport::getMeansOfTransport,
                 Transport::getTransportIdentification,
-                Transport::getTransportDocumentReference)
+                Transport::getTransportDocumentReference,
+                Transport::getTransitedCountries)
             .containsExactly(
                 "GBFXT",
                 LocalDate.of(2026, Month.APRIL, 22),
-                MeansOfTransport.VESSEL,
-                "Vessel Poseidon, voyage 42",
-                "BILL-OF-LADING-001");
+                MeansOfTransport.RAILWAY,
+                "Train 4471, wagon 12",
+                "CIM-CONSIGNMENT-001",
+                List.of("FR", "DE"));
     }
 
     private void assertAmendableContentMatches(Notification expected, Notification actual) {

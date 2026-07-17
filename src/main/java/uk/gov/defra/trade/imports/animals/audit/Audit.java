@@ -26,6 +26,8 @@ public class Audit {
     
     private Integer numberOfNotifications;
     
+    private Integer numberOfEvents;
+    
     private List<String> notificationReferenceNumbers;
     
     private String traceId;
