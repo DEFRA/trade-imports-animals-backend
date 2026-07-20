@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Direction;
@@ -112,10 +113,30 @@ public class NotificationService {
     }
 
     public NotificationPageResponse findAll(int page, String sort) {
+        return findAll(page, sort, null);
+    }
+
+    public NotificationPageResponse findAll(int page, String sort, String referenceNumber) {
+        List<NotificationStatus> dashboardStatuses = List.of(
+            NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
+        var pageable = PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort));
+
+        String trimmedReference = StringUtils.trimToNull(referenceNumber);
+        if (trimmedReference != null) {
+            log.debug("Fetching notification by reference {} for dashboard", trimmedReference);
+            Page<Notification> matched = notificationRepository
+                .findByReferenceNumberAndStatusIn(trimmedReference, dashboardStatuses)
+                .<Page<Notification>>map(notification ->
+                    new PageImpl<>(List.of(notification), pageable, 1))
+                .orElseGet(() -> Page.empty(pageable));
+            log.debug("Found {} notifications for reference {}", matched.getNumberOfElements(),
+                trimmedReference);
+            return NotificationPageResponse.from(matched);
+        }
+
         log.debug("Fetching notifications page {} (size {}) with sort {}", page, listPageSize, sort);
         Page<Notification> result = notificationRepository.findAllByStatusIn(
-            List.of(NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND),
-            PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort)));
+            dashboardStatuses, pageable);
         log.debug("Found {} notifications on page {} of {}",
             result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
         return NotificationPageResponse.from(result);

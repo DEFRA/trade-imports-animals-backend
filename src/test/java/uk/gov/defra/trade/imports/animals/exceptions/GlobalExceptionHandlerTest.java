@@ -10,6 +10,10 @@ import java.lang.reflect.Method;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Path;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,6 +83,40 @@ class GlobalExceptionHandlerTest {
         assertThat(errors).hasSize(2);
         assertThat(errors.get("origin")).containsExactly("must not be null");
         assertThat(errors.get("commodity")).containsExactly("must not be blank");
+    }
+
+    @Test
+    void handleConstraintViolationException_shouldReturnBadRequestWithFieldErrors() {
+        // Given
+        String traceId = "test-trace-456";
+        MDC.put("trace.id", traceId);
+
+        @SuppressWarnings("unchecked")
+        ConstraintViolation<Object> violation = mock(ConstraintViolation.class);
+        Path propertyPath = mock(Path.class);
+        when(propertyPath.toString()).thenReturn("findAll.referenceNumber");
+        when(violation.getPropertyPath()).thenReturn(propertyPath);
+        when(violation.getMessage()).thenReturn(
+            "must match \"^GBN-AG-\\d{2}-[0-9A-HJ-KM-NP-TV-Z]{6}$\"");
+
+        ConstraintViolationException exception =
+            new ConstraintViolationException(Set.of(violation));
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleConstraintViolationException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getTitle()).isEqualTo("Validation Error");
+
+        @SuppressWarnings("unchecked")
+        Map<String, List<String>> errors =
+            (Map<String, List<String>>) problemDetail.getProperties().get("errors");
+        assertThat(errors.get("referenceNumber")).containsExactly(
+            "must match \"^GBN-AG-\\d{2}-[0-9A-HJ-KM-NP-TV-Z]{6}$\"");
     }
 
     @Test
