@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.LocalDate;
+import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,6 +28,7 @@ import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
+import uk.gov.defra.trade.imports.animals.outbox.gbnag.GbnAgEventDataMapper;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,7 +42,7 @@ class OutboxServiceTest {
     @BeforeEach
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        outboxService = new OutboxService(outboxEventRepository, objectMapper);
+        outboxService = new OutboxService(outboxEventRepository, objectMapper, new GbnAgEventDataMapper());
     }
 
     @Nested
@@ -74,6 +76,7 @@ class OutboxServiceTest {
             assertThat(saved.getEventType()).isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
             assertThat(saved.getMetadata().getCorrelationId()).isEqualTo("trace-001");
             assertThat(saved.getMetadata().getSchemaVersion()).isEqualTo("1");
+            assertThat(saved.getMetadata().getSchemaUrl()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUrl());
             assertThat(saved.getEventId()).isNotNull();
             assertThat(saved.getTimestamp()).isNotNull();
         }
@@ -106,14 +109,15 @@ class OutboxServiceTest {
         }
 
         @Test
-        void appendEvent_shouldIncludeAllNotificationDataInEvent() {
+        @SuppressWarnings("unchecked")
+        void appendEvent_shouldStoreGbnAgPayloadInDataField() {
             // Given
             Origin origin = new Origin("GB", "true", "REF123");
             Commodity commodity = Commodity.builder().name("Live bovine animals").build();
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()
                 .portOfEntry("GBFXT")
-                .arrivalDate(LocalDate.of(2026, 4, 22))
+                .arrivalDate(LocalDate.of(2026, Month.APRIL, 22))
                 .build();
 
             Notification notification = Notification.builder()
@@ -137,20 +141,25 @@ class OutboxServiceTest {
             // When
             outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001");
 
-            // Then — data is stored as Map<String, Object> (opaque JSON, schema-agnostic)
+            // Then — data is the GBN-AG payload (mapped from the Notification), stored as
+            // Map<String, Object>. Field-level mapping is covered by GbnAgMapperTest; here we
+            // assert the service stores the GBN-AG shape rather than the raw notification.
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
             verify(outboxEventRepository).save(captor.capture());
             Map<String, Object> data = captor.getValue().getData();
-            assertThat(data).containsKey("referenceNumber");
-            assertThat(data.get("referenceNumber")).isEqualTo("GBN-AG-26-ABC123");
-            assertThat(data).containsKey("origin");
-            assertThat(data).containsKey("commodity");
-            assertThat(data.get("reasonForImport")).isEqualTo("PERMANENT");
-            assertThat(data).containsKey("additionalDetails");
-            assertThat(data.get("cphNumber")).isEqualTo("12/345/6789");
-            assertThat(data).containsKey("transport");
-            assertThat(data).containsKey("consignor");
-            assertThat(data).containsKey("destination");
+            assertThat(data)
+                .containsKeys("$model", "$type", "exchangedDocument", "specifiedConsignment")
+                .containsEntry("$type", "gbn-ag")
+                .doesNotContainKey("referenceNumber");
+
+            Map<String, Object> exchangedDocument = (Map<String, Object>) data.get("exchangedDocument");
+            assertThat(exchangedDocument)
+                .containsEntry("identifier", "GBN-AG-26-ABC123")
+                .containsEntry("notificationStatusCode", "SUBMITTED");
+
+            Map<String, Object> specifiedConsignment =
+                (Map<String, Object>) data.get("specifiedConsignment");
+            assertThat(specifiedConsignment).containsKeys("consignorParty", "deliveryParty");
         }
 
         @Test

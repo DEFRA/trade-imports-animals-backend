@@ -114,7 +114,8 @@ class ReplayIT extends OutboxIntegrationBase {
         for (Message message : messages) {
             JsonNode payload = objectMapper.readTree(
                 objectMapper.readTree(message.body()).get("Message").asText());
-            assertThat(payload.get("data").get("referenceNumber").asText()).isEqualTo(referenceNumber);
+            assertThat(payload.get("data").get("exchangedDocument").get("identifier").asText())
+                .isEqualTo(referenceNumber);
         }
     }
 

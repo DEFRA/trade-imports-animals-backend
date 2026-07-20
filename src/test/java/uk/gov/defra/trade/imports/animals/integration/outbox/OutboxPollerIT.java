@@ -57,7 +57,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         assertThat(publishedMessage.get("metadata").get("correlationId").asText())
             .isEqualTo(TRACE_PREFIX + "001");
         assertThat(publishedMessage.get("metadata").get("schemaVersion").asText()).isEqualTo("1");
-        assertThat(publishedMessage.get("data").get("referenceNumber").asText()).isEqualTo(referenceNumber);
+        assertThat(publishedMessage.get("data").get("exchangedDocument").get("identifier").asText()).isEqualTo(referenceNumber);
         assertThat(publishedMessage.has("publishedAt")).isTrue();
         assertThat(Instant.parse(publishedMessage.get("publishedAt").asText()))
             .isEqualTo(event.getPublishedAt());
@@ -125,8 +125,8 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         JsonNode secondPayload = objectMapper.readTree(secondEnvelope.get("Message").asText());
         assertThat(firstPayload.get("aggregateVersion").asLong()).isEqualTo(1L);
         assertThat(secondPayload.get("aggregateVersion").asLong()).isEqualTo(2L);
-        assertThat(firstPayload.get("data").get("referenceNumber").asText()).isEqualTo(referenceNumber);
-        assertThat(secondPayload.get("data").get("referenceNumber").asText()).isEqualTo(referenceNumber);
+        assertThat(firstPayload.get("data").get("exchangedDocument").get("identifier").asText()).isEqualTo(referenceNumber);
+        assertThat(secondPayload.get("data").get("exchangedDocument").get("identifier").asText()).isEqualTo(referenceNumber);
         assertThat(firstPayload.has("publishedAt")).isTrue();
         assertThat(secondPayload.has("publishedAt")).isTrue();
         assertThat(Instant.parse(firstPayload.get("publishedAt").asText()))
