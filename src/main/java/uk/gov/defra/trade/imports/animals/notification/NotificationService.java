@@ -4,6 +4,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -83,6 +84,31 @@ public class NotificationService {
         } else {
             return updateNotification(notificationDto);
         }
+    }
+
+    public ReplaceResult replaceNotification(
+        String referenceNumber, NotificationDto notificationDto) {
+        if (!referenceNumber.equals(notificationDto.getReferenceNumber())) {
+            throw new BadRequestException(
+                "Path reference number and notification body reference number must match");
+        }
+
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElse(null);
+        boolean created = notification == null;
+        if (created) {
+            notification = new Notification();
+            notification.setReferenceNumber(referenceNumber);
+            notification.setStatus(NotificationStatus.DRAFT);
+            notification.setCreated(LocalDateTime.now());
+        } else if (hasSameProjection(notification, notificationDto)) {
+            return new ReplaceResult(notification, false);
+        }
+
+        setNotificationDetails(notificationDto, notification);
+        Notification saved = notificationRepository.save(notification);
+        log.info("{} notification {}", created ? "Created" : "Replaced", referenceNumber);
+        return new ReplaceResult(saved, created);
     }
 
     @Transactional
@@ -324,6 +350,21 @@ public class NotificationService {
         notification.setUpdated(LocalDateTime.now());
     }
 
+    private boolean hasSameProjection(Notification notification, NotificationDto dto) {
+        return Objects.equals(notification.getOrigin(), dto.getOrigin())
+            && Objects.equals(notification.getCommodity(), dto.getCommodity())
+            && Objects.equals(notification.getReasonForImport(), dto.getReasonForImport())
+            && Objects.equals(notification.getAdditionalDetails(), dto.getAdditionalDetails())
+            && Objects.equals(notification.getPlaceOfOrigin(), dto.getPlaceOfOrigin())
+            && Objects.equals(notification.getConsignor(), dto.getConsignor())
+            && Objects.equals(notification.getConsignee(), dto.getConsignee())
+            && Objects.equals(notification.getImporter(), dto.getImporter())
+            && Objects.equals(notification.getDestination(), dto.getDestination())
+            && Objects.equals(notification.getCphNumber(), dto.getCphNumber())
+            && Objects.equals(notification.getTransport(), dto.getTransport())
+            && Objects.equals(notification.getConsignment(), dto.getConsignment());
+    }
+
     private void createNotificationAuditRecord(
         List<String> referenceNumbers, AuditContext auditContext, Result result) {
         Audit auditRecord = Audit.builder()
@@ -337,5 +378,9 @@ public class NotificationService {
             .build();
 
         auditRepository.save(auditRecord);
+    }
+
+    public record ReplaceResult(Notification notification, boolean created) {
+
     }
 }
