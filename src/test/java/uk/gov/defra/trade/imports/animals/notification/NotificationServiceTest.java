@@ -403,6 +403,55 @@ class NotificationServiceTest {
             assertThat(pageableCaptor.getValue().getSort().getOrderFor("created").getDirection())
                 .isEqualTo(Sort.Direction.ASC);
         }
+
+        @Test
+        void findAll_shouldReturnMatchingNotification_whenReferenceNumberProvided() {
+            Notification draft = Notification.builder()
+                .referenceNumber("GBN-AG-26-ABC123")
+                .status(DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumberAndStatusIn(
+                "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND)))
+                .thenReturn(Optional.of(draft));
+
+            NotificationPageResponse result =
+                notificationService.findAll(1, null, "GBN-AG-26-ABC123");
+
+            assertThat(result.content()).hasSize(1);
+            assertThat(result.content().getFirst().getReferenceNumber())
+                .isEqualTo("GBN-AG-26-ABC123");
+            assertThat(result.totalElements()).isEqualTo(1);
+            verify(notificationRepository, never())
+                .findAllByStatusIn(any(), any(Pageable.class));
+        }
+
+        @Test
+        void findAll_shouldReturnEmptyPage_whenReferenceNumberNotFound() {
+            when(notificationRepository.findByReferenceNumberAndStatusIn(
+                "GBN-AG-26-ZZZZZZ", List.of(DRAFT, SUBMITTED, AMEND)))
+                .thenReturn(Optional.empty());
+
+            NotificationPageResponse result =
+                notificationService.findAll(1, null, "GBN-AG-26-ZZZZZZ");
+
+            assertThat(result.content()).isEmpty();
+            assertThat(result.totalElements()).isZero();
+            verify(notificationRepository, never())
+                .findAllByStatusIn(any(), any(Pageable.class));
+        }
+
+        @Test
+        void findAll_shouldTrimReferenceNumber_beforeLookup() {
+            when(notificationRepository.findByReferenceNumberAndStatusIn(
+                "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND)))
+                .thenReturn(Optional.empty());
+
+            notificationService.findAll(1, null, "  GBN-AG-26-ABC123  ");
+
+            verify(notificationRepository).findByReferenceNumberAndStatusIn(
+                "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND));
+        }
     }
 
     @Nested
