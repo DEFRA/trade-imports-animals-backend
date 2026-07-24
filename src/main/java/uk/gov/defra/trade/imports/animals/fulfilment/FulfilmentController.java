@@ -34,6 +34,8 @@ import uk.gov.defra.trade.imports.animals.ownership.OwnerHeaders;
 @Validated
 public class FulfilmentController {
 
+    public static final String IDEMPOTENCY_KEY = "Idempotency-Key";
+
     private final FulfilmentService fulfilmentService;
     private final String backendBaseUrl;
 
@@ -96,6 +98,31 @@ public class FulfilmentController {
         log.debug("GET /fulfilments/{} - Fetching fulfilment", id);
         return ResponseEntity.ok(
             fulfilmentService.findById(id, owner(ownerId, ownerOrganisation)));
+    }
+
+    @PostMapping("/{id}/copy")
+    @Operation(summary = "Copy fulfilment",
+        description = "Creates a new DRAFT fulfilment from an existing fulfilment. "
+            + "Repeating the request with the same owner and Idempotency-Key returns the same "
+            + "copy with the same Location.")
+    @ApiResponse(responseCode = "201", description = "Fulfilment copy created or returned",
+        content = @Content(schema = @Schema(implementation = Fulfilment.class)))
+    @ApiResponse(responseCode = "400",
+        description = "Source fulfilment is not in a copyable state or header is blank",
+        content = @Content)
+    @ApiResponse(responseCode = "404", description = "Source fulfilment not found",
+        content = @Content)
+    @Timed("controller.copyFulfilment.time")
+    public ResponseEntity<Fulfilment> copy(
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+        @PathVariable String id,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation,
+        @RequestHeader(IDEMPOTENCY_KEY) String idempotencyKey) {
+        log.info("POST /fulfilments/{}/copy - Copying fulfilment", id);
+        Fulfilment copy = fulfilmentService.copy(
+            id, owner(ownerId, ownerOrganisation), idempotencyKey);
+        return ResponseEntity.created(buildLocationUri(copy.getId())).body(copy);
     }
 
     @GetMapping
@@ -172,6 +199,25 @@ public class FulfilmentController {
         log.info("POST /fulfilments/{}/cancel-amend - Cancelling amendment", id);
         return ResponseEntity.ok(
             fulfilmentService.cancelAmend(id, owner(ownerId, ownerOrganisation)));
+    }
+
+    @PostMapping("/{id}/soft-delete")
+    @Operation(summary = "Soft-delete fulfilment",
+        description = "Transitions a DRAFT, SUBMITTED or AMEND fulfilment to terminal DELETED. "
+            + "Repeating the request for an already-DELETED fulfilment returns it unchanged.")
+    @ApiResponse(responseCode = "200", description = "Fulfilment soft-deleted or already deleted",
+        content = @Content(schema = @Schema(implementation = Fulfilment.class)))
+    @ApiResponse(responseCode = "404", description = "Fulfilment not found",
+        content = @Content)
+    @Timed("controller.softDeleteFulfilment.time")
+    public ResponseEntity<Fulfilment> softDelete(
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+        @PathVariable String id,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+        log.info("POST /fulfilments/{}/soft-delete - Soft deleting fulfilment", id);
+        return ResponseEntity.ok(
+            fulfilmentService.softDelete(id, owner(ownerId, ownerOrganisation)));
     }
 
     private Owner owner(String ownerId, String ownerOrganisation) {

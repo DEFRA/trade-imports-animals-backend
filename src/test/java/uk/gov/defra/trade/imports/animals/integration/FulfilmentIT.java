@@ -10,8 +10,11 @@ import org.bson.Document;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import uk.gov.defra.trade.imports.animals.fulfilment.Fulfilment;
+import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentController;
 import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentDto;
 import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentRepository;
 import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentStatus;
@@ -383,6 +386,147 @@ class FulfilmentIT extends IntegrationBase {
             .isEmpty();
     }
 
+    @ParameterizedTest
+    @EnumSource(value = FulfilmentStatus.class, names = {"DRAFT", "SUBMITTED", "AMEND"})
+    void copy_shouldPersistNewOwnedDraftFromCopyableStatus(FulfilmentStatus sourceStatus) {
+        List<Document> sourceContent = scalarFulfilment(sourceStatus.name());
+        Fulfilment source = stored(
+            DIRECT_PUT_REF,
+            DEFAULT_OWNER,
+            sourceStatus,
+            LocalDateTime.of(2026, 7, 24, 10, 0),
+            sourceStatus == FulfilmentStatus.SUBMITTED
+                ? LocalDateTime.of(2026, 7, 24, 11, 0)
+                : null);
+        source.setFulfilment(sourceContent);
+        fulfilmentRepository.insert(source);
+
+        Fulfilment copy = copyFulfilment(source.getId(), "copy-" + sourceStatus);
+
+        assertThat(copy).isNotNull();
+        assertThat(copy.getId()).matches(REF_FORMAT_REGEX).isNotEqualTo(source.getId());
+        assertThat(copy.getOwner()).isEqualTo(DEFAULT_OWNER);
+        assertThat(copy.getFulfilment())
+            .isEqualTo(sourceContent)
+            .isNotSameAs(sourceContent);
+        assertThat(copy.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
+        assertThat(copy.getCreatedAt()).isNotNull();
+        assertThat(copy.getSubmittedAt()).isNull();
+        assertThat(copy.getSubmittedFulfilment()).isNull();
+        assertThat(copy.getCopyIdempotencyKey()).isEqualTo("copy-" + sourceStatus);
+
+        Fulfilment persisted = fulfilmentRepository.findById(copy.getId()).orElseThrow();
+        assertThat(persisted.getOwner()).isEqualTo(DEFAULT_OWNER);
+        assertThat(persisted.getFulfilment()).isEqualTo(sourceContent);
+        assertThat(persisted.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
+        assertThat(persisted.getSubmittedAt()).isNull();
+        assertThat(persisted.getSubmittedFulfilment()).isNull();
+        assertThat(persisted.getCopyIdempotencyKey()).isEqualTo("copy-" + sourceStatus);
+        assertThat(fulfilmentRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void copy_shouldDeduplicateSameOwnerAndKeyAndCreateForDifferentKey() {
+        Fulfilment source = createFulfilment();
+        replace(source.getId(), dto(source.getId(), scalarFulfilment("internalMarket")));
+
+        Fulfilment first = copyFulfilment(source.getId(), "same-key");
+        Fulfilment retry = copyFulfilment(source.getId(), "same-key");
+        Fulfilment differentKey = copyFulfilment(source.getId(), "different-key");
+
+        assertThat(retry.getId()).isEqualTo(first.getId());
+        assertThat(retry.getOwner()).isEqualTo(first.getOwner());
+        assertThat(retry.getFulfilment()).isEqualTo(first.getFulfilment());
+        assertThat(retry.getCopyIdempotencyKey()).isEqualTo(first.getCopyIdempotencyKey());
+        assertThat(differentKey.getId()).isNotEqualTo(first.getId());
+        assertThat(fulfilmentRepository
+            .findByOwnerSubAndOwnerOrganisationAndCopyIdempotencyKey(
+                DEFAULT_OWNER.sub(), DEFAULT_OWNER.organisation(), "same-key"))
+            .map(Fulfilment::getId)
+            .contains(first.getId());
+        assertThat(fulfilmentRepository.count()).isEqualTo(3);
+    }
+
+    @Test
+    void copy_shouldReturn400ForDeletedSource() {
+        Fulfilment source = createFulfilment();
+        source.setStatus(FulfilmentStatus.DELETED);
+        fulfilmentRepository.save(source);
+
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/copy", source.getId())
+            .header(FulfilmentController.IDEMPOTENCY_KEY, "deleted-copy")
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail").value(
+                Matchers.containsString("Cannot copy fulfilment with status: DELETED"));
+
+        assertThat(fulfilmentRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void copy_shouldReturn400ForMissingIdempotencyKey() {
+        Fulfilment source = createFulfilment();
+
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/copy", source.getId())
+            .exchange()
+            .expectStatus().isBadRequest();
+
+        assertThat(fulfilmentRepository.count()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = FulfilmentStatus.class, names = {"DRAFT", "SUBMITTED", "AMEND"})
+    void softDelete_shouldPersistDeletedAndRemainIdempotent(FulfilmentStatus sourceStatus) {
+        Fulfilment source = stored(
+            DIRECT_PUT_REF,
+            DEFAULT_OWNER,
+            sourceStatus,
+            LocalDateTime.of(2026, 7, 24, 10, 0),
+            null);
+        fulfilmentRepository.insert(source);
+
+        Fulfilment deleted = softDelete(source.getId(), DEFAULT_OWNER);
+        Fulfilment retried = softDelete(source.getId(), DEFAULT_OWNER);
+
+        assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
+        assertThat(retried).isEqualTo(deleted);
+        assertThat(fulfilmentRepository.findById(source.getId()).orElseThrow().getStatus())
+            .isEqualTo(FulfilmentStatus.DELETED);
+        assertThat(fulfilmentRepository.count()).isEqualTo(1);
+
+        webClient("NoAuth")
+            .get().uri(FULFILMENT_ENDPOINT)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.totalElements").isEqualTo(0)
+            .jsonPath("$.items.length()").isEqualTo(0);
+    }
+
+    @Test
+    void copyAndSoftDelete_shouldReturn404ForDifferentOwner() {
+        Fulfilment source = createFulfilment();
+        Owner differentOwner = new Owner("different-user", "different-org");
+
+        webClient("NoAuth", differentOwner)
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/copy", source.getId())
+            .header(FulfilmentController.IDEMPOTENCY_KEY, "different-owner-copy")
+            .exchange()
+            .expectStatus().isNotFound();
+
+        webClient("NoAuth", differentOwner)
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/soft-delete", source.getId())
+            .exchange()
+            .expectStatus().isNotFound();
+
+        assertThat(fulfilmentRepository.findById(source.getId()).orElseThrow().getStatus())
+            .isEqualTo(FulfilmentStatus.DRAFT);
+        assertThat(fulfilmentRepository.count()).isEqualTo(1);
+    }
+
     @Test
     void putAndGet_shouldRoundTripOpaqueScalarAndCompositeRecordsWithoutInterpretation() {
         Fulfilment created = createFulfilment();
@@ -477,6 +621,7 @@ class FulfilmentIT extends IntegrationBase {
             .jsonPath("$.items[0].status").isEqualTo("SUBMITTED")
             .jsonPath("$.items[0].createdAt").exists()
             .jsonPath("$.items[0].submittedAt").exists()
+            .jsonPath("$.items[0].copyIdempotencyKey").doesNotExist()
             .jsonPath("$.items[0].fulfilment").doesNotExist()
             .jsonPath("$.items[0].submittedFulfilment").doesNotExist()
             .jsonPath("$.items[1].id").isEqualTo(DIRECT_PUT_REF);
@@ -567,6 +712,26 @@ class FulfilmentIT extends IntegrationBase {
         return webClient("NoAuth")
             .put().uri(FULFILMENT_ENDPOINT + "/{id}", id)
             .bodyValue(dto)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Fulfilment.class)
+            .returnResult().getResponseBody();
+    }
+
+    private Fulfilment copyFulfilment(String id, String idempotencyKey) {
+        return webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/copy", id)
+            .header(FulfilmentController.IDEMPOTENCY_KEY, idempotencyKey)
+            .exchange()
+            .expectStatus().isCreated()
+            .expectHeader().valueMatches("Location", LOCATION_FORMAT_REGEX)
+            .expectBody(Fulfilment.class)
+            .returnResult().getResponseBody();
+    }
+
+    private Fulfilment softDelete(String id, Owner owner) {
+        return webClient("NoAuth", owner)
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/soft-delete", id)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Fulfilment.class)

@@ -19,7 +19,12 @@ import uk.gov.defra.trade.imports.animals.ownership.Owner;
         def = "{'owner.sub': 1, 'owner.organisation': 1, 'createdAt': -1}"),
     @CompoundIndex(
         name = "owner_submitted_at",
-        def = "{'owner.sub': 1, 'owner.organisation': 1, 'submittedAt': -1}")
+        def = "{'owner.sub': 1, 'owner.organisation': 1, 'submittedAt': -1}"),
+    @CompoundIndex(
+        name = "owner_copy_idempotency_key",
+        def = "{'owner.sub': 1, 'owner.organisation': 1, 'copyIdempotencyKey': 1}",
+        unique = true,
+        partialFilter = "{'copyIdempotencyKey': {'$type': 'string'}}")
 })
 @Data
 @Builder
@@ -41,4 +46,6 @@ public class Fulfilment {
     private LocalDateTime createdAt;
 
     private LocalDateTime submittedAt;
+
+    private String copyIdempotencyKey;
 }

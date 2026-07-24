@@ -14,6 +14,8 @@ import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
@@ -39,6 +41,118 @@ class FulfilmentServiceTest {
     void setUp() {
         fulfilmentService =
             new FulfilmentService(fulfilmentRepository, referenceNumberGenerator, 20);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = FulfilmentStatus.class, names = {"DRAFT", "SUBMITTED", "AMEND"})
+    void copy_shouldCreateOwnedDraftFromCopyableStatus(FulfilmentStatus sourceStatus) {
+        String copyId = "GBN-AG-26-ABC124";
+        String idempotencyKey = "copy-key";
+        List<Document> sourceContent = List.of(new Document("value", sourceStatus.name()));
+        Fulfilment source = fulfilment(sourceStatus, sourceContent, List.of());
+        when(fulfilmentRepository
+            .findByOwnerSubAndOwnerOrganisationAndCopyIdempotencyKey(
+                OWNER.sub(), OWNER.organisation(), idempotencyKey))
+            .thenReturn(Optional.empty());
+        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(source));
+        when(referenceNumberGenerator.generate()).thenReturn(copyId);
+        when(fulfilmentRepository.insert(any(Fulfilment.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Fulfilment copy = fulfilmentService.copy(ID, OWNER, idempotencyKey);
+
+        assertThat(copy.getId()).isEqualTo(copyId).isNotEqualTo(ID);
+        assertThat(copy.getOwner()).isEqualTo(OWNER);
+        assertThat(copy.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
+        assertThat(copy.getCreatedAt()).isNotNull();
+        assertThat(copy.getSubmittedAt()).isNull();
+        assertThat(copy.getSubmittedFulfilment()).isNull();
+        assertThat(copy.getFulfilment())
+            .isEqualTo(sourceContent)
+            .isNotSameAs(sourceContent);
+        assertThat(copy.getCopyIdempotencyKey()).isEqualTo(idempotencyKey);
+    }
+
+    @Test
+    void copy_shouldReturnExistingCopyForSameOwnerAndIdempotencyKey() {
+        String idempotencyKey = "copy-key";
+        Fulfilment existingCopy = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
+        when(fulfilmentRepository
+            .findByOwnerSubAndOwnerOrganisationAndCopyIdempotencyKey(
+                OWNER.sub(), OWNER.organisation(), idempotencyKey))
+            .thenReturn(Optional.of(existingCopy));
+
+        Fulfilment result = fulfilmentService.copy(ID, OWNER, idempotencyKey);
+
+        assertThat(result).isSameAs(existingCopy);
+        verify(fulfilmentRepository, never()).findById(any());
+        verify(fulfilmentRepository, never()).insert(any(Fulfilment.class));
+        verify(referenceNumberGenerator, never()).generate();
+    }
+
+    @Test
+    void copy_shouldRejectDeletedSource() {
+        String idempotencyKey = "copy-key";
+        Fulfilment deleted = fulfilment(FulfilmentStatus.DELETED, List.of(), null);
+        when(fulfilmentRepository
+            .findByOwnerSubAndOwnerOrganisationAndCopyIdempotencyKey(
+                OWNER.sub(), OWNER.organisation(), idempotencyKey))
+            .thenReturn(Optional.empty());
+        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(deleted));
+
+        assertThatThrownBy(() -> fulfilmentService.copy(ID, OWNER, idempotencyKey))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessageContaining("Cannot copy fulfilment with status: DELETED");
+
+        verify(fulfilmentRepository, never()).insert(any(Fulfilment.class));
+    }
+
+    @Test
+    void copy_shouldRejectBlankIdempotencyKey() {
+        assertThatThrownBy(() -> fulfilmentService.copy(ID, OWNER, " "))
+            .isInstanceOf(BadRequestException.class)
+            .hasMessage("Idempotency-Key must not be blank");
+
+        verify(fulfilmentRepository, never()).findById(any());
+        verify(fulfilmentRepository, never()).insert(any(Fulfilment.class));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = FulfilmentStatus.class, names = {"DRAFT", "SUBMITTED", "AMEND"})
+    void softDelete_shouldSetDeletedForDeletableStatus(FulfilmentStatus sourceStatus) {
+        Fulfilment fulfilment = fulfilment(sourceStatus, List.of(), null);
+        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
+        when(fulfilmentRepository.save(any(Fulfilment.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        Fulfilment deleted = fulfilmentService.softDelete(ID, OWNER);
+
+        assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
+        verify(fulfilmentRepository).save(fulfilment);
+    }
+
+    @Test
+    void softDelete_shouldReturnAlreadyDeletedUnchanged() {
+        Fulfilment deleted = fulfilment(FulfilmentStatus.DELETED, List.of(), null);
+        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(deleted));
+
+        Fulfilment result = fulfilmentService.softDelete(ID, OWNER);
+
+        assertThat(result).isSameAs(deleted);
+        verify(fulfilmentRepository, never()).save(any());
+    }
+
+    @Test
+    void softDelete_shouldHideFulfilmentOwnedBySomeoneElse() {
+        Fulfilment fulfilment = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
+        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
+        Owner differentOwner = new Owner("different-owner", "different-organisation");
+
+        assertThatThrownBy(() -> fulfilmentService.softDelete(ID, differentOwner))
+            .isInstanceOf(NotFoundException.class)
+            .hasMessageContaining(ID);
+
+        verify(fulfilmentRepository, never()).save(any());
     }
 
     @Test
