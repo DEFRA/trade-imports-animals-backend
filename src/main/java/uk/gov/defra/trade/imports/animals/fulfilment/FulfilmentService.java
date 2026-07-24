@@ -21,6 +21,10 @@ public class FulfilmentService {
     private static final String CANNOT_FIND_FULFILMENT_WITH_ID =
         "Cannot find fulfilment with id: ";
     private static final int MAX_REF_RETRIES = 3;
+    private static final List<FulfilmentStatus> LISTED_STATUSES = List.of(
+        FulfilmentStatus.DRAFT,
+        FulfilmentStatus.SUBMITTED,
+        FulfilmentStatus.AMEND);
 
     private final FulfilmentRepository fulfilmentRepository;
     private final ReferenceNumberGenerator referenceNumberGenerator;
@@ -41,7 +45,7 @@ public class FulfilmentService {
                 .id(referenceNumberGenerator.generate())
                 .owner(owner)
                 .fulfilment(List.of())
-                .status(FulfilmentStatus.IN_PROGRESS)
+                .status(FulfilmentStatus.DRAFT)
                 .createdAt(LocalDateTime.now())
                 .build();
             try {
@@ -69,7 +73,7 @@ public class FulfilmentService {
             ? Fulfilment.builder()
                 .id(id)
                 .owner(owner)
-                .status(FulfilmentStatus.IN_PROGRESS)
+                .status(FulfilmentStatus.DRAFT)
                 .createdAt(LocalDateTime.now())
                 .build()
             : existing;
@@ -93,7 +97,10 @@ public class FulfilmentService {
     @Transactional
     public Fulfilment submit(String id, Owner owner) {
         Fulfilment fulfilment = findById(id, owner);
-        assertWritable(fulfilment);
+        if (!isDraftOrAmend(fulfilment.getStatus())) {
+            throw new BadRequestException(
+                "Cannot submit fulfilment with status: " + fulfilment.getStatus());
+        }
         fulfilment.setStatus(FulfilmentStatus.SUBMITTED);
         fulfilment.setSubmittedAt(LocalDateTime.now());
         log.info("Submitted fulfilment {}", id);
@@ -107,7 +114,7 @@ public class FulfilmentService {
             throw new BadRequestException(
                 "Cannot amend fulfilment with status: " + fulfilment.getStatus());
         }
-        fulfilment.setStatus(FulfilmentStatus.IN_PROGRESS);
+        fulfilment.setStatus(FulfilmentStatus.AMEND);
         fulfilment.setSubmittedAt(null);
         log.info("Amended fulfilment {}", id);
         return fulfilmentRepository.save(fulfilment);
@@ -116,9 +123,10 @@ public class FulfilmentService {
     public FulfilmentPageResponse findAll(Owner owner, int page, String sort) {
         int normalisedPage = Math.max(page, 1);
         Page<Fulfilment> result =
-            fulfilmentRepository.findAllByOwnerSubAndOwnerOrganisation(
+            fulfilmentRepository.findAllByOwnerSubAndOwnerOrganisationAndStatusIn(
                 owner.sub(),
                 owner.organisation(),
+                LISTED_STATUSES,
                 PageRequest.of(
                     normalisedPage - 1, listPageSize, FulfilmentSort.toSort(sort)));
         return FulfilmentPageResponse.from(result);
@@ -131,10 +139,16 @@ public class FulfilmentService {
     }
 
     private void assertWritable(Fulfilment fulfilment) {
-        if (fulfilment.getStatus() == FulfilmentStatus.SUBMITTED) {
+        if (!isDraftOrAmend(fulfilment.getStatus())) {
             throw new BadRequestException(
-                "Journey \"" + fulfilment.getId() + "\" is submitted — writes blocked");
+                "Journey \"" + fulfilment.getId() + "\" has status "
+                    + fulfilment.getStatus() + " — writes blocked");
         }
+    }
+
+    // DRAFT and AMEND are the only editable and submittable lifecycle states.
+    private boolean isDraftOrAmend(FulfilmentStatus status) {
+        return status == FulfilmentStatus.DRAFT || status == FulfilmentStatus.AMEND;
     }
 
     public record ReplaceResult(Fulfilment fulfilment, boolean created) {

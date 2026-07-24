@@ -44,12 +44,12 @@ class FulfilmentIT extends IntegrationBase {
     }
 
     @Test
-    void post_shouldMintReferenceAndCreateEmptyInProgressFulfilment() {
+    void post_shouldMintReferenceAndCreateEmptyDraftFulfilment() {
         Fulfilment created = createFulfilment();
 
         assertThat(created.getId()).matches(REF_FORMAT_REGEX);
         assertThat(created.getFulfilment()).isEmpty();
-        assertThat(created.getStatus()).isEqualTo(FulfilmentStatus.IN_PROGRESS);
+        assertThat(created.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
         assertThat(created.getCreatedAt()).isNotNull();
         assertThat(created.getSubmittedAt()).isNull();
         assertThat(created.getOwner()).isEqualTo(DEFAULT_OWNER);
@@ -57,10 +57,17 @@ class FulfilmentIT extends IntegrationBase {
         Fulfilment persisted = fulfilmentRepository.findById(created.getId()).orElseThrow();
         assertThat(persisted.getId()).isEqualTo(created.getId());
         assertThat(persisted.getFulfilment()).isEmpty();
-        assertThat(persisted.getStatus()).isEqualTo(FulfilmentStatus.IN_PROGRESS);
+        assertThat(persisted.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
         assertThat(persisted.getCreatedAt()).isEqualTo(created.getCreatedAt().withNano(
             created.getCreatedAt().getNano() / 1_000_000 * 1_000_000));
         assertThat(persisted.getSubmittedAt()).isNull();
+
+        webClient("NoAuth")
+            .get().uri(FULFILMENT_ENDPOINT + "/{id}", created.getId())
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo("DRAFT");
     }
 
     @Test
@@ -80,7 +87,7 @@ class FulfilmentIT extends IntegrationBase {
         assertThat(created).isNotNull();
         assertThat(created.getId()).isEqualTo(DIRECT_PUT_REF);
         assertThat(created.getFulfilment()).isEqualTo(dto.getFulfilment());
-        assertThat(created.getStatus()).isEqualTo(FulfilmentStatus.IN_PROGRESS);
+        assertThat(created.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
         assertThat(created.getCreatedAt()).isNotNull();
         assertThat(fulfilmentRepository.count()).isEqualTo(1);
     }
@@ -177,10 +184,18 @@ class FulfilmentIT extends IntegrationBase {
 
         assertThat(fulfilmentRepository.findById(created.getId()).orElseThrow().getFulfilment())
             .isEqualTo(beforeSubmit.getFulfilment());
+
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail").value(
+                Matchers.containsString("Cannot submit fulfilment with status: SUBMITTED"));
     }
 
     @Test
-    void amend_shouldReopenSubmittedFulfilmentAndAllowWrites() {
+    void amend_shouldSetAmendStatusAndAllowWritesAndResubmission() {
         Fulfilment created = createFulfilment();
         webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
@@ -195,12 +210,70 @@ class FulfilmentIT extends IntegrationBase {
             .returnResult().getResponseBody();
 
         assertThat(amended).isNotNull();
-        assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.IN_PROGRESS);
+        assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.AMEND);
         assertThat(amended.getSubmittedAt()).isNull();
 
         Fulfilment replaced = replace(
             created.getId(), dto(created.getId(), scalarFulfilment("transit")));
         assertThat(replaced.getFulfilment()).isEqualTo(scalarFulfilment("transit"));
+
+        Fulfilment resubmitted = webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Fulfilment.class)
+            .returnResult().getResponseBody();
+
+        assertThat(resubmitted).isNotNull();
+        assertThat(resubmitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
+        assertThat(resubmitted.getSubmittedAt()).isNotNull();
+    }
+
+    @Test
+    void amend_shouldReturn400_whenFulfilmentIsDraft() {
+        Fulfilment created = createFulfilment();
+
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/amend", created.getId())
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail").value(
+                Matchers.containsString("Cannot amend fulfilment with status: DRAFT"));
+    }
+
+    @Test
+    void deletedFulfilment_shouldRejectSubmitAndReplace() {
+        Fulfilment created = createFulfilment();
+        Fulfilment deleted = fulfilmentRepository.findById(created.getId()).orElseThrow();
+        deleted.setStatus(FulfilmentStatus.DELETED);
+        fulfilmentRepository.save(deleted);
+
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail").value(
+                Matchers.containsString("Cannot submit fulfilment with status: DELETED"));
+
+        webClient("NoAuth")
+            .put().uri(FULFILMENT_ENDPOINT + "/{id}", created.getId())
+            .bodyValue(dto(created.getId(), scalarFulfilment("transit")))
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail").value(Matchers.containsString("writes blocked"));
+
+        webClient("NoAuth")
+            .get().uri(FULFILMENT_ENDPOINT + "/{id}", created.getId())
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo("DELETED");
+
+        assertThat(fulfilmentRepository.findById(created.getId()).orElseThrow().getFulfilment())
+            .isEmpty();
     }
 
     @Test
@@ -276,6 +349,12 @@ class FulfilmentIT extends IntegrationBase {
             "GBN-AG-26-ABC125", secondOwner, base.plusHours(2), base.plusHours(1)));
         fulfilmentRepository.insert(stored(
             "GBN-AG-26-ABC126", null, base.plusHours(3), null));
+        fulfilmentRepository.insert(stored(
+            "GBN-AG-26-ABC127",
+            DEFAULT_OWNER,
+            FulfilmentStatus.DELETED,
+            base.plusHours(4),
+            null));
 
         webClient("NoAuth")
             .get().uri(FULFILMENT_ENDPOINT + "?page=0&sort=not-a-sort")
@@ -349,11 +428,20 @@ class FulfilmentIT extends IntegrationBase {
 
     private Fulfilment stored(
         String id, Owner owner, LocalDateTime createdAt, LocalDateTime submittedAt) {
+        return stored(id, owner, FulfilmentStatus.SUBMITTED, createdAt, submittedAt);
+    }
+
+    private Fulfilment stored(
+        String id,
+        Owner owner,
+        FulfilmentStatus status,
+        LocalDateTime createdAt,
+        LocalDateTime submittedAt) {
         return Fulfilment.builder()
             .id(id)
             .owner(owner)
             .fulfilment(List.of(new Document("sensitive", "body")))
-            .status(FulfilmentStatus.SUBMITTED)
+            .status(status)
             .createdAt(createdAt)
             .submittedAt(submittedAt)
             .build();
