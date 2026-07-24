@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import java.net.URI;
 import java.util.List;
@@ -29,6 +30,8 @@ import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxReplayService;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
+import uk.gov.defra.trade.imports.animals.ownership.Owner;
+import uk.gov.defra.trade.imports.animals.ownership.OwnerHeaders;
 
 @RestController
 @RequestMapping("/notifications")
@@ -49,10 +52,15 @@ public class NotificationController {
     @PostMapping
     @Operation(summary = "Post Origin of the Import", description = "Submits an origin to the backend")
     @Timed("controller.postNotification.time")
-    public ResponseEntity<Notification> post(@Valid @RequestBody NotificationDto notificationDto) {
+    public ResponseEntity<Notification> post(
+        @Valid @RequestBody NotificationDto notificationDto,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("POST /notifications - countryCode={}",
             notificationDto.getOrigin() != null ? notificationDto.getOrigin().getCountryCode() : null);
-        return ResponseEntity.ok(notificationService.saveOriginOfImport(notificationDto));
+        return ResponseEntity.ok(
+            notificationService.saveOriginOfImport(
+                notificationDto, owner(ownerId, ownerOrganisation)));
     }
 
     @PutMapping("/{referenceNumber}")
@@ -68,10 +76,13 @@ public class NotificationController {
     public ResponseEntity<Notification> replace(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
         @PathVariable String referenceNumber,
-        @Valid @RequestBody NotificationDto notificationDto) {
+        @Valid @RequestBody NotificationDto notificationDto,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("PUT /notifications/{} - Replacing notification", referenceNumber);
         NotificationService.ReplaceResult result =
-            notificationService.replaceNotification(referenceNumber, notificationDto);
+            notificationService.replaceNotification(
+                referenceNumber, notificationDto, owner(ownerId, ownerOrganisation));
         if (result.created()) {
             return ResponseEntity.created(buildLocationUri(referenceNumber))
                 .body(result.notification());
@@ -87,9 +98,14 @@ public class NotificationController {
     @ApiResponse(responseCode = "404", description = "Source notification not found", content = @Content)
     @Timed("controller.copyNotification.time")
     public ResponseEntity<Notification> copy(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+        @PathVariable String referenceNumber,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("POST /notifications/{}/copy - Copying notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.copyNotification(referenceNumber));
+        return ResponseEntity.ok(
+            notificationService.copyNotification(
+                referenceNumber, owner(ownerId, ownerOrganisation)));
     }
 
     @PostMapping("/{referenceNumber}/submit")
@@ -104,9 +120,12 @@ public class NotificationController {
     @Timed("controller.submitNotification.time")
     public ResponseEntity<Notification> submit(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId) {
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("POST /notifications/{}/submit - Submitting notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.submitNotification(referenceNumber, traceId));
+        return ResponseEntity.ok(notificationService.submitNotification(
+            referenceNumber, traceId, owner(ownerId, ownerOrganisation)));
     }
 
     @PostMapping("/{referenceNumber}/amend")
@@ -121,9 +140,12 @@ public class NotificationController {
     @Timed("controller.amendNotification.time")
     public ResponseEntity<Notification> amend(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId) {
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("POST /notifications/{}/amend - Amending notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.amendNotification(referenceNumber, traceId));
+        return ResponseEntity.ok(notificationService.amendNotification(
+            referenceNumber, traceId, owner(ownerId, ownerOrganisation)));
     }
 
     @PostMapping("/{referenceNumber}/cancel-amend")
@@ -136,9 +158,13 @@ public class NotificationController {
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.cancelAmendNotification.time")
     public ResponseEntity<Notification> cancelAmend(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+        @PathVariable String referenceNumber,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("POST /notifications/{}/cancel-amend - Cancelling amendment", referenceNumber);
-        return ResponseEntity.ok(notificationService.cancelAmendNotification(referenceNumber));
+        return ResponseEntity.ok(notificationService.cancelAmendNotification(
+            referenceNumber, owner(ownerId, ownerOrganisation)));
     }
 
     @GetMapping("/{referenceNumber}")
@@ -150,9 +176,14 @@ public class NotificationController {
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.getNotificationByRef.time")
     public ResponseEntity<NotificationResponse> findByRef(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+        @PathVariable String referenceNumber,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.debug("Fetching notification {}", referenceNumber);
-        return ResponseEntity.ok(notificationService.findByRef(referenceNumber));
+        return ResponseEntity.ok(
+            notificationService.findByRef(
+                referenceNumber, owner(ownerId, ownerOrganisation)));
     }
 
     @GetMapping
@@ -164,9 +195,12 @@ public class NotificationController {
     @Timed("controller.getAllNotifications.time")
     public NotificationPageResponse findAll(
         @RequestParam(defaultValue = "1") @Min(1) int page,
-        @RequestParam(required = false) String sort) {
+        @RequestParam(required = false) String sort,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.debug("GET /notifications?page={}&sort={}", page, sort);
-        return notificationService.findAll(page, sort);
+        return notificationService.findAll(
+            page, sort, owner(ownerId, ownerOrganisation));
     }
 
     @GetMapping("/reference-numbers")
@@ -223,9 +257,13 @@ public class NotificationController {
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.softDeleteNotification.time")
     public ResponseEntity<Notification> softDelete(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+        @PathVariable String referenceNumber,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("POST /notifications/{}/soft-delete - Soft deleting notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.softDeleteNotification(referenceNumber));
+        return ResponseEntity.ok(notificationService.softDeleteNotification(
+            referenceNumber, owner(ownerId, ownerOrganisation)));
     }
 
     @DeleteMapping
@@ -248,5 +286,9 @@ public class NotificationController {
             baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
         }
         return URI.create(baseUrl + "/notifications/" + referenceNumber);
+    }
+
+    private Owner owner(String ownerId, String ownerOrganisation) {
+        return OwnerHeaders.toOwner(ownerId, ownerOrganisation);
     }
 }

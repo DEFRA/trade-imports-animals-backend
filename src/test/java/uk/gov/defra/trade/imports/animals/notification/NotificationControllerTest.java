@@ -32,6 +32,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
@@ -40,6 +41,8 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxReplayService;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
+import uk.gov.defra.trade.imports.animals.ownership.Owner;
+import uk.gov.defra.trade.imports.animals.ownership.OwnerHeaders;
 
 @WebMvcTest(NotificationController.class)
 @TestPropertySource(properties = {
@@ -52,6 +55,7 @@ class NotificationControllerTest {
     private static final String REF_2 = "GBN-AG-26-ABC002";
     private static final String REF_3 = "GBN-AG-26-ABC003";
     private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
+    private static final Owner OWNER = new Owner("test-owner", "");
 
     @Autowired
     private MockMvc mockMvc;
@@ -67,6 +71,28 @@ class NotificationControllerTest {
 
     @MockitoBean
     private OutboxReplayService outboxReplayService;
+
+    private static MockHttpServletRequestBuilder ownerPost(
+        String uriTemplate, Object... uriVariables) {
+        return withOwner(post(uriTemplate, uriVariables));
+    }
+
+    private static MockHttpServletRequestBuilder ownerGet(
+        String uriTemplate, Object... uriVariables) {
+        return withOwner(get(uriTemplate, uriVariables));
+    }
+
+    private static MockHttpServletRequestBuilder ownerDelete(
+        String uriTemplate, Object... uriVariables) {
+        return withOwner(delete(uriTemplate, uriVariables));
+    }
+
+    private static MockHttpServletRequestBuilder withOwner(
+        MockHttpServletRequestBuilder request) {
+        return request
+            .header(OwnerHeaders.OWNER_ID, OWNER.sub())
+            .header(OwnerHeaders.OWNER_ORGANISATION, OWNER.organisation());
+    }
 
     @Nested
     class PostNotification {
@@ -102,11 +128,11 @@ class NotificationControllerTest {
             savedNotification.setTransport(Transport.builder().transporter(transporters().getFirst()).build());
             savedNotification.setConsignment(consignments().getFirst());
 
-            when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
+            when(notificationService.saveOriginOfImport(any(NotificationDto.class), eq(OWNER)))
                 .thenReturn(savedNotification);
 
             // When & Then
-            mockMvc.perform(post("/notifications")
+            mockMvc.perform(ownerPost("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(notificationDto)))
                 .andExpect(status().isOk())
@@ -151,11 +177,11 @@ class NotificationControllerTest {
             savedNotification.setReferenceNumber(REF_2);
             savedNotification.setOrigin(origin);
 
-            when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
+            when(notificationService.saveOriginOfImport(any(NotificationDto.class), eq(OWNER)))
                 .thenReturn(savedNotification);
 
             // When & Then
-            mockMvc.perform(post("/notifications")
+            mockMvc.perform(ownerPost("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(notificationDto)))
                 .andExpect(status().isOk())
@@ -180,11 +206,11 @@ class NotificationControllerTest {
             savedNotification.setReferenceNumber(REF_3);
             savedNotification.setOrigin(origin);
 
-            when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
+            when(notificationService.saveOriginOfImport(any(NotificationDto.class), eq(OWNER)))
                 .thenReturn(savedNotification);
 
             // When & Then
-            mockMvc.perform(post("/notifications")
+            mockMvc.perform(ownerPost("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(objectMapper.writeValueAsString(notificationDto)))
                 .andExpect(status().isOk())
@@ -207,10 +233,10 @@ class NotificationControllerTest {
             newNotification.setReferenceNumber(REF_2);
             newNotification.setStatus(NotificationStatus.DRAFT);
 
-            when(notificationService.copyNotification(REF_1)).thenReturn(newNotification);
+            when(notificationService.copyNotification(REF_1, OWNER)).thenReturn(newNotification);
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1))
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/copy", REF_1))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("507f1f77bcf86cd799439099"))
                 .andExpect(jsonPath("$.referenceNumber").value(REF_2))
@@ -219,20 +245,20 @@ class NotificationControllerTest {
 
         @Test
         void copy_shouldReturn404_whenSourceNotFound() throws Exception {
-            when(notificationService.copyNotification(REF_1))
+            when(notificationService.copyNotification(REF_1, OWNER))
                 .thenThrow(new NotFoundException("not found"));
 
-            mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1))
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/copy", REF_1))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("not found"));
         }
 
         @Test
         void copy_shouldReturn400_whenSourceIsNotCopyable() throws Exception {
-            when(notificationService.copyNotification(REF_1))
+            when(notificationService.copyNotification(REF_1, OWNER))
                 .thenThrow(new BadRequestException("not copyable"));
 
-            mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1))
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/copy", REF_1))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("not copyable"));
         }
@@ -249,11 +275,11 @@ class NotificationControllerTest {
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.submitNotification(eq(REF_1), anyString()))
+            when(notificationService.submitNotification(eq(REF_1), anyString(), eq(OWNER)))
                 .thenReturn(submitted);
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/submit", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
@@ -268,27 +294,27 @@ class NotificationControllerTest {
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.submitNotification(REF_1, "trace-abc"))
+            when(notificationService.submitNotification(REF_1, "trace-abc", OWNER))
                 .thenReturn(submitted);
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/submit", REF_1)
                     .header(HEADER_TRACE_ID, "trace-abc")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
-            verify(notificationService).submitNotification(REF_1, "trace-abc");
+            verify(notificationService).submitNotification(REF_1, "trace-abc", OWNER);
         }
 
         @Test
         void submit_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            when(notificationService.submitNotification(eq(NONEXISTENT_REF), anyString()))
+            when(notificationService.submitNotification(eq(NONEXISTENT_REF), anyString(), eq(OWNER)))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/submit", NONEXISTENT_REF)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/submit", NONEXISTENT_REF)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value(
@@ -298,12 +324,12 @@ class NotificationControllerTest {
         @Test
         void submit_shouldReturn400_whenNotificationNotInSubmittableState() throws Exception {
             // Given
-            when(notificationService.submitNotification(eq(REF_1), anyString()))
+            when(notificationService.submitNotification(eq(REF_1), anyString(), eq(OWNER)))
                 .thenThrow(new BadRequestException(
                     "Cannot submit notification with status: DELETED"));
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/submit", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
@@ -322,11 +348,11 @@ class NotificationControllerTest {
             amended.setReferenceNumber(REF_1);
             amended.setStatus(NotificationStatus.AMEND);
 
-            when(notificationService.amendNotification(eq(REF_1), anyString()))
+            when(notificationService.amendNotification(eq(REF_1), anyString(), eq(OWNER)))
                 .thenReturn(amended);
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/amend", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/amend", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
@@ -341,27 +367,27 @@ class NotificationControllerTest {
             amended.setReferenceNumber(REF_1);
             amended.setStatus(NotificationStatus.AMEND);
 
-            when(notificationService.amendNotification(REF_1, "trace-xyz"))
+            when(notificationService.amendNotification(REF_1, "trace-xyz", OWNER))
                 .thenReturn(amended);
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/amend", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/amend", REF_1)
                     .header(HEADER_TRACE_ID, "trace-xyz")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
-            verify(notificationService).amendNotification(REF_1, "trace-xyz");
+            verify(notificationService).amendNotification(REF_1, "trace-xyz", OWNER);
         }
 
         @Test
         void amend_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            when(notificationService.amendNotification(eq(NONEXISTENT_REF), anyString()))
+            when(notificationService.amendNotification(eq(NONEXISTENT_REF), anyString(), eq(OWNER)))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/amend", NONEXISTENT_REF)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/amend", NONEXISTENT_REF)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value(
@@ -371,12 +397,12 @@ class NotificationControllerTest {
         @Test
         void amend_shouldReturn400_whenNotificationNotInAmendableState() throws Exception {
             // Given
-            when(notificationService.amendNotification(eq(REF_1), anyString()))
+            when(notificationService.amendNotification(eq(REF_1), anyString(), eq(OWNER)))
                 .thenThrow(new BadRequestException(
                     "Cannot amend notification with status: DRAFT"));
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/amend", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/amend", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
@@ -395,36 +421,36 @@ class NotificationControllerTest {
             restored.setReferenceNumber(REF_1);
             restored.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.cancelAmendNotification(REF_1)).thenReturn(restored);
+            when(notificationService.cancelAmendNotification(REF_1, OWNER)).thenReturn(restored);
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/cancel-amend", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/cancel-amend", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.status").value("SUBMITTED"));
 
-            verify(notificationService).cancelAmendNotification(REF_1);
+            verify(notificationService).cancelAmendNotification(REF_1, OWNER);
         }
 
         @Test
         void cancelAmend_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
-            when(notificationService.cancelAmendNotification(NONEXISTENT_REF))
+            when(notificationService.cancelAmendNotification(NONEXISTENT_REF, OWNER))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
-            mockMvc.perform(post("/notifications/{referenceNumber}/cancel-amend", NONEXISTENT_REF)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/cancel-amend", NONEXISTENT_REF)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound());
         }
 
         @Test
         void cancelAmend_shouldReturn400_whenNotificationNotInAmendStatus() throws Exception {
-            when(notificationService.cancelAmendNotification(REF_1))
+            when(notificationService.cancelAmendNotification(REF_1, OWNER))
                 .thenThrow(new BadRequestException(
                     "Cannot cancel amendment for notification with status: SUBMITTED"));
 
-            mockMvc.perform(post("/notifications/{referenceNumber}/cancel-amend", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/cancel-amend", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
@@ -438,11 +464,11 @@ class NotificationControllerTest {
         @Test
         void findAll_shouldReturnEmptyPage() throws Exception {
             // Given
-            when(notificationService.findAll(1, null)).thenReturn(
+            when(notificationService.findAll(1, null, OWNER)).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
             // When & Then
-            mockMvc.perform(get("/notifications")
+            mockMvc.perform(ownerGet("/notifications")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
@@ -477,12 +503,12 @@ class NotificationControllerTest {
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
-            when(notificationService.findAll(1, null)).thenReturn(
+            when(notificationService.findAll(1, null, OWNER)).thenReturn(
                 new NotificationPageResponse(List.of(notification1, notification2), 1, 25, 2, 2,
                     1));
 
             // When & Then
-            mockMvc.perform(get("/notifications")
+            mockMvc.perform(ownerGet("/notifications")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(2))
@@ -503,11 +529,11 @@ class NotificationControllerTest {
         @Test
         void findAll_shouldPassPageParam() throws Exception {
             // Given
-            when(notificationService.findAll(2, null)).thenReturn(
+            when(notificationService.findAll(2, null, OWNER)).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 2, 25, 0, 120, 3));
 
             // When & Then
-            mockMvc.perform(get("/notifications")
+            mockMvc.perform(ownerGet("/notifications")
                     .param("page", "2")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -519,15 +545,15 @@ class NotificationControllerTest {
 
         @Test
         void findAll_shouldPassSortParam() throws Exception {
-            when(notificationService.findAll(1, "createdAt,desc")).thenReturn(
+            when(notificationService.findAll(1, "createdAt,desc", OWNER)).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
-            mockMvc.perform(get("/notifications")
+            mockMvc.perform(ownerGet("/notifications")
                     .param("sort", "createdAt,desc")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
-            verify(notificationService).findAll(1, "createdAt,desc");
+            verify(notificationService).findAll(1, "createdAt,desc", OWNER);
         }
     }
 
@@ -541,7 +567,7 @@ class NotificationControllerTest {
             doNothing().when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), any(AuditContext.class));
 
             // When & Then
-            mockMvc.perform(delete("/notifications")
+            mockMvc.perform(ownerDelete("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
                     .header(HEADER_TRACE_ID, "trace-abc")
@@ -562,7 +588,7 @@ class NotificationControllerTest {
 
             // When & Then — also validates that NotFoundException resolves to 404 (not 500)
             // through the full Spring dispatch chain (GlobalExceptionHandler handler priority check)
-            mockMvc.perform(delete("/notifications")
+            mockMvc.perform(ownerDelete("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
                     .header(HEADER_TRACE_ID, "trace-abc")
@@ -576,7 +602,7 @@ class NotificationControllerTest {
         @Test
         void delete_shouldReturn400_whenListIsEmpty() throws Exception {
             // When & Then
-            mockMvc.perform(delete("/notifications")
+            mockMvc.perform(ownerDelete("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
                     .header(HEADER_TRACE_ID, "trace-abc")
@@ -593,7 +619,7 @@ class NotificationControllerTest {
             List<String> referenceNumbers = List.of(REF_1);
 
             // When & Then
-            mockMvc.perform(delete("/notifications")
+            mockMvc.perform(ownerDelete("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
                     .header(HEADER_USER_ID, "user-123")
@@ -609,7 +635,7 @@ class NotificationControllerTest {
             List<String> referenceNumbers = List.of(REF_1);
 
             // When & Then
-            mockMvc.perform(delete("/notifications")
+            mockMvc.perform(ownerDelete("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
                     .header(HEADER_TRACE_ID, "trace-abc")
@@ -646,10 +672,10 @@ class NotificationControllerTest {
                 .accompanyingDocuments(List.of(document))
                 .build();
 
-            when(notificationService.findByRef(REF_1)).thenReturn(response);
+            when(notificationService.findByRef(REF_1, OWNER)).thenReturn(response);
 
             // When / Then
-            mockMvc.perform(get("/notifications/{referenceNumber}", REF_1)
+            mockMvc.perform(ownerGet("/notifications/{referenceNumber}", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
@@ -683,10 +709,10 @@ class NotificationControllerTest {
                 .accompanyingDocuments(Collections.emptyList())
                 .build();
 
-            when(notificationService.findByRef(REF_2)).thenReturn(response);
+            when(notificationService.findByRef(REF_2, OWNER)).thenReturn(response);
 
             // When / Then
-            mockMvc.perform(get("/notifications/{referenceNumber}", REF_2)
+            mockMvc.perform(ownerGet("/notifications/{referenceNumber}", REF_2)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_2))
@@ -697,12 +723,12 @@ class NotificationControllerTest {
         @Test
         void findByRef_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            when(notificationService.findByRef(NONEXISTENT_REF))
+            when(notificationService.findByRef(NONEXISTENT_REF, OWNER))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
             // When / Then
-            mockMvc.perform(get("/notifications/{referenceNumber}", NONEXISTENT_REF)
+            mockMvc.perform(ownerGet("/notifications/{referenceNumber}", NONEXISTENT_REF)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value(
@@ -720,7 +746,7 @@ class NotificationControllerTest {
                 new ReferenceNumberPageResponse(Collections.emptyList(), 0, 25, 0, 0, 0));
 
             // When & Then
-            mockMvc.perform(get("/notifications/reference-numbers")
+            mockMvc.perform(ownerGet("/notifications/reference-numbers")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
@@ -739,7 +765,7 @@ class NotificationControllerTest {
                 new ReferenceNumberPageResponse(List.of(REF_1, REF_2), 0, 25, 2, 2, 1));
 
             // When & Then
-            mockMvc.perform(get("/notifications/reference-numbers")
+            mockMvc.perform(ownerGet("/notifications/reference-numbers")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(2))
@@ -758,7 +784,7 @@ class NotificationControllerTest {
                 new ReferenceNumberPageResponse(Collections.emptyList(), 2, 25, 0, 120, 5));
 
             // When & Then
-            mockMvc.perform(get("/notifications/reference-numbers")
+            mockMvc.perform(ownerGet("/notifications/reference-numbers")
                     .param("page", "2")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -785,7 +811,7 @@ class NotificationControllerTest {
             when(outboxService.findByReferenceNumber(referenceNumber)).thenReturn(events);
 
             // When & Then
-            mockMvc.perform(get("/notifications/{ref}/outbox-events", referenceNumber)
+            mockMvc.perform(ownerGet("/notifications/{ref}/outbox-events", referenceNumber)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
@@ -801,7 +827,7 @@ class NotificationControllerTest {
             when(outboxService.findByReferenceNumber(referenceNumber)).thenReturn(List.of());
 
             // When & Then
-            mockMvc.perform(get("/notifications/{ref}/outbox-events", referenceNumber)
+            mockMvc.perform(ownerGet("/notifications/{ref}/outbox-events", referenceNumber)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
@@ -820,10 +846,10 @@ class NotificationControllerTest {
             deleted.setReferenceNumber(REF_1);
             deleted.setStatus(NotificationStatus.DELETED);
 
-            when(notificationService.softDeleteNotification(REF_1)).thenReturn(deleted);
+            when(notificationService.softDeleteNotification(REF_1, OWNER)).thenReturn(deleted);
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/soft-delete", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/soft-delete", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
@@ -833,12 +859,12 @@ class NotificationControllerTest {
         @Test
         void softDelete_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            when(notificationService.softDeleteNotification(NONEXISTENT_REF))
+            when(notificationService.softDeleteNotification(NONEXISTENT_REF, OWNER))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/soft-delete", NONEXISTENT_REF)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/soft-delete", NONEXISTENT_REF)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value(
@@ -848,11 +874,11 @@ class NotificationControllerTest {
         @Test
         void softDelete_shouldReturn400_whenNotificationNotInDeletableState() throws Exception {
             // Given
-            when(notificationService.softDeleteNotification(REF_1))
+            when(notificationService.softDeleteNotification(REF_1, OWNER))
                 .thenThrow(new BadRequestException("Cannot delete notification with status: DELETED"));
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/soft-delete", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/soft-delete", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
@@ -867,7 +893,7 @@ class NotificationControllerTest {
         void replay_shouldReturn200WithEventCount_whenEventsExist() throws Exception {
             when(outboxReplayService.replay(eq(REF_1), any(AuditContext.class))).thenReturn(2);
 
-            mockMvc.perform(post("/notifications/{referenceNumber}/replay", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/replay", REF_1)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
                     .header(HEADER_TRACE_ID, "trace-abc")
                     .header(HEADER_USER_ID, "user-123"))
@@ -882,7 +908,7 @@ class NotificationControllerTest {
             when(outboxReplayService.replay(eq(REF_1), any(AuditContext.class)))
                 .thenThrow(new NotFoundException("No outbox events found for: " + REF_1));
 
-            mockMvc.perform(post("/notifications/{referenceNumber}/replay", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/replay", REF_1)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
                     .header(HEADER_TRACE_ID, "trace-abc")
                     .header(HEADER_USER_ID, "user-123"))
@@ -891,7 +917,7 @@ class NotificationControllerTest {
 
         @Test
         void replay_shouldReturn401_whenAdminSecretIsMissing() throws Exception {
-            mockMvc.perform(post("/notifications/{referenceNumber}/replay", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/replay", REF_1)
                     .header(HEADER_TRACE_ID, "trace-abc")
                     .header(HEADER_USER_ID, "user-123"))
                 .andExpect(status().isUnauthorized());
@@ -901,7 +927,7 @@ class NotificationControllerTest {
 
         @Test
         void replay_shouldReturn400_whenUserIdHeaderIsMissing() throws Exception {
-            mockMvc.perform(post("/notifications/{referenceNumber}/replay", REF_1)
+            mockMvc.perform(ownerPost("/notifications/{referenceNumber}/replay", REF_1)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
                     .header(HEADER_TRACE_ID, "trace-abc"))
                 .andExpect(status().isBadRequest());

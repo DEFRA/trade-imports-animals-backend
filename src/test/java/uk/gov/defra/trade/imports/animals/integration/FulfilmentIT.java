@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.bson.Document;
 import org.hamcrest.Matchers;
@@ -15,6 +16,7 @@ import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentDto;
 import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentRepository;
 import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentStatus;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
+import uk.gov.defra.trade.imports.animals.ownership.Owner;
 
 class FulfilmentIT extends IntegrationBase {
 
@@ -50,6 +52,7 @@ class FulfilmentIT extends IntegrationBase {
         assertThat(created.getStatus()).isEqualTo(FulfilmentStatus.IN_PROGRESS);
         assertThat(created.getCreatedAt()).isNotNull();
         assertThat(created.getSubmittedAt()).isNull();
+        assertThat(created.getOwner()).isEqualTo(DEFAULT_OWNER);
 
         Fulfilment persisted = fulfilmentRepository.findById(created.getId()).orElseThrow();
         assertThat(persisted.getId()).isEqualTo(created.getId());
@@ -234,14 +237,126 @@ class FulfilmentIT extends IntegrationBase {
         assertThat(persisted.toString()).isEqualTo(expected.toString());
     }
 
+    @Test
+    void ownerRelevantOperations_shouldReturn404_forDifferentOwner() {
+        Fulfilment created = createFulfilment();
+        Owner differentOwner = new Owner("different-user", "different-org");
+
+        webClient("NoAuth", differentOwner)
+            .get().uri(FULFILMENT_ENDPOINT + "/{id}", created.getId())
+            .exchange()
+            .expectStatus().isNotFound();
+
+        webClient("NoAuth", differentOwner)
+            .put().uri(FULFILMENT_ENDPOINT + "/{id}", created.getId())
+            .bodyValue(dto(created.getId(), scalarFulfilment("transit")))
+            .exchange()
+            .expectStatus().isNotFound();
+
+        webClient("NoAuth", differentOwner)
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
+            .exchange()
+            .expectStatus().isNotFound();
+
+        webClient("NoAuth", differentOwner)
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/amend", created.getId())
+            .exchange()
+            .expectStatus().isNotFound();
+    }
+
+    @Test
+    void list_shouldScopeBeforePagingAndNormaliseInvalidPageAndSort() {
+        Owner secondOwner = new Owner("second-user", "second-org");
+        LocalDateTime base = LocalDateTime.of(2026, 7, 24, 10, 0);
+        fulfilmentRepository.insert(stored(
+            DIRECT_PUT_REF, DEFAULT_OWNER, base, base.plusHours(3)));
+        fulfilmentRepository.insert(stored(
+            OTHER_REF, DEFAULT_OWNER, base.plusHours(1), base.plusHours(2)));
+        fulfilmentRepository.insert(stored(
+            "GBN-AG-26-ABC125", secondOwner, base.plusHours(2), base.plusHours(1)));
+        fulfilmentRepository.insert(stored(
+            "GBN-AG-26-ABC126", null, base.plusHours(3), null));
+
+        webClient("NoAuth")
+            .get().uri(FULFILMENT_ENDPOINT + "?page=0&sort=not-a-sort")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.page").isEqualTo(1)
+            .jsonPath("$.size").isEqualTo(20)
+            .jsonPath("$.totalElements").isEqualTo(2)
+            .jsonPath("$.totalPages").isEqualTo(1)
+            .jsonPath("$.items.length()").isEqualTo(2)
+            .jsonPath("$.items[0].id").isEqualTo(OTHER_REF)
+            .jsonPath("$.items[0].status").isEqualTo("SUBMITTED")
+            .jsonPath("$.items[0].createdAt").exists()
+            .jsonPath("$.items[0].submittedAt").exists()
+            .jsonPath("$.items[0].fulfilment").doesNotExist()
+            .jsonPath("$.items[1].id").isEqualTo(DIRECT_PUT_REF);
+
+        webClient("NoAuth", secondOwner)
+            .get().uri(FULFILMENT_ENDPOINT + "?page=1&sort=submittedAt,asc")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.totalElements").isEqualTo(1)
+            .jsonPath("$.items[0].id").isEqualTo("GBN-AG-26-ABC125");
+    }
+
+    @Test
+    void legacyUnownedFulfilment_shouldBeHiddenAndReturn404() {
+        fulfilmentRepository.insert(stored(
+            DIRECT_PUT_REF, null, LocalDateTime.of(2026, 7, 24, 10, 0), null));
+
+        webClient("NoAuth")
+            .get().uri(FULFILMENT_ENDPOINT)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.totalElements").isEqualTo(0)
+            .jsonPath("$.items.length()").isEqualTo(0);
+
+        webClient("NoAuth")
+            .get().uri(FULFILMENT_ENDPOINT + "/{id}", DIRECT_PUT_REF)
+            .exchange()
+            .expectStatus().isNotFound();
+    }
+
+    @Test
+    void post_shouldPreserveEmptyOrganisationAsOwnerValue() {
+        Owner ownerWithoutOrganisation = new Owner("stub-user", "");
+
+        Fulfilment created = createFulfilment(ownerWithoutOrganisation);
+
+        assertThat(created.getOwner()).isEqualTo(ownerWithoutOrganisation);
+        assertThat(fulfilmentRepository.findById(created.getId()).orElseThrow().getOwner())
+            .isEqualTo(ownerWithoutOrganisation);
+    }
+
     private Fulfilment createFulfilment() {
-        return webClient("NoAuth")
+        return createFulfilment(DEFAULT_OWNER);
+    }
+
+    private Fulfilment createFulfilment(Owner owner) {
+        return webClient("NoAuth", owner)
             .post().uri(FULFILMENT_ENDPOINT)
             .exchange()
             .expectStatus().isCreated()
             .expectHeader().valueMatches("Location", LOCATION_FORMAT_REGEX)
             .expectBody(Fulfilment.class)
             .returnResult().getResponseBody();
+    }
+
+    private Fulfilment stored(
+        String id, Owner owner, LocalDateTime createdAt, LocalDateTime submittedAt) {
+        return Fulfilment.builder()
+            .id(id)
+            .owner(owner)
+            .fulfilment(List.of(new Document("sensitive", "body")))
+            .status(FulfilmentStatus.SUBMITTED)
+            .createdAt(createdAt)
+            .submittedAt(submittedAt)
+            .build();
     }
 
     private void createFulfilmentWithId(String id) {

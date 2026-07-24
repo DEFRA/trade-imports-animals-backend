@@ -14,6 +14,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
+import uk.gov.defra.trade.imports.animals.ownership.Owner;
 import uk.gov.defra.trade.imports.animals.proposednotification.ProposedNotification;
 import uk.gov.defra.trade.imports.animals.proposednotification.ProposedNotificationRepository;
 
@@ -61,6 +62,7 @@ class NotificationProjectionIT extends IntegrationBase {
         assertThat(created.getStatus()).isEqualTo(NotificationStatus.DRAFT);
         assertThat(created.getCreated()).isNotNull();
         assertThat(created.getUpdated()).isNotNull();
+        assertThat(created.getOwner()).isEqualTo(DEFAULT_OWNER);
         assertThat(notificationRepository.count()).isEqualTo(1);
     }
 
@@ -118,6 +120,7 @@ class NotificationProjectionIT extends IntegrationBase {
         assertThat(new String(response, StandardCharsets.UTF_8)).isEqualTo(body);
         ProposedNotification persisted =
             proposedNotificationRepository.findById(REF).orElseThrow();
+        assertThat(persisted.getOwner()).isEqualTo(DEFAULT_OWNER);
         JsonNode persistedBody = objectMapper.valueToTree(persisted.getBody());
         assertThat(persistedBody).isEqualTo(objectMapper.readTree(body));
         assertThat(proposedNotificationRepository.count()).isEqualTo(1);
@@ -187,6 +190,22 @@ class NotificationProjectionIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
+    }
+
+    @Test
+    void getAndPutProposedNotification_shouldReturn404_forDifferentOwner() {
+        putProposedNotification(fullFatBody(REF, "Breeding"), true);
+
+        webClient("NoAuth", new Owner("different-user", "different-org"))
+            .get().uri(PROPOSED_NOTIFICATION_ENDPOINT + "/{id}", REF)
+            .exchange()
+            .expectStatus().isNotFound();
+
+        webClient("NoAuth", new Owner("different-user", "different-org"))
+            .put().uri(PROPOSED_NOTIFICATION_ENDPOINT + "/{id}", REF)
+            .bodyValue(fullFatBody(REF, "Sale"))
+            .exchange()
+            .expectStatus().isNotFound();
     }
 
     private Notification putCurrentNotification(NotificationDto dto, boolean created) {

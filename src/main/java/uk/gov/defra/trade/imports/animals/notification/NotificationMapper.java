@@ -17,7 +17,7 @@ import org.mapstruct.ReportingPolicy;
 @Mapper(unmappedTargetPolicy = ReportingPolicy.ERROR, unmappedSourcePolicy = ReportingPolicy.ERROR)
 public interface NotificationMapper {
 
-    @BeanMapping(ignoreUnmappedSourceProperties = "submittedBaseline")
+    @BeanMapping(ignoreUnmappedSourceProperties = {"owner", "submittedBaseline"})
     @Mapping(target = "accompanyingDocuments", ignore = true)
     NotificationResponse toResponse(Notification notification);
 }

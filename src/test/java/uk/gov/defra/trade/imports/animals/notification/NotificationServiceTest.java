@@ -59,12 +59,14 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
+import uk.gov.defra.trade.imports.animals.ownership.Owner;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
 
     private static final String TEST_TRACE_ID = "test-trace-id";
     private static final String TEST_USER_ID = "test-user-id";
+    private static final Owner OWNER = new Owner("test-owner", "test-organisation");
 
     @Mock
     private NotificationRepository notificationRepository;
@@ -112,6 +114,7 @@ class NotificationServiceTest {
             String expectedRef = "GBN-AG-26-ABC123";
 
             Notification saved = new Notification();
+            saved.setOwner(OWNER);
             saved.setId(generatedId);
             saved.setOrigin(origin);
             saved.setReferenceNumber(expectedRef);
@@ -120,7 +123,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class))).thenReturn(saved);
 
             // When
-            Notification result = notificationService.saveOriginOfImport(notificationDto);
+            Notification result = notificationService.saveOriginOfImport(notificationDto, OWNER);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(expectedRef);
@@ -137,6 +140,7 @@ class NotificationServiceTest {
             NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
 
             Notification saved = new Notification();
+            saved.setOwner(OWNER);
             saved.setId("507f1f77bcf86cd799439011");
             saved.setOrigin(origin);
             saved.setReferenceNumber("GBN-AG-26-ABC002");
@@ -150,7 +154,7 @@ class NotificationServiceTest {
                 .thenReturn(saved);
 
             // When
-            Notification result = notificationService.saveOriginOfImport(notificationDto);
+            Notification result = notificationService.saveOriginOfImport(notificationDto, OWNER);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo("GBN-AG-26-ABC002");
@@ -171,7 +175,7 @@ class NotificationServiceTest {
                 .thenThrow(new DuplicateKeyException("duplicate reference number"));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.saveOriginOfImport(notificationDto))
+            assertThatThrownBy(() -> notificationService.saveOriginOfImport(notificationDto, OWNER))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("3");
 
@@ -203,6 +207,7 @@ class NotificationServiceTest {
                 .build();
 
             Notification existingNotification = new Notification();
+            existingNotification.setOwner(OWNER);
             existingNotification.setId(existingId);
             existingNotification.setReferenceNumber(referenceNumber);
             existingNotification.setOrigin(origin);
@@ -224,6 +229,7 @@ class NotificationServiceTest {
                 .build();
 
             Notification updatedNotification = Notification.builder()
+                .owner(OWNER)
                 .id(existingId)
                 .referenceNumber(referenceNumber)
                 .origin(origin)
@@ -241,7 +247,7 @@ class NotificationServiceTest {
                 updatedNotification);
 
             // When
-            Notification result = notificationService.saveOriginOfImport(updateDto);
+            Notification result = notificationService.saveOriginOfImport(updateDto, OWNER);
 
             // Then
             assertThat(result).isNotNull();
@@ -294,27 +300,36 @@ class NotificationServiceTest {
             // Given
             Page<Notification> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
-            when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
+            when(notificationRepository.findAllByOwnerSubAndOwnerOrganisationAndStatusIn(
+                eq(OWNER.sub()),
+                eq(OWNER.organisation()),
+                eq(List.of(DRAFT, SUBMITTED, AMEND)),
+                any(Pageable.class)))
                 .thenReturn(emptyPage);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1, null);
+            NotificationPageResponse result = notificationService.findAll(1, null, OWNER);
 
             // Then
             assertThat(result).isNotNull();
             verify(notificationRepository, times(1))
-                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
+                .findAllByOwnerSubAndOwnerOrganisationAndStatusIn(
+                    eq(OWNER.sub()),
+                    eq(OWNER.organisation()),
+                    eq(List.of(DRAFT, SUBMITTED, AMEND)),
+                    any(Pageable.class));
         }
 
         @Test
         void findAll_shouldExcludeDeletedNotifications() {
             // Given — only DRAFT and SUBMITTED are passed as the allowlist; DELETED is excluded
             Notification draft = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber("GBN-AG-26-000DFT")
                 .status(DRAFT)
                 .build();
             Notification submitted = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber("GBN-AG-26-000SUB")
                 .status(SUBMITTED)
                 .build();
@@ -322,12 +337,15 @@ class NotificationServiceTest {
             Page<Notification> page = new PageImpl<>(
                 List.of(draft, submitted), PageRequest.of(0, 54), 0);
 
-            when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
+            when(notificationRepository.findAllByOwnerSubAndOwnerOrganisationAndStatusIn(
+                eq(OWNER.sub()),
+                eq(OWNER.organisation()),
+                eq(List.of(DRAFT, SUBMITTED, AMEND)),
+                any(Pageable.class)))
                 .thenReturn(page);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1, null);
+            NotificationPageResponse result = notificationService.findAll(1, null, OWNER);
 
             // Then — only DRAFT and SUBMITTED are returned
             assertThat(result.content()).hasSize(2);
@@ -336,25 +354,33 @@ class NotificationServiceTest {
             assertThat(result.page()).isEqualTo(1);
             assertThat(result.size()).isEqualTo(54);
             verify(notificationRepository, times(1))
-                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
+                .findAllByOwnerSubAndOwnerOrganisationAndStatusIn(
+                    eq(OWNER.sub()),
+                    eq(OWNER.organisation()),
+                    eq(List.of(DRAFT, SUBMITTED, AMEND)),
+                    any(Pageable.class));
         }
 
         @Test
         void findAll_shouldMapStatusToNotificationDto() {
             // Given
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber("GBN-AG-26-ABC123")
                 .origin(new Origin("GB", "true", "REF-1"))
                 .status(SUBMITTED)
                 .build();
             Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54),
                 1);
-            when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
+            when(notificationRepository.findAllByOwnerSubAndOwnerOrganisationAndStatusIn(
+                eq(OWNER.sub()),
+                eq(OWNER.organisation()),
+                eq(List.of(DRAFT, SUBMITTED, AMEND)),
+                any(Pageable.class)))
                 .thenReturn(page);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1, null);
+            NotificationPageResponse result = notificationService.findAll(1, null, OWNER);
 
             // Then
             assertThat(result.content()).hasSize(1);
@@ -369,6 +395,7 @@ class NotificationServiceTest {
             // Regression: notifications in AMEND were silently excluded from the
             // dashboard before AMEND was added to the allow-list (EUDPA-171).
             Notification amend = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber("GBN-AG-26-000AMD")
                 .status(AMEND)
                 .build();
@@ -376,11 +403,14 @@ class NotificationServiceTest {
             Page<Notification> page = new PageImpl<>(
                 List.of(amend), PageRequest.of(0, 54), 0);
 
-            when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
+            when(notificationRepository.findAllByOwnerSubAndOwnerOrganisationAndStatusIn(
+                eq(OWNER.sub()),
+                eq(OWNER.organisation()),
+                eq(List.of(DRAFT, SUBMITTED, AMEND)),
+                any(Pageable.class)))
                 .thenReturn(page);
 
-            NotificationPageResponse result = notificationService.findAll(1, null);
+            NotificationPageResponse result = notificationService.findAll(1, null, OWNER);
 
             assertThat(result.content()).hasSize(1);
             assertThat(result.content()).extracting(NotificationDto::getStatus)
@@ -391,15 +421,21 @@ class NotificationServiceTest {
         void findAll_shouldUseCreatedAtSort_whenRequested() {
             Page<Notification> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
-            when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
+            when(notificationRepository.findAllByOwnerSubAndOwnerOrganisationAndStatusIn(
+                eq(OWNER.sub()),
+                eq(OWNER.organisation()),
+                eq(List.of(DRAFT, SUBMITTED, AMEND)),
+                any(Pageable.class)))
                 .thenReturn(emptyPage);
 
-            notificationService.findAll(1, "createdAt,asc");
+            notificationService.findAll(1, "createdAt,asc", OWNER);
 
             ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-            verify(notificationRepository).findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)), pageableCaptor.capture());
+            verify(notificationRepository).findAllByOwnerSubAndOwnerOrganisationAndStatusIn(
+                eq(OWNER.sub()),
+                eq(OWNER.organisation()),
+                eq(List.of(DRAFT, SUBMITTED, AMEND)),
+                pageableCaptor.capture());
             assertThat(pageableCaptor.getValue().getSort().getOrderFor("created").getDirection())
                 .isEqualTo(Sort.Direction.ASC);
         }
@@ -606,6 +642,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
@@ -617,8 +654,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            Notification result = notificationService.submitNotification(referenceNumber,
-                "trace-001");
+            Notification result = notificationService.submitNotification(referenceNumber, "trace-001", OWNER);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
@@ -632,6 +668,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
@@ -643,7 +680,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.submitNotification(referenceNumber, "trace-001");
+            notificationService.submitNotification(referenceNumber, "trace-001", OWNER);
 
             // Then — save must happen before the outbox event is written
             InOrder inOrder = inOrder(notificationRepository, outboxService);
@@ -656,6 +693,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
@@ -670,7 +708,7 @@ class NotificationServiceTest {
 
             // When / Then — exception propagates out of submitNotification
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-001"))
+                () -> notificationService.submitNotification(referenceNumber, "trace-001", OWNER))
                 .isInstanceOf(OutboxWriteException.class);
         }
 
@@ -683,7 +721,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-001"))
+                () -> notificationService.submitNotification(referenceNumber, "trace-001", OWNER))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(referenceNumber);
 
@@ -698,6 +736,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
@@ -711,7 +750,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-001"))
+                () -> notificationService.submitNotification(referenceNumber, "trace-001", OWNER))
                 .isInstanceOf(OutboxWriteException.class)
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;
@@ -728,6 +767,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-AMEND1";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-amend-1")
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
@@ -739,8 +779,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            Notification result = notificationService.submitNotification(referenceNumber,
-                "trace-002");
+            Notification result = notificationService.submitNotification(referenceNumber, "trace-002", OWNER);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
@@ -754,6 +793,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-ALREADY";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-already")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
@@ -764,7 +804,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-003"))
+                () -> notificationService.submitNotification(referenceNumber, "trace-003", OWNER))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("SUBMITTED");
 
@@ -778,6 +818,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-DELETED";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-deleted")
                 .referenceNumber(referenceNumber)
                 .status(NotificationStatus.DELETED)
@@ -788,7 +829,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-004"))
+                () -> notificationService.submitNotification(referenceNumber, "trace-004", OWNER))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DELETED");
 
@@ -812,6 +853,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-AMD001";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-amd-1")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
@@ -823,8 +865,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            Notification result = notificationService.amendNotification(referenceNumber,
-                "trace-amd-1");
+            Notification result = notificationService.amendNotification(referenceNumber, "trace-amd-1", OWNER);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(AMEND);
@@ -840,6 +881,7 @@ class NotificationServiceTest {
             String referenceNumber = "GBN-AG-26-AMD008";
             Origin originalOrigin = new Origin("GB", "true", "BASELINE-REF");
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-amd-8")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
@@ -852,7 +894,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.amendNotification(referenceNumber, "trace-amd-8");
+            notificationService.amendNotification(referenceNumber, "trace-amd-8", OWNER);
 
             // Then
             assertThat(notification.getSubmittedBaseline()).isNotNull();
@@ -865,6 +907,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-AMD002";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-amd-2")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
@@ -876,7 +919,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.amendNotification(referenceNumber, "trace-amd-2");
+            notificationService.amendNotification(referenceNumber, "trace-amd-2", OWNER);
 
             // Then — save must happen before the outbox event is written
             InOrder inOrder = inOrder(notificationRepository, outboxService);
@@ -889,6 +932,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-AMD003";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-amd-3")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
@@ -899,7 +943,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.amendNotification(referenceNumber, "trace-amd-3"))
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-3", OWNER))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DRAFT");
 
@@ -913,6 +957,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-AMD004";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-amd-4")
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
@@ -923,7 +968,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.amendNotification(referenceNumber, "trace-amd-4"))
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-4", OWNER))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("AMEND");
 
@@ -940,7 +985,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.amendNotification(referenceNumber, "trace-amd-5"))
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-5", OWNER))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(referenceNumber);
 
@@ -954,6 +999,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-AMD006";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-amd-6")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
@@ -966,7 +1012,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.amendNotification(referenceNumber, "trace-amd-6"))
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-6", OWNER))
                 .isInstanceOf(OutboxWriteException.class)
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;
@@ -983,6 +1029,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-AMD007";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-amd-7")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
@@ -997,7 +1044,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.amendNotification(referenceNumber, "trace-amd-7"))
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-7", OWNER))
                 .isInstanceOf(OutboxWriteException.class);
         }
     }
@@ -1013,6 +1060,7 @@ class NotificationServiceTest {
                 .origin(new Origin("GB", "true", "ORIGINAL-REF"))
                 .build();
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-can-1")
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
@@ -1026,7 +1074,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            Notification result = notificationService.cancelAmendNotification(referenceNumber);
+            Notification result = notificationService.cancelAmendNotification(referenceNumber, OWNER);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
@@ -1042,6 +1090,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-CAN002";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
                 .build();
@@ -1050,7 +1099,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.cancelAmendNotification(referenceNumber))
+            assertThatThrownBy(() -> notificationService.cancelAmendNotification(referenceNumber, OWNER))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("SUBMITTED");
 
@@ -1062,6 +1111,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-CAN003";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
                 .submittedBaseline(null)
@@ -1071,7 +1121,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.cancelAmendNotification(referenceNumber))
+            assertThatThrownBy(() -> notificationService.cancelAmendNotification(referenceNumber, OWNER))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("baseline");
 
@@ -1086,7 +1136,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.cancelAmendNotification("GBN-AG-26-ABSENT"))
+                () -> notificationService.cancelAmendNotification("GBN-AG-26-ABSENT", OWNER))
                 .isInstanceOf(NotFoundException.class);
 
             verify(notificationRepository, never()).save(any());
@@ -1102,6 +1152,7 @@ class NotificationServiceTest {
             String referenceNumber = "GBN-AG-26-ABC123";
             Origin origin = new Origin("GB", "true", "REF-001");
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
                 .origin(origin)
@@ -1127,7 +1178,7 @@ class NotificationServiceTest {
                 .thenReturn(List.of(document));
 
             // When
-            NotificationResponse response = notificationService.findByRef(referenceNumber);
+            NotificationResponse response = notificationService.findByRef(referenceNumber, OWNER);
 
             // Then
             assertThat(response).isNotNull();
@@ -1150,6 +1201,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-XYZ456";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-002")
                 .referenceNumber(referenceNumber)
                 .origin(new Origin("IE", "false", null))
@@ -1161,7 +1213,7 @@ class NotificationServiceTest {
                 .thenReturn(Collections.emptyList());
 
             // When
-            NotificationResponse response = notificationService.findByRef(referenceNumber);
+            NotificationResponse response = notificationService.findByRef(referenceNumber, OWNER);
 
             // Then
             assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
@@ -1176,7 +1228,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.findByRef(referenceNumber))
+            assertThatThrownBy(() -> notificationService.findByRef(referenceNumber, OWNER))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(referenceNumber);
 
@@ -1193,12 +1245,14 @@ class NotificationServiceTest {
             String sourceRef = "GBN-AG-26-SRC001";
             String newRef = "GBN-AG-26-NEW001";
             Notification source = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber(sourceRef)
                 .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                 .status(NotificationStatus.DRAFT)
                 .build();
 
             Notification created = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber(newRef)
                 .status(NotificationStatus.DRAFT)
                 .build();
@@ -1209,7 +1263,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class))).thenReturn(created);
 
             // When
-            Notification result = notificationService.copyNotification(sourceRef);
+            Notification result = notificationService.copyNotification(sourceRef, OWNER);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
@@ -1222,12 +1276,14 @@ class NotificationServiceTest {
             String sourceRef = "GBN-AG-26-SUB001";
             String newRef = "GBN-AG-26-NEW002";
             Notification source = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber(sourceRef)
                 .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
             Notification created = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber(newRef)
                 .status(NotificationStatus.DRAFT)
                 .build();
@@ -1238,7 +1294,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class))).thenReturn(created);
 
             // When
-            Notification result = notificationService.copyNotification(sourceRef);
+            Notification result = notificationService.copyNotification(sourceRef, OWNER);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
@@ -1259,6 +1315,7 @@ class NotificationServiceTest {
                 .build();
 
             Notification source = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
                 .origin(origin)
@@ -1283,7 +1340,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef);
+            notificationService.copyNotification(sourceRef, OWNER);
 
             // Then — capture what was saved and assert retained fields
             ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
@@ -1309,6 +1366,7 @@ class NotificationServiceTest {
             CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
                 List.of(species()));
             Notification source = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
                 .origin(new Origin("FR", "no", "DO-NOT-COPY"))
@@ -1331,7 +1389,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef);
+            notificationService.copyNotification(sourceRef, OWNER);
 
             // Then — excluded fields must be null on the saved copy
             ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
@@ -1357,12 +1415,14 @@ class NotificationServiceTest {
             String sourceRef = "GBN-AG-26-AMD001";
             String newRef = "GBN-AG-26-NEW-AMD";
             Notification source = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber(sourceRef)
                 .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                 .status(AMEND)
                 .build();
 
             Notification created = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber(newRef)
                 .status(DRAFT)
                 .build();
@@ -1372,7 +1432,7 @@ class NotificationServiceTest {
             when(referenceNumberGenerator.generate()).thenReturn(newRef);
             when(notificationRepository.save(any(Notification.class))).thenReturn(created);
 
-            Notification result = notificationService.copyNotification(sourceRef);
+            Notification result = notificationService.copyNotification(sourceRef, OWNER);
 
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
             assertThat(result.getStatus()).isEqualTo(DRAFT);
@@ -1386,7 +1446,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef))
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, OWNER))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(sourceRef);
 
@@ -1398,6 +1458,7 @@ class NotificationServiceTest {
             // Given
             String sourceRef = "GBN-AG-26-DELETED";
             Notification deleted = Notification.builder()
+                .owner(OWNER)
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DELETED)
                 .build();
@@ -1405,7 +1466,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(deleted));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef))
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, OWNER))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DELETED");
 
@@ -1421,6 +1482,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-ABC123";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
@@ -1432,7 +1494,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            Notification result = notificationService.softDeleteNotification(referenceNumber);
+            Notification result = notificationService.softDeleteNotification(referenceNumber, OWNER);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
@@ -1445,6 +1507,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-ABC456";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-002")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
@@ -1456,7 +1519,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            Notification result = notificationService.softDeleteNotification(referenceNumber);
+            Notification result = notificationService.softDeleteNotification(referenceNumber, OWNER);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
@@ -1471,6 +1534,7 @@ class NotificationServiceTest {
             // The AMEND view page renders a Delete button (AC4) that reaches here.
             String referenceNumber = "GBN-AG-26-ABCAMD";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-amend-del")
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
@@ -1481,7 +1545,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-            Notification result = notificationService.softDeleteNotification(referenceNumber);
+            Notification result = notificationService.softDeleteNotification(referenceNumber, OWNER);
 
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
             assertThat(result.getUpdated()).isNotNull();
@@ -1493,6 +1557,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-ABC789";
             Notification notification = Notification.builder()
+                .owner(OWNER)
                 .id("notif-id-003")
                 .referenceNumber(referenceNumber)
                 .status(NotificationStatus.DELETED)
@@ -1502,7 +1567,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber))
+            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber, OWNER))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DELETED");
 
@@ -1517,7 +1582,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber))
+            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber, OWNER))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(referenceNumber);
 

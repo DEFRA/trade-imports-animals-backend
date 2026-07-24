@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import java.net.URI;
 import lombok.extern.slf4j.Slf4j;
@@ -18,9 +19,13 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
+import uk.gov.defra.trade.imports.animals.ownership.Owner;
+import uk.gov.defra.trade.imports.animals.ownership.OwnerHeaders;
 
 @RestController
 @RequestMapping("/fulfilments")
@@ -43,9 +48,11 @@ public class FulfilmentController {
     @ApiResponse(responseCode = "201", description = "Fulfilment created",
         content = @Content(schema = @Schema(implementation = Fulfilment.class)))
     @Timed("controller.postFulfilment.time")
-    public ResponseEntity<Fulfilment> create() {
+    public ResponseEntity<Fulfilment> create(
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("POST /fulfilments - Creating fulfilment");
-        Fulfilment created = fulfilmentService.create();
+        Fulfilment created = fulfilmentService.create(owner(ownerId, ownerOrganisation));
         return ResponseEntity.created(buildLocationUri(created.getId())).body(created);
     }
 
@@ -62,9 +69,12 @@ public class FulfilmentController {
     public ResponseEntity<Fulfilment> replace(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
         @PathVariable String id,
-        @Valid @RequestBody FulfilmentDto dto) {
+        @Valid @RequestBody FulfilmentDto dto,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("PUT /fulfilments/{} - Replacing fulfilment", id);
-        FulfilmentService.ReplaceResult result = fulfilmentService.replace(id, dto);
+        FulfilmentService.ReplaceResult result =
+            fulfilmentService.replace(id, dto, owner(ownerId, ownerOrganisation));
         if (result.created()) {
             return ResponseEntity.created(buildLocationUri(id)).body(result.fulfilment());
         }
@@ -80,9 +90,29 @@ public class FulfilmentController {
     @Timed("controller.getFulfilment.time")
     public ResponseEntity<Fulfilment> findById(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-        @PathVariable String id) {
+        @PathVariable String id,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.debug("GET /fulfilments/{} - Fetching fulfilment", id);
-        return ResponseEntity.ok(fulfilmentService.findById(id));
+        return ResponseEntity.ok(
+            fulfilmentService.findById(id, owner(ownerId, ownerOrganisation)));
+    }
+
+    @GetMapping
+    @Operation(summary = "List fulfilments",
+        description = "Returns owner-scoped fulfilment summaries. "
+            + "Optional sort: createdAt,desc (default), createdAt,asc, "
+            + "submittedAt,desc, submittedAt,asc")
+    @ApiResponse(responseCode = "200", description = "Paginated fulfilment summaries returned",
+        content = @Content(schema = @Schema(implementation = FulfilmentPageResponse.class)))
+    @Timed("controller.getAllFulfilments.time")
+    public FulfilmentPageResponse findAll(
+        @RequestParam(defaultValue = "1") int page,
+        @RequestParam(required = false) String sort,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+        log.debug("GET /fulfilments?page={}&sort={}", page, sort);
+        return fulfilmentService.findAll(owner(ownerId, ownerOrganisation), page, sort);
     }
 
     @PostMapping("/{id}/submit")
@@ -96,9 +126,12 @@ public class FulfilmentController {
     @Timed("controller.submitFulfilment.time")
     public ResponseEntity<Fulfilment> submit(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-        @PathVariable String id) {
+        @PathVariable String id,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("POST /fulfilments/{}/submit - Submitting fulfilment", id);
-        return ResponseEntity.ok(fulfilmentService.submit(id));
+        return ResponseEntity.ok(
+            fulfilmentService.submit(id, owner(ownerId, ownerOrganisation)));
     }
 
     @PostMapping("/{id}/amend")
@@ -112,9 +145,16 @@ public class FulfilmentController {
     @Timed("controller.amendFulfilment.time")
     public ResponseEntity<Fulfilment> amend(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-        @PathVariable String id) {
+        @PathVariable String id,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("POST /fulfilments/{}/amend - Amending fulfilment", id);
-        return ResponseEntity.ok(fulfilmentService.amend(id));
+        return ResponseEntity.ok(
+            fulfilmentService.amend(id, owner(ownerId, ownerOrganisation)));
+    }
+
+    private Owner owner(String ownerId, String ownerOrganisation) {
+        return OwnerHeaders.toOwner(ownerId, ownerOrganisation);
     }
 
     private URI buildLocationUri(String id) {

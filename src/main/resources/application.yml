@@ -136,6 +136,10 @@ notification:
   submit:
     lock-at-least-for: 50ms
 
+fulfilment:
+  list:
+    page-size: ${FULFILMENT_LIST_PAGE_SIZE:20}
+
 # Transactional outbox SNS relay (ADR-EUDP-001)
 outbox:
   poller:

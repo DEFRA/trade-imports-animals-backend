@@ -35,6 +35,8 @@ import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.mockserver.MockServerContainer;
 import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
+import uk.gov.defra.trade.imports.animals.ownership.Owner;
+import uk.gov.defra.trade.imports.animals.ownership.OwnerHeaders;
 
 /**
  * Base class for Spring Boot integration tests, activating the {@code integration-test} profile
@@ -56,6 +58,7 @@ import org.testcontainers.utility.DockerImageName;
 public abstract class IntegrationBase {
 
     static final List<String> SERVICES_TO_MOCK = List.of();
+    protected static final Owner DEFAULT_OWNER = new Owner("integration-user", "integration-org");
 
     @LocalServerPort
     protected int port;
@@ -129,11 +132,17 @@ public abstract class IntegrationBase {
     }
 
     protected WebTestClient webClient(String clientType) {
+        return webClient(clientType, DEFAULT_OWNER);
+    }
+
+    protected WebTestClient webClient(String clientType, Owner owner) {
         return WebTestClient.bindToServer()
             .baseUrl("http://localhost:%d".formatted(port))
             .defaultHeader("Authorization", "Bearer " + getToken(clientType))
             .defaultHeader("Content-Type", "application/json")
             .defaultHeader("INS-ConversationId", UUID.randomUUID().toString())
+            .defaultHeader(OwnerHeaders.OWNER_ID, owner.sub())
+            .defaultHeader(OwnerHeaders.OWNER_ORGANISATION, owner.organisation())
             .build();
     }
 
