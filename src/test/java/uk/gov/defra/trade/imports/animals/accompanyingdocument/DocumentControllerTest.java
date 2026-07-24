@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,6 +81,36 @@ class DocumentControllerTest {
           .andExpect(header().string("Location", "http://localhost:8085/document-uploads/upload-abc-123"))
           .andExpect(jsonPath("$.uploadId").value("upload-abc-123"))
           .andExpect(jsonPath("$.uploadUrl").value("http://localhost:8085/document-uploads/upload-abc-123/file"));
+    }
+
+    @ParameterizedTest
+    @EnumSource(
+        value = DocumentType.class,
+        names = {"ITAHC", "VETERINARY_HEALTH_CERTIFICATE"},
+        mode = EnumSource.Mode.EXCLUDE)
+    void shouldAcceptEveryPreviouslyRejectedDocumentType(DocumentType documentType)
+        throws Exception {
+      String ref = "GBN-AG-26-000001";
+      DocumentUploadRequest expectedRequest = new DocumentUploadRequest(
+          documentType, "UKGB2026001", LocalDate.of(2026, 1, 15));
+      DocumentUploadResponse serviceResponse = new DocumentUploadResponse(
+          "upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
+      String body = """
+          {
+            "documentType":"%s",
+            "documentReference":"UKGB2026001",
+            "dateOfIssue":"2026-01-15"
+          }
+          """.formatted(documentType.name());
+
+      when(documentService.initiate(ref, expectedRequest)).thenReturn(serviceResponse);
+
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isCreated());
+
+      verify(documentService).initiate(ref, expectedRequest);
     }
 
     @Test
