@@ -35,7 +35,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
-import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.core.SimpleLock;
 import org.junit.jupiter.api.BeforeEach;
 import org.mapstruct.factory.Mappers;
@@ -44,6 +43,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
@@ -87,14 +87,17 @@ class NotificationServiceTest {
     private ReferenceNumberGenerator referenceNumberGenerator;
 
     private NotificationService notificationService;
-    private LockingTaskExecutor lockingTaskExecutor;
+
+    // Real executor (its executeWithLock must actually run the locked task) built from the
+    // lockProvider mock; @InjectMocks does the wiring so we don't hand-construct it from a mock.
+    @InjectMocks
+    private DefaultLockingTaskExecutor lockingTaskExecutor;
 
     private final NotificationMapper notificationMapper = Mappers.getMapper(
         NotificationMapper.class);
 
     @BeforeEach
     void setUp() {
-        lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         // Default: TTL unconfigured (days null) so create tests keep their original behaviour and
         // stamp no expireAt. Expiry-specific tests rebuild the service with a bespoke config.
         notificationService = buildService(new NotificationTtlConfig(null, "local", sweep(false)));
