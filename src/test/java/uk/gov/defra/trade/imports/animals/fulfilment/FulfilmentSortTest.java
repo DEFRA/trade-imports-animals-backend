@@ -9,19 +9,20 @@ class FulfilmentSortTest {
 
     @Test
     void toSort_shouldSupportEveryContractSort() {
+        assertSort("arrivalDate,desc", "arrivalDate", Sort.Direction.DESC);
+        assertSort("arrivalDate,asc", "arrivalDate", Sort.Direction.ASC);
         assertSort("createdAt,desc", "createdAt", Sort.Direction.DESC);
         assertSort("createdAt,asc", "createdAt", Sort.Direction.ASC);
-        assertSort("submittedAt,desc", "submittedAt", Sort.Direction.DESC);
-        assertSort("submittedAt,asc", "submittedAt", Sort.Direction.ASC);
     }
 
     @Test
-    void toSort_shouldUseCreatedAtDescendingForInvalidOrBlankValues() {
-        assertSort(null, "createdAt", Sort.Direction.DESC);
-        assertSort("", "createdAt", Sort.Direction.DESC);
-        assertSort("createdAt", "createdAt", Sort.Direction.DESC);
-        assertSort("createdAt,sideways", "createdAt", Sort.Direction.DESC);
-        assertSort("status,asc", "createdAt", Sort.Direction.DESC);
+    void toSort_shouldUseArrivalDateDescendingForInvalidOrBlankValues() {
+        assertSort(null, "arrivalDate", Sort.Direction.DESC);
+        assertSort("", "arrivalDate", Sort.Direction.DESC);
+        assertSort("createdAt", "arrivalDate", Sort.Direction.DESC);
+        assertSort("createdAt,sideways", "arrivalDate", Sort.Direction.DESC);
+        assertSort("submittedAt,asc", "arrivalDate", Sort.Direction.DESC);
+        assertSort("status,asc", "arrivalDate", Sort.Direction.DESC);
     }
 
     private void assertSort(String parameter, String field, Sort.Direction direction) {

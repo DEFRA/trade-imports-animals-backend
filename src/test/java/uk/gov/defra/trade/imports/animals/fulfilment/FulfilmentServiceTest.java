@@ -18,6 +18,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
@@ -35,12 +36,16 @@ class FulfilmentServiceTest {
     @Mock
     private ReferenceNumberGenerator referenceNumberGenerator;
 
+    @Mock
+    private MongoTemplate mongoTemplate;
+
     private FulfilmentService fulfilmentService;
 
     @BeforeEach
     void setUp() {
         fulfilmentService =
-            new FulfilmentService(fulfilmentRepository, referenceNumberGenerator, 20);
+            new FulfilmentService(
+                fulfilmentRepository, referenceNumberGenerator, mongoTemplate, 20);
     }
 
     @ParameterizedTest

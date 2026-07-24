@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import org.bson.Document;
 import org.hamcrest.Matchers;
@@ -16,9 +18,18 @@ import org.springframework.beans.factory.annotation.Autowired;
 import uk.gov.defra.trade.imports.animals.fulfilment.Fulfilment;
 import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentController;
 import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentDto;
+import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentPageResponse;
 import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentRepository;
 import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentStatus;
+import uk.gov.defra.trade.imports.animals.notification.Commodity;
+import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
+import uk.gov.defra.trade.imports.animals.notification.Operator;
+import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
+import uk.gov.defra.trade.imports.animals.notification.Transport;
 import uk.gov.defra.trade.imports.animals.ownership.Owner;
 
 class FulfilmentIT extends IntegrationBase {
@@ -39,11 +50,15 @@ class FulfilmentIT extends IntegrationBase {
     private FulfilmentRepository fulfilmentRepository;
 
     @Autowired
+    private NotificationRepository notificationRepository;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
         fulfilmentRepository.deleteAll();
+        notificationRepository.deleteAll();
     }
 
     @Test
@@ -589,6 +604,139 @@ class FulfilmentIT extends IntegrationBase {
     }
 
     @Test
+    void list_shouldEnrichFromNotificationButKeepCanonicalFulfilmentState() {
+        Fulfilment created = createFulfilment();
+        replace(created.getId(), dto(created.getId(), scalarFulfilment("internalMarket")));
+        Fulfilment submitted = webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Fulfilment.class)
+            .returnResult().getResponseBody();
+        assertThat(submitted).isNotNull();
+
+        Commodity commodity = Commodity.builder().name("Live animals").build();
+        LocalDate arrivalDate = LocalDate.of(2026, 8, 12);
+        Notification notificationProjection = putNotificationProjection(
+            notificationDto(
+                created.getId(),
+                commodity,
+                "FR",
+                arrivalDate,
+                "Example consignor",
+                "Example consignee"),
+            DEFAULT_OWNER);
+        assertThat(notificationProjection).isNotNull();
+        assertThat(notificationProjection.getStatus()).isEqualTo(NotificationStatus.DRAFT);
+
+        Fulfilment withoutNotification = createFulfilmentWithId(OTHER_REF, DEFAULT_OWNER);
+        Fulfilment deleted = stored(
+            "GBN-AG-26-ABC125",
+            DEFAULT_OWNER,
+            FulfilmentStatus.DELETED,
+            LocalDateTime.of(2026, 7, 24, 12, 0),
+            null);
+        fulfilmentRepository.insert(deleted);
+        Owner secondOwner = new Owner("second-user", "second-org");
+        Fulfilment secondOwnerFulfilment = createFulfilmentWithId(
+            "GBN-AG-26-ABC126", secondOwner);
+
+        FulfilmentPageResponse page = listFulfilments(DEFAULT_OWNER, 1, "arrivalDate,desc");
+
+        assertThat(page.totalElements()).isEqualTo(2);
+        assertThat(page.items()).extracting(FulfilmentPageResponse.Item::id)
+            .containsExactly(created.getId(), withoutNotification.getId());
+        Fulfilment persistedCanonical =
+            fulfilmentRepository.findById(created.getId()).orElseThrow();
+        FulfilmentPageResponse.Item enriched = page.items().getFirst();
+        assertThat(enriched.status()).isEqualTo(FulfilmentStatus.SUBMITTED);
+        assertThat(enriched.createdAt()).isEqualTo(persistedCanonical.getCreatedAt());
+        assertThat(enriched.submittedAt()).isEqualTo(persistedCanonical.getSubmittedAt());
+        assertThat(enriched.reference()).isEqualTo(created.getId());
+        assertThat(enriched.commodityDisplay()).isEqualTo(commodity);
+        assertThat(enriched.originCountryCode()).isEqualTo("FR");
+        assertThat(enriched.arrivalDate()).isEqualTo(arrivalDate);
+        assertThat(enriched.consignorName()).isEqualTo("Example consignor");
+        assertThat(enriched.consigneeName()).isEqualTo("Example consignee");
+
+        FulfilmentPageResponse.Item blank = page.items().get(1);
+        assertThat(blank.status()).isEqualTo(FulfilmentStatus.DRAFT);
+        assertThat(blank.createdAt())
+            .isEqualTo(fulfilmentRepository.findById(OTHER_REF).orElseThrow().getCreatedAt());
+        assertThat(blank.submittedAt()).isNull();
+        assertThat(blank.reference()).isEqualTo(OTHER_REF);
+        assertThat(blank.commodityDisplay()).isNull();
+        assertThat(blank.originCountryCode()).isNull();
+        assertThat(blank.arrivalDate()).isNull();
+        assertThat(blank.consignorName()).isNull();
+        assertThat(blank.consigneeName()).isNull();
+
+        FulfilmentPageResponse secondOwnerPage =
+            listFulfilments(secondOwner, 1, "arrivalDate,desc");
+        assertThat(secondOwnerPage.totalElements()).isEqualTo(1);
+        assertThat(secondOwnerPage.items()).extracting(FulfilmentPageResponse.Item::id)
+            .containsExactly(secondOwnerFulfilment.getId());
+    }
+
+    @Test
+    void list_shouldSortByJoinedArrivalDateAndFulfilmentCreatedAtAndPage() {
+        LocalDateTime createdBase = LocalDateTime.of(2026, 7, 1, 10, 0);
+        LocalDate arrivalBase = LocalDate.of(2026, 8, 1);
+        List<Fulfilment> fulfilments = new ArrayList<>();
+        List<Notification> notifications = new ArrayList<>();
+        for (int index = 0; index < 21; index++) {
+            String id = "GBN-AG-26-P" + "%05d".formatted(index);
+            fulfilments.add(stored(
+                id,
+                DEFAULT_OWNER,
+                FulfilmentStatus.DRAFT,
+                createdBase.plusHours(index),
+                null));
+            notifications.add(Notification.builder()
+                .referenceNumber(id)
+                .owner(DEFAULT_OWNER)
+                .status(NotificationStatus.DRAFT)
+                .transport(Transport.builder()
+                    .arrivalDate(arrivalBase.plusDays(index))
+                    .build())
+                .build());
+        }
+        fulfilmentRepository.insert(fulfilments);
+        notificationRepository.insert(notifications);
+
+        FulfilmentPageResponse defaultFirstPage =
+            listFulfilmentsWithoutSort(DEFAULT_OWNER, 1);
+        FulfilmentPageResponse defaultSecondPage =
+            listFulfilmentsWithoutSort(DEFAULT_OWNER, 2);
+        FulfilmentPageResponse invalidSortPage =
+            listFulfilments(DEFAULT_OWNER, 1, "submittedAt,asc");
+        FulfilmentPageResponse createdAscendingPage =
+            listFulfilments(DEFAULT_OWNER, 1, "createdAt,asc");
+
+        assertThat(defaultFirstPage.page()).isEqualTo(1);
+        assertThat(defaultFirstPage.size()).isEqualTo(20);
+        assertThat(defaultFirstPage.totalElements()).isEqualTo(21);
+        assertThat(defaultFirstPage.totalPages()).isEqualTo(2);
+        assertThat(defaultFirstPage.items()).hasSize(20);
+        assertThat(defaultFirstPage.items().getFirst().id()).isEqualTo("GBN-AG-26-P00020");
+        assertThat(defaultFirstPage.items().getFirst().arrivalDate())
+            .isEqualTo(arrivalBase.plusDays(20));
+
+        assertThat(defaultSecondPage.page()).isEqualTo(2);
+        assertThat(defaultSecondPage.size()).isEqualTo(20);
+        assertThat(defaultSecondPage.totalElements()).isEqualTo(21);
+        assertThat(defaultSecondPage.totalPages()).isEqualTo(2);
+        assertThat(defaultSecondPage.items()).hasSize(1);
+        assertThat(defaultSecondPage.items().getFirst().id()).isEqualTo("GBN-AG-26-P00000");
+
+        assertThat(invalidSortPage.items().getFirst().id()).isEqualTo("GBN-AG-26-P00020");
+        assertThat(createdAscendingPage.items().getFirst().id())
+            .isEqualTo("GBN-AG-26-P00000");
+        assertThat(createdAscendingPage.items().getFirst().createdAt())
+            .isEqualTo(createdBase);
+    }
+
+    @Test
     void list_shouldScopeBeforePagingAndNormaliseInvalidPageAndSort() {
         Owner secondOwner = new Owner("second-user", "second-org");
         LocalDateTime base = LocalDateTime.of(2026, 7, 24, 10, 0);
@@ -617,17 +765,23 @@ class FulfilmentIT extends IntegrationBase {
             .jsonPath("$.totalElements").isEqualTo(2)
             .jsonPath("$.totalPages").isEqualTo(1)
             .jsonPath("$.items.length()").isEqualTo(2)
-            .jsonPath("$.items[0].id").isEqualTo(OTHER_REF)
+            .jsonPath("$.items[0].id").isEqualTo(DIRECT_PUT_REF)
             .jsonPath("$.items[0].status").isEqualTo("SUBMITTED")
             .jsonPath("$.items[0].createdAt").exists()
             .jsonPath("$.items[0].submittedAt").exists()
+            .jsonPath("$.items[0].reference").isEqualTo(DIRECT_PUT_REF)
+            .jsonPath("$.items[0].commodityDisplay").isEmpty()
+            .jsonPath("$.items[0].originCountryCode").isEmpty()
+            .jsonPath("$.items[0].arrivalDate").isEmpty()
+            .jsonPath("$.items[0].consignorName").isEmpty()
+            .jsonPath("$.items[0].consigneeName").isEmpty()
             .jsonPath("$.items[0].copyIdempotencyKey").doesNotExist()
             .jsonPath("$.items[0].fulfilment").doesNotExist()
             .jsonPath("$.items[0].submittedFulfilment").doesNotExist()
-            .jsonPath("$.items[1].id").isEqualTo(DIRECT_PUT_REF);
+            .jsonPath("$.items[1].id").isEqualTo(OTHER_REF);
 
         webClient("NoAuth", secondOwner)
-            .get().uri(FULFILMENT_ENDPOINT + "?page=1&sort=submittedAt,asc")
+            .get().uri(FULFILMENT_ENDPOINT + "?page=1&sort=createdAt,asc")
             .exchange()
             .expectStatus().isOk()
             .expectBody()
@@ -700,12 +854,18 @@ class FulfilmentIT extends IntegrationBase {
             .build();
     }
 
-    private void createFulfilmentWithId(String id) {
-        webClient("NoAuth")
+    private Fulfilment createFulfilmentWithId(String id, Owner owner) {
+        return webClient("NoAuth", owner)
             .put().uri(FULFILMENT_ENDPOINT + "/{id}", id)
             .bodyValue(dto(id, List.of()))
             .exchange()
-            .expectStatus().isCreated();
+            .expectStatus().isCreated()
+            .expectBody(Fulfilment.class)
+            .returnResult().getResponseBody();
+    }
+
+    private void createFulfilmentWithId(String id) {
+        createFulfilmentWithId(id, DEFAULT_OWNER);
     }
 
     private Fulfilment replace(String id, FulfilmentDto dto) {
@@ -735,6 +895,59 @@ class FulfilmentIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk()
             .expectBody(Fulfilment.class)
+            .returnResult().getResponseBody();
+    }
+
+    private Notification putNotificationProjection(NotificationDto dto, Owner owner) {
+        return webClient("NoAuth", owner)
+            .put().uri("/notifications/{id}", dto.getReferenceNumber())
+            .bodyValue(dto)
+            .exchange()
+            .expectStatus().isCreated()
+            .expectBody(Notification.class)
+            .returnResult().getResponseBody();
+    }
+
+    private NotificationDto notificationDto(
+        String reference,
+        Commodity commodity,
+        String originCountryCode,
+        LocalDate arrivalDate,
+        String consignorName,
+        String consigneeName) {
+        return NotificationDto.builder()
+            .referenceNumber(reference)
+            .commodity(commodity)
+            .origin(Origin.builder().countryCode(originCountryCode).build())
+            .transport(Transport.builder().arrivalDate(arrivalDate).build())
+            .consignor(Operator.builder().name(consignorName).build())
+            .consignee(Operator.builder().name(consigneeName).build())
+            .build();
+    }
+
+    private FulfilmentPageResponse listFulfilments(
+        Owner owner, int page, String sort) {
+        return webClient("NoAuth", owner)
+            .get().uri(uriBuilder -> uriBuilder
+                .path(FULFILMENT_ENDPOINT)
+                .queryParam("page", page)
+                .queryParam("sort", sort)
+                .build())
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(FulfilmentPageResponse.class)
+            .returnResult().getResponseBody();
+    }
+
+    private FulfilmentPageResponse listFulfilmentsWithoutSort(Owner owner, int page) {
+        return webClient("NoAuth", owner)
+            .get().uri(uriBuilder -> uriBuilder
+                .path(FULFILMENT_ENDPOINT)
+                .queryParam("page", page)
+                .build())
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(FulfilmentPageResponse.class)
             .returnResult().getResponseBody();
     }
 

@@ -4,8 +4,8 @@ import org.springframework.data.domain.Sort;
 
 public final class FulfilmentSort {
 
+    private static final String ARRIVAL_DATE = "arrivalDate";
     private static final String CREATED_AT = "createdAt";
-    private static final String SUBMITTED_AT = "submittedAt";
 
     private FulfilmentSort() {
     }
@@ -28,12 +28,12 @@ public final class FulfilmentSort {
 
         Sort.Direction sortDirection = Sort.Direction.fromString(direction);
         return switch (field) {
-            case CREATED_AT, SUBMITTED_AT -> Sort.by(sortDirection, field);
+            case ARRIVAL_DATE, CREATED_AT -> Sort.by(sortDirection, field);
             default -> defaultSort();
         };
     }
 
     private static Sort defaultSort() {
-        return Sort.by(Sort.Direction.DESC, CREATED_AT);
+        return Sort.by(Sort.Direction.DESC, ARRIVAL_DATE);
     }
 }

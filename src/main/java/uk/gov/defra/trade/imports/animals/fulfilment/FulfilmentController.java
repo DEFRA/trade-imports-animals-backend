@@ -127,9 +127,9 @@ public class FulfilmentController {
 
     @GetMapping
     @Operation(summary = "List fulfilments",
-        description = "Returns owner-scoped fulfilment summaries. "
-            + "Optional sort: createdAt,desc (default), createdAt,asc, "
-            + "submittedAt,desc, submittedAt,asc")
+        description = "Returns owner-scoped fulfilment summaries enriched with notification "
+            + "display fields. Optional sort: arrivalDate,desc (default), arrivalDate,asc, "
+            + "createdAt,desc, createdAt,asc")
     @ApiResponse(responseCode = "200", description = "Paginated fulfilment summaries returned",
         content = @Content(schema = @Schema(implementation = FulfilmentPageResponse.class)))
     @Timed("controller.getAllFulfilments.time")

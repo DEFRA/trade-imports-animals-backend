@@ -7,12 +7,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.aggregation.Aggregation;
+import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.ownership.Owner;
 
@@ -30,14 +35,17 @@ public class FulfilmentService {
 
     private final FulfilmentRepository fulfilmentRepository;
     private final ReferenceNumberGenerator referenceNumberGenerator;
+    private final MongoTemplate mongoTemplate;
     private final int listPageSize;
 
     public FulfilmentService(
         FulfilmentRepository fulfilmentRepository,
         ReferenceNumberGenerator referenceNumberGenerator,
+        MongoTemplate mongoTemplate,
         @Value("${fulfilment.list.page-size:20}") int listPageSize) {
         this.fulfilmentRepository = fulfilmentRepository;
         this.referenceNumberGenerator = referenceNumberGenerator;
+        this.mongoTemplate = mongoTemplate;
         this.listPageSize = listPageSize;
     }
 
@@ -213,14 +221,51 @@ public class FulfilmentService {
 
     public FulfilmentPageResponse findAll(Owner owner, int page, String sort) {
         int normalisedPage = Math.max(page, 1);
-        Page<Fulfilment> result =
-            fulfilmentRepository.findAllByOwnerSubAndOwnerOrganisationAndStatusIn(
-                owner.sub(),
-                owner.organisation(),
-                LISTED_STATUSES,
-                PageRequest.of(
-                    normalisedPage - 1, listPageSize, FulfilmentSort.toSort(sort)));
-        return FulfilmentPageResponse.from(result);
+        Criteria ownerAndStatusCriteria = listedForOwner(owner);
+        long totalElements = mongoTemplate.count(
+            Query.query(ownerAndStatusCriteria), Fulfilment.class);
+        long offset = (normalisedPage - 1L) * listPageSize;
+        Sort rowSort = FulfilmentSort.toSort(sort)
+            .and(Sort.by(Sort.Direction.ASC, "_id"));
+
+        Aggregation aggregation = Aggregation.newAggregation(
+            Aggregation.match(listedForOwner(owner)),
+            Aggregation.lookup(
+                mongoTemplate.getCollectionName(Notification.class),
+                "_id",
+                "referenceNumber",
+                "notification"),
+            Aggregation.unwind("notification", true),
+            enrichedRowProjection(),
+            Aggregation.sort(rowSort),
+            Aggregation.skip(offset),
+            Aggregation.limit(listPageSize));
+        List<FulfilmentPageResponse.Item> items = mongoTemplate.aggregate(
+            aggregation,
+            Fulfilment.class,
+            FulfilmentPageResponse.Item.class).getMappedResults();
+
+        return FulfilmentPageResponse.from(
+            normalisedPage, listPageSize, totalElements, items);
+    }
+
+    private Criteria listedForOwner(Owner owner) {
+        return Criteria.where("owner.sub").is(owner.sub())
+            .and("owner.organisation").is(owner.organisation())
+            .and("status").in(LISTED_STATUSES);
+    }
+
+    private AggregationOperation enrichedRowProjection() {
+        return Aggregation.project()
+            .and("status").as("status")
+            .and("createdAt").as("createdAt")
+            .and("submittedAt").as("submittedAt")
+            .and("_id").as("reference")
+            .and("notification.commodity").as("commodityDisplay")
+            .and("notification.origin.countryCode").as("originCountryCode")
+            .and("notification.transport.arrivalDate").as("arrivalDate")
+            .and("notification.consignor.name").as("consignorName")
+            .and("notification.consignee.name").as("consigneeName");
     }
 
     private void assertOwner(Fulfilment fulfilment, Owner owner) {
