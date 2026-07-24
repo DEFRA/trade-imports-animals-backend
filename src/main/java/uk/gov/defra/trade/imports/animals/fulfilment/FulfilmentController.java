@@ -153,6 +153,27 @@ public class FulfilmentController {
             fulfilmentService.amend(id, owner(ownerId, ownerOrganisation)));
     }
 
+    @PostMapping("/{id}/cancel-amend")
+    @Operation(summary = "Cancel fulfilment amendment",
+        description = "Restores the submitted fulfilment content and transitions from AMEND "
+            + "to SUBMITTED")
+    @ApiResponse(responseCode = "200", description = "Amendment cancelled",
+        content = @Content(schema = @Schema(implementation = Fulfilment.class)))
+    @ApiResponse(responseCode = "400",
+        description = "Fulfilment is not in AMEND status or its submitted snapshot is missing",
+        content = @Content)
+    @ApiResponse(responseCode = "404", description = "Fulfilment not found", content = @Content)
+    @Timed("controller.cancelAmendFulfilment.time")
+    public ResponseEntity<Fulfilment> cancelAmend(
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+        @PathVariable String id,
+        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
+        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+        log.info("POST /fulfilments/{}/cancel-amend - Cancelling amendment", id);
+        return ResponseEntity.ok(
+            fulfilmentService.cancelAmend(id, owner(ownerId, ownerOrganisation)));
+    }
+
     private Owner owner(String ownerId, String ownerOrganisation) {
         return OwnerHeaders.toOwner(ownerId, ownerOrganisation);
     }

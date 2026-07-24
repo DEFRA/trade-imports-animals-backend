@@ -34,6 +34,8 @@ public class Fulfilment {
 
     private List<Document> fulfilment;
 
+    private List<Document> submittedFulfilment;
+
     private FulfilmentStatus status;
 
     private LocalDateTime createdAt;

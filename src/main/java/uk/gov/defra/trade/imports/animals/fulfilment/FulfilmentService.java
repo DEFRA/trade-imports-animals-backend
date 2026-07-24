@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.fulfilment;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -102,6 +103,7 @@ public class FulfilmentService {
                 "Cannot submit fulfilment with status: " + fulfilment.getStatus());
         }
         fulfilment.setStatus(FulfilmentStatus.SUBMITTED);
+        fulfilment.setSubmittedFulfilment(null);
         fulfilment.setSubmittedAt(LocalDateTime.now());
         log.info("Submitted fulfilment {}", id);
         return fulfilmentRepository.save(fulfilment);
@@ -114,9 +116,31 @@ public class FulfilmentService {
             throw new BadRequestException(
                 "Cannot amend fulfilment with status: " + fulfilment.getStatus());
         }
+        fulfilment.setSubmittedFulfilment(new ArrayList<>(fulfilment.getFulfilment()));
         fulfilment.setStatus(FulfilmentStatus.AMEND);
         fulfilment.setSubmittedAt(null);
         log.info("Amended fulfilment {}", id);
+        return fulfilmentRepository.save(fulfilment);
+    }
+
+    @Transactional
+    public Fulfilment cancelAmend(String id, Owner owner) {
+        Fulfilment fulfilment = findById(id, owner);
+        if (fulfilment.getStatus() != FulfilmentStatus.AMEND) {
+            throw new BadRequestException(
+                "Cannot cancel amendment for fulfilment with status: "
+                    + fulfilment.getStatus());
+        }
+        if (fulfilment.getSubmittedFulfilment() == null) {
+            throw new BadRequestException(
+                "Cannot cancel amendment: no submitted snapshot stored for fulfilment");
+        }
+
+        fulfilment.setFulfilment(new ArrayList<>(fulfilment.getSubmittedFulfilment()));
+        fulfilment.setSubmittedFulfilment(null);
+        fulfilment.setStatus(FulfilmentStatus.SUBMITTED);
+        fulfilment.setSubmittedAt(LocalDateTime.now());
+        log.info("Cancelled amendment for fulfilment {}", id);
         return fulfilmentRepository.save(fulfilment);
     }
 

@@ -49,6 +49,7 @@ class FulfilmentIT extends IntegrationBase {
 
         assertThat(created.getId()).matches(REF_FORMAT_REGEX);
         assertThat(created.getFulfilment()).isEmpty();
+        assertThat(created.getSubmittedFulfilment()).isNull();
         assertThat(created.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
         assertThat(created.getCreatedAt()).isNotNull();
         assertThat(created.getSubmittedAt()).isNull();
@@ -57,6 +58,7 @@ class FulfilmentIT extends IntegrationBase {
         Fulfilment persisted = fulfilmentRepository.findById(created.getId()).orElseThrow();
         assertThat(persisted.getId()).isEqualTo(created.getId());
         assertThat(persisted.getFulfilment()).isEmpty();
+        assertThat(persisted.getSubmittedFulfilment()).isNull();
         assertThat(persisted.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
         assertThat(persisted.getCreatedAt()).isEqualTo(created.getCreatedAt().withNano(
             created.getCreatedAt().getNano() / 1_000_000 * 1_000_000));
@@ -197,6 +199,8 @@ class FulfilmentIT extends IntegrationBase {
     @Test
     void amend_shouldSetAmendStatusAndAllowWritesAndResubmission() {
         Fulfilment created = createFulfilment();
+        List<Document> submittedContent = scalarFulfilment("internalMarket");
+        replace(created.getId(), dto(created.getId(), submittedContent));
         webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
             .exchange()
@@ -211,11 +215,15 @@ class FulfilmentIT extends IntegrationBase {
 
         assertThat(amended).isNotNull();
         assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.AMEND);
+        assertThat(amended.getSubmittedFulfilment()).isEqualTo(submittedContent);
+        assertThat(amended.getSubmittedFulfilment())
+            .isNotSameAs(amended.getFulfilment());
         assertThat(amended.getSubmittedAt()).isNull();
 
         Fulfilment replaced = replace(
             created.getId(), dto(created.getId(), scalarFulfilment("transit")));
         assertThat(replaced.getFulfilment()).isEqualTo(scalarFulfilment("transit"));
+        assertThat(replaced.getSubmittedFulfilment()).isEqualTo(submittedContent);
 
         Fulfilment resubmitted = webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
@@ -226,7 +234,106 @@ class FulfilmentIT extends IntegrationBase {
 
         assertThat(resubmitted).isNotNull();
         assertThat(resubmitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
+        assertThat(resubmitted.getSubmittedFulfilment()).isNull();
         assertThat(resubmitted.getSubmittedAt()).isNotNull();
+    }
+
+    @Test
+    void cancelAmend_shouldDiscardEditsAndRestoreSubmittedContent() {
+        Fulfilment created = createFulfilment();
+        List<Document> submittedContent = scalarFulfilment("internalMarket");
+        replace(created.getId(), dto(created.getId(), submittedContent));
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
+            .exchange()
+            .expectStatus().isOk();
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/amend", created.getId())
+            .exchange()
+            .expectStatus().isOk();
+
+        List<Document> amendEdits = scalarFulfilment("transit");
+        Fulfilment edited = replace(
+            created.getId(), dto(created.getId(), amendEdits));
+
+        assertThat(edited.getFulfilment()).isEqualTo(amendEdits);
+        assertThat(edited.getSubmittedFulfilment()).isEqualTo(submittedContent);
+
+        Fulfilment restored = webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/cancel-amend", created.getId())
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Fulfilment.class)
+            .returnResult().getResponseBody();
+
+        assertThat(restored).isNotNull();
+        assertThat(restored.getFulfilment()).isEqualTo(submittedContent);
+        assertThat(restored.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
+        assertThat(restored.getSubmittedFulfilment()).isNull();
+        assertThat(restored.getSubmittedAt()).isNotNull();
+
+        Fulfilment found = webClient("NoAuth")
+            .get().uri(FULFILMENT_ENDPOINT + "/{id}", created.getId())
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Fulfilment.class)
+            .returnResult().getResponseBody();
+
+        assertThat(found).isNotNull();
+        assertThat(found.getFulfilment()).isEqualTo(submittedContent);
+        assertThat(found.getFulfilment()).isNotEqualTo(amendEdits);
+        assertThat(found.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
+        assertThat(found.getSubmittedFulfilment()).isNull();
+    }
+
+    @Test
+    void cancelAmend_shouldReturn400_whenFulfilmentIsNotAmend() {
+        Fulfilment created = createFulfilment();
+
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/cancel-amend", created.getId())
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail").value(
+                Matchers.containsString(
+                    "Cannot cancel amendment for fulfilment with status: DRAFT"));
+    }
+
+    @Test
+    void cancelAmend_shouldReturn400_whenSubmittedSnapshotIsMissing() {
+        Fulfilment created = createFulfilment();
+        Fulfilment withoutSnapshot =
+            fulfilmentRepository.findById(created.getId()).orElseThrow();
+        withoutSnapshot.setStatus(FulfilmentStatus.AMEND);
+        fulfilmentRepository.save(withoutSnapshot);
+
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/cancel-amend", created.getId())
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail").value(
+                Matchers.containsString("no submitted snapshot"));
+    }
+
+    @Test
+    void cancelAmend_shouldReturn404_forDifferentOwner() {
+        Fulfilment created = createFulfilment();
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
+            .exchange()
+            .expectStatus().isOk();
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/amend", created.getId())
+            .exchange()
+            .expectStatus().isOk();
+        Owner differentOwner = new Owner("different-user", "different-org");
+
+        webClient("NoAuth", differentOwner)
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/cancel-amend", created.getId())
+            .exchange()
+            .expectStatus().isNotFound();
     }
 
     @Test
@@ -371,6 +478,7 @@ class FulfilmentIT extends IntegrationBase {
             .jsonPath("$.items[0].createdAt").exists()
             .jsonPath("$.items[0].submittedAt").exists()
             .jsonPath("$.items[0].fulfilment").doesNotExist()
+            .jsonPath("$.items[0].submittedFulfilment").doesNotExist()
             .jsonPath("$.items[1].id").isEqualTo(DIRECT_PUT_REF);
 
         webClient("NoAuth", secondOwner)
