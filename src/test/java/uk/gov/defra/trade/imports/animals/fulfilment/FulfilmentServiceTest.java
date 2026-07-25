@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -21,6 +22,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.notification.NotificationResponse;
+import uk.gov.defra.trade.imports.animals.notification.NotificationService;
+import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.ownership.Owner;
 
@@ -28,10 +32,14 @@ import uk.gov.defra.trade.imports.animals.ownership.Owner;
 class FulfilmentServiceTest {
 
     private static final String ID = "GBN-AG-26-ABC123";
+    private static final String TRACE_ID = "trace-fulfilment-001";
     private static final Owner OWNER = new Owner("owner-id", "owner-organisation");
 
     @Mock
     private FulfilmentRepository fulfilmentRepository;
+
+    @Mock
+    private NotificationService notificationService;
 
     @Mock
     private ReferenceNumberGenerator referenceNumberGenerator;
@@ -45,7 +53,8 @@ class FulfilmentServiceTest {
     void setUp() {
         fulfilmentService =
             new FulfilmentService(
-                fulfilmentRepository, referenceNumberGenerator, mongoTemplate, 20);
+                fulfilmentRepository, notificationService, referenceNumberGenerator,
+                mongoTemplate, 20);
     }
 
     @ParameterizedTest
@@ -145,6 +154,7 @@ class FulfilmentServiceTest {
 
         assertThat(result).isSameAs(deleted);
         verify(fulfilmentRepository, never()).save(any());
+        verifyNoInteractions(notificationService);
     }
 
     @Test
@@ -169,7 +179,7 @@ class FulfilmentServiceTest {
         when(fulfilmentRepository.save(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Fulfilment amended = fulfilmentService.amend(ID, OWNER);
+        Fulfilment amended = fulfilmentService.amend(ID, OWNER, TRACE_ID);
 
         assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.AMEND);
         assertThat(amended.getSubmittedFulfilment())
@@ -256,11 +266,107 @@ class FulfilmentServiceTest {
         when(fulfilmentRepository.save(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Fulfilment submitted = fulfilmentService.submit(ID, OWNER);
+        Fulfilment submitted = fulfilmentService.submit(ID, OWNER, TRACE_ID);
 
         assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
         assertThat(submitted.getSubmittedFulfilment()).isNull();
         assertThat(submitted.getSubmittedAt()).isNotNull();
+    }
+
+    @Test
+    void submit_shouldCascadeNotificationWithTraceId() {
+        Fulfilment fulfilment = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
+        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
+        when(fulfilmentRepository.save(any(Fulfilment.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
+
+        Fulfilment submitted = fulfilmentService.submit(ID, OWNER, TRACE_ID);
+
+        assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
+        verify(notificationService).submitNotification(ID, TRACE_ID, OWNER);
+    }
+
+    @Test
+    void amend_shouldCascadeNotificationWithTraceId() {
+        Fulfilment fulfilment = fulfilment(FulfilmentStatus.SUBMITTED, List.of(), null);
+        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
+        when(fulfilmentRepository.save(any(Fulfilment.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
+
+        Fulfilment amended = fulfilmentService.amend(ID, OWNER, TRACE_ID);
+
+        assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.AMEND);
+        verify(notificationService).amendNotification(ID, TRACE_ID, OWNER);
+    }
+
+    @Test
+    void cancelAmend_shouldCascadeNotification() {
+        Fulfilment fulfilment = fulfilment(
+            FulfilmentStatus.AMEND, List.of(), List.of());
+        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
+        when(fulfilmentRepository.save(any(Fulfilment.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
+
+        Fulfilment submitted = fulfilmentService.cancelAmend(ID, OWNER);
+
+        assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
+        verify(notificationService).cancelAmendNotification(ID, OWNER);
+    }
+
+    @Test
+    void softDelete_shouldCascadeNotification() {
+        Fulfilment fulfilment = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
+        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
+        when(fulfilmentRepository.save(any(Fulfilment.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
+        when(notificationService.findByRef(ID, OWNER))
+            .thenReturn(NotificationResponse.builder()
+                .status(NotificationStatus.DRAFT)
+                .build());
+
+        Fulfilment deleted = fulfilmentService.softDelete(ID, OWNER);
+
+        assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
+        verify(notificationService).softDeleteNotification(ID, OWNER);
+    }
+
+    @Test
+    void submit_shouldSucceedWithoutNotificationProjection() {
+        Fulfilment fulfilment = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
+        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
+        when(fulfilmentRepository.save(any(Fulfilment.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(notificationService.existsByReferenceNumber(ID)).thenReturn(false);
+
+        Fulfilment submitted = fulfilmentService.submit(ID, OWNER, TRACE_ID);
+
+        assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
+        verify(notificationService, never()).submitNotification(any(), any(), any());
+        verify(notificationService, never()).amendNotification(any(), any(), any());
+        verify(notificationService, never()).cancelAmendNotification(any(), any());
+        verify(notificationService, never()).softDeleteNotification(any(), any());
+    }
+
+    @Test
+    void softDelete_shouldSkipAlreadyDeletedNotificationProjection() {
+        Fulfilment fulfilment = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
+        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
+        when(fulfilmentRepository.save(any(Fulfilment.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
+        when(notificationService.findByRef(ID, OWNER))
+            .thenReturn(NotificationResponse.builder()
+                .status(NotificationStatus.DELETED)
+                .build());
+
+        Fulfilment deleted = fulfilmentService.softDelete(ID, OWNER);
+
+        assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
+        verify(notificationService, never()).softDeleteNotification(any(), any());
     }
 
     private Fulfilment fulfilment(

@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
+import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.ownership.Owner;
 import uk.gov.defra.trade.imports.animals.ownership.OwnerHeaders;
@@ -154,11 +155,15 @@ public class FulfilmentController {
     public ResponseEntity<Fulfilment> submit(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
         @PathVariable String id,
+        @RequestHeader(
+            value = NotificationController.HEADER_TRACE_ID,
+            required = false,
+            defaultValue = "") String traceId,
         @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
         @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("POST /fulfilments/{}/submit - Submitting fulfilment", id);
         return ResponseEntity.ok(
-            fulfilmentService.submit(id, owner(ownerId, ownerOrganisation)));
+            fulfilmentService.submit(id, owner(ownerId, ownerOrganisation), traceId));
     }
 
     @PostMapping("/{id}/amend")
@@ -173,11 +178,15 @@ public class FulfilmentController {
     public ResponseEntity<Fulfilment> amend(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
         @PathVariable String id,
+        @RequestHeader(
+            value = NotificationController.HEADER_TRACE_ID,
+            required = false,
+            defaultValue = "") String traceId,
         @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
         @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
         log.info("POST /fulfilments/{}/amend - Amending fulfilment", id);
         return ResponseEntity.ok(
-            fulfilmentService.amend(id, owner(ownerId, ownerOrganisation)));
+            fulfilmentService.amend(id, owner(ownerId, ownerOrganisation), traceId));
     }
 
     @PostMapping("/{id}/cancel-amend")

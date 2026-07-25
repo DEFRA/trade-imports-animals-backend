@@ -144,6 +144,10 @@ public class NotificationService {
             .build();
     }
 
+    public boolean existsByReferenceNumber(String referenceNumber) {
+        return notificationRepository.existsByReferenceNumber(referenceNumber);
+    }
+
     public NotificationPageResponse findAll(int page, String sort, Owner owner) {
         log.debug("Fetching notifications page {} (size {}) with sort {}", page, listPageSize, sort);
         Page<Notification> result =

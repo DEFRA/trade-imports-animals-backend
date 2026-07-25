@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationService;
+import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.ownership.Owner;
 
@@ -34,16 +36,19 @@ public class FulfilmentService {
         FulfilmentStatus.AMEND);
 
     private final FulfilmentRepository fulfilmentRepository;
+    private final NotificationService notificationService;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final MongoTemplate mongoTemplate;
     private final int listPageSize;
 
     public FulfilmentService(
         FulfilmentRepository fulfilmentRepository,
+        NotificationService notificationService,
         ReferenceNumberGenerator referenceNumberGenerator,
         MongoTemplate mongoTemplate,
         @Value("${fulfilment.list.page-size:20}") int listPageSize) {
         this.fulfilmentRepository = fulfilmentRepository;
+        this.notificationService = notificationService;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.mongoTemplate = mongoTemplate;
         this.listPageSize = listPageSize;
@@ -155,7 +160,7 @@ public class FulfilmentService {
     }
 
     @Transactional
-    public Fulfilment submit(String id, Owner owner) {
+    public Fulfilment submit(String id, Owner owner, String correlationId) {
         Fulfilment fulfilment = findById(id, owner);
         if (!isDraftOrAmend(fulfilment.getStatus())) {
             throw new BadRequestException(
@@ -165,11 +170,15 @@ public class FulfilmentService {
         fulfilment.setSubmittedFulfilment(null);
         fulfilment.setSubmittedAt(LocalDateTime.now());
         log.info("Submitted fulfilment {}", id);
-        return fulfilmentRepository.save(fulfilment);
+        Fulfilment saved = fulfilmentRepository.save(fulfilment);
+        if (notificationProjectionExists(id)) {
+            notificationService.submitNotification(id, correlationId, owner);
+        }
+        return saved;
     }
 
     @Transactional
-    public Fulfilment amend(String id, Owner owner) {
+    public Fulfilment amend(String id, Owner owner, String correlationId) {
         Fulfilment fulfilment = findById(id, owner);
         if (fulfilment.getStatus() != FulfilmentStatus.SUBMITTED) {
             throw new BadRequestException(
@@ -179,7 +188,11 @@ public class FulfilmentService {
         fulfilment.setStatus(FulfilmentStatus.AMEND);
         fulfilment.setSubmittedAt(null);
         log.info("Amended fulfilment {}", id);
-        return fulfilmentRepository.save(fulfilment);
+        Fulfilment saved = fulfilmentRepository.save(fulfilment);
+        if (notificationProjectionExists(id)) {
+            notificationService.amendNotification(id, correlationId, owner);
+        }
+        return saved;
     }
 
     @Transactional
@@ -200,7 +213,11 @@ public class FulfilmentService {
         fulfilment.setStatus(FulfilmentStatus.SUBMITTED);
         fulfilment.setSubmittedAt(LocalDateTime.now());
         log.info("Cancelled amendment for fulfilment {}", id);
-        return fulfilmentRepository.save(fulfilment);
+        Fulfilment saved = fulfilmentRepository.save(fulfilment);
+        if (notificationProjectionExists(id)) {
+            notificationService.cancelAmendNotification(id, owner);
+        }
+        return saved;
     }
 
     @Transactional
@@ -216,7 +233,12 @@ public class FulfilmentService {
 
         fulfilment.setStatus(FulfilmentStatus.DELETED);
         log.info("Soft deleted fulfilment {}", id);
-        return fulfilmentRepository.save(fulfilment);
+        Fulfilment saved = fulfilmentRepository.save(fulfilment);
+        if (notificationProjectionExists(id)
+            && notificationService.findByRef(id, owner).status() != NotificationStatus.DELETED) {
+            notificationService.softDeleteNotification(id, owner);
+        }
+        return saved;
     }
 
     public FulfilmentPageResponse findAll(Owner owner, int page, String sort) {
@@ -298,6 +320,17 @@ public class FulfilmentService {
             .findByOwnerSubAndOwnerOrganisationAndCopyIdempotencyKey(
                 owner.sub(), owner.organisation(), idempotencyKey)
             .orElse(null);
+    }
+
+    private boolean notificationProjectionExists(String id) {
+        if (notificationService.existsByReferenceNumber(id)) {
+            return true;
+        }
+        log.warn(
+            "Skipping notification lifecycle cascade for fulfilment {}: "
+                + "notification projection does not exist",
+            id);
+        return false;
     }
 
     public record ReplaceResult(Fulfilment fulfilment, boolean created) {

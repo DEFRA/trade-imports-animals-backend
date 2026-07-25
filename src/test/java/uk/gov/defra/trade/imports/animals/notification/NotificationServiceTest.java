@@ -99,6 +99,19 @@ class NotificationServiceTest {
             notificationMapper, new NotificationCopyMapper(), referenceNumberGenerator, Duration.ZERO, 54, 50);
     }
 
+    @Test
+    void existsByReferenceNumber_shouldDelegateToRepository() {
+        // Given
+        String referenceNumber = "GBN-AG-26-ABC123";
+        when(notificationRepository.existsByReferenceNumber(referenceNumber)).thenReturn(true);
+
+        // When
+        boolean exists = notificationService.existsByReferenceNumber(referenceNumber);
+
+        // Then
+        assertThat(exists).isTrue();
+    }
+
     @Nested
     class SaveOriginOfImport {
 
