@@ -25,6 +25,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.tran
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -216,7 +217,7 @@ class NotificationServiceTest {
 
             Transport transport = Transport.builder()
                 .portOfEntry("ABERDEEN")
-                .arrivalDate(LocalDate.of(2026, 1, 1))
+                .arrivalDate(LocalDate.of(2026, Month.JANUARY, 1))
                 .transporter(transporters().getFirst())
                 .build();
 
@@ -587,9 +588,11 @@ class NotificationServiceTest {
             when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
             // When / Then
-            assertThatThrownBy(() ->
-                notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef),
-                    new AuditContext(TEST_TRACE_ID, TEST_USER_ID)))
+            List<String> referenceNumbers = List.of(existingRef, missingRef);
+            AuditContext auditContext = new AuditContext(TEST_TRACE_ID, TEST_USER_ID);
+
+            assertThatThrownBy(
+                () -> notificationService.deleteByReferenceNumbers(referenceNumbers, auditContext))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(missingRef);
 
@@ -613,9 +616,11 @@ class NotificationServiceTest {
             when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
             // When / Then
-            assertThatThrownBy(() ->
-                notificationService.deleteByReferenceNumbers(List.of(missing1, missing2),
-                    new AuditContext(TEST_TRACE_ID, TEST_USER_ID)))
+            List<String> referenceNumbers = List.of(missing1, missing2);
+            AuditContext auditContext = new AuditContext(TEST_TRACE_ID, TEST_USER_ID);
+
+            assertThatThrownBy(
+                () -> notificationService.deleteByReferenceNumbers(referenceNumbers, auditContext))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(missing1)
                 .hasMessageContaining(missing2);
@@ -1431,7 +1436,7 @@ class NotificationServiceTest {
                 .cphNumber("12/345/6789")
                 .transport(Transport.builder()
                     .portOfEntry("GBDVR")
-                    .arrivalDate(LocalDate.of(2026, 5, 1))
+                    .arrivalDate(LocalDate.of(2026, Month.MAY, 1))
                     .transporter(transporters().getFirst())
                     .build())
                 .consignment(consignments().getFirst())
@@ -1480,7 +1485,7 @@ class NotificationServiceTest {
                 .additionalDetails(new AdditionalDetails("Slaughter", "no"))
                 .transport(Transport.builder()
                     .portOfEntry("GBFXT")
-                    .arrivalDate(LocalDate.of(2026, 6, 1))
+                    .arrivalDate(LocalDate.of(2026, Month.JUNE, 1))
                     .build())
                 .consignment(consignments().getFirst())
                 .build();

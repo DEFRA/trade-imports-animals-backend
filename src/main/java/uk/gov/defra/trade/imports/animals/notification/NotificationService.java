@@ -366,7 +366,7 @@ public class NotificationService {
                 Notification saved = notificationRepository.save(notification);
                 log.info("Notification saved with reference number: {}", saved.getReferenceNumber());
                 return saved;
-            } catch (DuplicateKeyException e) {
+            } catch (DuplicateKeyException _) {
                 log.warn("Reference number collision on persistence attempt {}/{}; retrying", attempt, MAX_REF_RETRIES);
             }
         }
