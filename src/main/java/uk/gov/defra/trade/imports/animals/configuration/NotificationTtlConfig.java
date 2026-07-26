@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.configuration;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
@@ -26,7 +27,9 @@ import org.springframework.validation.annotation.Validated;
  * via {@code NOTIFICATION_TTL_DAYS} and {@code NOTIFICATION_TTL_SWEEP_ENABLED}.
  *
  * @param days        how many days after {@code created} a notification expires; {@code null} when
- *                    unconfigured, which disables stamping (the prod default)
+ *                    unconfigured, which disables stamping (the prod default). Must be positive
+ *                    when set — a non-positive value fails validation at startup rather than
+ *                    stamping an already-elapsed {@code expireAt}
  * @param environment the running CDP environment name (from {@code ENVIRONMENT}); production is
  *                    exactly {@code prod}
  * @param sweep       expiry-sweeper settings
@@ -34,7 +37,7 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "notification.ttl")
 public record NotificationTtlConfig(
-    Integer days,
+    @Positive Integer days,
     String environment,
     @Valid @NotNull Sweep sweep) {
 

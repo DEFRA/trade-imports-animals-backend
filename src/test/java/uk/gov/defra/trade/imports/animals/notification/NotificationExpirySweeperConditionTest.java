@@ -29,19 +29,19 @@ class NotificationExpirySweeperConditionTest {
         .withUserConfiguration(NotificationExpirySweeper.class);
 
     @Test
-    void sweeperBeanPresent_whenSweepEnabled() {
+    void sweeper_shouldExist_whenSweepEnabled() {
         runner.withPropertyValues("notification.ttl.sweep.enabled=true")
             .run(context -> assertThat(context).hasSingleBean(NotificationExpirySweeper.class));
     }
 
     @Test
-    void sweeperBeanAbsent_whenSweepDisabled() {
+    void sweeper_shouldNotExist_whenSweepDisabled() {
         runner.withPropertyValues("notification.ttl.sweep.enabled=false")
             .run(context -> assertThat(context).doesNotHaveBean(NotificationExpirySweeper.class));
     }
 
     @Test
-    void sweeperBeanAbsent_whenSweepPropertyMissing() {
+    void sweeper_shouldNotExist_whenSweepPropertyMissing() {
         runner.run(context -> assertThat(context).doesNotHaveBean(NotificationExpirySweeper.class));
     }
 }

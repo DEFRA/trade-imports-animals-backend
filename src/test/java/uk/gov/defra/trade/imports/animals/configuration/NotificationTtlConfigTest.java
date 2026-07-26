@@ -2,6 +2,9 @@ package uk.gov.defra.trade.imports.animals.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
+import jakarta.validation.ValidatorFactory;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -13,6 +16,11 @@ class NotificationTtlConfigTest {
 
     private static NotificationTtlConfig withEnvironment(String environment) {
         return new NotificationTtlConfig(7, environment,
+            new Sweep(false, 3_600_000, 10, Duration.ofSeconds(1), Duration.ofSeconds(30)));
+    }
+
+    private static NotificationTtlConfig withDays(Integer days) {
+        return new NotificationTtlConfig(days, "dev",
             new Sweep(false, 3_600_000, 10, Duration.ofSeconds(1), Duration.ofSeconds(30)));
     }
 
@@ -48,5 +56,29 @@ class NotificationTtlConfigTest {
         assertThat(sweep.intervalMs()).isEqualTo(5_000);
         assertThat(sweep.lockAtLeastFor()).isEqualTo(Duration.ofSeconds(2));
         assertThat(sweep.lockAtMostFor()).isEqualTo(Duration.ofSeconds(60));
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1, -7})
+    void days_shouldFailValidation_whenNotPositive(int days) {
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            Validator validator = factory.getValidator();
+
+            assertThat(validator.validate(withDays(days)))
+                .singleElement()
+                .satisfies(violation ->
+                    assertThat(violation.getPropertyPath()).hasToString("days"));
+        }
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(ints = {1, 7, 90})
+    void days_shouldPassValidation_whenPositiveOrUnset(Integer days) {
+        try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
+            Validator validator = factory.getValidator();
+
+            assertThat(validator.validate(withDays(days))).isEmpty();
+        }
     }
 }

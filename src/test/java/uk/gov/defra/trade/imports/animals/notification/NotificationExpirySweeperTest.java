@@ -50,7 +50,7 @@ class NotificationExpirySweeperTest {
         LockingTaskExecutor lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         NotificationTtlConfig ttlConfig = new NotificationTtlConfig(7, "dev",
             new NotificationTtlConfig.Sweep(
-                true, 3_600_000, 10, Duration.ofSeconds(1), Duration.ofSeconds(30)));
+                true, 3_600_000, 5, Duration.ofSeconds(1), Duration.ofSeconds(30)));
         sweeper = new NotificationExpirySweeper(notificationService, lockingTaskExecutor, ttlConfig);
 
         Logger logger = (Logger) LoggerFactory.getLogger(NotificationExpirySweeper.class);
@@ -76,11 +76,11 @@ class NotificationExpirySweeperTest {
 
         @Test
         void shouldDeleteExpiredWithConfiguredBatchSize_whenLockAcquired() {
-            when(notificationService.deleteExpired(10)).thenReturn(3);
+            when(notificationService.deleteExpired(5)).thenReturn(3);
 
             sweeper.sweep();
 
-            verify(notificationService).deleteExpired(10);
+            verify(notificationService).deleteExpired(5);
             assertThat(logAppender.list)
                 .anyMatch(event -> event.getFormattedMessage()
                     .equals("Expiry sweeper deleted 3 notification(s)"));
@@ -110,11 +110,11 @@ class NotificationExpirySweeperTest {
 
         @Test
         void shouldNotLogDeletedCount_whenNothingExpired() {
-            when(notificationService.deleteExpired(10)).thenReturn(0);
+            when(notificationService.deleteExpired(5)).thenReturn(0);
 
             sweeper.sweep();
 
-            verify(notificationService).deleteExpired(10);
+            verify(notificationService).deleteExpired(5);
             assertThat(logAppender.list)
                 .noneMatch(event -> event.getFormattedMessage().contains("Expiry sweeper deleted"));
         }
