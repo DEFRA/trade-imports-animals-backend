@@ -148,8 +148,11 @@ public class DocumentService {
    * values the browser submitted alongside the file — cdp-uploader's README documents that text
    * form fields are preserved as-is in the callback).
    *
-   * @param uploadId the upload session identifier from the callback path; informational only
-   *                 (kept for log breadcrumbs — resolution is via {@code metadata.correlationId})
+   * @param uploadId the upload session identifier from the callback path — cdp-uploader's own
+   *                 id, used to resolve the record on the update branch (where the frontend
+   *                 pre-registered with this id at initiate time) and stored on newly-created
+   *                 records on the create branch (cdp-uploader does not echo it back in the
+   *                 callback body, so the URL path is the sole source)
    * @param payload  the callback payload from cdp-uploader
    * @throws BadRequestException if the payload metadata does not include a correlationId
    */
@@ -157,7 +160,7 @@ public class DocumentService {
     String correlationId = extractCorrelationId(payload);
     AccompanyingDocument document = accompanyingDocumentRepository
         .findByCorrelationId(correlationId)
-        .orElseGet(() -> buildDocumentFromScanResult(correlationId, payload));
+        .orElseGet(() -> buildDocumentFromScanResult(uploadId, correlationId, payload));
 
     document.setFiles(mapUploadedFiles(payload));
     document.setScanStatus(resolveScanStatus(payload));
@@ -169,17 +172,18 @@ public class DocumentService {
   /**
    * Constructs a new {@link AccompanyingDocument} from a cdp-uploader scan-result payload — used
    * when no pre-registered document exists (EUDPA-106 direct-to-uploader flow, where the frontend
-   * calls cdp-uploader's {@code /initiate} itself). Reads {@code notificationReferenceNumber} and
-   * {@code uploadId} from {@code metadata} and the three text fields ({@code documentType},
+   * calls cdp-uploader's {@code /initiate} itself). Reads {@code notificationReferenceNumber}
+   * from {@code metadata} and the three text fields ({@code documentType},
    * {@code documentReference}, {@code dateOfIssue} — the GDS day/month/year triple) from
-   * {@code payload.form().getTextFields()}.
+   * {@code payload.form().getTextFields()}. The cdp-uploader {@code uploadId} comes in via the
+   * callback URL path (cdp-uploader does not echo it back in the JSON body).
    *
    * <p>Every field is required. Any missing, blank, or unparseable value triggers
    * {@link BadRequestException} — a partially-built document would be undefined behaviour at the
    * display layer and would leak into audit records as a silent data-quality issue.
    */
   private AccompanyingDocument buildDocumentFromScanResult(
-      String correlationId, CdpScanResultPayload payload) {
+      String uploadId, String correlationId, CdpScanResultPayload payload) {
     Map<String, String> metadata = payload.metadata();
     Map<String, String> formText = payload.form() != null
         ? payload.form().getTextFields()
@@ -194,7 +198,7 @@ public class DocumentService {
 
     return AccompanyingDocument.builder()
         .notificationReferenceNumber(notificationRef)
-        .uploadId(metadata.getOrDefault("uploadId", correlationId))
+        .uploadId(uploadId)
         .correlationId(correlationId)
         .documentType(documentType)
         .documentReference(documentReference)
