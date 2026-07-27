@@ -655,7 +655,7 @@ class NotificationControllerTest {
             Origin origin = new Origin("GB", "true", "REF-001");
 
             AccompanyingDocumentDto document = new AccompanyingDocumentDto(
-                "doc-id-001", REF_1, "upload-abc-123",
+                "doc-id-001", REF_1, "upload-abc-123", /* correlationId */ "corr-001",
                 DocumentType.ITAHC, "UKGB2026001",
                 /* dateOfIssue */ null, ScanStatus.COMPLETE,
                 /* files */ Collections.emptyList(), /* created */ null, /* updated */ null);
