@@ -116,6 +116,114 @@ class CdpScanResultFormTest {
   }
 
   @Nested
+  class AddFieldDispatch {
+
+    @Test
+    void deserialize_shouldPopulateTextFields_whenJsonContainsScalarStrings()
+        throws JsonProcessingException {
+      String json = """
+          {
+            "documentType": "PASSPORT",
+            "documentReference": "REF-123",
+            "correlationId": "corr-uuid"
+          }
+          """;
+
+      CdpScanResultForm form = objectMapper.readValue(json, CdpScanResultForm.class);
+
+      assertThat(form.getTextFields())
+          .containsEntry("documentType", "PASSPORT")
+          .containsEntry("documentReference", "REF-123")
+          .containsEntry("correlationId", "corr-uuid");
+      assertThat(form.getFiles()).isEmpty();
+    }
+
+    @Test
+    void deserialize_shouldIgnoreNestedObject_whenFileIdKeyMissing()
+        throws JsonProcessingException {
+      String json = """
+          {
+            "someObject": { "filename": "no-fileId.pdf", "contentType": "application/pdf" }
+          }
+          """;
+
+      CdpScanResultForm form = objectMapper.readValue(json, CdpScanResultForm.class);
+
+      assertThat(form.getFiles()).isEmpty();
+      assertThat(form.getTextFields()).isEmpty();
+    }
+
+    @Test
+    void deserialize_shouldIgnoreScalar_whenValueIsNumeric() throws JsonProcessingException {
+      String json = """
+          { "documentCount": 3 }
+          """;
+
+      CdpScanResultForm form = objectMapper.readValue(json, CdpScanResultForm.class);
+
+      assertThat(form.getFiles()).isEmpty();
+      assertThat(form.getTextFields()).isEmpty();
+    }
+
+    @Test
+    void deserialize_shouldIgnoreScalar_whenValueIsBoolean() throws JsonProcessingException {
+      String json = """
+          { "isDraft": true }
+          """;
+
+      CdpScanResultForm form = objectMapper.readValue(json, CdpScanResultForm.class);
+
+      assertThat(form.getFiles()).isEmpty();
+      assertThat(form.getTextFields()).isEmpty();
+    }
+
+    @Test
+    void deserialize_shouldIgnoreValue_whenValueIsArray() throws JsonProcessingException {
+      String json = """
+          { "tags": ["a", "b"] }
+          """;
+
+      CdpScanResultForm form = objectMapper.readValue(json, CdpScanResultForm.class);
+
+      assertThat(form.getFiles()).isEmpty();
+      assertThat(form.getTextFields()).isEmpty();
+    }
+
+    @Test
+    void deserialize_shouldPopulateBothMaps_whenFormMixesFilesAndTextFields()
+        throws JsonProcessingException {
+      String json = """
+          {
+            "documentType": "PASSPORT",
+            "documentReference": "REF-123",
+            "certificateFile": {
+              "fileId": "file-uuid-1",
+              "filename": "cert.pdf",
+              "contentType": "application/pdf",
+              "fileStatus": "complete",
+              "contentLength": 2048,
+              "checksumSha256": "abc123",
+              "detectedContentType": "application/pdf",
+              "s3Key": "upload-uuid/file-uuid-1",
+              "s3Bucket": "my-bucket",
+              "hasError": false,
+              "errorMessage": null
+            }
+          }
+          """;
+
+      CdpScanResultForm form = objectMapper.readValue(json, CdpScanResultForm.class);
+
+      assertThat(form.getTextFields())
+          .containsEntry("documentType", "PASSPORT")
+          .containsEntry("documentReference", "REF-123")
+          .hasSize(2);
+      assertThat(form.getFiles()).containsOnlyKeys("certificateFile");
+      assertThat(form.getFiles().get("certificateFile").fileId()).isEqualTo("file-uuid-1");
+    }
+  }
+
+  @Nested
   class ExplicitConstructorDefensiveCopy {
 
     @Test
