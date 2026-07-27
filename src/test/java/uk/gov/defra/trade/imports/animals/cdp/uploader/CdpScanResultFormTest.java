@@ -116,22 +116,6 @@ class CdpScanResultFormTest {
   }
 
   @Nested
-  class AddFileMutability {
-
-    @Test
-    void addFile_shouldAddEntryToFilesMap() {
-      CdpScanResultForm form = new CdpScanResultForm();
-      CdpScanResultFile file = new CdpScanResultFile(
-          "file-id", "doc.pdf", "application/pdf", FileStatus.COMPLETE,
-          1024L, "sha256", "application/pdf", "s3key", "bucket", false, null);
-
-      form.addFile("docFile", file);
-
-      assertThat(form.getFiles()).containsEntry("docFile", file);
-    }
-  }
-
-  @Nested
   class ExplicitConstructorDefensiveCopy {
 
     @Test
@@ -143,24 +127,24 @@ class CdpScanResultFormTest {
 
       CdpScanResultForm form = new CdpScanResultForm(unmodifiable);
 
-      // addFile must not throw UnsupportedOperationException even though the source map was
-      // unmodifiable — the constructor must have taken a defensive copy.
-      assertThatCode(() -> form.addFile("extraFile", file)).doesNotThrowAnyException();
+      // Subsequent mutation must not throw UnsupportedOperationException even though the source
+      // map was unmodifiable — the constructor must have taken a defensive copy.
+      assertThatCode(() -> form.getFiles().put("extraFile", file)).doesNotThrowAnyException();
       assertThat(form.getFiles()).containsKey("extraFile");
       assertThat(form.getFiles()).containsKey("doc");
     }
 
     @Test
-    void constructor_shouldNotMutateOriginalMap_whenAddFileIsCalled() {
+    void constructor_shouldNotMutateOriginalMap_whenFormIsMutatedLater() {
       CdpScanResultFile file = new CdpScanResultFile(
           "file-id", "doc.pdf", "application/pdf", FileStatus.COMPLETE,
           1024L, "sha256", "application/pdf", "s3key", "bucket", false, null);
       Map<String, CdpScanResultFile> original = new java.util.LinkedHashMap<>(Map.of("doc", file));
 
       CdpScanResultForm form = new CdpScanResultForm(original);
-      form.addFile("extraFile", file);
+      form.getFiles().put("extraFile", file);
 
-      // The defensive copy means mutations to form.files do not affect the original map.
+      // The defensive copy means mutations to form.files do not leak back into the original map.
       assertThat(original).doesNotContainKey("extraFile");
     }
   }
