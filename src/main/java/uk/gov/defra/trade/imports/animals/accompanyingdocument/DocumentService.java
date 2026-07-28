@@ -135,27 +135,117 @@ public class DocumentService {
   }
 
   /**
-   * Processes a cdp-uploader scan result callback, updating the document's scan status and file
-   * list. The document is resolved via {@code metadata.correlationId} — cdp-uploader echoes the
-   * metadata map back verbatim and does not include {@code uploadId} in the callback body, so a
-   * backend-minted correlationId is the only safe disambiguator when multiple PENDING uploads
-   * share a notification reference.
+   * Processes a cdp-uploader scan result callback, creating or updating the document record.
+   * The document is resolved via {@code metadata.correlationId}. Under the direct-to-uploader
+   * flow (EUDPA-106), the frontend calls cdp-uploader's {@code /initiate} itself and does not
+   * pre-register the document with this service — the callback is where the record first appears.
+   * Under the legacy backend-proxied flow, the record was created at initiate time; the callback
+   * updates it.
+   *
+   * <p>On the create branch, {@code documentType}, {@code documentReference}, {@code dateOfIssue}
+   * and {@code notificationReferenceNumber} are taken from the callback body: notification from
+   * {@code metadata}, the three text fields from {@code payload.form()} (the multipart form
+   * values the browser submitted alongside the file — cdp-uploader's README documents that text
+   * form fields are preserved as-is in the callback).
    *
    * @param uploadId the upload session identifier from the callback path; informational only
    *                 (kept for log breadcrumbs — resolution is via {@code metadata.correlationId})
    * @param payload  the callback payload from cdp-uploader
    * @throws BadRequestException if the payload metadata does not include a correlationId
-   * @throws NotFoundException   if no document with the given correlationId exists
    */
   public void handleScanResult(String uploadId, CdpScanResultPayload payload) {
     String correlationId = extractCorrelationId(payload);
-    AccompanyingDocument document = findByCorrelationId(correlationId);
+    AccompanyingDocument document = accompanyingDocumentRepository
+        .findByCorrelationId(correlationId)
+        .orElseGet(() -> buildDocumentFromScanResult(correlationId, payload));
 
     document.setFiles(mapUploadedFiles(payload));
     document.setScanStatus(resolveScanStatus(payload));
 
     accompanyingDocumentRepository.save(document);
-    log.info("Updated uploadId {} scanStatus to {}", document.getUploadId(), document.getScanStatus());
+    log.info("Persisted uploadId {} scanStatus {}", document.getUploadId(), document.getScanStatus());
+  }
+
+  /**
+   * Constructs a new {@link AccompanyingDocument} from a cdp-uploader scan-result payload — used
+   * when no pre-registered document exists (EUDPA-106 direct-to-uploader flow, where the frontend
+   * calls cdp-uploader's {@code /initiate} itself). Reads {@code notificationReferenceNumber} and
+   * {@code uploadId} from {@code metadata} and the three text fields ({@code documentType},
+   * {@code documentReference}, {@code dateOfIssue} — the GDS day/month/year triple) from
+   * {@code payload.form().getTextFields()}.
+   *
+   * <p>Every field is required. Any missing, blank, or unparseable value triggers
+   * {@link BadRequestException} — a partially-built document would be undefined behaviour at the
+   * display layer and would leak into audit records as a silent data-quality issue.
+   */
+  private AccompanyingDocument buildDocumentFromScanResult(
+      String correlationId, CdpScanResultPayload payload) {
+    Map<String, String> metadata = payload.metadata();
+    Map<String, String> formText = payload.form() != null
+        ? payload.form().getTextFields()
+        : Map.of();
+
+    String notificationRef = requireCallbackField(metadata, "metadata", "notificationReferenceNumber");
+    DocumentType documentType = DocumentType.parse(formText.get("documentType"))
+        .orElseThrow(() -> new BadRequestException(
+            "Scan callback form.documentType is missing or not a known DocumentType value"));
+    String documentReference = requireCallbackField(formText, "form", "documentReference");
+    java.time.Instant dateOfIssue = parseIssueDate(formText);
+
+    return AccompanyingDocument.builder()
+        .notificationReferenceNumber(notificationRef)
+        .uploadId(metadata.getOrDefault("uploadId", correlationId))
+        .correlationId(correlationId)
+        .documentType(documentType)
+        .documentReference(documentReference)
+        .dateOfIssue(dateOfIssue)
+        .files(new ArrayList<>())
+        .build();
+  }
+
+  /**
+   * Reads a required string field from a scan-callback map (either {@code metadata} or the
+   * {@code form.textFields} map), throwing {@link BadRequestException} if the value is
+   * {@code null}, blank, or whitespace-only. The {@code section} argument is used only to
+   * qualify the error message so a 400 log-line points at the callback body location without
+   * ambiguity — e.g. {@code "metadata.notificationReferenceNumber"} vs
+   * {@code "form.notificationReferenceNumber"}.
+   *
+   * <p>Package-private for direct unit-testing.
+   */
+  static String requireCallbackField(Map<String, String> source, String section, String key) {
+    String value = source.get(key);
+    if (value == null || value.isBlank()) {
+      throw new BadRequestException(
+          "Scan callback " + section + "." + key + " is missing or blank");
+    }
+    return value;
+  }
+
+  /**
+   * Parses the GDS date-input triple ({@code issueDate-day/month/year}) from the callback's form
+   * fields into a UTC {@link java.time.Instant} at midnight. Throws {@link BadRequestException} if
+   * any of the three fields is missing or if the combined values do not form a valid calendar
+   * date — mirrors the required-field policy applied to the other callback-form fields.
+   *
+   * <p>Package-private for direct unit-testing.
+   */
+  static java.time.Instant parseIssueDate(Map<String, String> formText) {
+    String day = requireCallbackField(formText, "form", "issueDate-day");
+    String month = requireCallbackField(formText, "form", "issueDate-month");
+    String year = requireCallbackField(formText, "form", "issueDate-year");
+    try {
+      return java.time.LocalDate.of(
+          Integer.parseInt(year),
+          Integer.parseInt(month),
+          Integer.parseInt(day))
+          .atStartOfDay(ZoneOffset.UTC)
+          .toInstant();
+    } catch (NumberFormatException | java.time.DateTimeException e) {
+      throw new BadRequestException(
+          "Scan callback form.issueDate is not a valid date: "
+              + day + "/" + month + "/" + year);
+    }
   }
 
   /**
@@ -296,13 +386,6 @@ public class DocumentService {
           "Scan callback missing required correlationId in metadata");
     }
     return correlationId;
-  }
-
-  private AccompanyingDocument findByCorrelationId(String correlationId) {
-    return accompanyingDocumentRepository
-        .findByCorrelationId(correlationId)
-        .orElseThrow(() -> new NotFoundException(
-            "No accompanying document found with correlationId: " + correlationId));
   }
 
   private static List<UploadedFile> mapUploadedFiles(CdpScanResultPayload payload) {

@@ -195,21 +195,188 @@ class DocumentServiceTest {
     }
 
     @Test
-    void handleScanResult_shouldThrowNotFound_whenCorrelationIdUnknown() {
-      // Given — correlationId is present but no document matches
+    void handleScanResult_shouldCreateDocument_whenCorrelationIdUnknown() {
+      // EUDPA-106: under the direct-to-uploader flow the frontend calls /initiate itself and
+      // no PENDING document is pre-registered — the callback creates the record.
       String correlationId = "unknown-correlation-id";
       when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
           .thenReturn(Optional.empty());
 
       CdpScanResultForm form = new CdpScanResultForm();
+      form.getTextFields().put("documentType", "ITAHC");
+      form.getTextFields().put("documentReference", "REF-001");
+      form.getTextFields().put("issueDate-day", "15");
+      form.getTextFields().put("issueDate-month", "6");
+      form.getTextFields().put("issueDate-year", "2026");
+
+      Map<String, String> metadata = Map.of(
+          "correlationId", correlationId,
+          "notificationReferenceNumber", "GBN-AG-26-XYZ",
+          "uploadId", "cdp-upload-id-123");
+      CdpScanResultPayload payload = new CdpScanResultPayload("ready", metadata, form, 0);
+
+      ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
+
+      // When
+      documentService.handleScanResult("pending", payload);
+
+      // Then — a fresh record was created and populated from callback body
+      verify(accompanyingDocumentRepository).save(captor.capture());
+      AccompanyingDocument saved = captor.getValue();
+      assertThat(saved.getCorrelationId()).isEqualTo(correlationId);
+      assertThat(saved.getUploadId()).isEqualTo("cdp-upload-id-123");
+      assertThat(saved.getNotificationReferenceNumber()).isEqualTo("GBN-AG-26-XYZ");
+      assertThat(saved.getDocumentType()).isEqualTo(DocumentType.ITAHC);
+      assertThat(saved.getDocumentReference()).isEqualTo("REF-001");
+      assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+    }
+
+    @Test
+    void handleScanResult_shouldThrowBadRequest_whenCreatingRecordAndDocumentTypeMissing() {
+      when(accompanyingDocumentRepository.findByCorrelationId("corr-missing-type"))
+          .thenReturn(Optional.empty());
+
+      CdpScanResultForm form = new CdpScanResultForm();
+      // documentType intentionally omitted
+      form.getTextFields().put("documentReference", "REF-002");
+      form.getTextFields().put("issueDate-day", "1");
+      form.getTextFields().put("issueDate-month", "1");
+      form.getTextFields().put("issueDate-year", "2026");
+
       CdpScanResultPayload payload = new CdpScanResultPayload(
-          "ready", Map.of("correlationId", correlationId), form, 0);
+          "ready",
+          Map.of("correlationId", "corr-missing-type",
+              "notificationReferenceNumber", "GBN-AG-26-XYZ"),
+          form,
+          0);
 
-      // When / Then
       assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
-          .isInstanceOf(NotFoundException.class)
-          .hasMessageContaining(correlationId);
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("documentType");
+      verify(accompanyingDocumentRepository, never()).save(any());
+    }
 
+    @Test
+    void handleScanResult_shouldThrowBadRequest_whenCreatingRecordAndDocumentTypeUnknown() {
+      when(accompanyingDocumentRepository.findByCorrelationId("corr-unknown-type"))
+          .thenReturn(Optional.empty());
+
+      CdpScanResultForm form = new CdpScanResultForm();
+      form.getTextFields().put("documentType", "NOT_A_REAL_TYPE");
+      form.getTextFields().put("documentReference", "REF-003");
+      form.getTextFields().put("issueDate-day", "1");
+      form.getTextFields().put("issueDate-month", "1");
+      form.getTextFields().put("issueDate-year", "2026");
+
+      CdpScanResultPayload payload = new CdpScanResultPayload(
+          "ready",
+          Map.of("correlationId", "corr-unknown-type",
+              "notificationReferenceNumber", "GBN-AG-26-XYZ"),
+          form,
+          0);
+
+      assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("documentType");
+      verify(accompanyingDocumentRepository, never()).save(any());
+    }
+
+    @Test
+    void handleScanResult_shouldThrowBadRequest_whenCreatingRecordAndNotificationRefMissing() {
+      when(accompanyingDocumentRepository.findByCorrelationId("corr-missing-notif"))
+          .thenReturn(Optional.empty());
+
+      CdpScanResultForm form = new CdpScanResultForm();
+      form.getTextFields().put("documentType", "ITAHC");
+      form.getTextFields().put("documentReference", "REF-004");
+      form.getTextFields().put("issueDate-day", "1");
+      form.getTextFields().put("issueDate-month", "1");
+      form.getTextFields().put("issueDate-year", "2026");
+
+      CdpScanResultPayload payload = new CdpScanResultPayload(
+          "ready",
+          Map.of("correlationId", "corr-missing-notif"),  // notificationReferenceNumber missing
+          form,
+          0);
+
+      assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("notificationReferenceNumber");
+      verify(accompanyingDocumentRepository, never()).save(any());
+    }
+
+    @Test
+    void handleScanResult_shouldThrowBadRequest_whenCreatingRecordAndDocumentReferenceMissing() {
+      when(accompanyingDocumentRepository.findByCorrelationId("corr-missing-ref"))
+          .thenReturn(Optional.empty());
+
+      CdpScanResultForm form = new CdpScanResultForm();
+      form.getTextFields().put("documentType", "ITAHC");
+      // documentReference intentionally omitted
+      form.getTextFields().put("issueDate-day", "1");
+      form.getTextFields().put("issueDate-month", "1");
+      form.getTextFields().put("issueDate-year", "2026");
+
+      CdpScanResultPayload payload = new CdpScanResultPayload(
+          "ready",
+          Map.of("correlationId", "corr-missing-ref",
+              "notificationReferenceNumber", "GBN-AG-26-XYZ"),
+          form,
+          0);
+
+      assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("documentReference");
+      verify(accompanyingDocumentRepository, never()).save(any());
+    }
+
+    @Test
+    void handleScanResult_shouldThrowBadRequest_whenCreatingRecordAndIssueDatePartMissing() {
+      when(accompanyingDocumentRepository.findByCorrelationId("corr-missing-day"))
+          .thenReturn(Optional.empty());
+
+      CdpScanResultForm form = new CdpScanResultForm();
+      form.getTextFields().put("documentType", "ITAHC");
+      form.getTextFields().put("documentReference", "REF-005");
+      // issueDate-day intentionally omitted
+      form.getTextFields().put("issueDate-month", "1");
+      form.getTextFields().put("issueDate-year", "2026");
+
+      CdpScanResultPayload payload = new CdpScanResultPayload(
+          "ready",
+          Map.of("correlationId", "corr-missing-day",
+              "notificationReferenceNumber", "GBN-AG-26-XYZ"),
+          form,
+          0);
+
+      assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("issueDate-day");
+      verify(accompanyingDocumentRepository, never()).save(any());
+    }
+
+    @Test
+    void handleScanResult_shouldThrowBadRequest_whenCreatingRecordAndIssueDateInvalid() {
+      when(accompanyingDocumentRepository.findByCorrelationId("corr-bad-date"))
+          .thenReturn(Optional.empty());
+
+      CdpScanResultForm form = new CdpScanResultForm();
+      form.getTextFields().put("documentType", "ITAHC");
+      form.getTextFields().put("documentReference", "REF-006");
+      form.getTextFields().put("issueDate-day", "32");     // no calendar has a 32nd day
+      form.getTextFields().put("issueDate-month", "1");
+      form.getTextFields().put("issueDate-year", "2026");
+
+      CdpScanResultPayload payload = new CdpScanResultPayload(
+          "ready",
+          Map.of("correlationId", "corr-bad-date",
+              "notificationReferenceNumber", "GBN-AG-26-XYZ"),
+          form,
+          0);
+
+      assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("issueDate");
       verify(accompanyingDocumentRepository, never()).save(any());
     }
 
@@ -432,6 +599,196 @@ class DocumentServiceTest {
       assertThatThrownBy(() -> documentService.findFile(uploadId))
           .isInstanceOf(NotFoundException.class)
           .hasMessageContaining(uploadId);
+    }
+  }
+
+  @Nested
+  class ParseIssueDate {
+
+    @Test
+    void parseIssueDate_shouldReturnMidnightUtcInstant_whenAllPartsValid() {
+      Map<String, String> formText = Map.of(
+          "issueDate-day", "15",
+          "issueDate-month", "6",
+          "issueDate-year", "2026");
+
+      Instant result = DocumentService.parseIssueDate(formText);
+
+      assertThat(result).isEqualTo(
+          LocalDate.of(2026, 6, 15).atStartOfDay(ZoneOffset.UTC).toInstant());
+    }
+
+    @Test
+    void parseIssueDate_shouldAcceptZeroPaddedParts() {
+      // GDS date-input can render leading zeros for single-digit day/month values.
+      Map<String, String> formText = Map.of(
+          "issueDate-day", "05",
+          "issueDate-month", "07",
+          "issueDate-year", "2026");
+
+      Instant result = DocumentService.parseIssueDate(formText);
+
+      assertThat(result).isEqualTo(
+          LocalDate.of(2026, 7, 5).atStartOfDay(ZoneOffset.UTC).toInstant());
+    }
+
+    @Test
+    void parseIssueDate_shouldAcceptFeb29InLeapYear() {
+      Map<String, String> formText = Map.of(
+          "issueDate-day", "29",
+          "issueDate-month", "2",
+          "issueDate-year", "2024");
+
+      Instant result = DocumentService.parseIssueDate(formText);
+
+      assertThat(result).isEqualTo(
+          LocalDate.of(2024, 2, 29).atStartOfDay(ZoneOffset.UTC).toInstant());
+    }
+
+    @Test
+    void parseIssueDate_shouldThrowBadRequest_whenFeb29InNonLeapYear() {
+      Map<String, String> formText = Map.of(
+          "issueDate-day", "29",
+          "issueDate-month", "2",
+          "issueDate-year", "2026");
+
+      assertThatThrownBy(() -> DocumentService.parseIssueDate(formText))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("issueDate")
+          .hasMessageContaining("29/2/2026");
+    }
+
+    @Test
+    void parseIssueDate_shouldThrowBadRequest_whenDayIsOutOfRange() {
+      Map<String, String> formText = Map.of(
+          "issueDate-day", "32",
+          "issueDate-month", "1",
+          "issueDate-year", "2026");
+
+      assertThatThrownBy(() -> DocumentService.parseIssueDate(formText))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("issueDate");
+    }
+
+    @Test
+    void parseIssueDate_shouldThrowBadRequest_whenMonthIsOutOfRange() {
+      Map<String, String> formText = Map.of(
+          "issueDate-day", "15",
+          "issueDate-month", "13",
+          "issueDate-year", "2026");
+
+      assertThatThrownBy(() -> DocumentService.parseIssueDate(formText))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("issueDate");
+    }
+
+    @Test
+    void parseIssueDate_shouldThrowBadRequest_whenDayIsNonNumeric() {
+      Map<String, String> formText = Map.of(
+          "issueDate-day", "abc",
+          "issueDate-month", "1",
+          "issueDate-year", "2026");
+
+      assertThatThrownBy(() -> DocumentService.parseIssueDate(formText))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("issueDate");
+    }
+
+    @Test
+    void parseIssueDate_shouldThrowBadRequest_whenDayMissing() {
+      Map<String, String> formText = Map.of(
+          "issueDate-month", "1",
+          "issueDate-year", "2026");
+
+      assertThatThrownBy(() -> DocumentService.parseIssueDate(formText))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("issueDate-day");
+    }
+
+    @Test
+    void parseIssueDate_shouldThrowBadRequest_whenMonthMissing() {
+      Map<String, String> formText = Map.of(
+          "issueDate-day", "15",
+          "issueDate-year", "2026");
+
+      assertThatThrownBy(() -> DocumentService.parseIssueDate(formText))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("issueDate-month");
+    }
+
+    @Test
+    void parseIssueDate_shouldThrowBadRequest_whenYearMissing() {
+      Map<String, String> formText = Map.of(
+          "issueDate-day", "15",
+          "issueDate-month", "6");
+
+      assertThatThrownBy(() -> DocumentService.parseIssueDate(formText))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("issueDate-year");
+    }
+  }
+
+  @Nested
+  class RequireCallbackField {
+
+    @Test
+    void requireCallbackField_shouldReturnValue_whenPresentAndNonBlank() {
+      String value = DocumentService.requireCallbackField(
+          Map.of("documentType", "ITAHC"), "form", "documentType");
+
+      assertThat(value).isEqualTo("ITAHC");
+    }
+
+    @Test
+    void requireCallbackField_shouldThrowBadRequest_whenKeyMissing() {
+      assertThatThrownBy(() -> DocumentService.requireCallbackField(
+          Map.of(), "metadata", "notificationReferenceNumber"))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("metadata.notificationReferenceNumber")
+          .hasMessageContaining("missing or blank");
+    }
+
+    @Test
+    void requireCallbackField_shouldThrowBadRequest_whenValueIsEmptyString() {
+      Map<String, String> source = new java.util.HashMap<>();
+      source.put("documentReference", "");
+
+      assertThatThrownBy(() -> DocumentService.requireCallbackField(source, "form", "documentReference"))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("form.documentReference");
+    }
+
+    @Test
+    void requireCallbackField_shouldThrowBadRequest_whenValueIsWhitespaceOnly() {
+      Map<String, String> source = new java.util.HashMap<>();
+      source.put("documentReference", "   \t \n");
+
+      assertThatThrownBy(() -> DocumentService.requireCallbackField(source, "form", "documentReference"))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("form.documentReference");
+    }
+
+    @Test
+    void requireCallbackField_shouldThrowBadRequest_whenValueIsExplicitlyNull() {
+      // HashMap permits null values; getOrDefault-style lookups will surface it as null.
+      Map<String, String> source = new java.util.HashMap<>();
+      source.put("issueDate-day", null);
+
+      assertThatThrownBy(() -> DocumentService.requireCallbackField(source, "form", "issueDate-day"))
+          .isInstanceOf(BadRequestException.class)
+          .hasMessageContaining("form.issueDate-day");
+    }
+
+    @Test
+    void requireCallbackField_shouldQualifyErrorMessageWithSection_soCallbackBodyLocationIsUnambiguous() {
+      // Same key name might legitimately appear in metadata AND form; the qualified message
+      // should point at the right section rather than just the bare key.
+      assertThatThrownBy(() -> DocumentService.requireCallbackField(
+          Map.of(), "metadata", "correlationId"))
+          .hasMessageContaining("metadata.correlationId");
+      assertThatThrownBy(() -> DocumentService.requireCallbackField(
+          Map.of(), "form", "correlationId"))
+          .hasMessageContaining("form.correlationId");
     }
   }
 }
