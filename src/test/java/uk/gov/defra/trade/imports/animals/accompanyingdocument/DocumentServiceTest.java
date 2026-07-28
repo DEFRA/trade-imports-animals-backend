@@ -197,10 +197,8 @@ class DocumentServiceTest {
     @Test
     void handleScanResult_shouldCreateDocument_whenCorrelationIdUnknown() {
       // EUDPA-106: under the direct-to-uploader flow the frontend calls /initiate itself and
-      // no PENDING document is pre-registered — the callback creates the record. The
-      // cdp-uploader uploadId is delivered via the callback URL path (not the JSON body).
+      // no PENDING document is pre-registered — the callback creates the record.
       String correlationId = "unknown-correlation-id";
-      String uploadId = "cdp-upload-id-123";
       when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
           .thenReturn(Optional.empty());
 
@@ -213,19 +211,20 @@ class DocumentServiceTest {
 
       Map<String, String> metadata = Map.of(
           "correlationId", correlationId,
-          "notificationReferenceNumber", "GBN-AG-26-XYZ");
+          "notificationReferenceNumber", "GBN-AG-26-XYZ",
+          "uploadId", "cdp-upload-id-123");
       CdpScanResultPayload payload = new CdpScanResultPayload("ready", metadata, form, 0);
 
       ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
 
       // When
-      documentService.handleScanResult(uploadId, payload);
+      documentService.handleScanResult("pending", payload);
 
-      // Then — a fresh record was created and populated from callback body + path
+      // Then — a fresh record was created and populated from callback body
       verify(accompanyingDocumentRepository).save(captor.capture());
       AccompanyingDocument saved = captor.getValue();
       assertThat(saved.getCorrelationId()).isEqualTo(correlationId);
-      assertThat(saved.getUploadId()).isEqualTo(uploadId);
+      assertThat(saved.getUploadId()).isEqualTo("cdp-upload-id-123");
       assertThat(saved.getNotificationReferenceNumber()).isEqualTo("GBN-AG-26-XYZ");
       assertThat(saved.getDocumentType()).isEqualTo(DocumentType.ITAHC);
       assertThat(saved.getDocumentReference()).isEqualTo("REF-001");
