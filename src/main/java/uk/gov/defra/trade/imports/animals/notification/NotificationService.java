@@ -31,6 +31,7 @@ import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.outbox.Actor;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
@@ -147,7 +148,7 @@ public class NotificationService {
     }
 
     @Transactional
-    public Notification submitNotification(String referenceNumber, String correlationId) {
+    public Notification submitNotification(String referenceNumber, String correlationId, Actor actor) {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
@@ -164,11 +165,12 @@ public class NotificationService {
             correlationId,
             NotificationStatus.SUBMITTED,
             OutboxEventType.NOTIFICATION_SUBMITTED,
-            "submission");
+            "submission",
+            actor);
     }
 
     @Transactional
-    public Notification amendNotification(String referenceNumber, String correlationId) {
+    public Notification amendNotification(String referenceNumber, String correlationId, Actor actor) {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
@@ -186,7 +188,8 @@ public class NotificationService {
             correlationId,
             NotificationStatus.AMEND,
             OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED,
-            "amend");
+            "amend",
+            actor);
     }
 
     @Transactional
@@ -218,7 +221,8 @@ public class NotificationService {
         String correlationId,
         NotificationStatus targetStatus,
         OutboxEventType eventType,
-        String operationLabel) {
+        String operationLabel,
+        Actor actor) {
         String aggregateId = OutboxService.buildAggregateId(referenceNumber);
         LockConfiguration lockConfig = new LockConfiguration(
             Instant.now(),
@@ -236,7 +240,7 @@ public class NotificationService {
                     notification.setStatus(targetStatus);
                     notification.setUpdated(LocalDateTime.now());
                     Notification saved = notificationRepository.save(notification);
-                    outboxService.appendEvent(saved, eventType, correlationId);
+                    outboxService.appendEvent(saved, eventType, correlationId, actor);
                     return saved;
                 },
                 lockConfig);

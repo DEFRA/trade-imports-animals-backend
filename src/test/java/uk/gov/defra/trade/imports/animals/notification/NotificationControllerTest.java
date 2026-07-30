@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -249,7 +250,7 @@ class NotificationControllerTest {
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.submitNotification(eq(REF_1), anyString()))
+            when(notificationService.submitNotification(eq(REF_1), anyString(), any()))
                 .thenReturn(submitted);
 
             // When & Then
@@ -268,7 +269,7 @@ class NotificationControllerTest {
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.submitNotification(REF_1, "trace-abc"))
+            when(notificationService.submitNotification(REF_1, "trace-abc", null))
                 .thenReturn(submitted);
 
             // When & Then
@@ -277,13 +278,13 @@ class NotificationControllerTest {
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
-            verify(notificationService).submitNotification(REF_1, "trace-abc");
+            verify(notificationService).submitNotification(REF_1, "trace-abc", null);
         }
 
         @Test
         void submit_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            when(notificationService.submitNotification(eq(NONEXISTENT_REF), anyString()))
+            when(notificationService.submitNotification(eq(NONEXISTENT_REF), anyString(), any()))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
@@ -298,7 +299,7 @@ class NotificationControllerTest {
         @Test
         void submit_shouldReturn400_whenNotificationNotInSubmittableState() throws Exception {
             // Given
-            when(notificationService.submitNotification(eq(REF_1), anyString()))
+            when(notificationService.submitNotification(eq(REF_1), anyString(), any()))
                 .thenThrow(new BadRequestException(
                     "Cannot submit notification with status: DELETED"));
 
@@ -308,6 +309,43 @@ class NotificationControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
                     "Cannot submit notification with status: DELETED"));
+        }
+
+        @Test
+        void submit_shouldPassActorToService_whenActorBodyProvided() throws Exception {
+            // Given
+            Notification submitted = new Notification();
+            submitted.setId("notif-id-001");
+            submitted.setReferenceNumber(REF_1);
+            submitted.setStatus(NotificationStatus.SUBMITTED);
+
+            when(notificationService.submitNotification(eq(REF_1), anyString(), any()))
+                .thenReturn(submitted);
+
+            String actorBody = """
+                {
+                    "id": "contact-guid-001",
+                    "source": "dynamics-contact",
+                    "userType": "B2C",
+                    "displayName": "Jane Farmer",
+                    "organisationId": "org-001"
+                }
+                """;
+
+            // When & Then
+            mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(actorBody))
+                .andExpect(status().isOk());
+
+            verify(notificationService).submitNotification(
+                eq(REF_1), anyString(),
+                argThat(a -> a != null
+                    && "contact-guid-001".equals(a.getId())
+                    && "dynamics-contact".equals(a.getSource())
+                    && "B2C".equals(a.getUserType())
+                    && "Jane Farmer".equals(a.getDisplayName())
+                    && "org-001".equals(a.getOrganisationId())));
         }
     }
 
@@ -322,7 +360,7 @@ class NotificationControllerTest {
             amended.setReferenceNumber(REF_1);
             amended.setStatus(NotificationStatus.AMEND);
 
-            when(notificationService.amendNotification(eq(REF_1), anyString()))
+            when(notificationService.amendNotification(eq(REF_1), anyString(), any()))
                 .thenReturn(amended);
 
             // When & Then
@@ -341,7 +379,7 @@ class NotificationControllerTest {
             amended.setReferenceNumber(REF_1);
             amended.setStatus(NotificationStatus.AMEND);
 
-            when(notificationService.amendNotification(REF_1, "trace-xyz"))
+            when(notificationService.amendNotification(REF_1, "trace-xyz", null))
                 .thenReturn(amended);
 
             // When & Then
@@ -350,13 +388,13 @@ class NotificationControllerTest {
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
-            verify(notificationService).amendNotification(REF_1, "trace-xyz");
+            verify(notificationService).amendNotification(REF_1, "trace-xyz", null);
         }
 
         @Test
         void amend_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            when(notificationService.amendNotification(eq(NONEXISTENT_REF), anyString()))
+            when(notificationService.amendNotification(eq(NONEXISTENT_REF), anyString(), any()))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
@@ -371,7 +409,7 @@ class NotificationControllerTest {
         @Test
         void amend_shouldReturn400_whenNotificationNotInAmendableState() throws Exception {
             // Given
-            when(notificationService.amendNotification(eq(REF_1), anyString()))
+            when(notificationService.amendNotification(eq(REF_1), anyString(), any()))
                 .thenThrow(new BadRequestException(
                     "Cannot amend notification with status: DRAFT"));
 
