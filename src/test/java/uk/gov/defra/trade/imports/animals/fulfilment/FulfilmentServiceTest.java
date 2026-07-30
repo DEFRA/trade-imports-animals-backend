@@ -130,7 +130,7 @@ class FulfilmentServiceTest {
         when(fulfilmentRepository.save(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Fulfilment deleted = fulfilmentService.softDelete(ID);
+        Fulfilment deleted = fulfilmentService.softDelete(ID, TRACE_ID, null);
 
         assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
         verify(fulfilmentRepository).save(fulfilment);
@@ -141,7 +141,7 @@ class FulfilmentServiceTest {
         Fulfilment deleted = fulfilment(FulfilmentStatus.DELETED, List.of(), null);
         when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(deleted));
 
-        Fulfilment result = fulfilmentService.softDelete(ID);
+        Fulfilment result = fulfilmentService.softDelete(ID, TRACE_ID, null);
 
         assertThat(result).isSameAs(deleted);
         verify(fulfilmentRepository, never()).save(any());
@@ -292,11 +292,12 @@ class FulfilmentServiceTest {
             .thenReturn(NotificationResponse.builder()
                 .status(NotificationStatus.DRAFT)
                 .build());
+        Actor actor = Actor.builder().id("contact-guid-003").build();
 
-        Fulfilment deleted = fulfilmentService.softDelete(ID);
+        Fulfilment deleted = fulfilmentService.softDelete(ID, TRACE_ID, actor);
 
         assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
-        verify(notificationService).softDeleteNotification(ID);
+        verify(notificationService).softDeleteNotification(ID, TRACE_ID, actor);
     }
 
     @Test
@@ -313,7 +314,7 @@ class FulfilmentServiceTest {
         verify(notificationService, never()).submitNotification(any(), any(), any());
         verify(notificationService, never()).amendNotification(any(), any(), any());
         verify(notificationService, never()).cancelAmendNotification(any());
-        verify(notificationService, never()).softDeleteNotification(any());
+        verify(notificationService, never()).softDeleteNotification(any(), any(), any());
     }
 
     @Test
@@ -328,10 +329,10 @@ class FulfilmentServiceTest {
                 .status(NotificationStatus.DELETED)
                 .build());
 
-        Fulfilment deleted = fulfilmentService.softDelete(ID);
+        Fulfilment deleted = fulfilmentService.softDelete(ID, TRACE_ID, null);
 
         assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
-        verify(notificationService, never()).softDeleteNotification(any());
+        verify(notificationService, never()).softDeleteNotification(any(), any(), any());
     }
 
     private Fulfilment fulfilment(

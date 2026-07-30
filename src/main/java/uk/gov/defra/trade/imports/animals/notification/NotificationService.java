@@ -272,7 +272,8 @@ public class NotificationService {
     }
 
     @Transactional
-    public Notification softDeleteNotification(String referenceNumber) {
+    public Notification softDeleteNotification(
+        String referenceNumber, String correlationId, Actor actor) {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
@@ -282,9 +283,19 @@ public class NotificationService {
             throw new BadRequestException(
                 "Cannot delete notification with status: " + notification.getStatus());
         }
-        notification.setStatus(NotificationStatus.DELETED);
-        notification.setUpdated(LocalDateTime.now());
-        return notificationRepository.save(notification);
+        if (notification.getStatus() == NotificationStatus.DRAFT) {
+            notification.setStatus(NotificationStatus.DELETED);
+            notification.setUpdated(LocalDateTime.now());
+            return notificationRepository.save(notification);
+        }
+        return writeWithOutbox(
+            notification,
+            referenceNumber,
+            correlationId,
+            NotificationStatus.DELETED,
+            OutboxEventType.NOTIFICATION_WITHDRAWN,
+            "withdrawal",
+            actor);
     }
 
     public ReferenceNumberPageResponse findAllReferenceNumbers(int page) {

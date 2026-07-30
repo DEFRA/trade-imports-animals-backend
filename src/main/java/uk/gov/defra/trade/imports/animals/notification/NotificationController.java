@@ -235,9 +235,13 @@ public class NotificationController {
     @Timed("controller.softDeleteNotification.time")
     public ResponseEntity<Notification> softDelete(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-        @PathVariable String referenceNumber) {
+        @PathVariable String referenceNumber,
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @Valid @RequestBody(required = false) ActorRequest actorRequest) {
         log.info("POST /notifications/{}/soft-delete - Soft deleting notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.softDeleteNotification(referenceNumber));
+        Actor actor = actorRequest != null ? actorRequest.toActor() : null;
+        return ResponseEntity.ok(
+            notificationService.softDeleteNotification(referenceNumber, traceId, actor));
     }
 
     @DeleteMapping

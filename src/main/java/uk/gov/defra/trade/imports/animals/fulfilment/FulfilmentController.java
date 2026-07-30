@@ -202,9 +202,15 @@ public class FulfilmentController {
     @Timed("controller.softDeleteFulfilment.time")
     public ResponseEntity<Fulfilment> softDelete(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-        @PathVariable String id) {
+        @PathVariable String id,
+        @RequestHeader(
+            value = NotificationController.HEADER_TRACE_ID,
+            required = false,
+            defaultValue = "") String traceId,
+        @Valid @RequestBody(required = false) ActorRequest actorRequest) {
         log.info("POST /fulfilments/{}/soft-delete - Soft deleting fulfilment", id);
-        return ResponseEntity.ok(fulfilmentService.softDelete(id));
+        Actor actor = actorRequest != null ? actorRequest.toActor() : null;
+        return ResponseEntity.ok(fulfilmentService.softDelete(id, traceId, actor));
     }
 
     private URI buildLocationUri(String id) {

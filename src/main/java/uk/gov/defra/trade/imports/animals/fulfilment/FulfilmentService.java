@@ -215,7 +215,7 @@ public class FulfilmentService {
     }
 
     @Transactional
-    public Fulfilment softDelete(String id) {
+    public Fulfilment softDelete(String id, String correlationId, Actor actor) {
         Fulfilment fulfilment = findById(id);
         if (fulfilment.getStatus() == FulfilmentStatus.DELETED) {
             return fulfilment;
@@ -230,7 +230,7 @@ public class FulfilmentService {
         Fulfilment saved = fulfilmentRepository.save(fulfilment);
         if (notificationProjectionExists(id)
             && notificationService.findByRef(id).status() != NotificationStatus.DELETED) {
-            notificationService.softDeleteNotification(id);
+            notificationService.softDeleteNotification(id, correlationId, actor);
         }
         return saved;
     }

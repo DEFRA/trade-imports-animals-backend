@@ -188,6 +188,45 @@ class OutboxServiceTest {
         }
 
         @Test
+        void appendEvent_shouldStoreWithdrawnEnvelopeWithActorAndDeletedStatus() {
+            Notification notification = Notification.builder()
+                .referenceNumber("GBN-AG-26-WTH001")
+                .status(NotificationStatus.DELETED)
+                .build();
+            Actor actor = Actor.builder()
+                .id("contact-guid-withdraw")
+                .source("dynamics-contact")
+                .userType("B2C")
+                .displayName("Will Withdraw")
+                .organisationId("org-withdraw")
+                .build();
+
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
+                "Imports.Notification.GBN-AG.GBN-AG-26-WTH001"))
+                .thenReturn(Optional.empty());
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            outboxService.appendEvent(
+                notification, OutboxEventType.NOTIFICATION_WITHDRAWN,
+                "trace-withdraw", actor);
+
+            ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+            verify(outboxEventRepository).save(captor.capture());
+            OutboxEvent saved = captor.getValue();
+
+            assertThat(saved.getEventType())
+                .isEqualTo("uk.gov.defra.imports.notification.NotificationWithdrawn");
+            assertThat(saved.getMetadata().getCorrelationId()).isEqualTo("trace-withdraw");
+            assertThat(saved.getMetadata().getSchemaUrl())
+                .isEqualTo(OutboxEventType.NOTIFICATION_WITHDRAWN.schemaUrl());
+            assertThat(saved.getActor()).isEqualTo(actor);
+            assertThat(saved.getStatusChanges()).hasSize(1);
+            assertThat(saved.getStatusChanges().getFirst().getStatus())
+                .isEqualTo(NotificationStatus.DELETED);
+            assertThat(saved.getStatusChanges().getFirst().getActor()).isEqualTo(actor);
+        }
+
+        @Test
         void appendEvent_shouldIncrementFromHighestVersion_whenPriorEventsExistForAmendedNotification() {
             // Regression for the EUDPA-171 amend flow: a notification can have
             // more than one outbox event (initial submit, then amend, etc.). The
