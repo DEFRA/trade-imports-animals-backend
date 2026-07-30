@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.bson.Document;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -826,6 +827,49 @@ class FulfilmentIT extends IntegrationBase {
     }
 
     @Test
+    void list_shouldReturnOnlyExactReferenceMatch() {
+        createFulfilmentWithId(DIRECT_PUT_REF);
+        createFulfilmentWithId(OTHER_REF);
+
+        FulfilmentPageResponse page =
+            listFulfilments(1, null, DIRECT_PUT_REF);
+
+        assertThat(page.totalElements()).isEqualTo(1);
+        assertThat(page.items()).extracting(FulfilmentPageResponse.Item::id)
+            .containsExactly(DIRECT_PUT_REF);
+    }
+
+    @Test
+    void list_shouldReturnEmptyPageWhenReferenceDoesNotMatch() {
+        createFulfilmentWithId(DIRECT_PUT_REF);
+
+        FulfilmentPageResponse page =
+            listFulfilments(1, null, "GBN-AG-26-ZZZZZZ");
+
+        assertThat(page.totalElements()).isZero();
+        assertThat(page.totalPages()).isZero();
+        assertThat(page.items()).isEmpty();
+    }
+
+    @Test
+    void list_shouldPreserveSortWhenFilteringByReference() {
+        LocalDateTime createdBase = LocalDateTime.of(2026, 7, 1, 10, 0);
+        fulfilmentRepository.insert(stored(
+            DIRECT_PUT_REF, FulfilmentStatus.DRAFT, createdBase.plusHours(1), null));
+        fulfilmentRepository.insert(stored(
+            OTHER_REF, FulfilmentStatus.DRAFT, createdBase, null));
+
+        FulfilmentPageResponse page =
+            listFulfilments(1, "createdAt,asc", DIRECT_PUT_REF);
+
+        assertThat(page.totalElements()).isEqualTo(1);
+        assertThat(page.items()).extracting(FulfilmentPageResponse.Item::id)
+            .containsExactly(DIRECT_PUT_REF);
+        assertThat(page.items().getFirst().createdAt())
+            .isEqualTo(createdBase.plusHours(1));
+    }
+
+    @Test
     void list_shouldSortByJoinedArrivalDateAndFulfilmentCreatedAtAndPage() {
         LocalDateTime createdBase = LocalDateTime.of(2026, 7, 1, 10, 0);
         LocalDate arrivalBase = LocalDate.of(2026, 8, 1);
@@ -1100,11 +1144,18 @@ class FulfilmentIT extends IntegrationBase {
     }
 
     private FulfilmentPageResponse listFulfilments(int page, String sort) {
+        return listFulfilments(page, sort, null);
+    }
+
+    private FulfilmentPageResponse listFulfilments(
+        int page, String sort, String referenceNumber) {
         return webClient("NoAuth")
             .get().uri(uriBuilder -> uriBuilder
                 .path(FULFILMENT_ENDPOINT)
                 .queryParam("page", page)
-                .queryParam("sort", sort)
+                .queryParamIfPresent("sort", Optional.ofNullable(sort))
+                .queryParamIfPresent(
+                    "referenceNumber", Optional.ofNullable(referenceNumber))
                 .build())
             .exchange()
             .expectStatus().isOk()

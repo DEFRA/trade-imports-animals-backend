@@ -118,15 +118,18 @@ public class FulfilmentController {
     @Operation(summary = "List fulfilments",
         description = "Returns fulfilment summaries enriched with notification "
             + "display fields. Optional sort: arrivalDate,desc (default), arrivalDate,asc, "
-            + "createdAt,desc, createdAt,asc")
+            + "createdAt,desc, createdAt,asc. Optional referenceNumber: exact match against "
+            + "a complete notification reference.")
     @ApiResponse(responseCode = "200", description = "Paginated fulfilment summaries returned",
         content = @Content(schema = @Schema(implementation = FulfilmentPageResponse.class)))
     @Timed("controller.getAllFulfilments.time")
     public FulfilmentPageResponse findAll(
         @RequestParam(defaultValue = "1") int page,
-        @RequestParam(required = false) String sort) {
-        log.debug("GET /fulfilments?page={}&sort={}", page, sort);
-        return fulfilmentService.findAll(page, sort);
+        @RequestParam(required = false) String sort,
+        @RequestParam(required = false) String referenceNumber) {
+        log.debug("GET /fulfilments?page={}&sort={}&referenceNumber={}",
+            page, sort, referenceNumber);
+        return fulfilmentService.findAll(page, sort, referenceNumber);
     }
 
     @PostMapping("/{id}/submit")

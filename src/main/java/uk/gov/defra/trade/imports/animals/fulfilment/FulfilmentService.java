@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
@@ -236,8 +237,14 @@ public class FulfilmentService {
     }
 
     public FulfilmentPageResponse findAll(int page, String sort) {
+        return findAll(page, sort, null);
+    }
+
+    public FulfilmentPageResponse findAll(
+        int page, String sort, String referenceNumber) {
         int normalisedPage = Math.max(page, 1);
-        Criteria statusCriteria = listedCriteria();
+        String trimmedReference = StringUtils.trimToNull(referenceNumber);
+        Criteria statusCriteria = listedCriteria(trimmedReference);
         long totalElements = mongoTemplate.count(
             Query.query(statusCriteria), Fulfilment.class);
         long offset = (normalisedPage - 1L) * listPageSize;
@@ -245,7 +252,7 @@ public class FulfilmentService {
             .and(Sort.by(Sort.Direction.ASC, "_id"));
 
         Aggregation aggregation = Aggregation.newAggregation(
-            Aggregation.match(listedCriteria()),
+            Aggregation.match(listedCriteria(trimmedReference)),
             Aggregation.lookup(
                 mongoTemplate.getCollectionName(Notification.class),
                 "_id",
@@ -265,8 +272,12 @@ public class FulfilmentService {
             normalisedPage, listPageSize, totalElements, items);
     }
 
-    private Criteria listedCriteria() {
-        return Criteria.where("status").in(LISTED_STATUSES);
+    private Criteria listedCriteria(String referenceNumber) {
+        Criteria criteria = Criteria.where("status").in(LISTED_STATUSES);
+        if (referenceNumber != null) {
+            criteria.and("_id").is(referenceNumber);
+        }
+        return criteria;
     }
 
     private AggregationOperation enrichedRowProjection() {
