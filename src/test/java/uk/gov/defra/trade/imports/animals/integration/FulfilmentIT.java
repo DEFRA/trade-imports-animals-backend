@@ -35,7 +35,6 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
-import uk.gov.defra.trade.imports.animals.ownership.Owner;
 
 class FulfilmentIT extends IntegrationBase {
 
@@ -80,7 +79,6 @@ class FulfilmentIT extends IntegrationBase {
         assertThat(created.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
         assertThat(created.getCreatedAt()).isNotNull();
         assertThat(created.getSubmittedAt()).isNull();
-        assertThat(created.getOwner()).isEqualTo(DEFAULT_OWNER);
 
         Fulfilment persisted = fulfilmentRepository.findById(created.getId()).orElseThrow();
         assertThat(persisted.getId()).isEqualTo(created.getId());
@@ -294,7 +292,7 @@ class FulfilmentIT extends IntegrationBase {
         Fulfilment created = createFulfilmentWithNotificationProjection();
 
         // When
-        Fulfilment deleted = softDelete(created.getId(), DEFAULT_OWNER);
+        Fulfilment deleted = softDelete(created.getId());
 
         // Then
         assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
@@ -382,7 +380,7 @@ class FulfilmentIT extends IntegrationBase {
             .expectStatus().isOk();
 
         // When
-        Fulfilment deleted = softDelete(created.getId(), DEFAULT_OWNER);
+        Fulfilment deleted = softDelete(created.getId());
 
         // Then
         assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
@@ -515,25 +513,6 @@ class FulfilmentIT extends IntegrationBase {
     }
 
     @Test
-    void cancelAmend_shouldReturn404_forDifferentOwner() {
-        Fulfilment created = createFulfilment();
-        webClient("NoAuth")
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
-            .exchange()
-            .expectStatus().isOk();
-        webClient("NoAuth")
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/amend", created.getId())
-            .exchange()
-            .expectStatus().isOk();
-        Owner differentOwner = new Owner("different-user", "different-org");
-
-        webClient("NoAuth", differentOwner)
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/cancel-amend", created.getId())
-            .exchange()
-            .expectStatus().isNotFound();
-    }
-
-    @Test
     void amend_shouldReturn400_whenFulfilmentIsDraft() {
         Fulfilment created = createFulfilment();
 
@@ -582,11 +561,10 @@ class FulfilmentIT extends IntegrationBase {
 
     @ParameterizedTest
     @EnumSource(value = FulfilmentStatus.class, names = {"DRAFT", "SUBMITTED", "AMEND"})
-    void copy_shouldPersistNewOwnedDraftFromCopyableStatus(FulfilmentStatus sourceStatus) {
+    void copy_shouldPersistNewDraftFromCopyableStatus(FulfilmentStatus sourceStatus) {
         List<Document> sourceContent = scalarFulfilment(sourceStatus.name());
         Fulfilment source = stored(
             DIRECT_PUT_REF,
-            DEFAULT_OWNER,
             sourceStatus,
             LocalDateTime.of(2026, 7, 24, 10, 0),
             sourceStatus == FulfilmentStatus.SUBMITTED
@@ -599,7 +577,6 @@ class FulfilmentIT extends IntegrationBase {
 
         assertThat(copy).isNotNull();
         assertThat(copy.getId()).matches(REF_FORMAT_REGEX).isNotEqualTo(source.getId());
-        assertThat(copy.getOwner()).isEqualTo(DEFAULT_OWNER);
         assertThat(copy.getFulfilment())
             .isEqualTo(sourceContent)
             .isNotSameAs(sourceContent);
@@ -610,7 +587,6 @@ class FulfilmentIT extends IntegrationBase {
         assertThat(copy.getCopyIdempotencyKey()).isEqualTo("copy-" + sourceStatus);
 
         Fulfilment persisted = fulfilmentRepository.findById(copy.getId()).orElseThrow();
-        assertThat(persisted.getOwner()).isEqualTo(DEFAULT_OWNER);
         assertThat(persisted.getFulfilment()).isEqualTo(sourceContent);
         assertThat(persisted.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
         assertThat(persisted.getSubmittedAt()).isNull();
@@ -620,7 +596,7 @@ class FulfilmentIT extends IntegrationBase {
     }
 
     @Test
-    void copy_shouldDeduplicateSameOwnerAndKeyAndCreateForDifferentKey() {
+    void copy_shouldDeduplicateSameKeyAndCreateForDifferentKey() {
         Fulfilment source = createFulfilment();
         replace(source.getId(), dto(source.getId(), scalarFulfilment("internalMarket")));
 
@@ -629,13 +605,10 @@ class FulfilmentIT extends IntegrationBase {
         Fulfilment differentKey = copyFulfilment(source.getId(), "different-key");
 
         assertThat(retry.getId()).isEqualTo(first.getId());
-        assertThat(retry.getOwner()).isEqualTo(first.getOwner());
         assertThat(retry.getFulfilment()).isEqualTo(first.getFulfilment());
         assertThat(retry.getCopyIdempotencyKey()).isEqualTo(first.getCopyIdempotencyKey());
         assertThat(differentKey.getId()).isNotEqualTo(first.getId());
-        assertThat(fulfilmentRepository
-            .findByOwnerSubAndOwnerOrganisationAndCopyIdempotencyKey(
-                DEFAULT_OWNER.sub(), DEFAULT_OWNER.organisation(), "same-key"))
+        assertThat(fulfilmentRepository.findByCopyIdempotencyKey("same-key"))
             .map(Fulfilment::getId)
             .contains(first.getId());
         assertThat(fulfilmentRepository.count()).isEqualTo(3);
@@ -676,14 +649,13 @@ class FulfilmentIT extends IntegrationBase {
     void softDelete_shouldPersistDeletedAndRemainIdempotent(FulfilmentStatus sourceStatus) {
         Fulfilment source = stored(
             DIRECT_PUT_REF,
-            DEFAULT_OWNER,
             sourceStatus,
             LocalDateTime.of(2026, 7, 24, 10, 0),
             null);
         fulfilmentRepository.insert(source);
 
-        Fulfilment deleted = softDelete(source.getId(), DEFAULT_OWNER);
-        Fulfilment retried = softDelete(source.getId(), DEFAULT_OWNER);
+        Fulfilment deleted = softDelete(source.getId());
+        Fulfilment retried = softDelete(source.getId());
 
         assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
         assertThat(retried).isEqualTo(deleted);
@@ -698,27 +670,6 @@ class FulfilmentIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.totalElements").isEqualTo(0)
             .jsonPath("$.items.length()").isEqualTo(0);
-    }
-
-    @Test
-    void copyAndSoftDelete_shouldReturn404ForDifferentOwner() {
-        Fulfilment source = createFulfilment();
-        Owner differentOwner = new Owner("different-user", "different-org");
-
-        webClient("NoAuth", differentOwner)
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/copy", source.getId())
-            .header(FulfilmentController.IDEMPOTENCY_KEY, "different-owner-copy")
-            .exchange()
-            .expectStatus().isNotFound();
-
-        webClient("NoAuth", differentOwner)
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/soft-delete", source.getId())
-            .exchange()
-            .expectStatus().isNotFound();
-
-        assertThat(fulfilmentRepository.findById(source.getId()).orElseThrow().getStatus())
-            .isEqualTo(FulfilmentStatus.DRAFT);
-        assertThat(fulfilmentRepository.count()).isEqualTo(1);
     }
 
     @Test
@@ -756,33 +707,6 @@ class FulfilmentIT extends IntegrationBase {
     }
 
     @Test
-    void ownerRelevantOperations_shouldReturn404_forDifferentOwner() {
-        Fulfilment created = createFulfilment();
-        Owner differentOwner = new Owner("different-user", "different-org");
-
-        webClient("NoAuth", differentOwner)
-            .get().uri(FULFILMENT_ENDPOINT + "/{id}", created.getId())
-            .exchange()
-            .expectStatus().isNotFound();
-
-        webClient("NoAuth", differentOwner)
-            .put().uri(FULFILMENT_ENDPOINT + "/{id}", created.getId())
-            .bodyValue(dto(created.getId(), scalarFulfilment("transit")))
-            .exchange()
-            .expectStatus().isNotFound();
-
-        webClient("NoAuth", differentOwner)
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
-            .exchange()
-            .expectStatus().isNotFound();
-
-        webClient("NoAuth", differentOwner)
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/amend", created.getId())
-            .exchange()
-            .expectStatus().isNotFound();
-    }
-
-    @Test
     void list_shouldEnrichFromNotificationButKeepCanonicalFulfilmentState() {
         Fulfilment created = createFulfilment();
         replace(created.getId(), dto(created.getId(), scalarFulfilment("internalMarket")));
@@ -803,24 +727,19 @@ class FulfilmentIT extends IntegrationBase {
                 "FR",
                 arrivalDate,
                 "Example consignor",
-                "Example consignee"),
-            DEFAULT_OWNER);
+                "Example consignee"));
         assertThat(notificationProjection).isNotNull();
         assertThat(notificationProjection.getStatus()).isEqualTo(NotificationStatus.DRAFT);
 
-        Fulfilment withoutNotification = createFulfilmentWithId(OTHER_REF, DEFAULT_OWNER);
+        Fulfilment withoutNotification = createFulfilmentWithId(OTHER_REF);
         Fulfilment deleted = stored(
             "GBN-AG-26-ABC125",
-            DEFAULT_OWNER,
             FulfilmentStatus.DELETED,
             LocalDateTime.of(2026, 7, 24, 12, 0),
             null);
         fulfilmentRepository.insert(deleted);
-        Owner secondOwner = new Owner("second-user", "second-org");
-        Fulfilment secondOwnerFulfilment = createFulfilmentWithId(
-            "GBN-AG-26-ABC126", secondOwner);
 
-        FulfilmentPageResponse page = listFulfilments(DEFAULT_OWNER, 1, "arrivalDate,desc");
+        FulfilmentPageResponse page = listFulfilments(1, "arrivalDate,desc");
 
         assertThat(page.totalElements()).isEqualTo(2);
         assertThat(page.items()).extracting(FulfilmentPageResponse.Item::id)
@@ -849,12 +768,6 @@ class FulfilmentIT extends IntegrationBase {
         assertThat(blank.arrivalDate()).isNull();
         assertThat(blank.consignorName()).isNull();
         assertThat(blank.consigneeName()).isNull();
-
-        FulfilmentPageResponse secondOwnerPage =
-            listFulfilments(secondOwner, 1, "arrivalDate,desc");
-        assertThat(secondOwnerPage.totalElements()).isEqualTo(1);
-        assertThat(secondOwnerPage.items()).extracting(FulfilmentPageResponse.Item::id)
-            .containsExactly(secondOwnerFulfilment.getId());
     }
 
     @Test
@@ -867,13 +780,11 @@ class FulfilmentIT extends IntegrationBase {
             String id = "GBN-AG-26-P" + "%05d".formatted(index);
             fulfilments.add(stored(
                 id,
-                DEFAULT_OWNER,
                 FulfilmentStatus.DRAFT,
                 createdBase.plusHours(index),
                 null));
             notifications.add(Notification.builder()
                 .referenceNumber(id)
-                .owner(DEFAULT_OWNER)
                 .status(NotificationStatus.DRAFT)
                 .transport(Transport.builder()
                     .arrivalDate(arrivalBase.plusDays(index))
@@ -884,13 +795,13 @@ class FulfilmentIT extends IntegrationBase {
         notificationRepository.insert(notifications);
 
         FulfilmentPageResponse defaultFirstPage =
-            listFulfilmentsWithoutSort(DEFAULT_OWNER, 1);
+            listFulfilmentsWithoutSort(1);
         FulfilmentPageResponse defaultSecondPage =
-            listFulfilmentsWithoutSort(DEFAULT_OWNER, 2);
+            listFulfilmentsWithoutSort(2);
         FulfilmentPageResponse invalidSortPage =
-            listFulfilments(DEFAULT_OWNER, 1, "submittedAt,asc");
+            listFulfilments(1, "submittedAt,asc");
         FulfilmentPageResponse createdAscendingPage =
-            listFulfilments(DEFAULT_OWNER, 1, "createdAt,asc");
+            listFulfilments(1, "createdAt,asc");
 
         assertThat(defaultFirstPage.page()).isEqualTo(1);
         assertThat(defaultFirstPage.size()).isEqualTo(20);
@@ -916,20 +827,14 @@ class FulfilmentIT extends IntegrationBase {
     }
 
     @Test
-    void list_shouldScopeBeforePagingAndNormaliseInvalidPageAndSort() {
-        Owner secondOwner = new Owner("second-user", "second-org");
+    void list_shouldNormaliseInvalidPageAndSort() {
         LocalDateTime base = LocalDateTime.of(2026, 7, 24, 10, 0);
         fulfilmentRepository.insert(stored(
-            DIRECT_PUT_REF, DEFAULT_OWNER, base, base.plusHours(3)));
+            DIRECT_PUT_REF, base, base.plusHours(3)));
         fulfilmentRepository.insert(stored(
-            OTHER_REF, DEFAULT_OWNER, base.plusHours(1), base.plusHours(2)));
-        fulfilmentRepository.insert(stored(
-            "GBN-AG-26-ABC125", secondOwner, base.plusHours(2), base.plusHours(1)));
-        fulfilmentRepository.insert(stored(
-            "GBN-AG-26-ABC126", null, base.plusHours(3), null));
+            OTHER_REF, base.plusHours(1), base.plusHours(2)));
         fulfilmentRepository.insert(stored(
             "GBN-AG-26-ABC127",
-            DEFAULT_OWNER,
             FulfilmentStatus.DELETED,
             base.plusHours(4),
             null));
@@ -958,48 +863,16 @@ class FulfilmentIT extends IntegrationBase {
             .jsonPath("$.items[0].fulfilment").doesNotExist()
             .jsonPath("$.items[0].submittedFulfilment").doesNotExist()
             .jsonPath("$.items[1].id").isEqualTo(OTHER_REF);
-
-        webClient("NoAuth", secondOwner)
-            .get().uri(FULFILMENT_ENDPOINT + "?page=1&sort=createdAt,asc")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody()
-            .jsonPath("$.totalElements").isEqualTo(1)
-            .jsonPath("$.items[0].id").isEqualTo("GBN-AG-26-ABC125");
-    }
-
-    @Test
-    void legacyUnownedFulfilment_shouldBeHiddenAndReturn404() {
-        fulfilmentRepository.insert(stored(
-            DIRECT_PUT_REF, null, LocalDateTime.of(2026, 7, 24, 10, 0), null));
-
-        webClient("NoAuth")
-            .get().uri(FULFILMENT_ENDPOINT)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody()
-            .jsonPath("$.totalElements").isEqualTo(0)
-            .jsonPath("$.items.length()").isEqualTo(0);
-
-        webClient("NoAuth")
-            .get().uri(FULFILMENT_ENDPOINT + "/{id}", DIRECT_PUT_REF)
-            .exchange()
-            .expectStatus().isNotFound();
-    }
-
-    @Test
-    void post_shouldPreserveEmptyOrganisationAsOwnerValue() {
-        Owner ownerWithoutOrganisation = new Owner("stub-user", "");
-
-        Fulfilment created = createFulfilment(ownerWithoutOrganisation);
-
-        assertThat(created.getOwner()).isEqualTo(ownerWithoutOrganisation);
-        assertThat(fulfilmentRepository.findById(created.getId()).orElseThrow().getOwner())
-            .isEqualTo(ownerWithoutOrganisation);
     }
 
     private Fulfilment createFulfilment() {
-        return createFulfilment(DEFAULT_OWNER);
+        return webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT)
+            .exchange()
+            .expectStatus().isCreated()
+            .expectHeader().valueMatches("Location", LOCATION_FORMAT_REGEX)
+            .expectBody(Fulfilment.class)
+            .returnResult().getResponseBody();
     }
 
     private Fulfilment createFulfilmentWithNotificationProjection() {
@@ -1011,35 +884,22 @@ class FulfilmentIT extends IntegrationBase {
                 "GB",
                 LocalDate.of(2026, 8, 12),
                 "Example consignor",
-                "Example consignee"),
-            DEFAULT_OWNER);
+                "Example consignee"));
         return created;
     }
 
-    private Fulfilment createFulfilment(Owner owner) {
-        return webClient("NoAuth", owner)
-            .post().uri(FULFILMENT_ENDPOINT)
-            .exchange()
-            .expectStatus().isCreated()
-            .expectHeader().valueMatches("Location", LOCATION_FORMAT_REGEX)
-            .expectBody(Fulfilment.class)
-            .returnResult().getResponseBody();
-    }
-
     private Fulfilment stored(
-        String id, Owner owner, LocalDateTime createdAt, LocalDateTime submittedAt) {
-        return stored(id, owner, FulfilmentStatus.SUBMITTED, createdAt, submittedAt);
+        String id, LocalDateTime createdAt, LocalDateTime submittedAt) {
+        return stored(id, FulfilmentStatus.SUBMITTED, createdAt, submittedAt);
     }
 
     private Fulfilment stored(
         String id,
-        Owner owner,
         FulfilmentStatus status,
         LocalDateTime createdAt,
         LocalDateTime submittedAt) {
         return Fulfilment.builder()
             .id(id)
-            .owner(owner)
             .fulfilment(List.of(new Document("sensitive", "body")))
             .status(status)
             .createdAt(createdAt)
@@ -1047,18 +907,14 @@ class FulfilmentIT extends IntegrationBase {
             .build();
     }
 
-    private Fulfilment createFulfilmentWithId(String id, Owner owner) {
-        return webClient("NoAuth", owner)
+    private Fulfilment createFulfilmentWithId(String id) {
+        return webClient("NoAuth")
             .put().uri(FULFILMENT_ENDPOINT + "/{id}", id)
             .bodyValue(dto(id, List.of()))
             .exchange()
             .expectStatus().isCreated()
             .expectBody(Fulfilment.class)
             .returnResult().getResponseBody();
-    }
-
-    private void createFulfilmentWithId(String id) {
-        createFulfilmentWithId(id, DEFAULT_OWNER);
     }
 
     private Fulfilment replace(String id, FulfilmentDto dto) {
@@ -1082,8 +938,8 @@ class FulfilmentIT extends IntegrationBase {
             .returnResult().getResponseBody();
     }
 
-    private Fulfilment softDelete(String id, Owner owner) {
-        return webClient("NoAuth", owner)
+    private Fulfilment softDelete(String id) {
+        return webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/soft-delete", id)
             .exchange()
             .expectStatus().isOk()
@@ -1116,8 +972,8 @@ class FulfilmentIT extends IntegrationBase {
             OutboxService.buildAggregateId(referenceNumber));
     }
 
-    private Notification putNotificationProjection(NotificationDto dto, Owner owner) {
-        return webClient("NoAuth", owner)
+    private Notification putNotificationProjection(NotificationDto dto) {
+        return webClient("NoAuth")
             .put().uri("/notifications/{id}", dto.getReferenceNumber())
             .bodyValue(dto)
             .exchange()
@@ -1143,9 +999,8 @@ class FulfilmentIT extends IntegrationBase {
             .build();
     }
 
-    private FulfilmentPageResponse listFulfilments(
-        Owner owner, int page, String sort) {
-        return webClient("NoAuth", owner)
+    private FulfilmentPageResponse listFulfilments(int page, String sort) {
+        return webClient("NoAuth")
             .get().uri(uriBuilder -> uriBuilder
                 .path(FULFILMENT_ENDPOINT)
                 .queryParam("page", page)
@@ -1157,8 +1012,8 @@ class FulfilmentIT extends IntegrationBase {
             .returnResult().getResponseBody();
     }
 
-    private FulfilmentPageResponse listFulfilmentsWithoutSort(Owner owner, int page) {
-        return webClient("NoAuth", owner)
+    private FulfilmentPageResponse listFulfilmentsWithoutSort(int page) {
+        return webClient("NoAuth")
             .get().uri(uriBuilder -> uriBuilder
                 .path(FULFILMENT_ENDPOINT)
                 .queryParam("page", page)

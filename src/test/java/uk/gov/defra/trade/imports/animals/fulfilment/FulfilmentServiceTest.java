@@ -21,19 +21,16 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
-import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.notification.NotificationResponse;
 import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
-import uk.gov.defra.trade.imports.animals.ownership.Owner;
 
 @ExtendWith(MockitoExtension.class)
 class FulfilmentServiceTest {
 
     private static final String ID = "GBN-AG-26-ABC123";
     private static final String TRACE_ID = "trace-fulfilment-001";
-    private static final Owner OWNER = new Owner("owner-id", "owner-organisation");
 
     @Mock
     private FulfilmentRepository fulfilmentRepository;
@@ -59,24 +56,21 @@ class FulfilmentServiceTest {
 
     @ParameterizedTest
     @EnumSource(value = FulfilmentStatus.class, names = {"DRAFT", "SUBMITTED", "AMEND"})
-    void copy_shouldCreateOwnedDraftFromCopyableStatus(FulfilmentStatus sourceStatus) {
+    void copy_shouldCreateDraftFromCopyableStatus(FulfilmentStatus sourceStatus) {
         String copyId = "GBN-AG-26-ABC124";
         String idempotencyKey = "copy-key";
         List<Document> sourceContent = List.of(new Document("value", sourceStatus.name()));
         Fulfilment source = fulfilment(sourceStatus, sourceContent, List.of());
-        when(fulfilmentRepository
-            .findByOwnerSubAndOwnerOrganisationAndCopyIdempotencyKey(
-                OWNER.sub(), OWNER.organisation(), idempotencyKey))
+        when(fulfilmentRepository.findByCopyIdempotencyKey(idempotencyKey))
             .thenReturn(Optional.empty());
         when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(source));
         when(referenceNumberGenerator.generate()).thenReturn(copyId);
         when(fulfilmentRepository.insert(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Fulfilment copy = fulfilmentService.copy(ID, OWNER, idempotencyKey);
+        Fulfilment copy = fulfilmentService.copy(ID, idempotencyKey);
 
         assertThat(copy.getId()).isEqualTo(copyId).isNotEqualTo(ID);
-        assertThat(copy.getOwner()).isEqualTo(OWNER);
         assertThat(copy.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
         assertThat(copy.getCreatedAt()).isNotNull();
         assertThat(copy.getSubmittedAt()).isNull();
@@ -88,15 +82,13 @@ class FulfilmentServiceTest {
     }
 
     @Test
-    void copy_shouldReturnExistingCopyForSameOwnerAndIdempotencyKey() {
+    void copy_shouldReturnExistingCopyForSameIdempotencyKey() {
         String idempotencyKey = "copy-key";
         Fulfilment existingCopy = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
-        when(fulfilmentRepository
-            .findByOwnerSubAndOwnerOrganisationAndCopyIdempotencyKey(
-                OWNER.sub(), OWNER.organisation(), idempotencyKey))
+        when(fulfilmentRepository.findByCopyIdempotencyKey(idempotencyKey))
             .thenReturn(Optional.of(existingCopy));
 
-        Fulfilment result = fulfilmentService.copy(ID, OWNER, idempotencyKey);
+        Fulfilment result = fulfilmentService.copy(ID, idempotencyKey);
 
         assertThat(result).isSameAs(existingCopy);
         verify(fulfilmentRepository, never()).findById(any());
@@ -108,13 +100,11 @@ class FulfilmentServiceTest {
     void copy_shouldRejectDeletedSource() {
         String idempotencyKey = "copy-key";
         Fulfilment deleted = fulfilment(FulfilmentStatus.DELETED, List.of(), null);
-        when(fulfilmentRepository
-            .findByOwnerSubAndOwnerOrganisationAndCopyIdempotencyKey(
-                OWNER.sub(), OWNER.organisation(), idempotencyKey))
+        when(fulfilmentRepository.findByCopyIdempotencyKey(idempotencyKey))
             .thenReturn(Optional.empty());
         when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(deleted));
 
-        assertThatThrownBy(() -> fulfilmentService.copy(ID, OWNER, idempotencyKey))
+        assertThatThrownBy(() -> fulfilmentService.copy(ID, idempotencyKey))
             .isInstanceOf(BadRequestException.class)
             .hasMessageContaining("Cannot copy fulfilment with status: DELETED");
 
@@ -123,7 +113,7 @@ class FulfilmentServiceTest {
 
     @Test
     void copy_shouldRejectBlankIdempotencyKey() {
-        assertThatThrownBy(() -> fulfilmentService.copy(ID, OWNER, " "))
+        assertThatThrownBy(() -> fulfilmentService.copy(ID, " "))
             .isInstanceOf(BadRequestException.class)
             .hasMessage("Idempotency-Key must not be blank");
 
@@ -139,7 +129,7 @@ class FulfilmentServiceTest {
         when(fulfilmentRepository.save(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Fulfilment deleted = fulfilmentService.softDelete(ID, OWNER);
+        Fulfilment deleted = fulfilmentService.softDelete(ID);
 
         assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
         verify(fulfilmentRepository).save(fulfilment);
@@ -150,24 +140,11 @@ class FulfilmentServiceTest {
         Fulfilment deleted = fulfilment(FulfilmentStatus.DELETED, List.of(), null);
         when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(deleted));
 
-        Fulfilment result = fulfilmentService.softDelete(ID, OWNER);
+        Fulfilment result = fulfilmentService.softDelete(ID);
 
         assertThat(result).isSameAs(deleted);
         verify(fulfilmentRepository, never()).save(any());
         verifyNoInteractions(notificationService);
-    }
-
-    @Test
-    void softDelete_shouldHideFulfilmentOwnedBySomeoneElse() {
-        Fulfilment fulfilment = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
-        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
-        Owner differentOwner = new Owner("different-owner", "different-organisation");
-
-        assertThatThrownBy(() -> fulfilmentService.softDelete(ID, differentOwner))
-            .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining(ID);
-
-        verify(fulfilmentRepository, never()).save(any());
     }
 
     @Test
@@ -179,7 +156,7 @@ class FulfilmentServiceTest {
         when(fulfilmentRepository.save(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Fulfilment amended = fulfilmentService.amend(ID, OWNER, TRACE_ID);
+        Fulfilment amended = fulfilmentService.amend(ID, TRACE_ID);
 
         assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.AMEND);
         assertThat(amended.getSubmittedFulfilment())
@@ -190,8 +167,7 @@ class FulfilmentServiceTest {
         List<Document> amendedContent = List.of(new Document("value", "amended"));
         fulfilmentService.replace(
             ID,
-            FulfilmentDto.builder().id(ID).fulfilment(amendedContent).build(),
-            OWNER);
+            FulfilmentDto.builder().id(ID).fulfilment(amendedContent).build());
 
         assertThat(fulfilment.getFulfilment()).isEqualTo(amendedContent);
         assertThat(fulfilment.getSubmittedFulfilment()).isEqualTo(submittedContent);
@@ -209,7 +185,7 @@ class FulfilmentServiceTest {
             .thenAnswer(invocation -> invocation.getArgument(0));
         LocalDateTime beforeCancel = LocalDateTime.now();
 
-        Fulfilment restored = fulfilmentService.cancelAmend(ID, OWNER);
+        Fulfilment restored = fulfilmentService.cancelAmend(ID);
 
         assertThat(restored.getFulfilment()).isEqualTo(submittedContent);
         assertThat(restored.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
@@ -223,7 +199,7 @@ class FulfilmentServiceTest {
         Fulfilment fulfilment = fulfilment(FulfilmentStatus.SUBMITTED, List.of(), null);
         when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
 
-        assertThatThrownBy(() -> fulfilmentService.cancelAmend(ID, OWNER))
+        assertThatThrownBy(() -> fulfilmentService.cancelAmend(ID))
             .isInstanceOf(BadRequestException.class)
             .hasMessageContaining("SUBMITTED");
 
@@ -235,23 +211,9 @@ class FulfilmentServiceTest {
         Fulfilment fulfilment = fulfilment(FulfilmentStatus.AMEND, List.of(), null);
         when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
 
-        assertThatThrownBy(() -> fulfilmentService.cancelAmend(ID, OWNER))
+        assertThatThrownBy(() -> fulfilmentService.cancelAmend(ID))
             .isInstanceOf(BadRequestException.class)
             .hasMessageContaining("no submitted snapshot");
-
-        verify(fulfilmentRepository, never()).save(any());
-    }
-
-    @Test
-    void cancelAmend_shouldHideFulfilmentOwnedBySomeoneElse() {
-        Fulfilment fulfilment = fulfilment(
-            FulfilmentStatus.AMEND, List.of(), List.of());
-        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
-        Owner differentOwner = new Owner("different-owner", "different-organisation");
-
-        assertThatThrownBy(() -> fulfilmentService.cancelAmend(ID, differentOwner))
-            .isInstanceOf(NotFoundException.class)
-            .hasMessageContaining(ID);
 
         verify(fulfilmentRepository, never()).save(any());
     }
@@ -266,7 +228,7 @@ class FulfilmentServiceTest {
         when(fulfilmentRepository.save(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Fulfilment submitted = fulfilmentService.submit(ID, OWNER, TRACE_ID);
+        Fulfilment submitted = fulfilmentService.submit(ID, TRACE_ID);
 
         assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
         assertThat(submitted.getSubmittedFulfilment()).isNull();
@@ -281,10 +243,10 @@ class FulfilmentServiceTest {
             .thenAnswer(invocation -> invocation.getArgument(0));
         when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
 
-        Fulfilment submitted = fulfilmentService.submit(ID, OWNER, TRACE_ID);
+        Fulfilment submitted = fulfilmentService.submit(ID, TRACE_ID);
 
         assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        verify(notificationService).submitNotification(ID, TRACE_ID, OWNER);
+        verify(notificationService).submitNotification(ID, TRACE_ID);
     }
 
     @Test
@@ -295,10 +257,10 @@ class FulfilmentServiceTest {
             .thenAnswer(invocation -> invocation.getArgument(0));
         when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
 
-        Fulfilment amended = fulfilmentService.amend(ID, OWNER, TRACE_ID);
+        Fulfilment amended = fulfilmentService.amend(ID, TRACE_ID);
 
         assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.AMEND);
-        verify(notificationService).amendNotification(ID, TRACE_ID, OWNER);
+        verify(notificationService).amendNotification(ID, TRACE_ID);
     }
 
     @Test
@@ -310,10 +272,10 @@ class FulfilmentServiceTest {
             .thenAnswer(invocation -> invocation.getArgument(0));
         when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
 
-        Fulfilment submitted = fulfilmentService.cancelAmend(ID, OWNER);
+        Fulfilment submitted = fulfilmentService.cancelAmend(ID);
 
         assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        verify(notificationService).cancelAmendNotification(ID, OWNER);
+        verify(notificationService).cancelAmendNotification(ID);
     }
 
     @Test
@@ -323,15 +285,15 @@ class FulfilmentServiceTest {
         when(fulfilmentRepository.save(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
         when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
-        when(notificationService.findByRef(ID, OWNER))
+        when(notificationService.findByRef(ID))
             .thenReturn(NotificationResponse.builder()
                 .status(NotificationStatus.DRAFT)
                 .build());
 
-        Fulfilment deleted = fulfilmentService.softDelete(ID, OWNER);
+        Fulfilment deleted = fulfilmentService.softDelete(ID);
 
         assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
-        verify(notificationService).softDeleteNotification(ID, OWNER);
+        verify(notificationService).softDeleteNotification(ID);
     }
 
     @Test
@@ -342,13 +304,13 @@ class FulfilmentServiceTest {
             .thenAnswer(invocation -> invocation.getArgument(0));
         when(notificationService.existsByReferenceNumber(ID)).thenReturn(false);
 
-        Fulfilment submitted = fulfilmentService.submit(ID, OWNER, TRACE_ID);
+        Fulfilment submitted = fulfilmentService.submit(ID, TRACE_ID);
 
         assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        verify(notificationService, never()).submitNotification(any(), any(), any());
-        verify(notificationService, never()).amendNotification(any(), any(), any());
-        verify(notificationService, never()).cancelAmendNotification(any(), any());
-        verify(notificationService, never()).softDeleteNotification(any(), any());
+        verify(notificationService, never()).submitNotification(any(), any());
+        verify(notificationService, never()).amendNotification(any(), any());
+        verify(notificationService, never()).cancelAmendNotification(any());
+        verify(notificationService, never()).softDeleteNotification(any());
     }
 
     @Test
@@ -358,15 +320,15 @@ class FulfilmentServiceTest {
         when(fulfilmentRepository.save(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
         when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
-        when(notificationService.findByRef(ID, OWNER))
+        when(notificationService.findByRef(ID))
             .thenReturn(NotificationResponse.builder()
                 .status(NotificationStatus.DELETED)
                 .build());
 
-        Fulfilment deleted = fulfilmentService.softDelete(ID, OWNER);
+        Fulfilment deleted = fulfilmentService.softDelete(ID);
 
         assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
-        verify(notificationService, never()).softDeleteNotification(any(), any());
+        verify(notificationService, never()).softDeleteNotification(any());
     }
 
     private Fulfilment fulfilment(
@@ -375,7 +337,6 @@ class FulfilmentServiceTest {
         List<Document> submittedContent) {
         return Fulfilment.builder()
             .id(ID)
-            .owner(OWNER)
             .fulfilment(content)
             .submittedFulfilment(submittedContent)
             .status(status)

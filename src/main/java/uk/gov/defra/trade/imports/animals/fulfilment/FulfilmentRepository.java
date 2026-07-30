@@ -7,8 +7,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface FulfilmentRepository extends MongoRepository<Fulfilment, String> {
 
-    Optional<Fulfilment> findByOwnerSubAndOwnerOrganisationAndCopyIdempotencyKey(
-        String ownerSub,
-        String ownerOrganisation,
-        String copyIdempotencyKey);
+    Optional<Fulfilment> findByCopyIdempotencyKey(String copyIdempotencyKey);
 }

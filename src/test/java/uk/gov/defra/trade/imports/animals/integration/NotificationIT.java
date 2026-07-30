@@ -44,7 +44,6 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
-import uk.gov.defra.trade.imports.animals.ownership.Owner;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 class NotificationIT extends IntegrationBase {
@@ -116,7 +115,6 @@ class NotificationIT extends IntegrationBase {
         assertThat(created).isNotNull();
         assertThat(created.getId()).isNotNull();
         assertThat(created.getReferenceNumber()).matches(REF_FORMAT_REGEX);
-        assertThat(created.getOwner()).isEqualTo(DEFAULT_OWNER);
         assertNotificationMappedFields(created);
 
         // Verify persisted — reload via API
@@ -160,102 +158,6 @@ class NotificationIT extends IntegrationBase {
         assertThat(page.page()).isEqualTo(1);
     }
 
-    @Test
-    void findAll_shouldFilterByCompositeOwnerBeforePaging() {
-        Owner secondOwner = new Owner("second-user", "second-org");
-        Owner sameUserDifferentOrganisation =
-            new Owner(DEFAULT_OWNER.sub(), "different-org");
-
-        createNotification(DEFAULT_OWNER, createNotificationDto("GB", "Owner one"));
-        createNotification(secondOwner, createNotificationDto("IE", "Owner two"));
-        createNotification(
-            sameUserDifferentOrganisation, createNotificationDto("FR", "Other organisation"));
-
-        NotificationPageResponse ownerOnePage = findAllNotificationsPage(1);
-        NotificationPageResponse ownerTwoPage =
-            findAllNotificationsPage(secondOwner, 1, null);
-
-        assertThat(ownerOnePage.totalElements()).isEqualTo(1);
-        assertThat(ownerOnePage.content()).extracting(NotificationDto::getCommodity)
-            .extracting(Commodity::getName)
-            .containsExactly("Owner one");
-        assertThat(ownerTwoPage.totalElements()).isEqualTo(1);
-        assertThat(ownerTwoPage.content()).extracting(NotificationDto::getCommodity)
-            .extracting(Commodity::getName)
-            .containsExactly("Owner two");
-    }
-
-    @Test
-    void legacyUnownedNotification_shouldBeHiddenAndReturn404() {
-        Notification legacy = Notification.builder()
-            .referenceNumber("GBN-AG-26-ABC999")
-            .status(NotificationStatus.DRAFT)
-            .created(LocalDateTime.now())
-            .build();
-        notificationRepository.save(legacy);
-
-        NotificationPageResponse page = findAllNotificationsPage();
-
-        assertThat(page.totalElements()).isZero();
-        webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}",
-                legacy.getReferenceNumber())
-            .exchange()
-            .expectStatus().isNotFound();
-    }
-
-    @Test
-    void ownerRelevantOperations_shouldReturn404_forDifferentOwner() {
-        Notification created = createNotification(
-            DEFAULT_OWNER, createNotificationDto("GB", "Owned notification"));
-        Owner differentOwner = new Owner("different-user", "different-org");
-        NotificationDto replacement = createNotificationDto("FR", "Replacement");
-        replacement.setReferenceNumber(created.getReferenceNumber());
-
-        webClient("NoAuth", differentOwner)
-            .get().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}",
-                created.getReferenceNumber())
-            .exchange()
-            .expectStatus().isNotFound();
-
-        webClient("NoAuth", differentOwner)
-            .put().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}",
-                created.getReferenceNumber())
-            .bodyValue(replacement)
-            .exchange()
-            .expectStatus().isNotFound();
-
-        webClient("NoAuth", differentOwner)
-            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/copy",
-                created.getReferenceNumber())
-            .exchange()
-            .expectStatus().isNotFound();
-
-        webClient("NoAuth", differentOwner)
-            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit",
-                created.getReferenceNumber())
-            .exchange()
-            .expectStatus().isNotFound();
-
-        webClient("NoAuth", differentOwner)
-            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend",
-                created.getReferenceNumber())
-            .exchange()
-            .expectStatus().isNotFound();
-
-        webClient("NoAuth", differentOwner)
-            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/cancel-amend",
-                created.getReferenceNumber())
-            .exchange()
-            .expectStatus().isNotFound();
-
-        webClient("NoAuth", differentOwner)
-            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/soft-delete",
-                created.getReferenceNumber())
-            .exchange()
-            .expectStatus().isNotFound();
-    }
-
     @ParameterizedTest
     @ValueSource(strings = {
         "further-keeping",
@@ -283,7 +185,7 @@ class NotificationIT extends IntegrationBase {
             .additionalDetails(new AdditionalDetails(certifiedFor, null))
             .build();
 
-        webClient("NoAuth", DEFAULT_OWNER)
+        webClient("NoAuth")
             .put()
             .uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", referenceNumber)
             .bodyValue(notification)
@@ -292,10 +194,9 @@ class NotificationIT extends IntegrationBase {
 
         Notification persisted = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
-        assertThat(persisted.getOwner()).isEqualTo(DEFAULT_OWNER);
         assertThat(persisted.getAdditionalDetails().getCertifiedFor()).isEqualTo(certifiedFor);
 
-        NotificationResponse response = webClient("NoAuth", DEFAULT_OWNER)
+        NotificationResponse response = webClient("NoAuth")
             .get()
             .uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", referenceNumber)
             .exchange()
@@ -1567,32 +1468,16 @@ class NotificationIT extends IntegrationBase {
     }
 
     private NotificationPageResponse findAllNotificationsPage(int page, String sort) {
-        return findAllNotificationsPage(DEFAULT_OWNER, page, sort);
-    }
-
-    private NotificationPageResponse findAllNotificationsPage(
-        Owner owner, int page, String sort) {
         String uri = NOTIFICATION_ENDPOINT + "?page=" + page;
         if (sort != null) {
             uri += "&sort=" + sort;
         }
-        return webClient("NoAuth", owner)
+        return webClient("NoAuth")
             .get()
             .uri(uri)
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationPageResponse.class)
-            .returnResult().getResponseBody();
-    }
-
-    private Notification createNotification(Owner owner, NotificationDto dto) {
-        return webClient("NoAuth", owner)
-            .post()
-            .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(dto)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Notification.class)
             .returnResult().getResponseBody();
     }
 

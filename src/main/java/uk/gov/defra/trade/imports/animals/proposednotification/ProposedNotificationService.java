@@ -6,7 +6,6 @@ import org.bson.Document;
 import org.springframework.stereotype.Service;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
-import uk.gov.defra.trade.imports.animals.ownership.Owner;
 
 @Service
 @Slf4j
@@ -18,7 +17,7 @@ public class ProposedNotificationService {
 
     private final ProposedNotificationRepository proposedNotificationRepository;
 
-    public ReplaceResult replace(String id, Document body, Owner owner) {
+    public ReplaceResult replace(String id, Document body) {
         if (!id.equals(body.get("referenceNumber"))) {
             throw new BadRequestException(
                 "Path id and proposed notification body reference number must match");
@@ -30,10 +29,7 @@ public class ProposedNotificationService {
         if (created) {
             proposedNotification = ProposedNotification.builder()
                 .id(id)
-                .owner(owner)
                 .build();
-        } else {
-            assertOwner(proposedNotification, owner);
         }
         proposedNotification.setBody(body);
         ProposedNotification saved = proposedNotificationRepository.save(proposedNotification);
@@ -41,20 +37,12 @@ public class ProposedNotificationService {
         return new ReplaceResult(saved.getBody(), created);
     }
 
-    public Document findById(String id, Owner owner) {
+    public Document findById(String id) {
         ProposedNotification proposedNotification =
             proposedNotificationRepository.findById(id)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_PROPOSED_NOTIFICATION_WITH_ID + id));
-        assertOwner(proposedNotification, owner);
         return proposedNotification.getBody();
-    }
-
-    private void assertOwner(ProposedNotification proposedNotification, Owner owner) {
-        if (!owner.equals(proposedNotification.getOwner())) {
-            throw new NotFoundException(
-                CANNOT_FIND_PROPOSED_NOTIFICATION_WITH_ID + proposedNotification.getId());
-        }
     }
 
     public record ReplaceResult(Document body, boolean created) {

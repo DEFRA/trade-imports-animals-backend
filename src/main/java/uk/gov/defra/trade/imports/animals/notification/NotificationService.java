@@ -32,7 +32,6 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
-import uk.gov.defra.trade.imports.animals.ownership.Owner;
 
 @Service
 @Slf4j
@@ -79,16 +78,16 @@ public class NotificationService {
         this.adminPageSize = adminPageSize;
     }
 
-    public Notification saveOriginOfImport(NotificationDto notificationDto, Owner owner) {
+    public Notification saveOriginOfImport(NotificationDto notificationDto) {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
-            return createNotification(notificationDto, owner);
+            return createNotification(notificationDto);
         } else {
-            return updateNotification(notificationDto, owner);
+            return updateNotification(notificationDto);
         }
     }
 
     public ReplaceResult replaceNotification(
-        String referenceNumber, NotificationDto notificationDto, Owner owner) {
+        String referenceNumber, NotificationDto notificationDto) {
         if (!referenceNumber.equals(notificationDto.getReferenceNumber())) {
             throw new BadRequestException(
                 "Path reference number and notification body reference number must match");
@@ -100,11 +99,9 @@ public class NotificationService {
         if (created) {
             notification = new Notification();
             notification.setReferenceNumber(referenceNumber);
-            notification.setOwner(owner);
             notification.setStatus(NotificationStatus.DRAFT);
             notification.setCreated(LocalDateTime.now());
         } else {
-            assertOwner(notification, owner);
             if (hasSameProjection(notification, notificationDto)) {
                 return new ReplaceResult(notification, false);
             }
@@ -117,26 +114,24 @@ public class NotificationService {
     }
 
     @Transactional
-    public Notification copyNotification(String referenceNumber, Owner owner) {
+    public Notification copyNotification(String referenceNumber) {
         Notification source = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        assertOwner(source, owner);
         if (source.getStatus() != NotificationStatus.DRAFT
             && source.getStatus() != NotificationStatus.SUBMITTED
             && source.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException("Cannot copy notification with status: " + source.getStatus());
         }
         log.info("Copying notification {}", referenceNumber);
-        return createNotification(notificationCopyMapper.toCopyDto(source), owner);
+        return createNotification(notificationCopyMapper.toCopyDto(source));
     }
 
-    public NotificationResponse findByRef(String referenceNumber, Owner owner) {
+    public NotificationResponse findByRef(String referenceNumber) {
         log.debug("Fetching notification for reference {}", referenceNumber);
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        assertOwner(notification, owner);
         List<AccompanyingDocument> documents = documentService.findByNotificationRef(
             referenceNumber);
         return notificationMapper.toResponse(notification).toBuilder()
@@ -148,12 +143,10 @@ public class NotificationService {
         return notificationRepository.existsByReferenceNumber(referenceNumber);
     }
 
-    public NotificationPageResponse findAll(int page, String sort, Owner owner) {
+    public NotificationPageResponse findAll(int page, String sort) {
         log.debug("Fetching notifications page {} (size {}) with sort {}", page, listPageSize, sort);
         Page<Notification> result =
-            notificationRepository.findAllByOwnerSubAndOwnerOrganisationAndStatusIn(
-                owner.sub(),
-                owner.organisation(),
+            notificationRepository.findAllByStatusIn(
                 List.of(
                     NotificationStatus.DRAFT,
                     NotificationStatus.SUBMITTED,
@@ -165,12 +158,10 @@ public class NotificationService {
     }
 
     @Transactional
-    public Notification submitNotification(
-        String referenceNumber, String correlationId, Owner owner) {
+    public Notification submitNotification(String referenceNumber, String correlationId) {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        assertOwner(notification, owner);
 
         if (notification.getStatus() != NotificationStatus.DRAFT
             && notification.getStatus() != NotificationStatus.AMEND) {
@@ -188,12 +179,10 @@ public class NotificationService {
     }
 
     @Transactional
-    public Notification amendNotification(
-        String referenceNumber, String correlationId, Owner owner) {
+    public Notification amendNotification(String referenceNumber, String correlationId) {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        assertOwner(notification, owner);
 
         if (notification.getStatus() != NotificationStatus.SUBMITTED) {
             throw new BadRequestException(
@@ -212,11 +201,10 @@ public class NotificationService {
     }
 
     @Transactional
-    public Notification cancelAmendNotification(String referenceNumber, Owner owner) {
+    public Notification cancelAmendNotification(String referenceNumber) {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        assertOwner(notification, owner);
 
         if (notification.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException(
@@ -280,11 +268,10 @@ public class NotificationService {
     }
 
     @Transactional
-    public Notification softDeleteNotification(String referenceNumber, Owner owner) {
+    public Notification softDeleteNotification(String referenceNumber) {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        assertOwner(notification, owner);
         if (notification.getStatus() != NotificationStatus.DRAFT
             && notification.getStatus() != NotificationStatus.SUBMITTED
             && notification.getStatus() != NotificationStatus.AMEND) {
@@ -329,9 +316,8 @@ public class NotificationService {
         createNotificationAuditRecord(referenceNumbers, auditContext, Result.SUCCESS);
     }
 
-    private Notification createNotification(NotificationDto dto, Owner owner) {
+    private Notification createNotification(NotificationDto dto) {
         Notification notification = new Notification();
-        notification.setOwner(owner);
         notification.setCreated(LocalDateTime.now());
         notification.setStatus(NotificationStatus.DRAFT);
         setNotificationDetails(dto, notification);
@@ -349,11 +335,10 @@ public class NotificationService {
             "Failed to generate a unique reference number after " + MAX_REF_RETRIES + " attempts");
     }
 
-    private Notification updateNotification(NotificationDto dto, Owner owner) {
+    private Notification updateNotification(NotificationDto dto) {
         Notification existingNotification = notificationRepository.findByReferenceNumber(
             dto.getReferenceNumber()).orElseThrow(() -> new NotFoundException(
             CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + dto.getReferenceNumber()));
-        assertOwner(existingNotification, owner);
         log.info("Notification already exists, updating {}", dto.getReferenceNumber());
         setNotificationDetails(dto, existingNotification);
         return notificationRepository.save(existingNotification);
@@ -388,14 +373,6 @@ public class NotificationService {
             && Objects.equals(notification.getCphNumber(), dto.getCphNumber())
             && Objects.equals(notification.getTransport(), dto.getTransport())
             && Objects.equals(notification.getConsignment(), dto.getConsignment());
-    }
-
-    private void assertOwner(Notification notification, Owner owner) {
-        if (!owner.equals(notification.getOwner())) {
-            throw new NotFoundException(
-                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER
-                    + notification.getReferenceNumber());
-        }
     }
 
     private void createNotificationAuditRecord(

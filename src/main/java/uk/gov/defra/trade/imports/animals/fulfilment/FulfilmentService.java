@@ -21,7 +21,6 @@ import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
-import uk.gov.defra.trade.imports.animals.ownership.Owner;
 
 @Service
 @Slf4j
@@ -54,11 +53,10 @@ public class FulfilmentService {
         this.listPageSize = listPageSize;
     }
 
-    public Fulfilment create(Owner owner) {
+    public Fulfilment create() {
         for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
             Fulfilment fulfilment = Fulfilment.builder()
                 .id(referenceNumberGenerator.generate())
-                .owner(owner)
                 .fulfilment(List.of())
                 .status(FulfilmentStatus.DRAFT)
                 .createdAt(LocalDateTime.now())
@@ -76,7 +74,7 @@ public class FulfilmentService {
             "Failed to generate a unique reference number after " + MAX_REF_RETRIES + " attempts");
     }
 
-    public ReplaceResult replace(String id, FulfilmentDto dto, Owner owner) {
+    public ReplaceResult replace(String id, FulfilmentDto dto) {
         if (dto.getId() != null && !id.equals(dto.getId())) {
             throw new BadRequestException(
                 "Path id and fulfilment body id must match");
@@ -87,13 +85,11 @@ public class FulfilmentService {
         Fulfilment fulfilment = created
             ? Fulfilment.builder()
                 .id(id)
-                .owner(owner)
                 .status(FulfilmentStatus.DRAFT)
                 .createdAt(LocalDateTime.now())
                 .build()
             : existing;
 
-        assertOwner(fulfilment, owner);
         assertWritable(fulfilment);
         fulfilment.setFulfilment(dto.getFulfilment());
         Fulfilment saved = fulfilmentRepository.save(fulfilment);
@@ -101,28 +97,26 @@ public class FulfilmentService {
         return new ReplaceResult(saved, created);
     }
 
-    public Fulfilment findById(String id, Owner owner) {
-        Fulfilment fulfilment = fulfilmentRepository.findById(id)
+    public Fulfilment findById(String id) {
+        return fulfilmentRepository.findById(id)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_FULFILMENT_WITH_ID + id));
-        assertOwner(fulfilment, owner);
-        return fulfilment;
     }
 
     @Transactional
-    public Fulfilment copy(String id, Owner owner, String idempotencyKey) {
+    public Fulfilment copy(String id, String idempotencyKey) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new BadRequestException("Idempotency-Key must not be blank");
         }
 
-        Fulfilment existingCopy = findCopy(owner, idempotencyKey);
+        Fulfilment existingCopy = findCopy(idempotencyKey);
         if (existingCopy != null) {
             log.info("Returning existing fulfilment copy {} for idempotency key",
                 existingCopy.getId());
             return existingCopy;
         }
 
-        Fulfilment source = findById(id, owner);
+        Fulfilment source = findById(id);
         if (!isCopyable(source.getStatus())) {
             throw new BadRequestException(
                 "Cannot copy fulfilment with status: " + source.getStatus());
@@ -134,7 +128,6 @@ public class FulfilmentService {
         for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
             Fulfilment copy = Fulfilment.builder()
                 .id(referenceNumberGenerator.generate())
-                .owner(owner)
                 .fulfilment(copiedContent)
                 .status(FulfilmentStatus.DRAFT)
                 .createdAt(LocalDateTime.now())
@@ -145,7 +138,7 @@ public class FulfilmentService {
                 log.info("Copied fulfilment {} to {}", id, saved.getId());
                 return saved;
             } catch (DuplicateKeyException e) {
-                existingCopy = findCopy(owner, idempotencyKey);
+                existingCopy = findCopy(idempotencyKey);
                 if (existingCopy != null) {
                     log.info("Returning concurrently-created fulfilment copy {}",
                         existingCopy.getId());
@@ -160,8 +153,8 @@ public class FulfilmentService {
     }
 
     @Transactional
-    public Fulfilment submit(String id, Owner owner, String correlationId) {
-        Fulfilment fulfilment = findById(id, owner);
+    public Fulfilment submit(String id, String correlationId) {
+        Fulfilment fulfilment = findById(id);
         if (!isDraftOrAmend(fulfilment.getStatus())) {
             throw new BadRequestException(
                 "Cannot submit fulfilment with status: " + fulfilment.getStatus());
@@ -172,14 +165,14 @@ public class FulfilmentService {
         log.info("Submitted fulfilment {}", id);
         Fulfilment saved = fulfilmentRepository.save(fulfilment);
         if (notificationProjectionExists(id)) {
-            notificationService.submitNotification(id, correlationId, owner);
+            notificationService.submitNotification(id, correlationId);
         }
         return saved;
     }
 
     @Transactional
-    public Fulfilment amend(String id, Owner owner, String correlationId) {
-        Fulfilment fulfilment = findById(id, owner);
+    public Fulfilment amend(String id, String correlationId) {
+        Fulfilment fulfilment = findById(id);
         if (fulfilment.getStatus() != FulfilmentStatus.SUBMITTED) {
             throw new BadRequestException(
                 "Cannot amend fulfilment with status: " + fulfilment.getStatus());
@@ -190,14 +183,14 @@ public class FulfilmentService {
         log.info("Amended fulfilment {}", id);
         Fulfilment saved = fulfilmentRepository.save(fulfilment);
         if (notificationProjectionExists(id)) {
-            notificationService.amendNotification(id, correlationId, owner);
+            notificationService.amendNotification(id, correlationId);
         }
         return saved;
     }
 
     @Transactional
-    public Fulfilment cancelAmend(String id, Owner owner) {
-        Fulfilment fulfilment = findById(id, owner);
+    public Fulfilment cancelAmend(String id) {
+        Fulfilment fulfilment = findById(id);
         if (fulfilment.getStatus() != FulfilmentStatus.AMEND) {
             throw new BadRequestException(
                 "Cannot cancel amendment for fulfilment with status: "
@@ -215,14 +208,14 @@ public class FulfilmentService {
         log.info("Cancelled amendment for fulfilment {}", id);
         Fulfilment saved = fulfilmentRepository.save(fulfilment);
         if (notificationProjectionExists(id)) {
-            notificationService.cancelAmendNotification(id, owner);
+            notificationService.cancelAmendNotification(id);
         }
         return saved;
     }
 
     @Transactional
-    public Fulfilment softDelete(String id, Owner owner) {
-        Fulfilment fulfilment = findById(id, owner);
+    public Fulfilment softDelete(String id) {
+        Fulfilment fulfilment = findById(id);
         if (fulfilment.getStatus() == FulfilmentStatus.DELETED) {
             return fulfilment;
         }
@@ -235,23 +228,23 @@ public class FulfilmentService {
         log.info("Soft deleted fulfilment {}", id);
         Fulfilment saved = fulfilmentRepository.save(fulfilment);
         if (notificationProjectionExists(id)
-            && notificationService.findByRef(id, owner).status() != NotificationStatus.DELETED) {
-            notificationService.softDeleteNotification(id, owner);
+            && notificationService.findByRef(id).status() != NotificationStatus.DELETED) {
+            notificationService.softDeleteNotification(id);
         }
         return saved;
     }
 
-    public FulfilmentPageResponse findAll(Owner owner, int page, String sort) {
+    public FulfilmentPageResponse findAll(int page, String sort) {
         int normalisedPage = Math.max(page, 1);
-        Criteria ownerAndStatusCriteria = listedForOwner(owner);
+        Criteria statusCriteria = listedCriteria();
         long totalElements = mongoTemplate.count(
-            Query.query(ownerAndStatusCriteria), Fulfilment.class);
+            Query.query(statusCriteria), Fulfilment.class);
         long offset = (normalisedPage - 1L) * listPageSize;
         Sort rowSort = FulfilmentSort.toSort(sort)
             .and(Sort.by(Sort.Direction.ASC, "_id"));
 
         Aggregation aggregation = Aggregation.newAggregation(
-            Aggregation.match(listedForOwner(owner)),
+            Aggregation.match(listedCriteria()),
             Aggregation.lookup(
                 mongoTemplate.getCollectionName(Notification.class),
                 "_id",
@@ -271,10 +264,8 @@ public class FulfilmentService {
             normalisedPage, listPageSize, totalElements, items);
     }
 
-    private Criteria listedForOwner(Owner owner) {
-        return Criteria.where("owner.sub").is(owner.sub())
-            .and("owner.organisation").is(owner.organisation())
-            .and("status").in(LISTED_STATUSES);
+    private Criteria listedCriteria() {
+        return Criteria.where("status").in(LISTED_STATUSES);
     }
 
     private AggregationOperation enrichedRowProjection() {
@@ -288,12 +279,6 @@ public class FulfilmentService {
             .and("notification.transport.arrivalDate").as("arrivalDate")
             .and("notification.consignor.name").as("consignorName")
             .and("notification.consignee.name").as("consigneeName");
-    }
-
-    private void assertOwner(Fulfilment fulfilment, Owner owner) {
-        if (!owner.equals(fulfilment.getOwner())) {
-            throw new NotFoundException(CANNOT_FIND_FULFILMENT_WITH_ID + fulfilment.getId());
-        }
     }
 
     private void assertWritable(Fulfilment fulfilment) {
@@ -315,10 +300,9 @@ public class FulfilmentService {
             || status == FulfilmentStatus.AMEND;
     }
 
-    private Fulfilment findCopy(Owner owner, String idempotencyKey) {
+    private Fulfilment findCopy(String idempotencyKey) {
         return fulfilmentRepository
-            .findByOwnerSubAndOwnerOrganisationAndCopyIdempotencyKey(
-                owner.sub(), owner.organisation(), idempotencyKey)
+            .findByCopyIdempotencyKey(idempotencyKey)
             .orElse(null);
     }
 

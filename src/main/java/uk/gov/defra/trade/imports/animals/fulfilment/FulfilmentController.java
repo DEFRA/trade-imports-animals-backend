@@ -7,7 +7,6 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import java.net.URI;
 import lombok.extern.slf4j.Slf4j;
@@ -25,8 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
-import uk.gov.defra.trade.imports.animals.ownership.Owner;
-import uk.gov.defra.trade.imports.animals.ownership.OwnerHeaders;
 
 @RestController
 @RequestMapping("/fulfilments")
@@ -51,11 +48,9 @@ public class FulfilmentController {
     @ApiResponse(responseCode = "201", description = "Fulfilment created",
         content = @Content(schema = @Schema(implementation = Fulfilment.class)))
     @Timed("controller.postFulfilment.time")
-    public ResponseEntity<Fulfilment> create(
-        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
-        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+    public ResponseEntity<Fulfilment> create() {
         log.info("POST /fulfilments - Creating fulfilment");
-        Fulfilment created = fulfilmentService.create(owner(ownerId, ownerOrganisation));
+        Fulfilment created = fulfilmentService.create();
         return ResponseEntity.created(buildLocationUri(created.getId())).body(created);
     }
 
@@ -72,12 +67,9 @@ public class FulfilmentController {
     public ResponseEntity<Fulfilment> replace(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
         @PathVariable String id,
-        @Valid @RequestBody FulfilmentDto dto,
-        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
-        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+        @Valid @RequestBody FulfilmentDto dto) {
         log.info("PUT /fulfilments/{} - Replacing fulfilment", id);
-        FulfilmentService.ReplaceResult result =
-            fulfilmentService.replace(id, dto, owner(ownerId, ownerOrganisation));
+        FulfilmentService.ReplaceResult result = fulfilmentService.replace(id, dto);
         if (result.created()) {
             return ResponseEntity.created(buildLocationUri(id)).body(result.fulfilment());
         }
@@ -93,18 +85,15 @@ public class FulfilmentController {
     @Timed("controller.getFulfilment.time")
     public ResponseEntity<Fulfilment> findById(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-        @PathVariable String id,
-        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
-        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+        @PathVariable String id) {
         log.debug("GET /fulfilments/{} - Fetching fulfilment", id);
-        return ResponseEntity.ok(
-            fulfilmentService.findById(id, owner(ownerId, ownerOrganisation)));
+        return ResponseEntity.ok(fulfilmentService.findById(id));
     }
 
     @PostMapping("/{id}/copy")
     @Operation(summary = "Copy fulfilment",
         description = "Creates a new DRAFT fulfilment from an existing fulfilment. "
-            + "Repeating the request with the same owner and Idempotency-Key returns the same "
+            + "Repeating the request with the same Idempotency-Key returns the same "
             + "copy with the same Location.")
     @ApiResponse(responseCode = "201", description = "Fulfilment copy created or returned",
         content = @Content(schema = @Schema(implementation = Fulfilment.class)))
@@ -117,18 +106,15 @@ public class FulfilmentController {
     public ResponseEntity<Fulfilment> copy(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
         @PathVariable String id,
-        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
-        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation,
         @RequestHeader(IDEMPOTENCY_KEY) String idempotencyKey) {
         log.info("POST /fulfilments/{}/copy - Copying fulfilment", id);
-        Fulfilment copy = fulfilmentService.copy(
-            id, owner(ownerId, ownerOrganisation), idempotencyKey);
+        Fulfilment copy = fulfilmentService.copy(id, idempotencyKey);
         return ResponseEntity.created(buildLocationUri(copy.getId())).body(copy);
     }
 
     @GetMapping
     @Operation(summary = "List fulfilments",
-        description = "Returns owner-scoped fulfilment summaries enriched with notification "
+        description = "Returns fulfilment summaries enriched with notification "
             + "display fields. Optional sort: arrivalDate,desc (default), arrivalDate,asc, "
             + "createdAt,desc, createdAt,asc")
     @ApiResponse(responseCode = "200", description = "Paginated fulfilment summaries returned",
@@ -136,11 +122,9 @@ public class FulfilmentController {
     @Timed("controller.getAllFulfilments.time")
     public FulfilmentPageResponse findAll(
         @RequestParam(defaultValue = "1") int page,
-        @RequestParam(required = false) String sort,
-        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
-        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+        @RequestParam(required = false) String sort) {
         log.debug("GET /fulfilments?page={}&sort={}", page, sort);
-        return fulfilmentService.findAll(owner(ownerId, ownerOrganisation), page, sort);
+        return fulfilmentService.findAll(page, sort);
     }
 
     @PostMapping("/{id}/submit")
@@ -158,12 +142,9 @@ public class FulfilmentController {
         @RequestHeader(
             value = NotificationController.HEADER_TRACE_ID,
             required = false,
-            defaultValue = "") String traceId,
-        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
-        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+            defaultValue = "") String traceId) {
         log.info("POST /fulfilments/{}/submit - Submitting fulfilment", id);
-        return ResponseEntity.ok(
-            fulfilmentService.submit(id, owner(ownerId, ownerOrganisation), traceId));
+        return ResponseEntity.ok(fulfilmentService.submit(id, traceId));
     }
 
     @PostMapping("/{id}/amend")
@@ -181,12 +162,9 @@ public class FulfilmentController {
         @RequestHeader(
             value = NotificationController.HEADER_TRACE_ID,
             required = false,
-            defaultValue = "") String traceId,
-        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
-        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+            defaultValue = "") String traceId) {
         log.info("POST /fulfilments/{}/amend - Amending fulfilment", id);
-        return ResponseEntity.ok(
-            fulfilmentService.amend(id, owner(ownerId, ownerOrganisation), traceId));
+        return ResponseEntity.ok(fulfilmentService.amend(id, traceId));
     }
 
     @PostMapping("/{id}/cancel-amend")
@@ -202,12 +180,9 @@ public class FulfilmentController {
     @Timed("controller.cancelAmendFulfilment.time")
     public ResponseEntity<Fulfilment> cancelAmend(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-        @PathVariable String id,
-        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
-        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+        @PathVariable String id) {
         log.info("POST /fulfilments/{}/cancel-amend - Cancelling amendment", id);
-        return ResponseEntity.ok(
-            fulfilmentService.cancelAmend(id, owner(ownerId, ownerOrganisation)));
+        return ResponseEntity.ok(fulfilmentService.cancelAmend(id));
     }
 
     @PostMapping("/{id}/soft-delete")
@@ -221,16 +196,9 @@ public class FulfilmentController {
     @Timed("controller.softDeleteFulfilment.time")
     public ResponseEntity<Fulfilment> softDelete(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-        @PathVariable String id,
-        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
-        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+        @PathVariable String id) {
         log.info("POST /fulfilments/{}/soft-delete - Soft deleting fulfilment", id);
-        return ResponseEntity.ok(
-            fulfilmentService.softDelete(id, owner(ownerId, ownerOrganisation)));
-    }
-
-    private Owner owner(String ownerId, String ownerOrganisation) {
-        return OwnerHeaders.toOwner(ownerId, ownerOrganisation);
+        return ResponseEntity.ok(fulfilmentService.softDelete(id));
     }
 
     private URI buildLocationUri(String id) {

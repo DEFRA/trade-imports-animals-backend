@@ -5,7 +5,6 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import java.net.URI;
 import lombok.extern.slf4j.Slf4j;
@@ -17,12 +16,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
-import uk.gov.defra.trade.imports.animals.ownership.Owner;
-import uk.gov.defra.trade.imports.animals.ownership.OwnerHeaders;
 
 @RestController
 @RequestMapping("/proposed-notifications")
@@ -52,13 +48,10 @@ public class ProposedNotificationController {
     public ResponseEntity<Document> replace(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
         @PathVariable String id,
-        @RequestBody Document body,
-        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
-        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+        @RequestBody Document body) {
         log.info("PUT /proposed-notifications/{} - Replacing proposed notification", id);
         ProposedNotificationService.ReplaceResult result =
-            proposedNotificationService.replace(
-                id, body, owner(ownerId, ownerOrganisation));
+            proposedNotificationService.replace(id, body);
         if (result.created()) {
             return ResponseEntity.created(buildLocationUri(id)).body(result.body());
         }
@@ -74,17 +67,9 @@ public class ProposedNotificationController {
     @Timed("controller.getProposedNotification.time")
     public ResponseEntity<Document> findById(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-        @PathVariable String id,
-        @RequestHeader(OwnerHeaders.OWNER_ID) @NotBlank String ownerId,
-        @RequestHeader(OwnerHeaders.OWNER_ORGANISATION) String ownerOrganisation) {
+        @PathVariable String id) {
         log.debug("GET /proposed-notifications/{} - Fetching proposed notification", id);
-        return ResponseEntity.ok(
-            proposedNotificationService.findById(
-                id, owner(ownerId, ownerOrganisation)));
-    }
-
-    private Owner owner(String ownerId, String ownerOrganisation) {
-        return OwnerHeaders.toOwner(ownerId, ownerOrganisation);
+        return ResponseEntity.ok(proposedNotificationService.findById(id));
     }
 
     private URI buildLocationUri(String id) {
