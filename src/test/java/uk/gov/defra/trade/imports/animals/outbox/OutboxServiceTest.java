@@ -62,7 +62,7 @@ class OutboxServiceTest {
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001");
+            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
 
             // Then
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
@@ -79,6 +79,10 @@ class OutboxServiceTest {
             assertThat(saved.getMetadata().getSchemaUrl()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUrl());
             assertThat(saved.getEventId()).isNotNull();
             assertThat(saved.getTimestamp()).isNotNull();
+            assertThat(saved.getActor()).isNull();
+            assertThat(saved.getStatusChanges()).hasSize(1);
+            assertThat(saved.getStatusChanges().getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+            assertThat(saved.getStatusChanges().getFirst().getActor()).isNull();
         }
 
         @Test
@@ -100,7 +104,7 @@ class OutboxServiceTest {
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-002");
+            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-002", null);
 
             // Then
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
@@ -139,7 +143,7 @@ class OutboxServiceTest {
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001");
+            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
 
             // Then — data is the GBN-AG payload (mapped from the Notification), stored as
             // Map<String, Object>. Field-level mapping is covered by GbnAgMapperTest; here we
@@ -175,7 +179,7 @@ class OutboxServiceTest {
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             outboxService.appendEvent(
-                notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-9");
+                notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-9", null);
 
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
             verify(outboxEventRepository).save(captor.capture());
@@ -205,7 +209,8 @@ class OutboxServiceTest {
                 .thenReturn(Optional.of(latest));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-7");
+            outboxService.appendEvent(
+                notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-7", null);
 
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
             verify(outboxEventRepository).save(captor.capture());
@@ -227,7 +232,8 @@ class OutboxServiceTest {
                 .thenThrow(new DuplicateKeyException("duplicate key"));
 
             // When / Then
-            assertThatThrownBy(() -> outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001"))
+            assertThatThrownBy(() -> outboxService.appendEvent(
+                notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null))
                 .isInstanceOf(OutboxWriteException.class)
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;
@@ -236,6 +242,93 @@ class OutboxServiceTest {
                     assertThat(owe.getAggregateVersion()).isEqualTo(1L);
                     assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
                 });
+        }
+
+        @Test
+        void appendEvent_shouldStampActorOnEvent_whenActorProvided() {
+            Notification notification = Notification.builder()
+                .referenceNumber("GBN-AG-26-ACT001")
+                .status(NotificationStatus.SUBMITTED)
+                .build();
+            Actor actor = Actor.builder()
+                .id("contact-guid-001")
+                .source("dynamics-contact")
+                .userType("B2C")
+                .displayName("Jane Farmer")
+                .organisationId("org-001")
+                .build();
+
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
+                "Imports.Notification.GBN-AG.GBN-AG-26-ACT001"))
+                .thenReturn(Optional.empty());
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            outboxService.appendEvent(
+                notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-act-1", actor);
+
+            ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+            verify(outboxEventRepository).save(captor.capture());
+            OutboxEvent saved = captor.getValue();
+
+            assertThat(saved.getActor()).isEqualTo(actor);
+            assertThat(saved.getStatusChanges()).hasSize(1);
+            StatusChange change = saved.getStatusChanges().getFirst();
+            assertThat(change.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+            assertThat(change.getDateChanged()).isNotNull();
+            assertThat(change.getActor()).isEqualTo(actor);
+        }
+
+        @Test
+        void appendEvent_shouldBuildCumulativeStatusChanges_fromLatestPriorEvent() {
+            Notification notification = Notification.builder()
+                .referenceNumber("GBN-AG-26-ACT002")
+                .status(NotificationStatus.AMEND)
+                .build();
+            Actor submitActor = Actor.builder()
+                .id("contact-guid-001")
+                .source("dynamics-contact")
+                .userType("B2C")
+                .displayName("Jane Farmer")
+                .organisationId("org-001")
+                .build();
+            Actor amendActor = Actor.builder()
+                .id("contact-guid-002")
+                .source("dynamics-contact")
+                .userType("B2C")
+                .displayName("John Agent")
+                .organisationId("org-002")
+                .build();
+            StatusChange priorChange = StatusChange.builder()
+                .status(NotificationStatus.SUBMITTED)
+                .dateChanged(java.time.Instant.parse("2026-01-01T10:00:00Z"))
+                .actor(submitActor)
+                .build();
+            OutboxEvent latestEvent = OutboxEvent.builder()
+                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-ACT002")
+                .aggregateVersion(1L)
+                .statusChanges(List.of(priorChange))
+                .build();
+
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
+                "Imports.Notification.GBN-AG.GBN-AG-26-ACT002"))
+                .thenReturn(Optional.of(latestEvent));
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            outboxService.appendEvent(
+                notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED,
+                "trace-act-2", amendActor);
+
+            ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+            verify(outboxEventRepository).save(captor.capture());
+            OutboxEvent saved = captor.getValue();
+
+            assertThat(saved.getStatusChanges()).hasSize(2);
+            assertThat(saved.getStatusChanges().get(0).getStatus())
+                .isEqualTo(NotificationStatus.SUBMITTED);
+            assertThat(saved.getStatusChanges().get(0).getActor()).isEqualTo(submitActor);
+            assertThat(saved.getStatusChanges().get(1).getStatus())
+                .isEqualTo(NotificationStatus.AMEND);
+            assertThat(saved.getStatusChanges().get(1).getActor()).isEqualTo(amendActor);
         }
     }
 

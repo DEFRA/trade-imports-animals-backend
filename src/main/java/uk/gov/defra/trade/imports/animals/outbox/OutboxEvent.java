@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.outbox;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,6 +38,8 @@ public class OutboxEvent {
     private Instant timestamp;
     private Map<String, Object> data;
     private OutboxEventMetadata metadata;
+    private Actor actor;
+    private List<StatusChange> statusChanges;
 
     /** Publish timestamp set before SNS publish and included in the published envelope. */
     private Instant publishedAt;

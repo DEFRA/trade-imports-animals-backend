@@ -26,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
+import uk.gov.defra.trade.imports.animals.outbox.Actor;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxReplayService;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
@@ -108,9 +109,11 @@ public class NotificationController {
     @Timed("controller.submitNotification.time")
     public ResponseEntity<Notification> submit(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId) {
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @Valid @RequestBody(required = false) ActorRequest actorRequest) {
         log.info("POST /notifications/{}/submit - Submitting notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.submitNotification(referenceNumber, traceId));
+        Actor actor = actorRequest != null ? actorRequest.toActor() : null;
+        return ResponseEntity.ok(notificationService.submitNotification(referenceNumber, traceId, actor));
     }
 
     @PostMapping("/{referenceNumber}/amend")
@@ -125,9 +128,11 @@ public class NotificationController {
     @Timed("controller.amendNotification.time")
     public ResponseEntity<Notification> amend(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId) {
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @Valid @RequestBody(required = false) ActorRequest actorRequest) {
         log.info("POST /notifications/{}/amend - Amending notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.amendNotification(referenceNumber, traceId));
+        Actor actor = actorRequest != null ? actorRequest.toActor() : null;
+        return ResponseEntity.ok(notificationService.amendNotification(referenceNumber, traceId, actor));
     }
 
     @PostMapping("/{referenceNumber}/cancel-amend")

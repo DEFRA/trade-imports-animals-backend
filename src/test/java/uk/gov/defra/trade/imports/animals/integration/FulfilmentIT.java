@@ -8,6 +8,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.bson.Document;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -225,9 +226,11 @@ class FulfilmentIT extends IntegrationBase {
     void submit_shouldCascadeNotificationAndWriteSubmittedOutboxEvent() {
         // Given
         Fulfilment created = createFulfilmentWithNotificationProjection();
+        Map<String, String> actor = actor("contact-submit-001", "Submitter");
 
         // When
-        Fulfilment submitted = submitFulfilment(created.getId(), "trace-submit-cascade");
+        Fulfilment submitted =
+            submitFulfilment(created.getId(), "trace-submit-cascade", actor);
 
         // Then
         assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
@@ -239,16 +242,24 @@ class FulfilmentIT extends IntegrationBase {
             .isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.value());
         assertThat(events.getFirst().getMetadata().getCorrelationId())
             .isEqualTo("trace-submit-cascade");
+        assertThat(events.getFirst().getActor().getId()).isEqualTo("contact-submit-001");
+        assertThat(events.getFirst().getStatusChanges()).hasSize(1);
+        assertThat(events.getFirst().getStatusChanges().getFirst().getActor())
+            .isEqualTo(events.getFirst().getActor());
     }
 
     @Test
     void amend_shouldCascadeNotificationAndWriteAmendedOutboxEvent() {
         // Given
         Fulfilment created = createFulfilmentWithNotificationProjection();
-        submitFulfilment(created.getId(), "trace-submit-before-amend");
+        submitFulfilment(
+            created.getId(), "trace-submit-before-amend",
+            actor("contact-submit-002", "Submitter"));
 
         // When
-        Fulfilment amended = amendFulfilment(created.getId(), "trace-amend-cascade");
+        Fulfilment amended = amendFulfilment(
+            created.getId(), "trace-amend-cascade",
+            actor("contact-amend-002", "Amender"));
 
         // Then
         assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.AMEND);
@@ -260,6 +271,12 @@ class FulfilmentIT extends IntegrationBase {
             .isEqualTo(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED.value());
         assertThat(events.get(1).getMetadata().getCorrelationId())
             .isEqualTo("trace-amend-cascade");
+        assertThat(events.get(1).getActor().getId()).isEqualTo("contact-amend-002");
+        assertThat(events.get(1).getStatusChanges()).hasSize(2);
+        assertThat(events.get(1).getStatusChanges().get(0).getActor().getId())
+            .isEqualTo("contact-submit-002");
+        assertThat(events.get(1).getStatusChanges().get(1).getActor().getId())
+            .isEqualTo("contact-amend-002");
     }
 
     @Test
@@ -957,6 +974,18 @@ class FulfilmentIT extends IntegrationBase {
             .returnResult().getResponseBody();
     }
 
+    private Fulfilment submitFulfilment(
+        String id, String traceId, Map<String, String> actor) {
+        return webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", id)
+            .header(NotificationController.HEADER_TRACE_ID, traceId)
+            .bodyValue(actor)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Fulfilment.class)
+            .returnResult().getResponseBody();
+    }
+
     private Fulfilment amendFulfilment(String id, String traceId) {
         return webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/amend", id)
@@ -965,6 +994,27 @@ class FulfilmentIT extends IntegrationBase {
             .expectStatus().isOk()
             .expectBody(Fulfilment.class)
             .returnResult().getResponseBody();
+    }
+
+    private Fulfilment amendFulfilment(
+        String id, String traceId, Map<String, String> actor) {
+        return webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/amend", id)
+            .header(NotificationController.HEADER_TRACE_ID, traceId)
+            .bodyValue(actor)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Fulfilment.class)
+            .returnResult().getResponseBody();
+    }
+
+    private Map<String, String> actor(String id, String displayName) {
+        return Map.of(
+            "id", id,
+            "source", "dynamics-contact",
+            "userType", "B2C",
+            "displayName", displayName,
+            "organisationId", "org-fulfilment-001");
     }
 
     private List<OutboxEvent> outboxEvents(String referenceNumber) {

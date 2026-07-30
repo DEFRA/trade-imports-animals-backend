@@ -57,6 +57,7 @@ import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.outbox.Actor;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
@@ -638,15 +639,18 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
+            Actor actor = Actor.builder().id("contact-guid-001").build();
 
             // When
-            Notification result = notificationService.submitNotification(referenceNumber, "trace-001");
+            Notification result =
+                notificationService.submitNotification(referenceNumber, "trace-001", actor);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
-            verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001");
+            verify(outboxService).appendEvent(
+                notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", actor);
         }
 
         @Test
@@ -665,12 +669,13 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.submitNotification(referenceNumber, "trace-001");
+            notificationService.submitNotification(referenceNumber, "trace-001", null);
 
             // Then — save must happen before the outbox event is written
             InOrder inOrder = inOrder(notificationRepository, outboxService);
             inOrder.verify(notificationRepository).save(notification);
-            inOrder.verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001");
+            inOrder.verify(outboxService).appendEvent(
+                notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
         }
 
         @Test
@@ -688,11 +693,11 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
             doThrow(new OutboxWriteException("Forced failure", "agg-id", 1L, "trace-001"))
-                .when(outboxService).appendEvent(any(), any(), any());
+                .when(outboxService).appendEvent(any(), any(), any(), any());
 
             // When / Then — exception propagates out of submitNotification
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-001"))
+                () -> notificationService.submitNotification(referenceNumber, "trace-001", null))
                 .isInstanceOf(OutboxWriteException.class);
         }
 
@@ -705,12 +710,12 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-001"))
+                () -> notificationService.submitNotification(referenceNumber, "trace-001", null))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(referenceNumber);
 
             verify(notificationRepository, never()).save(any());
-            verify(outboxService, never()).appendEvent(any(), any(), any());
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
             // Lock must never be acquired — the notification lookup fails before the lock scope
             verify(lockProvider, never()).lock(any());
         }
@@ -733,7 +738,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-001"))
+                () -> notificationService.submitNotification(referenceNumber, "trace-001", null))
                 .isInstanceOf(OutboxWriteException.class)
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;
@@ -761,13 +766,15 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            Notification result = notificationService.submitNotification(referenceNumber, "trace-002");
+            Notification result =
+                notificationService.submitNotification(referenceNumber, "trace-002", null);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
-            verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-002");
+            verify(outboxService).appendEvent(
+                notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-002", null);
         }
 
         @Test
@@ -785,12 +792,12 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-003"))
+                () -> notificationService.submitNotification(referenceNumber, "trace-003", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("SUBMITTED");
 
             verify(notificationRepository, never()).save(any());
-            verify(outboxService, never()).appendEvent(any(), any(), any());
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
             verify(lockProvider, never()).lock(any());
         }
 
@@ -809,12 +816,12 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-004"))
+                () -> notificationService.submitNotification(referenceNumber, "trace-004", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DELETED");
 
             verify(notificationRepository, never()).save(any());
-            verify(outboxService, never()).appendEvent(any(), any(), any());
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
         }
     }
 
@@ -842,16 +849,20 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
+            Actor actor = Actor.builder().id("contact-guid-002").build();
 
             // When
-            Notification result = notificationService.amendNotification(referenceNumber, "trace-amd-1");
+            Notification result =
+                notificationService.amendNotification(referenceNumber, "trace-amd-1", actor);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(AMEND);
             assertThat(result.getUpdated()).isNotNull();
             assertThat(result.getSubmittedBaseline()).isNotNull();
             verify(notificationRepository).save(notification);
-            verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-1");
+            verify(outboxService).appendEvent(
+                notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED,
+                "trace-amd-1", actor);
         }
 
         @Test
@@ -872,7 +883,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.amendNotification(referenceNumber, "trace-amd-8");
+            notificationService.amendNotification(referenceNumber, "trace-amd-8", null);
 
             // Then
             assertThat(notification.getSubmittedBaseline()).isNotNull();
@@ -896,12 +907,14 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.amendNotification(referenceNumber, "trace-amd-2");
+            notificationService.amendNotification(referenceNumber, "trace-amd-2", null);
 
             // Then — save must happen before the outbox event is written
             InOrder inOrder = inOrder(notificationRepository, outboxService);
             inOrder.verify(notificationRepository).save(notification);
-            inOrder.verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-2");
+            inOrder.verify(outboxService).appendEvent(
+                notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED,
+                "trace-amd-2", null);
         }
 
         @Test
@@ -919,12 +932,12 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.amendNotification(referenceNumber, "trace-amd-3"))
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-3", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DRAFT");
 
             verify(notificationRepository, never()).save(any());
-            verify(outboxService, never()).appendEvent(any(), any(), any());
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
             verify(lockProvider, never()).lock(any());
         }
 
@@ -943,12 +956,12 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.amendNotification(referenceNumber, "trace-amd-4"))
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-4", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("AMEND");
 
             verify(notificationRepository, never()).save(any());
-            verify(outboxService, never()).appendEvent(any(), any(), any());
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
         }
 
         @Test
@@ -960,12 +973,12 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.amendNotification(referenceNumber, "trace-amd-5"))
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-5", null))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(referenceNumber);
 
             verify(notificationRepository, never()).save(any());
-            verify(outboxService, never()).appendEvent(any(), any(), any());
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
             verify(lockProvider, never()).lock(any());
         }
 
@@ -986,7 +999,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.amendNotification(referenceNumber, "trace-amd-6"))
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-6", null))
                 .isInstanceOf(OutboxWriteException.class)
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;
@@ -1013,11 +1026,11 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
             doThrow(new OutboxWriteException("Forced failure", "agg-id", 1L, "trace-amd-7"))
-                .when(outboxService).appendEvent(any(), any(), any());
+                .when(outboxService).appendEvent(any(), any(), any(), any());
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.amendNotification(referenceNumber, "trace-amd-7"))
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-7", null))
                 .isInstanceOf(OutboxWriteException.class);
         }
     }
@@ -1054,7 +1067,7 @@ class NotificationServiceTest {
             assertThat(result.getOrigin().getInternalReference()).isEqualTo("ORIGINAL-REF");
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
-            verify(outboxService, never()).appendEvent(any(), any(), any());
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
         }
 
         @Test

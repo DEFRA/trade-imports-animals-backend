@@ -22,8 +22,10 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
+import uk.gov.defra.trade.imports.animals.notification.ActorRequest;
 import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
+import uk.gov.defra.trade.imports.animals.outbox.Actor;
 
 @RestController
 @RequestMapping("/fulfilments")
@@ -142,9 +144,11 @@ public class FulfilmentController {
         @RequestHeader(
             value = NotificationController.HEADER_TRACE_ID,
             required = false,
-            defaultValue = "") String traceId) {
+            defaultValue = "") String traceId,
+        @Valid @RequestBody(required = false) ActorRequest actorRequest) {
         log.info("POST /fulfilments/{}/submit - Submitting fulfilment", id);
-        return ResponseEntity.ok(fulfilmentService.submit(id, traceId));
+        Actor actor = actorRequest != null ? actorRequest.toActor() : null;
+        return ResponseEntity.ok(fulfilmentService.submit(id, traceId, actor));
     }
 
     @PostMapping("/{id}/amend")
@@ -162,9 +166,11 @@ public class FulfilmentController {
         @RequestHeader(
             value = NotificationController.HEADER_TRACE_ID,
             required = false,
-            defaultValue = "") String traceId) {
+            defaultValue = "") String traceId,
+        @Valid @RequestBody(required = false) ActorRequest actorRequest) {
         log.info("POST /fulfilments/{}/amend - Amending fulfilment", id);
-        return ResponseEntity.ok(fulfilmentService.amend(id, traceId));
+        Actor actor = actorRequest != null ? actorRequest.toActor() : null;
+        return ResponseEntity.ok(fulfilmentService.amend(id, traceId, actor));
     }
 
     @PostMapping("/{id}/cancel-amend")

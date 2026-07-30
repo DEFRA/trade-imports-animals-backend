@@ -3,9 +3,12 @@ package uk.gov.defra.trade.imports.animals.outbox;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -30,13 +33,28 @@ public class OutboxService {
     private final ObjectMapper objectMapper;
     private final GbnAgEventDataMapper gbnAgEventDataMapper;
 
-    public void appendEvent(Notification notification, OutboxEventType eventType, String correlationId) {
+    public void appendEvent(Notification notification, OutboxEventType eventType, String correlationId, Actor actor) {
         String aggregateId = buildAggregateId(notification.getReferenceNumber());
 
-        long nextVersion = outboxEventRepository
-            .findTopByAggregateIdOrderByAggregateVersionDesc(aggregateId)
-            .map(e -> e.getAggregateVersion() + 1)
-            .orElse(1L);
+        Optional<OutboxEvent> latestEvent = outboxEventRepository
+            .findTopByAggregateIdOrderByAggregateVersionDesc(aggregateId);
+
+        long nextVersion = latestEvent.map(e -> e.getAggregateVersion() + 1).orElse(1L);
+
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
+
+        StatusChange currentChange = StatusChange.builder()
+            .status(notification.getStatus())
+            .dateChanged(now)
+            .actor(actor)
+            .build();
+
+        List<StatusChange> priorChanges = latestEvent
+            .map(e -> e.getStatusChanges() != null ? e.getStatusChanges() : List.<StatusChange>of())
+            .orElseGet(List::of);
+
+        List<StatusChange> statusChanges = Stream.concat(priorChanges.stream(), Stream.of(currentChange))
+            .toList();
 
         Map<String, Object> data = objectMapper.convertValue(
             gbnAgEventDataMapper.toGbnAgEventData(notification), MAP_TYPE);
@@ -48,13 +66,15 @@ public class OutboxService {
             .subType(SUB_TYPE)
             .aggregateVersion(nextVersion)
             .eventType(eventType.value())
-            .timestamp(Instant.now())
+            .timestamp(now)
             .data(data)
             .metadata(OutboxEventMetadata.builder()
                 .correlationId(correlationId)
                 .schemaVersion(SCHEMA_VERSION)
                 .schemaUrl(eventType.schemaUrl())
                 .build())
+            .actor(actor)
+            .statusChanges(statusChanges)
             .build();
 
         try {

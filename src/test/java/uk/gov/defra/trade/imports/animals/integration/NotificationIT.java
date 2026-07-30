@@ -1102,6 +1102,97 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getMetadata().getSchemaVersion()).isEqualTo("1");
         assertThat(event.getMetadata().getSchemaUrl()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUrl());
         assertThat(gbnAgIdentifier(event)).isEqualTo(referenceNumber);
+        assertThat(event.getActor()).isNull();
+        assertThat(event.getStatusChanges()).hasSize(1);
+        assertThat(event.getStatusChanges().getFirst().getStatus())
+            .isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(event.getStatusChanges().getFirst().getDateChanged()).isNotNull();
+        assertThat(event.getStatusChanges().getFirst().getActor()).isNull();
+    }
+
+    @Test
+    void submit_shouldWriteActorAndStatusChanges_whenActorBodyProvided() {
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        var actorBody = Map.of(
+            "id", "contact-guid-001",
+            "source", "dynamics-contact",
+            "userType", "B2C",
+            "displayName", "Jane Farmer",
+            "organisationId", "org-001"
+        );
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .bodyValue(actorBody)
+            .exchange()
+            .expectStatus().isOk();
+
+        List<OutboxEvent> events = outboxEventRepository.findAll();
+        assertThat(events).hasSize(1);
+        OutboxEvent event = events.getFirst();
+
+        assertThat(event.getActor()).isNotNull();
+        assertThat(event.getActor().getId()).isEqualTo("contact-guid-001");
+        assertThat(event.getActor().getSource()).isEqualTo("dynamics-contact");
+        assertThat(event.getActor().getUserType()).isEqualTo("B2C");
+        assertThat(event.getActor().getDisplayName()).isEqualTo("Jane Farmer");
+        assertThat(event.getActor().getOrganisationId()).isEqualTo("org-001");
+        assertThat(event.getActor().getOnBehalfOfOrganisationId()).isNull();
+        assertThat(event.getStatusChanges()).hasSize(1);
+        assertThat(event.getStatusChanges().getFirst().getStatus())
+            .isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(event.getStatusChanges().getFirst().getActor()).isEqualTo(event.getActor());
+    }
+
+    @Test
+    void submitThenAmend_shouldAccumulateActorStatusChanges() {
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        var submitActor = Map.of(
+            "id", "contact-sub-001", "source", "dynamics-contact",
+            "userType", "B2C", "displayName", "Alice", "organisationId", "org-001");
+        var amendActor = Map.of(
+            "id", "contact-sub-002", "source", "dynamics-contact",
+            "userType", "B2C", "displayName", "Bob", "organisationId", "org-002");
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .bodyValue(submitActor)
+            .exchange().expectStatus().isOk();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .bodyValue(amendActor)
+            .exchange().expectStatus().isOk();
+
+        List<OutboxEvent> events = outboxEventRepository.findAll()
+            .stream()
+            .sorted(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
+            .toList();
+
+        assertThat(events).hasSize(2);
+        OutboxEvent amendEvent = events.get(1);
+        assertThat(amendEvent.getActor().getId()).isEqualTo("contact-sub-002");
+        assertThat(amendEvent.getStatusChanges()).hasSize(2);
+        assertThat(amendEvent.getStatusChanges().get(0).getStatus())
+            .isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(amendEvent.getStatusChanges().get(0).getActor().getId())
+            .isEqualTo("contact-sub-001");
+        assertThat(amendEvent.getStatusChanges().get(1).getStatus())
+            .isEqualTo(NotificationStatus.AMEND);
+        assertThat(amendEvent.getStatusChanges().get(1).getActor().getId())
+            .isEqualTo("contact-sub-002");
     }
 
     @SuppressWarnings("unchecked")

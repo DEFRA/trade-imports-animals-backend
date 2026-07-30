@@ -21,6 +21,7 @@ import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
+import uk.gov.defra.trade.imports.animals.outbox.Actor;
 
 @Service
 @Slf4j
@@ -153,7 +154,7 @@ public class FulfilmentService {
     }
 
     @Transactional
-    public Fulfilment submit(String id, String correlationId) {
+    public Fulfilment submit(String id, String correlationId, Actor actor) {
         Fulfilment fulfilment = findById(id);
         if (!isDraftOrAmend(fulfilment.getStatus())) {
             throw new BadRequestException(
@@ -165,13 +166,13 @@ public class FulfilmentService {
         log.info("Submitted fulfilment {}", id);
         Fulfilment saved = fulfilmentRepository.save(fulfilment);
         if (notificationProjectionExists(id)) {
-            notificationService.submitNotification(id, correlationId);
+            notificationService.submitNotification(id, correlationId, actor);
         }
         return saved;
     }
 
     @Transactional
-    public Fulfilment amend(String id, String correlationId) {
+    public Fulfilment amend(String id, String correlationId, Actor actor) {
         Fulfilment fulfilment = findById(id);
         if (fulfilment.getStatus() != FulfilmentStatus.SUBMITTED) {
             throw new BadRequestException(
@@ -183,7 +184,7 @@ public class FulfilmentService {
         log.info("Amended fulfilment {}", id);
         Fulfilment saved = fulfilmentRepository.save(fulfilment);
         if (notificationProjectionExists(id)) {
-            notificationService.amendNotification(id, correlationId);
+            notificationService.amendNotification(id, correlationId, actor);
         }
         return saved;
     }

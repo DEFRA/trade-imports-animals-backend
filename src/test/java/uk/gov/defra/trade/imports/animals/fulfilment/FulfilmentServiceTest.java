@@ -25,6 +25,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationResponse;
 import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
+import uk.gov.defra.trade.imports.animals.outbox.Actor;
 
 @ExtendWith(MockitoExtension.class)
 class FulfilmentServiceTest {
@@ -156,7 +157,7 @@ class FulfilmentServiceTest {
         when(fulfilmentRepository.save(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Fulfilment amended = fulfilmentService.amend(ID, TRACE_ID);
+        Fulfilment amended = fulfilmentService.amend(ID, TRACE_ID, null);
 
         assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.AMEND);
         assertThat(amended.getSubmittedFulfilment())
@@ -228,7 +229,7 @@ class FulfilmentServiceTest {
         when(fulfilmentRepository.save(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
 
-        Fulfilment submitted = fulfilmentService.submit(ID, TRACE_ID);
+        Fulfilment submitted = fulfilmentService.submit(ID, TRACE_ID, null);
 
         assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
         assertThat(submitted.getSubmittedFulfilment()).isNull();
@@ -242,11 +243,12 @@ class FulfilmentServiceTest {
         when(fulfilmentRepository.save(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
         when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
+        Actor actor = Actor.builder().id("contact-guid-001").build();
 
-        Fulfilment submitted = fulfilmentService.submit(ID, TRACE_ID);
+        Fulfilment submitted = fulfilmentService.submit(ID, TRACE_ID, actor);
 
         assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        verify(notificationService).submitNotification(ID, TRACE_ID);
+        verify(notificationService).submitNotification(ID, TRACE_ID, actor);
     }
 
     @Test
@@ -256,11 +258,12 @@ class FulfilmentServiceTest {
         when(fulfilmentRepository.save(any(Fulfilment.class)))
             .thenAnswer(invocation -> invocation.getArgument(0));
         when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
+        Actor actor = Actor.builder().id("contact-guid-002").build();
 
-        Fulfilment amended = fulfilmentService.amend(ID, TRACE_ID);
+        Fulfilment amended = fulfilmentService.amend(ID, TRACE_ID, actor);
 
         assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.AMEND);
-        verify(notificationService).amendNotification(ID, TRACE_ID);
+        verify(notificationService).amendNotification(ID, TRACE_ID, actor);
     }
 
     @Test
@@ -304,11 +307,11 @@ class FulfilmentServiceTest {
             .thenAnswer(invocation -> invocation.getArgument(0));
         when(notificationService.existsByReferenceNumber(ID)).thenReturn(false);
 
-        Fulfilment submitted = fulfilmentService.submit(ID, TRACE_ID);
+        Fulfilment submitted = fulfilmentService.submit(ID, TRACE_ID, null);
 
         assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        verify(notificationService, never()).submitNotification(any(), any());
-        verify(notificationService, never()).amendNotification(any(), any());
+        verify(notificationService, never()).submitNotification(any(), any(), any());
+        verify(notificationService, never()).amendNotification(any(), any(), any());
         verify(notificationService, never()).cancelAmendNotification(any());
         verify(notificationService, never()).softDeleteNotification(any());
     }
