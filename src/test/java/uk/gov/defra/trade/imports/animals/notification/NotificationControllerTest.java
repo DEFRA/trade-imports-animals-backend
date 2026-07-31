@@ -922,60 +922,20 @@ class NotificationControllerTest {
             deleted.setReferenceNumber(REF_1);
             deleted.setStatus(NotificationStatus.DELETED);
 
-            when(notificationService.softDeleteNotification(REF_1, "trace-withdraw", null))
-                .thenReturn(deleted);
+            when(notificationService.softDeleteNotification(REF_1)).thenReturn(deleted);
 
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/soft-delete", REF_1)
-                    .header(HEADER_TRACE_ID, "trace-withdraw")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.status").value("DELETED"));
-
-            verify(notificationService)
-                .softDeleteNotification(REF_1, "trace-withdraw", null);
-        }
-
-        @Test
-        void softDelete_shouldBindActorBody() throws Exception {
-            Notification deleted = Notification.builder()
-                .referenceNumber(REF_1)
-                .status(NotificationStatus.DELETED)
-                .build();
-            when(notificationService.softDeleteNotification(
-                eq(REF_1), eq("trace-withdraw"), argThat(actor -> actor != null)))
-                .thenReturn(deleted);
-
-            mockMvc.perform(post("/notifications/{referenceNumber}/soft-delete", REF_1)
-                    .header(HEADER_TRACE_ID, "trace-withdraw")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("""
-                        {
-                            "id": "contact-guid-003",
-                            "source": "dynamics-contact",
-                            "userType": "B2C",
-                            "displayName": "Will Withdraw",
-                            "organisationId": "org-003",
-                            "onBehalfOfOrganisationId": "org-004"
-                        }
-                        """))
-                .andExpect(status().isOk());
-
-            verify(notificationService).softDeleteNotification(
-                eq(REF_1), eq("trace-withdraw"),
-                argThat(actor -> "contact-guid-003".equals(actor.getId())
-                    && "dynamics-contact".equals(actor.getSource())
-                    && "B2C".equals(actor.getUserType())
-                    && "Will Withdraw".equals(actor.getDisplayName())
-                    && "org-003".equals(actor.getOrganisationId())
-                    && "org-004".equals(actor.getOnBehalfOfOrganisationId())));
         }
 
         @Test
         void softDelete_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            when(notificationService.softDeleteNotification(NONEXISTENT_REF, "", null))
+            when(notificationService.softDeleteNotification(NONEXISTENT_REF))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
@@ -990,7 +950,7 @@ class NotificationControllerTest {
         @Test
         void softDelete_shouldReturn400_whenNotificationNotInDeletableState() throws Exception {
             // Given
-            when(notificationService.softDeleteNotification(REF_1, "", null))
+            when(notificationService.softDeleteNotification(REF_1))
                 .thenThrow(new BadRequestException("Cannot delete notification with status: DELETED"));
 
             // When & Then

@@ -1353,8 +1353,6 @@ class NotificationIT extends IntegrationBase {
         assertThat(result.getReferenceNumber()).isEqualTo(referenceNumber);
         assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
         assertThat(result.getUpdated()).isNotNull();
-
-        assertThat(outboxEventRepository.findAll()).isEmpty();
     }
 
     @Test
@@ -1367,30 +1365,13 @@ class NotificationIT extends IntegrationBase {
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
-        var submitActor = Map.of(
-            "id", "contact-submit-before-withdraw",
-            "source", "dynamics-contact",
-            "userType", "B2C",
-            "displayName", "Submitter",
-            "organisationId", "org-submit");
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
-            .header(HEADER_TRACE_ID, "trace-submit-before-withdraw")
-            .bodyValue(submitActor)
             .exchange().expectStatus().isOk();
-
-        var withdrawActor = Map.of(
-            "id", "contact-withdraw-submitted",
-            "source", "dynamics-contact",
-            "userType", "B2C",
-            "displayName", "Submitted Withdrawer",
-            "organisationId", "org-withdraw");
 
         // When — soft-delete the submitted notification
         Notification result = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
-            .header(HEADER_TRACE_ID, "trace-withdraw-submitted")
-            .bodyValue(withdrawActor)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -1401,29 +1382,6 @@ class NotificationIT extends IntegrationBase {
         assertThat(result.getReferenceNumber()).isEqualTo(referenceNumber);
         assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
         assertThat(result.getUpdated()).isNotNull();
-
-        List<OutboxEvent> events = outboxEventRepository.findAll().stream()
-            .sorted(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
-            .toList();
-        assertThat(events).hasSize(2);
-        assertThat(events.getFirst().getEventType())
-            .isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.value());
-        OutboxEvent withdrawn = events.getLast();
-        assertThat(withdrawn.getEventType())
-            .isEqualTo(OutboxEventType.NOTIFICATION_WITHDRAWN.value());
-        assertThat(withdrawn.getAggregateVersion()).isEqualTo(2L);
-        assertThat(withdrawn.getMetadata().getCorrelationId())
-            .isEqualTo("trace-withdraw-submitted");
-        assertThat(withdrawn.getActor().getId()).isEqualTo("contact-withdraw-submitted");
-        assertThat(withdrawn.getStatusChanges()).hasSize(2);
-        assertThat(withdrawn.getStatusChanges().get(0).getStatus())
-            .isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(withdrawn.getStatusChanges().get(0).getActor().getId())
-            .isEqualTo("contact-submit-before-withdraw");
-        assertThat(withdrawn.getStatusChanges().get(1).getStatus())
-            .isEqualTo(NotificationStatus.DELETED);
-        assertThat(withdrawn.getStatusChanges().get(1).getActor().getId())
-            .isEqualTo("contact-withdraw-submitted");
     }
 
     @Test

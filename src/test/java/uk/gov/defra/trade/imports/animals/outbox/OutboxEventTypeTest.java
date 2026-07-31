@@ -28,13 +28,4 @@ class OutboxEventTypeTest {
                     + "schemas/profiles/imports/gb/events/"
                     + "gbn-ag-event-notification-submission-amended-v1.schema.json");
     }
-
-    @Test
-    void notificationWithdrawn_schemaUrl_matchesEnumNamingPattern() {
-        assertThat(OutboxEventType.NOTIFICATION_WITHDRAWN.schemaUrl())
-            .isEqualTo(
-                "https://github.com/DEFRA/trade-imports-schemas/blob/main/"
-                    + "schemas/profiles/imports/gb/events/"
-                    + "gbn-ag-event-notification-withdrawn-v1.schema.json");
-    }
 }

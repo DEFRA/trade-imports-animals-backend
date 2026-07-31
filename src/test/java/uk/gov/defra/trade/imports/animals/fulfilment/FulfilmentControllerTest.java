@@ -115,41 +115,6 @@ class FulfilmentControllerTest {
                 && "org-002".equals(a.getOnBehalfOfOrganisationId())));
     }
 
-    @Test
-    void softDelete_shouldAcceptMissingActorBody() throws Exception {
-        when(fulfilmentService.softDelete(ID, "trace-withdraw", null))
-            .thenReturn(fulfilment(FulfilmentStatus.DELETED));
-
-        mockMvc.perform(post("/fulfilments/{id}/soft-delete", ID)
-                .header(NotificationController.HEADER_TRACE_ID, "trace-withdraw")
-                .contentType(MediaType.APPLICATION_JSON))
-            .andExpect(status().isOk());
-
-        verify(fulfilmentService).softDelete(ID, "trace-withdraw", null);
-    }
-
-    @Test
-    void softDelete_shouldBindActorBody() throws Exception {
-        when(fulfilmentService.softDelete(
-            eq(ID), eq("trace-withdraw"), argThat(a -> a != null)))
-            .thenReturn(fulfilment(FulfilmentStatus.DELETED));
-
-        mockMvc.perform(post("/fulfilments/{id}/soft-delete", ID)
-                .header(NotificationController.HEADER_TRACE_ID, "trace-withdraw")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(actorBody()))
-            .andExpect(status().isOk());
-
-        verify(fulfilmentService).softDelete(
-            eq(ID), eq("trace-withdraw"),
-            argThat(a -> "contact-guid-001".equals(a.getId())
-                && "dynamics-contact".equals(a.getSource())
-                && "B2C".equals(a.getUserType())
-                && "Jane Farmer".equals(a.getDisplayName())
-                && "org-001".equals(a.getOrganisationId())
-                && "org-002".equals(a.getOnBehalfOfOrganisationId())));
-    }
-
     private Fulfilment fulfilment(FulfilmentStatus status) {
         return Fulfilment.builder().id(ID).status(status).build();
     }

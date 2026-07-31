@@ -18,11 +18,7 @@ public enum OutboxEventType {
     NOTIFICATION_SUBMISSION_AMENDED(
         "uk.gov.defra.imports.notification.NotificationSubmissionAmended",
         "https://github.com/DEFRA/trade-imports-schemas/blob/main/"
-            + "schemas/profiles/imports/gb/events/gbn-ag-event-notification-submission-amended-v1.schema.json"),
-    NOTIFICATION_WITHDRAWN(
-        "uk.gov.defra.imports.notification.NotificationWithdrawn",
-        "https://github.com/DEFRA/trade-imports-schemas/blob/main/"
-            + "schemas/profiles/imports/gb/events/gbn-ag-event-notification-withdrawn-v1.schema.json");
+            + "schemas/profiles/imports/gb/events/gbn-ag-event-notification-submission-amended-v1.schema.json");
 
     private final String value;
     private final String schemaUrl;

@@ -305,7 +305,7 @@ class FulfilmentIT extends IntegrationBase {
     }
 
     @Test
-    void softDelete_shouldCascadeDraftNotificationWithoutWritingOutboxEvent() {
+    void softDelete_shouldCascadeNotification() {
         // Given
         Fulfilment created = createFulfilmentWithNotificationProjection();
 
@@ -317,42 +317,6 @@ class FulfilmentIT extends IntegrationBase {
         assertThat(notificationRepository.findByReferenceNumber(created.getId()).orElseThrow()
             .getStatus()).isEqualTo(NotificationStatus.DELETED);
         assertThat(outboxEvents(created.getId())).isEmpty();
-    }
-
-    @Test
-    void softDelete_shouldCascadeSubmittedNotificationAndWriteWithdrawnOutboxEvent() {
-        // Given
-        Fulfilment created = createFulfilmentWithNotificationProjection();
-        submitFulfilment(
-            created.getId(), "trace-submit-before-withdraw",
-            actor("contact-submit-003", "Submitter"));
-
-        // When
-        Fulfilment deleted = softDelete(
-            created.getId(), "trace-withdraw-cascade",
-            actor("contact-withdraw-003", "Withdrawer"));
-
-        // Then
-        assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
-        assertThat(notificationRepository.findByReferenceNumber(created.getId()).orElseThrow()
-            .getStatus()).isEqualTo(NotificationStatus.DELETED);
-        List<OutboxEvent> events = outboxEvents(created.getId());
-        assertThat(events).hasSize(2);
-        OutboxEvent event = events.getLast();
-        assertThat(event.getEventType())
-            .isEqualTo(OutboxEventType.NOTIFICATION_WITHDRAWN.value());
-        assertThat(event.getMetadata().getCorrelationId())
-            .isEqualTo("trace-withdraw-cascade");
-        assertThat(event.getActor().getId()).isEqualTo("contact-withdraw-003");
-        assertThat(event.getStatusChanges()).hasSize(2);
-        assertThat(event.getStatusChanges().getFirst().getStatus())
-            .isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(event.getStatusChanges().getFirst().getActor().getId())
-            .isEqualTo("contact-submit-003");
-        assertThat(event.getStatusChanges().getLast().getStatus())
-            .isEqualTo(NotificationStatus.DELETED);
-        assertThat(event.getStatusChanges().getLast().getActor().getId())
-            .isEqualTo("contact-withdraw-003");
     }
 
     @Test
@@ -716,8 +680,6 @@ class FulfilmentIT extends IntegrationBase {
         assertThat(fulfilmentRepository.findById(source.getId()).orElseThrow().getStatus())
             .isEqualTo(FulfilmentStatus.DELETED);
         assertThat(fulfilmentRepository.count()).isEqualTo(1);
-        assertThat(notificationRepository.findByReferenceNumber(source.getId())).isEmpty();
-        assertThat(outboxEvents(source.getId())).isEmpty();
 
         webClient("NoAuth")
             .get().uri(FULFILMENT_ENDPOINT)
@@ -1040,18 +1002,6 @@ class FulfilmentIT extends IntegrationBase {
     private Fulfilment softDelete(String id) {
         return webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/soft-delete", id)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
-            .returnResult().getResponseBody();
-    }
-
-    private Fulfilment softDelete(
-        String id, String traceId, Map<String, String> actor) {
-        return webClient("NoAuth")
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/soft-delete", id)
-            .header(NotificationController.HEADER_TRACE_ID, traceId)
-            .bodyValue(actor)
             .exchange()
             .expectStatus().isOk()
             .expectBody(Fulfilment.class)

@@ -1615,12 +1615,6 @@ class NotificationServiceTest {
     @Nested
     class SoftDeleteNotification {
 
-        @BeforeEach
-        void setUp() {
-            lenient().when(lockProvider.lock(any()))
-                .thenReturn(Optional.of(mock(SimpleLock.class)));
-        }
-
         @Test
         void softDeleteNotification_shouldSetStatusToDeletedAndSave_whenDraft() {
             // Given
@@ -1635,18 +1629,14 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
-            Actor actor = Actor.builder().id("contact-guid-withdraw").build();
 
             // When
-            Notification result = notificationService.softDeleteNotification(
-                referenceNumber, "trace-withdraw-draft", actor);
+            Notification result = notificationService.softDeleteNotification(referenceNumber);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
-            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
-            verify(lockProvider, never()).lock(any());
         }
 
         @Test
@@ -1663,19 +1653,14 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
-            Actor actor = Actor.builder().id("contact-guid-submitted-withdraw").build();
 
             // When
-            Notification result = notificationService.softDeleteNotification(
-                referenceNumber, "trace-withdraw-submitted", actor);
+            Notification result = notificationService.softDeleteNotification(referenceNumber);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
-            verify(outboxService).appendEvent(
-                notification, OutboxEventType.NOTIFICATION_WITHDRAWN,
-                "trace-withdraw-submitted", actor);
         }
 
         @Test
@@ -1694,17 +1679,12 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
-            Actor actor = Actor.builder().id("contact-guid-amend-withdraw").build();
 
-            Notification result = notificationService.softDeleteNotification(
-                referenceNumber, "trace-withdraw-amend", actor);
+            Notification result = notificationService.softDeleteNotification(referenceNumber);
 
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
-            verify(outboxService).appendEvent(
-                notification, OutboxEventType.NOTIFICATION_WITHDRAWN,
-                "trace-withdraw-amend", actor);
         }
 
         @Test
@@ -1721,14 +1701,11 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.softDeleteNotification(
-                referenceNumber, "trace-withdraw-deleted", null))
+            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DELETED");
 
             verify(notificationRepository, never()).save(any());
-            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
-            verify(lockProvider, never()).lock(any());
         }
 
         @Test
@@ -1739,14 +1716,11 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.softDeleteNotification(
-                referenceNumber, "trace-withdraw-absent", null))
+            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(referenceNumber);
 
             verify(notificationRepository, never()).save(any());
-            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
-            verify(lockProvider, never()).lock(any());
         }
     }
 }

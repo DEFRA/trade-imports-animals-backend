@@ -90,56 +90,6 @@ class OutboxPollerIT extends OutboxIntegrationBase {
     }
 
     @Test
-    void publishUnpublishedEvents_shouldDeliverWithdrawnEventWithActorAndStatusChange()
-        throws Exception {
-        String referenceNumber = createAndSubmitNotificationWithActor(
-            TRACE_PREFIX + "withdraw-submit");
-        assertThat(outboxPublishService.publishUnpublishedEvents()).isEqualTo(1);
-        purgeQueue();
-
-        Map<String, String> actor = Map.of(
-            "id", "contact-wire-withdraw",
-            "source", "dynamics-contact",
-            "userType", "B2C",
-            "displayName", "Wire Withdrawer",
-            "organisationId", "org-wire-withdraw");
-
-        webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
-            .header(HEADER_TRACE_ID, TRACE_PREFIX + "withdraw")
-            .bodyValue(actor)
-            .exchange()
-            .expectStatus().isOk();
-
-        assertThat(outboxPublishService.publishUnpublishedEvents()).isEqualTo(1);
-
-        Message sqsMessage = awaitSqsMessage();
-        JsonNode snsEnvelope = objectMapper.readTree(sqsMessage.body());
-        JsonNode publishedMessage = objectMapper.readTree(snsEnvelope.get("Message").asText());
-        assertThat(publishedMessage.get("eventType").asText())
-            .isEqualTo("uk.gov.defra.imports.notification.NotificationWithdrawn");
-        assertThat(publishedMessage.get("metadata").get("correlationId").asText())
-            .isEqualTo(TRACE_PREFIX + "withdraw");
-        assertThat(publishedMessage.get("actor").get("id").asText())
-            .isEqualTo("contact-wire-withdraw");
-        assertThat(publishedMessage.get("statusChanges").size()).isEqualTo(2);
-        assertThat(publishedMessage.get("statusChanges").get(0).get("status").asText())
-            .isEqualTo("SUBMITTED");
-        assertThat(publishedMessage.get("statusChanges").get(0).get("actor").get("id").asText())
-            .isEqualTo("contact-wire-001");
-        assertThat(publishedMessage.get("statusChanges").get(1).get("status").asText())
-            .isEqualTo("DELETED");
-        assertThat(publishedMessage.get("statusChanges").get(1).get("actor"))
-            .isEqualTo(publishedMessage.get("actor"));
-
-        JsonNode attributes = snsEnvelope.get("MessageAttributes");
-        assertThat(attributes.get("eventType").get("Value").asText())
-            .isEqualTo("uk.gov.defra.imports.notification.NotificationWithdrawn");
-        assertThat(attributes.get("correlationId").get("Value").asText())
-            .isEqualTo(TRACE_PREFIX + "withdraw");
-    }
-
-    @Test
     void publishUnpublishedEvents_shouldNotRepublishAlreadyPublishedEvents() {
         createAndSubmitNotification(TRACE_PREFIX + "002");
         assertThat(outboxPublishService.publishUnpublishedEvents()).isEqualTo(1);
