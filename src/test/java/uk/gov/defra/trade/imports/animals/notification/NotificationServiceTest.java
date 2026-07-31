@@ -24,6 +24,8 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.tran
 
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.Month;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -34,7 +36,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
-import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import net.javacrumbs.shedlock.core.SimpleLock;
 import org.junit.jupiter.api.BeforeEach;
 import org.mapstruct.factory.Mappers;
@@ -43,6 +44,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
@@ -54,6 +56,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
+import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
@@ -87,15 +90,31 @@ class NotificationServiceTest {
 
     private NotificationService notificationService;
 
+    // Real executor (its executeWithLock must actually run the locked task) built from the
+    // lockProvider mock; @InjectMocks does the wiring so we don't hand-construct it from a mock.
+    @InjectMocks
+    private DefaultLockingTaskExecutor lockingTaskExecutor;
+
     private final NotificationMapper notificationMapper = Mappers.getMapper(
         NotificationMapper.class);
 
     @BeforeEach
     void setUp() {
-        LockingTaskExecutor lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
-        notificationService = new NotificationService(notificationRepository, auditRepository,
+        // Default: TTL unconfigured (days null) so create tests keep their original behaviour and
+        // stamp no expireAt. Expiry-specific tests rebuild the service with a bespoke config.
+        notificationService = buildService(new NotificationTtlConfig(null, "local", sweep(false)));
+    }
+
+    private NotificationService buildService(NotificationTtlConfig ttlConfig) {
+        return new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            notificationMapper, new NotificationCopyMapper(), referenceNumberGenerator, Duration.ZERO, 54, 50);
+            notificationMapper, new NotificationCopyMapper(), referenceNumberGenerator, ttlConfig,
+            Duration.ZERO, 54, 50);
+    }
+
+    private static NotificationTtlConfig.Sweep sweep(boolean enabled) {
+        return new NotificationTtlConfig.Sweep(
+            enabled, 3_600_000, 10, Duration.ofSeconds(1), Duration.ofSeconds(30));
     }
 
     @Test
@@ -212,7 +231,7 @@ class NotificationServiceTest {
 
             Transport transport = Transport.builder()
                 .portOfEntry("ABERDEEN")
-                .arrivalDate(LocalDate.of(2026, 1, 1))
+                .arrivalDate(LocalDate.of(2026, Month.JANUARY, 1))
                 .transporter(transporters().getFirst())
                 .build();
 
@@ -427,6 +446,55 @@ class NotificationServiceTest {
             assertThat(pageableCaptor.getValue().getSort().getOrderFor("created").getDirection())
                 .isEqualTo(Sort.Direction.ASC);
         }
+
+        @Test
+        void findAll_shouldReturnMatchingNotification_whenReferenceNumberProvided() {
+            Notification draft = Notification.builder()
+                .referenceNumber("GBN-AG-26-ABC123")
+                .status(DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumberAndStatusIn(
+                "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND)))
+                .thenReturn(Optional.of(draft));
+
+            NotificationPageResponse result =
+                notificationService.findAll(1, null, "GBN-AG-26-ABC123");
+
+            assertThat(result.content()).hasSize(1);
+            assertThat(result.content().getFirst().getReferenceNumber())
+                .isEqualTo("GBN-AG-26-ABC123");
+            assertThat(result.totalElements()).isEqualTo(1);
+            verify(notificationRepository, never())
+                .findAllByStatusIn(any(), any(Pageable.class));
+        }
+
+        @Test
+        void findAll_shouldReturnEmptyPage_whenReferenceNumberNotFound() {
+            when(notificationRepository.findByReferenceNumberAndStatusIn(
+                "GBN-AG-26-ZZZZZZ", List.of(DRAFT, SUBMITTED, AMEND)))
+                .thenReturn(Optional.empty());
+
+            NotificationPageResponse result =
+                notificationService.findAll(1, null, "GBN-AG-26-ZZZZZZ");
+
+            assertThat(result.content()).isEmpty();
+            assertThat(result.totalElements()).isZero();
+            verify(notificationRepository, never())
+                .findAllByStatusIn(any(), any(Pageable.class));
+        }
+
+        @Test
+        void findAll_shouldTrimReferenceNumber_beforeLookup() {
+            when(notificationRepository.findByReferenceNumberAndStatusIn(
+                "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND)))
+                .thenReturn(Optional.empty());
+
+            notificationService.findAll(1, null, "  GBN-AG-26-ABC123  ");
+
+            verify(notificationRepository).findByReferenceNumberAndStatusIn(
+                "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND));
+        }
     }
 
     @Nested
@@ -544,9 +612,11 @@ class NotificationServiceTest {
             when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
             // When / Then
-            assertThatThrownBy(() ->
-                notificationService.deleteByReferenceNumbers(List.of(existingRef, missingRef),
-                    new AuditContext(TEST_TRACE_ID, TEST_USER_ID)))
+            List<String> referenceNumbers = List.of(existingRef, missingRef);
+            AuditContext auditContext = new AuditContext(TEST_TRACE_ID, TEST_USER_ID);
+
+            assertThatThrownBy(
+                () -> notificationService.deleteByReferenceNumbers(referenceNumbers, auditContext))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(missingRef);
 
@@ -570,9 +640,11 @@ class NotificationServiceTest {
             when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
             // When / Then
-            assertThatThrownBy(() ->
-                notificationService.deleteByReferenceNumbers(List.of(missing1, missing2),
-                    new AuditContext(TEST_TRACE_ID, TEST_USER_ID)))
+            List<String> referenceNumbers = List.of(missing1, missing2);
+            AuditContext auditContext = new AuditContext(TEST_TRACE_ID, TEST_USER_ID);
+
+            assertThatThrownBy(
+                () -> notificationService.deleteByReferenceNumbers(referenceNumbers, auditContext))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(missing1)
                 .hasMessageContaining(missing2);
@@ -612,6 +684,100 @@ class NotificationServiceTest {
             inOrder.verify(notificationRepository)
                 .deleteAllByReferenceNumberIn(List.of(referenceNumber));
             inOrder.verify(documentService).deleteForNotificationRefs(List.of(referenceNumber));
+        }
+    }
+
+    @Nested
+    class ExpiryStamping {
+
+        @BeforeEach
+        void stubCreate() {
+            when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-TTL001");
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        }
+
+        private Notification create(NotificationTtlConfig ttlConfig) {
+            NotificationService service = buildService(ttlConfig);
+            return service.saveOriginOfImport(
+                NotificationDto.builder().origin(new Origin("GB", "true", "REF123")).build());
+        }
+
+        @Test
+        void createNotification_stampsExpireAt_whenDaysConfiguredAndNotProd() {
+            Notification result = create(new NotificationTtlConfig(7, "dev", sweep(false)));
+
+            assertThat(result.getExpireAt()).isEqualTo(result.getCreated().plusDays(7));
+        }
+
+        @Test
+        void createNotification_neverStampsExpireAt_inProd_regardlessOfOtherConfig() {
+            // AC: in a prod-configured environment, notifications are never marked for automatic
+            // removal, regardless of other config values (days set, sweep enabled).
+            Notification result = create(new NotificationTtlConfig(7, "prod", sweep(true)));
+
+            assertThat(result.getExpireAt()).isNull();
+        }
+
+        @Test
+        void createNotification_neverStampsExpireAt_inProd_caseInsensitive() {
+            Notification result = create(new NotificationTtlConfig(7, "PROD", sweep(true)));
+
+            assertThat(result.getExpireAt()).isNull();
+        }
+
+        @Test
+        void createNotification_doesNotStampExpireAt_whenDaysUnconfigured() {
+            Notification result = create(new NotificationTtlConfig(null, "dev", sweep(false)));
+
+            assertThat(result.getExpireAt()).isNull();
+        }
+    }
+
+    @Nested
+    class DeleteExpired {
+
+        @Test
+        void deleteExpired_deletesDueNotifications_andCascadesToDocuments_withNoAudit() {
+            String ref1 = "GBN-AG-26-EXP001";
+            String ref2 = "GBN-AG-26-EXP002";
+            when(notificationRepository.findExpired(
+                any(LocalDateTime.class), any(Pageable.class)))
+                .thenReturn(List.of(() -> ref1, () -> ref2));
+
+            int deleted = notificationService.deleteExpired(10);
+
+            assertThat(deleted).isEqualTo(2);
+            InOrder inOrder = inOrder(notificationRepository, documentService);
+            inOrder.verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
+            inOrder.verify(documentService).deleteForNotificationRefs(List.of(ref1, ref2));
+            // A background sweep is not a user action — it writes no audit record.
+            verify(auditRepository, never()).save(any(Audit.class));
+        }
+
+        @Test
+        void deleteExpired_returnsZeroAndSkipsDeletion_whenNothingDue() {
+            when(notificationRepository.findExpired(
+                any(LocalDateTime.class), any(Pageable.class)))
+                .thenReturn(Collections.emptyList());
+
+            assertThat(notificationService.deleteExpired(10)).isZero();
+
+            verify(notificationRepository, never()).deleteAllByReferenceNumberIn(anyList());
+            verify(documentService, never()).deleteForNotificationRefs(anyList());
+        }
+
+        @Test
+        void deleteExpired_queriesFirstPageBoundedByBatchSize() {
+            ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+            when(notificationRepository.findExpired(
+                any(LocalDateTime.class), pageableCaptor.capture()))
+                .thenReturn(Collections.emptyList());
+
+            notificationService.deleteExpired(5);
+
+            assertThat(pageableCaptor.getValue().getPageNumber()).isZero();
+            assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
         }
     }
 
@@ -1303,7 +1469,7 @@ class NotificationServiceTest {
                 .cphNumber("12/345/6789")
                 .transport(Transport.builder()
                     .portOfEntry("GBDVR")
-                    .arrivalDate(LocalDate.of(2026, 5, 1))
+                    .arrivalDate(LocalDate.of(2026, Month.MAY, 1))
                     .transporter(transporters().getFirst())
                     .build())
                 .consignment(consignments().getFirst())
@@ -1352,7 +1518,7 @@ class NotificationServiceTest {
                 .additionalDetails(new AdditionalDetails("Slaughter", "no"))
                 .transport(Transport.builder()
                     .portOfEntry("GBFXT")
-                    .arrivalDate(LocalDate.of(2026, 6, 1))
+                    .arrivalDate(LocalDate.of(2026, Month.JUNE, 1))
                     .build())
                 .consignment(consignments().getFirst())
                 .build();

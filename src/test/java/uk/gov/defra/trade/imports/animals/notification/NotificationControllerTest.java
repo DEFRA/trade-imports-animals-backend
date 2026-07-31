@@ -313,6 +313,7 @@ class NotificationControllerTest {
 
         @Test
         void submit_shouldPassActorToService_whenActorBodyProvided() throws Exception {
+            // Given
             Notification submitted = new Notification();
             submitted.setId("notif-id-001");
             submitted.setReferenceNumber(REF_1);
@@ -331,6 +332,7 @@ class NotificationControllerTest {
                 }
                 """;
 
+            // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(actorBody))
@@ -512,7 +514,7 @@ class NotificationControllerTest {
         @Test
         void findAll_shouldReturnEmptyPage() throws Exception {
             // Given
-            when(notificationService.findAll(1, null)).thenReturn(
+            when(notificationService.findAll(1, null, null)).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
             // When & Then
@@ -551,7 +553,7 @@ class NotificationControllerTest {
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
-            when(notificationService.findAll(1, null)).thenReturn(
+            when(notificationService.findAll(1, null, null)).thenReturn(
                 new NotificationPageResponse(List.of(notification1, notification2), 1, 25, 2, 2,
                     1));
 
@@ -577,7 +579,7 @@ class NotificationControllerTest {
         @Test
         void findAll_shouldPassPageParam() throws Exception {
             // Given
-            when(notificationService.findAll(2, null)).thenReturn(
+            when(notificationService.findAll(2, null, null)).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 2, 25, 0, 120, 3));
 
             // When & Then
@@ -593,7 +595,7 @@ class NotificationControllerTest {
 
         @Test
         void findAll_shouldPassSortParam() throws Exception {
-            when(notificationService.findAll(1, "createdAt,desc")).thenReturn(
+            when(notificationService.findAll(1, "createdAt,desc", null)).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
             mockMvc.perform(get("/notifications")
@@ -601,7 +603,33 @@ class NotificationControllerTest {
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
-            verify(notificationService).findAll(1, "createdAt,desc");
+            verify(notificationService).findAll(1, "createdAt,desc", null);
+        }
+
+        @Test
+        void findAll_shouldPassReferenceNumberParam() throws Exception {
+            when(notificationService.findAll(1, null, REF_1)).thenReturn(
+                new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
+
+            mockMvc.perform(get("/notifications")
+                    .param("referenceNumber", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+            verify(notificationService).findAll(1, null, REF_1);
+        }
+
+        @Test
+        void findAll_shouldPassInvalidReferenceNumberToService() throws Exception {
+            when(notificationService.findAll(1, null, "invalid-ref")).thenReturn(
+                new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
+
+            mockMvc.perform(get("/notifications")
+                    .param("referenceNumber", "invalid-ref")
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+            verify(notificationService).findAll(1, null, "invalid-ref");
         }
     }
 

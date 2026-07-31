@@ -6,6 +6,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -51,6 +53,42 @@ public class GlobalExceptionHandler {
         Map<String, List<String>> errors = new LinkedHashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             errors.computeIfAbsent(error.getField(), k -> new ArrayList<>()).add(error.getDefaultMessage());
+        }
+        problemDetail.setProperty("errors", errors);
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
+     * Handle method-parameter validation errors from {@code @Validated} controllers (400 Bad Request).
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ProblemDetail> handleConstraintViolationException(
+        ConstraintViolationException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Constraint violation (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST,
+            "Validation failed for one or more fields"
+        );
+
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
+        problemDetail.setTitle("Validation Error");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        Map<String, List<String>> errors = new LinkedHashMap<>();
+        for (ConstraintViolation<?> violation : ex.getConstraintViolations()) {
+            String propertyPath = violation.getPropertyPath().toString();
+            String field = propertyPath.contains(".")
+                ? propertyPath.substring(propertyPath.lastIndexOf('.') + 1)
+                : propertyPath;
+            errors.computeIfAbsent(field, k -> new ArrayList<>()).add(violation.getMessage());
         }
         problemDetail.setProperty("errors", errors);
 

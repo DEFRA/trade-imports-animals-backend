@@ -210,6 +210,69 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void findAll_shouldReturnMatchingNotification_whenReferenceNumberProvided() {
+        NotificationDto notificationDto1 = createNotificationDto("GB", "Live cattle");
+        NotificationDto notificationDto2 = createNotificationDto("IE", "Live sheep");
+
+        String matchingRef = webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDto1).exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .returnResult().getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(notificationDto2).exchange()
+            .expectStatus().isOk();
+
+        NotificationPageResponse page = findAllNotificationsPage(1, null, matchingRef);
+
+        assertThat(page.content()).hasSize(1);
+        assertThat(page.content().getFirst().getReferenceNumber()).isEqualTo(matchingRef);
+        assertThat(page.totalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void findAll_shouldReturnEmptyPage_whenReferenceNumberUnknown() {
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle")).exchange()
+            .expectStatus().isOk();
+
+        NotificationPageResponse page =
+            findAllNotificationsPage(1, null, "GBN-AG-26-ZZZZZZ");
+
+        assertThat(page.content()).isEmpty();
+        assertThat(page.totalElements()).isZero();
+    }
+
+    @Test
+    void findAll_shouldReturnEmptyPage_whenReferenceNumberIsDeleted() {
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        NotificationPageResponse page = findAllNotificationsPage(1, null, referenceNumber);
+
+        assertThat(page.content()).isEmpty();
+        assertThat(page.totalElements()).isZero();
+    }
+
+    @Test
+    void findAll_shouldReturnEmptyPage_whenReferenceNumberInvalid() {
+        NotificationPageResponse page =
+            findAllNotificationsPage(1, null, "invalid-ref");
+
+        assertThat(page.content()).isEmpty();
+        assertThat(page.totalElements()).isZero();
+    }
+
+    @Test
     void findAll_shouldReturnNotificationsOrderedByArrivalDateDescending() {
         // Given
         webClient("NoAuth")
@@ -1112,6 +1175,7 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void submit_shouldWriteActorAndStatusChanges_whenActorBodyProvided() {
+        // Given — create a notification
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(createNotificationDto("GB", "Live cattle"))
@@ -1127,12 +1191,14 @@ class NotificationIT extends IntegrationBase {
             "organisationId", "org-001"
         );
 
+        // When — submit with actor body
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
             .bodyValue(actorBody)
             .exchange()
             .expectStatus().isOk();
 
+        // Then — actor is stamped on the event and statusChanges carries it
         List<OutboxEvent> events = outboxEventRepository.findAll();
         assertThat(events).hasSize(1);
         OutboxEvent event = events.getFirst();
@@ -1152,6 +1218,7 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void submitThenAmend_shouldAccumulateActorStatusChanges() {
+        // Given — create and submit
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(createNotificationDto("GB", "Live cattle"))
@@ -1171,11 +1238,13 @@ class NotificationIT extends IntegrationBase {
             .bodyValue(submitActor)
             .exchange().expectStatus().isOk();
 
+        // When — amend
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
             .bodyValue(amendActor)
             .exchange().expectStatus().isOk();
 
+        // Then — amend event has both status changes in order
         List<OutboxEvent> events = outboxEventRepository.findAll()
             .stream()
             .sorted(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
@@ -1601,9 +1670,17 @@ class NotificationIT extends IntegrationBase {
     }
 
     private NotificationPageResponse findAllNotificationsPage(int page, String sort) {
+        return findAllNotificationsPage(page, sort, null);
+    }
+
+    private NotificationPageResponse findAllNotificationsPage(
+        int page, String sort, String referenceNumber) {
         String uri = NOTIFICATION_ENDPOINT + "?page=" + page;
         if (sort != null) {
             uri += "&sort=" + sort;
+        }
+        if (referenceNumber != null) {
+            uri += "&referenceNumber=" + referenceNumber;
         }
         return webClient("NoAuth")
             .get()

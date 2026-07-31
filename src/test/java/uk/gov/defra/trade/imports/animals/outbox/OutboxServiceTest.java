@@ -248,8 +248,7 @@ class OutboxServiceTest {
                 .thenReturn(Optional.of(latest));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-            outboxService.appendEvent(
-                notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-7", null);
+            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-7", null);
 
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
             verify(outboxEventRepository).save(captor.capture());
@@ -257,34 +256,8 @@ class OutboxServiceTest {
         }
 
         @Test
-        void appendEvent_shouldThrowOutboxWriteException_onDuplicateKey() {
-            // Given
-            Notification notification = Notification.builder()
-                .referenceNumber("GBN-AG-26-ABC123")
-                .status(NotificationStatus.SUBMITTED)
-                .build();
-
-            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-ABC123"))
-                .thenReturn(Optional.empty());
-            when(outboxEventRepository.save(any()))
-                .thenThrow(new DuplicateKeyException("duplicate key"));
-
-            // When / Then
-            assertThatThrownBy(() -> outboxService.appendEvent(
-                notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null))
-                .isInstanceOf(OutboxWriteException.class)
-                .satisfies(ex -> {
-                    OutboxWriteException owe = (OutboxWriteException) ex;
-                    assertThat(owe.getAggregateId())
-                        .isEqualTo("Imports.Notification.GBN-AG.GBN-AG-26-ABC123");
-                    assertThat(owe.getAggregateVersion()).isEqualTo(1L);
-                    assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
-                });
-        }
-
-        @Test
         void appendEvent_shouldStampActorOnEvent_whenActorProvided() {
+            // Given
             Notification notification = Notification.builder()
                 .referenceNumber("GBN-AG-26-ACT001")
                 .status(NotificationStatus.SUBMITTED)
@@ -302,9 +275,10 @@ class OutboxServiceTest {
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-            outboxService.appendEvent(
-                notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-act-1", actor);
+            // When
+            outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-act-1", actor);
 
+            // Then
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
             verify(outboxEventRepository).save(captor.capture());
             OutboxEvent saved = captor.getValue();
@@ -319,6 +293,7 @@ class OutboxServiceTest {
 
         @Test
         void appendEvent_shouldBuildCumulativeStatusChanges_fromLatestPriorEvent() {
+            // Given — latest prior event already has a SUBMITTED statusChange
             Notification notification = Notification.builder()
                 .referenceNumber("GBN-AG-26-ACT002")
                 .status(NotificationStatus.AMEND)
@@ -353,21 +328,46 @@ class OutboxServiceTest {
                 .thenReturn(Optional.of(latestEvent));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
+            // When
             outboxService.appendEvent(
-                notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED,
-                "trace-act-2", amendActor);
+                notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-act-2", amendActor);
 
+            // Then
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
             verify(outboxEventRepository).save(captor.capture());
             OutboxEvent saved = captor.getValue();
 
             assertThat(saved.getStatusChanges()).hasSize(2);
-            assertThat(saved.getStatusChanges().get(0).getStatus())
-                .isEqualTo(NotificationStatus.SUBMITTED);
+            assertThat(saved.getStatusChanges().get(0).getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
             assertThat(saved.getStatusChanges().get(0).getActor()).isEqualTo(submitActor);
-            assertThat(saved.getStatusChanges().get(1).getStatus())
-                .isEqualTo(NotificationStatus.AMEND);
+            assertThat(saved.getStatusChanges().get(1).getStatus()).isEqualTo(NotificationStatus.AMEND);
             assertThat(saved.getStatusChanges().get(1).getActor()).isEqualTo(amendActor);
+        }
+
+        @Test
+        void appendEvent_shouldThrowOutboxWriteException_onDuplicateKey() {
+            // Given
+            Notification notification = Notification.builder()
+                .referenceNumber("GBN-AG-26-ABC123")
+                .status(NotificationStatus.SUBMITTED)
+                .build();
+
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
+                "Imports.Notification.GBN-AG.GBN-AG-26-ABC123"))
+                .thenReturn(Optional.empty());
+            when(outboxEventRepository.save(any()))
+                .thenThrow(new DuplicateKeyException("duplicate key"));
+
+            // When / Then
+            assertThatThrownBy(() -> outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null))
+                .isInstanceOf(OutboxWriteException.class)
+                .satisfies(ex -> {
+                    OutboxWriteException owe = (OutboxWriteException) ex;
+                    assertThat(owe.getAggregateId())
+                        .isEqualTo("Imports.Notification.GBN-AG.GBN-AG-26-ABC123");
+                    assertThat(owe.getAggregateVersion()).isEqualTo(1L);
+                    assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
+                });
         }
     }
 

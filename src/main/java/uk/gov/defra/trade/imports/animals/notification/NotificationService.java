@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Direction;
@@ -27,6 +28,7 @@ import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
+import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
@@ -50,6 +52,7 @@ public class NotificationService {
     private final NotificationMapper notificationMapper;
     private final NotificationCopyMapper notificationCopyMapper;
     private final ReferenceNumberGenerator referenceNumberGenerator;
+    private final NotificationTtlConfig ttlConfig;
     private final Duration lockAtLeastFor;
     private final int listPageSize;
     private final int adminPageSize;
@@ -63,6 +66,7 @@ public class NotificationService {
         NotificationMapper notificationMapper,
         NotificationCopyMapper notificationCopyMapper,
         ReferenceNumberGenerator referenceNumberGenerator,
+        NotificationTtlConfig ttlConfig,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
         @Value("${notification.list.page-size}") int listPageSize,
         @Value("${notification.admin.page-size}") int adminPageSize) {
@@ -74,6 +78,7 @@ public class NotificationService {
         this.notificationMapper = notificationMapper;
         this.notificationCopyMapper = notificationCopyMapper;
         this.referenceNumberGenerator = referenceNumberGenerator;
+        this.ttlConfig = ttlConfig;
         this.lockAtLeastFor = lockAtLeastFor;
         this.listPageSize = listPageSize;
         this.adminPageSize = adminPageSize;
@@ -145,14 +150,30 @@ public class NotificationService {
     }
 
     public NotificationPageResponse findAll(int page, String sort) {
+        return findAll(page, sort, null);
+    }
+
+    public NotificationPageResponse findAll(int page, String sort, String referenceNumber) {
+        List<NotificationStatus> dashboardStatuses = List.of(
+            NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
+        var pageable = PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort));
+
+        String trimmedReference = StringUtils.trimToNull(referenceNumber);
+        if (trimmedReference != null) {
+            log.debug("Fetching notification by reference {} for dashboard", trimmedReference);
+            Page<Notification> matched = notificationRepository
+                .findByReferenceNumberAndStatusIn(trimmedReference, dashboardStatuses)
+                .<Page<Notification>>map(notification ->
+                    new PageImpl<>(List.of(notification), pageable, 1))
+                .orElseGet(() -> Page.empty(pageable));
+            log.debug("Found {} notifications for reference {}", matched.getNumberOfElements(),
+                trimmedReference);
+            return NotificationPageResponse.from(matched);
+        }
+
         log.debug("Fetching notifications page {} (size {}) with sort {}", page, listPageSize, sort);
-        Page<Notification> result =
-            notificationRepository.findAllByStatusIn(
-                List.of(
-                    NotificationStatus.DRAFT,
-                    NotificationStatus.SUBMITTED,
-                    NotificationStatus.AMEND),
-                PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort)));
+        Page<Notification> result = notificationRepository.findAllByStatusIn(
+            dashboardStatuses, pageable);
         log.debug("Found {} notifications on page {} of {}",
             result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
         return NotificationPageResponse.from(result);
@@ -326,15 +347,65 @@ public class NotificationService {
                 "Cannot find notifications with reference numbers: " + String.join(", ", missing));
         }
         log.info("Deleting {} notifications", found.size());
+        deleteNotificationsAndDocuments(referenceNumbers);
+        createNotificationAuditRecord(referenceNumbers, auditContext, Result.SUCCESS);
+    }
+
+    /**
+     * Deletes notifications whose {@code expireAt} has passed, cascading to their accompanying
+     * documents, up to {@code batchSize} per call. Called by the non-prod
+     * {@code NotificationExpirySweeper}; unlike {@link #deleteByReferenceNumbers} it writes no audit
+     * record and tolerates documents vanishing mid-batch (a background sweep should not fail because
+     * another actor removed a row concurrently). Notifications with a {@code null} {@code expireAt}
+     * — including everything created before this feature shipped — are never selected.
+     *
+     * @param batchSize maximum number of notifications to remove in this run
+     * @return the number of notifications deleted
+     */
+    @Transactional
+    public int deleteExpired(int batchSize) {
+        List<NotificationReferenceOnly> due =
+            notificationRepository.findExpired(LocalDateTime.now(), PageRequest.of(0, batchSize));
+        if (due.isEmpty()) {
+            return 0;
+        }
+        List<String> referenceNumbers = due.stream()
+            .map(NotificationReferenceOnly::getReferenceNumber)
+            .toList();
+        log.info("Expiring {} notification(s)", referenceNumbers.size());
+        deleteNotificationsAndDocuments(referenceNumbers);
+        return referenceNumbers.size();
+    }
+
+    /**
+     * Removes the given notifications and their accompanying documents. Shared by the audited,
+     * strict-existence {@link #deleteByReferenceNumbers} path and the tolerant {@link #deleteExpired}
+     * sweep; carries no audit or existence semantics of its own.
+     */
+    private void deleteNotificationsAndDocuments(List<String> referenceNumbers) {
         notificationRepository.deleteAllByReferenceNumberIn(referenceNumbers);
         documentService.deleteForNotificationRefs(referenceNumbers);
-        createNotificationAuditRecord(referenceNumbers, auditContext, Result.SUCCESS);
+    }
+
+    /**
+     * Stamps {@code expireAt} on a freshly-created notification, but only when both prod safeguards
+     * pass: a TTL duration is configured (non-prod config) and the running environment is not prod.
+     * Anchored to {@code created}, so a notification expires a fixed window after creation
+     * regardless of later activity.
+     */
+    private void stampExpiry(Notification notification) {
+        Integer days = ttlConfig.days();
+        if (days == null || ttlConfig.isProd()) {
+            return;
+        }
+        notification.setExpireAt(notification.getCreated().plusDays(days));
     }
 
     private Notification createNotification(NotificationDto dto) {
         Notification notification = new Notification();
         notification.setCreated(LocalDateTime.now());
         notification.setStatus(NotificationStatus.DRAFT);
+        stampExpiry(notification);
         setNotificationDetails(dto, notification);
         for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
             notification.setReferenceNumber(referenceNumberGenerator.generate());
@@ -342,7 +413,7 @@ public class NotificationService {
                 Notification saved = notificationRepository.save(notification);
                 log.info("Notification saved with reference number: {}", saved.getReferenceNumber());
                 return saved;
-            } catch (DuplicateKeyException e) {
+            } catch (DuplicateKeyException _) {
                 log.warn("Reference number collision on persistence attempt {}/{}; retrying", attempt, MAX_REF_RETRIES);
             }
         }
