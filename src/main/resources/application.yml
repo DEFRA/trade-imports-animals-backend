@@ -152,6 +152,21 @@ fulfilment:
   list:
     page-size: ${FULFILMENT_LIST_PAGE_SIZE:20}
 
+# Plant-products (CHED-PP) sibling domain
+plant-products:
+  notification:
+    list:
+      page-size: ${PLANT_PRODUCTS_NOTIFICATION_LIST_PAGE_SIZE:25}
+    ttl:
+      days: ${PLANT_PRODUCTS_NOTIFICATION_TTL_DAYS:}
+      environment: ${ENVIRONMENT:local}
+      sweep:
+        enabled: ${PLANT_PRODUCTS_NOTIFICATION_TTL_SWEEP_ENABLED:false}
+        interval-ms: 3600000
+        batch-size: 10
+        lock-at-least-for: 1s
+        lock-at-most-for: 30s
+
 # Transactional outbox SNS relay (ADR-EUDP-001)
 outbox:
   poller:
