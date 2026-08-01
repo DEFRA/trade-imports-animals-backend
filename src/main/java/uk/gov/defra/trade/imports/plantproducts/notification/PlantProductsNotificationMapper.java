@@ -9,11 +9,15 @@ import org.mapstruct.ReportingPolicy;
 @Mapper(unmappedTargetPolicy = ReportingPolicy.ERROR, unmappedSourcePolicy = ReportingPolicy.ERROR)
 public interface PlantProductsNotificationMapper {
 
-    @BeanMapping(ignoreUnmappedSourceProperties = {"submittedBaseline", "expireAt"})
+    @BeanMapping(ignoreUnmappedSourceProperties = {
+        "copyIdempotencyKey", "submittedBaseline", "expireAt"
+    })
     @Mapping(target = "accompanyingDocuments", ignore = true)
     PlantProductsNotificationResponse toResponse(PlantProductsNotification notification);
 
-    @BeanMapping(ignoreUnmappedSourceProperties = {"id", "submittedBaseline", "expireAt"})
+    @BeanMapping(ignoreUnmappedSourceProperties = {
+        "id", "copyIdempotencyKey", "submittedBaseline", "expireAt"
+    })
     PlantProductsNotificationDto toDto(PlantProductsNotification notification);
 
     @BeanMapping(ignoreUnmappedSourceProperties = {
@@ -26,6 +30,7 @@ public interface PlantProductsNotificationMapper {
     @Mapping(target = "ownership", ignore = true)
     @Mapping(target = "created", ignore = true)
     @Mapping(target = "updated", ignore = true)
+    @Mapping(target = "copyIdempotencyKey", ignore = true)
     @Mapping(target = "submittedBaseline", ignore = true)
     @Mapping(target = "expireAt", ignore = true)
     void applyContent(PlantProductsNotificationDto dto, @MappingTarget PlantProductsNotification notification);

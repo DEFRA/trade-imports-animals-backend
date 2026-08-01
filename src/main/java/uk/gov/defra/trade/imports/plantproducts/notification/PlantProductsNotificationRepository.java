@@ -16,6 +16,8 @@ public interface PlantProductsNotificationRepository
 
     Optional<PlantProductsNotification> findByReferenceNumber(String referenceNumber);
 
+    Optional<PlantProductsNotification> findByCopyIdempotencyKey(String copyIdempotencyKey);
+
     Optional<PlantProductsNotification> findByReferenceNumberAndStatusIn(
         String referenceNumber, Collection<PlantProductsNotificationStatus> statuses);
 

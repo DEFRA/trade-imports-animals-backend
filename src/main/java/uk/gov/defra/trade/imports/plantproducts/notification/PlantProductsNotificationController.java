@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -35,6 +36,8 @@ import uk.gov.defra.trade.imports.plantproducts.exceptions.PlantProductsNotFound
 @Slf4j
 @Validated
 public class PlantProductsNotificationController {
+
+    public static final String IDEMPOTENCY_KEY = "Idempotency-Key";
 
     private final PlantProductsNotificationService notificationService;
     private final PlantProductsAccompanyingDocumentService accompanyingDocumentService;
@@ -155,17 +158,22 @@ public class PlantProductsNotificationController {
 
     @PostMapping("/{reference-number}/copies")
     @Operation(summary = "Copy plant-products notification",
-        description = "Creates a new DRAFT notification copied from a SUBMITTED or AMEND source")
-    @ApiResponse(responseCode = "201", description = "New DRAFT notification created",
+        description = "Creates a new DRAFT notification copied from a SUBMITTED or AMEND source. "
+            + "Repeating the request with the same Idempotency-Key returns the same copy with the "
+            + "same Location.")
+    @ApiResponse(responseCode = "201", description = "DRAFT notification copy created or returned",
         content = @Content(schema = @Schema(implementation = PlantProductsNotification.class)))
-    @ApiResponse(responseCode = "400", description = "Source notification is not copyable", content = @Content)
+    @ApiResponse(responseCode = "400",
+        description = "Source notification is not in a copyable state or the Idempotency-Key header is blank",
+        content = @Content)
     @ApiResponse(responseCode = "404", description = "Source notification not found", content = @Content)
     @Timed("controller.copyPlantProductsNotification.time")
     public ResponseEntity<PlantProductsNotification> copy(
         @Pattern(regexp = PlantProductsReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-        @PathVariable("reference-number") String referenceNumber) {
+        @PathVariable("reference-number") String referenceNumber,
+        @RequestHeader(IDEMPOTENCY_KEY) String idempotencyKey) {
         log.info("POST /plant-products/notifications/{}/copies - Copying notification", referenceNumber);
-        PlantProductsNotification copy = notificationService.copy(referenceNumber);
+        PlantProductsNotification copy = notificationService.copy(referenceNumber, idempotencyKey);
         return ResponseEntity.created(notificationLocation(copy.getReferenceNumber()))
             .body(copy);
     }

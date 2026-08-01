@@ -14,7 +14,7 @@ public interface PlantProductsNotificationContentSnapshotMapper {
 
     @BeanMapping(ignoreUnmappedSourceProperties = {
         "id", "referenceNumber", "chedType", "status", "ownership",
-        "created", "updated", "submittedBaseline", "expireAt"
+        "created", "updated", "copyIdempotencyKey", "submittedBaseline", "expireAt"
     })
     @Mapping(target = "commodity", source = "commodity", qualifiedByName = "copyCommodity")
     @Mapping(target = "nominatedContacts", source = "nominatedContacts", qualifiedByName = "copyNominatedContacts")
@@ -28,6 +28,7 @@ public interface PlantProductsNotificationContentSnapshotMapper {
     @Mapping(target = "ownership", ignore = true)
     @Mapping(target = "created", ignore = true)
     @Mapping(target = "updated", ignore = true)
+    @Mapping(target = "copyIdempotencyKey", ignore = true)
     @Mapping(target = "submittedBaseline", ignore = true)
     @Mapping(target = "expireAt", ignore = true)
     @Mapping(target = "commodity", source = "commodity", qualifiedByName = "copyCommodity")

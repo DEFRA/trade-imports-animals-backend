@@ -27,6 +27,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -493,21 +495,28 @@ class PlantProductsNotificationServiceTest {
     class Copy {
 
         @Test
-        void copy_shouldDelegateCopyRemintDraftAndNeverWriteDocuments() {
+        void copy_shouldRemintDraftWithIdempotencyKeyAndNeverWriteDocuments() {
             // Given
+            String idempotencyKey = "copy-key";
             PlantProductsNotification source = withStatus(PlantProductsNotificationStatus.SUBMITTED);
             LocalDateTime copyTime = LocalDateTime.now();
             PlantProductsNotification copied = PlantProductsNotification.builder()
+                .origin(source.getOrigin())
                 .status(PlantProductsNotificationStatus.DRAFT)
                 .created(copyTime)
                 .updated(copyTime)
                 .build();
+            when(notificationRepository.findByCopyIdempotencyKey(idempotencyKey))
+                .thenReturn(Optional.empty());
             stubFound(source);
             when(notificationCopyMapper.copyFrom(source)).thenReturn(copied);
             when(referenceNumberGenerator.generate()).thenReturn(refNumber("C0PY01"));
+            when(notificationRepository.insert(any(PlantProductsNotification.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
 
             // When
-            PlantProductsNotification result = service.copy(source.getReferenceNumber());
+            PlantProductsNotification result = service.copy(
+                source.getReferenceNumber(), idempotencyKey);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(refNumber("C0PY01"));
@@ -515,37 +524,140 @@ class PlantProductsNotificationServiceTest {
             assertThat(result.getChedType()).isEqualTo("CHEDPP");
             assertThat(result.getCreated()).isNotNull();
             assertThat(result.getUpdated()).isNotNull();
+            assertThat(result.getOrigin()).isEqualTo(source.getOrigin());
+            assertThat(result.getCopyIdempotencyKey()).isEqualTo(idempotencyKey);
             verify(notificationCopyMapper).copyFrom(source);
+            verify(notificationRepository).insert(copied);
             verifyNoInteractions(accompanyingDocumentRepository);
         }
 
-        @ParameterizedTest
-        @EnumSource(value = PlantProductsNotificationStatus.class, names = {"DRAFT", "DELETED"})
-        void copy_shouldRejectNonCopyableStatuses(PlantProductsNotificationStatus status) {
+        @Test
+        void copy_shouldReturnExistingCopyWithoutInserting() {
             // Given
-            PlantProductsNotification source = withStatus(status);
+            String idempotencyKey = "repeat-key";
+            PlantProductsNotification existingCopy = withStatus(PlantProductsNotificationStatus.DRAFT);
+            when(notificationRepository.findByCopyIdempotencyKey(idempotencyKey))
+                .thenReturn(Optional.of(existingCopy));
+
+            // When
+            PlantProductsNotification result = service.copy(refNumber("0THER1"), idempotencyKey);
+
+            // Then
+            assertThat(result).isSameAs(existingCopy);
+            verify(notificationRepository, never()).findByReferenceNumber(any());
+            verify(notificationRepository, never()).insert(any(PlantProductsNotification.class));
+        }
+
+        @ParameterizedTest
+        @NullAndEmptySource
+        @ValueSource(strings = "   ")
+        void copy_shouldRejectBlankIdempotencyKey(String idempotencyKey) {
+            // When & Then
+            assertThatThrownBy(() -> service.copy(refNumber("B1ANK1"), idempotencyKey))
+                .isInstanceOf(PlantProductsBadRequestException.class)
+                .hasMessage("Idempotency-Key must not be blank");
+            verifyNoInteractions(notificationRepository);
+        }
+
+        @Test
+        void copy_shouldRejectNonCopyableStatus() {
+            // Given
+            String idempotencyKey = "non-copyable-key";
+            PlantProductsNotification source = withStatus(PlantProductsNotificationStatus.DRAFT);
+            when(notificationRepository.findByCopyIdempotencyKey(idempotencyKey))
+                .thenReturn(Optional.empty());
             stubFound(source);
 
             // When & Then
-            assertThatThrownBy(() -> service.copy(source.getReferenceNumber()))
+            assertThatThrownBy(() -> service.copy(source.getReferenceNumber(), idempotencyKey))
                 .isInstanceOf(PlantProductsBadRequestException.class);
+            verify(notificationRepository, never()).insert(any(PlantProductsNotification.class));
         }
 
         @Test
         void copy_shouldThrowNotFoundForUnknownReference() {
             // Given
             String reference = refNumber("M1SS02");
+            String idempotencyKey = "missing-source-key";
+            when(notificationRepository.findByCopyIdempotencyKey(idempotencyKey))
+                .thenReturn(Optional.empty());
             when(notificationRepository.findByReferenceNumber(reference)).thenReturn(Optional.empty());
 
             // When & Then
-            assertThatThrownBy(() -> service.copy(reference))
+            assertThatThrownBy(() -> service.copy(reference, idempotencyKey))
                 .isInstanceOf(PlantProductsNotFoundException.class);
+        }
+
+        @Test
+        void copy_shouldReturnConcurrentlyCreatedCopyAfterDuplicateKey() {
+            // Given
+            String idempotencyKey = "concurrent-key";
+            PlantProductsNotification source = withStatus(PlantProductsNotificationStatus.SUBMITTED);
+            PlantProductsNotification mappedCopy = PlantProductsNotification.builder()
+                .status(PlantProductsNotificationStatus.DRAFT)
+                .created(LocalDateTime.now())
+                .updated(LocalDateTime.now())
+                .build();
+            PlantProductsNotification concurrentCopy = PlantProductsNotification.builder()
+                .referenceNumber(refNumber("C0NC01"))
+                .status(PlantProductsNotificationStatus.DRAFT)
+                .copyIdempotencyKey(idempotencyKey)
+                .build();
+            when(notificationRepository.findByCopyIdempotencyKey(idempotencyKey))
+                .thenReturn(Optional.empty(), Optional.of(concurrentCopy));
+            stubFound(source);
+            when(notificationCopyMapper.copyFrom(source)).thenReturn(mappedCopy);
+            when(referenceNumberGenerator.generate()).thenReturn(refNumber("C0NC02"));
+            when(notificationRepository.insert(mappedCopy))
+                .thenThrow(new DuplicateKeyException("collision"));
+
+            // When
+            PlantProductsNotification result = service.copy(
+                source.getReferenceNumber(), idempotencyKey);
+
+            // Then
+            assertThat(result).isSameAs(concurrentCopy);
+            verify(referenceNumberGenerator).generate();
+            verify(notificationRepository).insert(mappedCopy);
+        }
+
+        @Test
+        void copy_shouldRetryReferenceMintAfterNonIdempotencyCollision() {
+            // Given
+            String idempotencyKey = "reference-collision-key";
+            PlantProductsNotification source = withStatus(PlantProductsNotificationStatus.SUBMITTED);
+            PlantProductsNotification mappedCopy = PlantProductsNotification.builder()
+                .status(PlantProductsNotificationStatus.DRAFT)
+                .created(LocalDateTime.now())
+                .updated(LocalDateTime.now())
+                .build();
+            when(notificationRepository.findByCopyIdempotencyKey(idempotencyKey))
+                .thenReturn(Optional.empty());
+            stubFound(source);
+            when(notificationCopyMapper.copyFrom(source)).thenReturn(mappedCopy);
+            when(referenceNumberGenerator.generate()).thenReturn(
+                refNumber("CPY001"), refNumber("CPY002"));
+            when(notificationRepository.insert(mappedCopy))
+                .thenThrow(new DuplicateKeyException("collision"))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+            // When
+            PlantProductsNotification result = service.copy(
+                source.getReferenceNumber(), idempotencyKey);
+
+            // Then
+            assertThat(result.getReferenceNumber()).isEqualTo(refNumber("CPY002"));
+            verify(referenceNumberGenerator, times(2)).generate();
+            verify(notificationRepository, times(2)).insert(mappedCopy);
         }
 
         @Test
         void copy_shouldRetryThreeTimesThenFail_whenEveryMintCollides() {
             // Given
+            String idempotencyKey = "exhausted-key";
             PlantProductsNotification source = withStatus(PlantProductsNotificationStatus.AMEND);
+            when(notificationRepository.findByCopyIdempotencyKey(idempotencyKey))
+                .thenReturn(Optional.empty());
             stubFound(source);
             LocalDateTime copyTime = LocalDateTime.now();
             when(notificationCopyMapper.copyFrom(source)).thenReturn(PlantProductsNotification.builder()
@@ -555,13 +667,14 @@ class PlantProductsNotificationServiceTest {
                 .build());
             when(referenceNumberGenerator.generate()).thenReturn(
                 refNumber("CPY001"), refNumber("CPY002"), refNumber("CPY003"));
-            when(notificationRepository.save(any())).thenThrow(new DuplicateKeyException("collision"));
+            when(notificationRepository.insert(any(PlantProductsNotification.class)))
+                .thenThrow(new DuplicateKeyException("collision"));
 
             // When & Then
-            assertThatThrownBy(() -> service.copy(source.getReferenceNumber()))
+            assertThatThrownBy(() -> service.copy(source.getReferenceNumber(), idempotencyKey))
                 .isInstanceOf(IllegalStateException.class);
             verify(referenceNumberGenerator, times(3)).generate();
-            verify(notificationRepository, times(3)).save(any());
+            verify(notificationRepository, times(3)).insert(any(PlantProductsNotification.class));
         }
     }
 

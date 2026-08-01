@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.plantproducts.notification;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -276,40 +277,69 @@ class PlantProductsNotificationControllerTest {
     class Copy {
 
         @Test
-        void postCopy_shouldReturn201AndLocation() throws Exception {
+        void postCopy_shouldPassIdempotencyKeyAndReturn201AndLocation() throws Exception {
             // Given
+            String idempotencyKey = "copy-key";
             PlantProductsNotification copied = fullyPopulatedNotification();
             copied.setReferenceNumber(refNumber("NEW001"));
             copied.setStatus(PlantProductsNotificationStatus.DRAFT);
-            when(notificationService.copy(REFERENCE)).thenReturn(copied);
+            when(notificationService.copy(REFERENCE, idempotencyKey)).thenReturn(copied);
 
             // When & Then
-            mockMvc.perform(post("/plant-products/notifications/{reference-number}/copies", REFERENCE))
+            mockMvc.perform(post("/plant-products/notifications/{reference-number}/copies", REFERENCE)
+                    .header(PlantProductsNotificationController.IDEMPOTENCY_KEY, idempotencyKey))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location",
                     "http://localhost:8085/plant-products/notifications/" + refNumber("NEW001")))
                 .andExpect(jsonPath("$.status").value("DRAFT"));
+            verify(notificationService).copy(REFERENCE, idempotencyKey);
+        }
+
+        @Test
+        void postCopy_shouldReturn400AndNotCallServiceWhenIdempotencyKeyIsMissing()
+            throws Exception {
+            // When & Then
+            mockMvc.perform(post("/plant-products/notifications/{reference-number}/copies", REFERENCE))
+                .andExpect(status().isBadRequest());
+            verify(notificationService, never()).copy(any(), any());
+        }
+
+        @Test
+        void postCopy_shouldReturn400WhenIdempotencyKeyIsBlank() throws Exception {
+            // Given
+            when(notificationService.copy(REFERENCE, "   "))
+                .thenThrow(new PlantProductsBadRequestException(
+                    "Idempotency-Key must not be blank"));
+
+            // When & Then
+            mockMvc.perform(post("/plant-products/notifications/{reference-number}/copies", REFERENCE)
+                    .header(PlantProductsNotificationController.IDEMPOTENCY_KEY, "   "))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Idempotency-Key must not be blank"));
+            verify(notificationService).copy(REFERENCE, "   ");
         }
 
         @Test
         void postCopy_shouldReturn400WhenNotCopyable() throws Exception {
             // Given
-            when(notificationService.copy(REFERENCE))
+            when(notificationService.copy(REFERENCE, "not-copyable-key"))
                 .thenThrow(new PlantProductsBadRequestException("not copyable"));
 
             // When & Then
-            mockMvc.perform(post("/plant-products/notifications/{reference-number}/copies", REFERENCE))
+            mockMvc.perform(post("/plant-products/notifications/{reference-number}/copies", REFERENCE)
+                    .header(PlantProductsNotificationController.IDEMPOTENCY_KEY, "not-copyable-key"))
                 .andExpect(status().isBadRequest());
         }
 
         @Test
         void postCopy_shouldReturn404WhenUnknown() throws Exception {
             // Given
-            when(notificationService.copy(REFERENCE))
+            when(notificationService.copy(REFERENCE, "unknown-key"))
                 .thenThrow(new PlantProductsNotFoundException("unknown"));
 
             // When & Then
-            mockMvc.perform(post("/plant-products/notifications/{reference-number}/copies", REFERENCE))
+            mockMvc.perform(post("/plant-products/notifications/{reference-number}/copies", REFERENCE)
+                    .header(PlantProductsNotificationController.IDEMPOTENCY_KEY, "unknown-key"))
                 .andExpect(status().isNotFound());
         }
     }

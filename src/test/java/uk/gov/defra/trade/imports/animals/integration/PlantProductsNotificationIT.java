@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static uk.gov.defra.trade.imports.plantproducts.notification.PlantProductsNotificationStatus.AMEND;
 import static uk.gov.defra.trade.imports.plantproducts.notification.PlantProductsNotificationStatus.DELETED;
 import static uk.gov.defra.trade.imports.plantproducts.notification.PlantProductsNotificationStatus.DRAFT;
@@ -10,9 +11,23 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -35,6 +50,7 @@ import uk.gov.defra.trade.imports.plantproducts.notification.PlantProductsContac
 import uk.gov.defra.trade.imports.plantproducts.notification.PlantProductsMeansOfTransport;
 import uk.gov.defra.trade.imports.plantproducts.notification.PlantProductsNotification;
 import uk.gov.defra.trade.imports.plantproducts.notification.PlantProductsNotificationBase;
+import uk.gov.defra.trade.imports.plantproducts.notification.PlantProductsNotificationController;
 import uk.gov.defra.trade.imports.plantproducts.notification.PlantProductsNotificationDto;
 import uk.gov.defra.trade.imports.plantproducts.notification.PlantProductsNotificationPageResponse;
 import uk.gov.defra.trade.imports.plantproducts.notification.PlantProductsNotificationRepository;
@@ -50,6 +66,7 @@ import uk.gov.defra.trade.imports.plantproducts.notification.StatusChangeRequest
 import uk.gov.defra.trade.imports.plantproducts.notification.TransportContainer;
 import uk.gov.defra.trade.imports.plantproducts.notification.VarietyClass;
 
+@Import(PlantProductsNotificationIT.ConcurrentCopyConfiguration.class)
 class PlantProductsNotificationIT extends IntegrationBase {
 
     private static final String ENDPOINT = "/plant-products/notifications";
@@ -62,6 +79,9 @@ class PlantProductsNotificationIT extends IntegrationBase {
 
     @Autowired
     private PlantProductsAccompanyingDocumentRepository accompanyingDocumentRepository;
+
+    @Autowired
+    private ConcurrentCopyLookupGate concurrentCopyLookupGate;
 
     @BeforeEach
     void setUp() {
@@ -317,6 +337,7 @@ class PlantProductsNotificationIT extends IntegrationBase {
         EntityExchangeResult<PlantProductsNotification> copyResult = webClient("NoAuth")
             .post()
             .uri(ENDPOINT + "/{referenceNumber}/copies", sourceReference)
+            .header(PlantProductsNotificationController.IDEMPOTENCY_KEY, "content-copy-key")
             .exchange()
             .expectStatus().isCreated()
             .expectBody(PlantProductsNotification.class)
@@ -329,6 +350,7 @@ class PlantProductsNotificationIT extends IntegrationBase {
         assertThat(copyResult.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
             .endsWith(ENDPOINT + "/" + copy.getReferenceNumber());
         assertThat(copy.getStatus()).isEqualTo(DRAFT);
+        assertThat(copy.getCopyIdempotencyKey()).isEqualTo("content-copy-key");
         assertThat(copy.getDeclaration()).isNull();
         sourceDto.setDeclaration(null);
         assertContentFields(sourceDto, copy);
@@ -344,10 +366,179 @@ class PlantProductsNotificationIT extends IntegrationBase {
         // When / Then - invalid and unknown sources
         webClient("NoAuth").post()
             .uri(ENDPOINT + "/{referenceNumber}/copies", draftReference)
+            .header(PlantProductsNotificationController.IDEMPOTENCY_KEY, "draft-copy-key")
             .exchange().expectStatus().isBadRequest();
         webClient("NoAuth").post()
             .uri(ENDPOINT + "/{referenceNumber}/copies", NONEXISTENT_REF)
+            .header(PlantProductsNotificationController.IDEMPOTENCY_KEY, "missing-copy-key")
             .exchange().expectStatus().isNotFound();
+    }
+
+    @Test
+    void copy_shouldReturnSameDraftAndLocationForRepeatedIdempotencyKey() {
+        // Given
+        PlantProductsNotificationDto sourceDto = fullNotificationDto();
+        String sourceReference = create(sourceDto).getReferenceNumber();
+        changeStatus(sourceReference, SUBMITTED, null).expectStatus().isOk();
+
+        // When
+        EntityExchangeResult<PlantProductsNotification> first =
+            copy(sourceReference, "same-copy-key");
+        EntityExchangeResult<PlantProductsNotification> repeated =
+            copy(sourceReference, "same-copy-key");
+
+        // Then
+        PlantProductsNotification firstCopy = first.getResponseBody();
+        PlantProductsNotification repeatedCopy = repeated.getResponseBody();
+        assertThat(firstCopy).isNotNull();
+        assertThat(repeatedCopy).isNotNull();
+        assertThat(repeatedCopy.getReferenceNumber()).isEqualTo(firstCopy.getReferenceNumber());
+        assertThat(repeated.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
+            .isEqualTo(first.getResponseHeaders().getFirst(HttpHeaders.LOCATION));
+        assertThat(notificationRepository.findAllByStatusIn(List.of(DRAFT), Pageable.unpaged()))
+            .singleElement()
+            .extracting(PlantProductsNotification::getReferenceNumber)
+            .isEqualTo(firstCopy.getReferenceNumber());
+    }
+
+    @Test
+    void copy_shouldReturnSameDraftAndLocationForConcurrentIdempotencyKey() throws Exception {
+        // Given
+        String sourceReference = createFullNotification().getReferenceNumber();
+        changeStatus(sourceReference, SUBMITTED, null).expectStatus().isOk();
+        String idempotencyKey = "concurrent-copy-key";
+        concurrentCopyLookupGate.arm(idempotencyKey);
+        CountDownLatch requestsReady = new CountDownLatch(2);
+        CountDownLatch startRequests = new CountDownLatch(1);
+
+        // When
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<EntityExchangeResult<PlantProductsNotification>> firstRequest = executor.submit(
+                () -> concurrentCopy(sourceReference, idempotencyKey, requestsReady, startRequests));
+            Future<EntityExchangeResult<PlantProductsNotification>> secondRequest = executor.submit(
+                () -> concurrentCopy(sourceReference, idempotencyKey, requestsReady, startRequests));
+            assertThat(requestsReady.await(10, TimeUnit.SECONDS)).isTrue();
+            startRequests.countDown();
+
+            EntityExchangeResult<PlantProductsNotification> first =
+                firstRequest.get(30, TimeUnit.SECONDS);
+            EntityExchangeResult<PlantProductsNotification> second =
+                secondRequest.get(30, TimeUnit.SECONDS);
+
+            // Then
+            assertThat(first.getResponseBody()).isNotNull();
+            assertThat(second.getResponseBody()).isEqualTo(first.getResponseBody());
+            assertThat(second.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
+                .isEqualTo(first.getResponseHeaders().getFirst(HttpHeaders.LOCATION));
+            assertThat(notificationRepository.findAllByStatusIn(List.of(DRAFT), Pageable.unpaged()))
+                .singleElement()
+                .extracting(PlantProductsNotification::getReferenceNumber)
+                .isEqualTo(first.getResponseBody().getReferenceNumber());
+            assertThat(notificationRepository.count()).isEqualTo(2);
+        } finally {
+            concurrentCopyLookupGate.disarm();
+        }
+    }
+
+    @Test
+    void copy_shouldCreateDistinctDraftsForDistinctIdempotencyKeys() {
+        // Given
+        String sourceReference = createFullNotification().getReferenceNumber();
+        changeStatus(sourceReference, SUBMITTED, null).expectStatus().isOk();
+
+        // When
+        PlantProductsNotification first =
+            copy(sourceReference, "first-copy-key").getResponseBody();
+        PlantProductsNotification second =
+            copy(sourceReference, "second-copy-key").getResponseBody();
+
+        // Then
+        assertThat(first).isNotNull();
+        assertThat(second).isNotNull();
+        assertThat(second.getReferenceNumber()).isNotEqualTo(first.getReferenceNumber());
+        assertThat(notificationRepository.findAllByStatusIn(List.of(DRAFT), Pageable.unpaged()))
+            .extracting(PlantProductsNotification::getReferenceNumber)
+            .containsExactlyInAnyOrder(first.getReferenceNumber(), second.getReferenceNumber());
+    }
+
+    @Test
+    void copy_shouldReturnExistingCopyWhenKeyIsRepeatedAgainstDifferentSource() {
+        // Given
+        String firstSource = createFullNotification().getReferenceNumber();
+        String secondSource = createFullNotification().getReferenceNumber();
+        changeStatus(firstSource, SUBMITTED, null).expectStatus().isOk();
+        changeStatus(secondSource, SUBMITTED, null).expectStatus().isOk();
+
+        // When
+        EntityExchangeResult<PlantProductsNotification> first = copy(firstSource, "scoped-key");
+        EntityExchangeResult<PlantProductsNotification> repeated = copy(secondSource, "scoped-key");
+
+        // Then
+        assertThat(repeated.getResponseBody()).isNotNull();
+        assertThat(first.getResponseBody()).isNotNull();
+        assertThat(repeated.getResponseBody().getReferenceNumber())
+            .isEqualTo(first.getResponseBody().getReferenceNumber());
+        assertThat(repeated.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
+            .isEqualTo(first.getResponseHeaders().getFirst(HttpHeaders.LOCATION));
+        assertThat(notificationRepository.findAllByStatusIn(List.of(DRAFT), Pageable.unpaged()))
+            .hasSize(1);
+    }
+
+    @Test
+    void copy_shouldRejectMissingAndBlankIdempotencyKeyWithoutCreatingDraft() {
+        // Given
+        String sourceReference = createFullNotification().getReferenceNumber();
+        changeStatus(sourceReference, SUBMITTED, null).expectStatus().isOk();
+
+        // When & Then - missing header
+        webClient("NoAuth")
+            .post()
+            .uri(ENDPOINT + "/{referenceNumber}/copies", sourceReference)
+            .exchange()
+            .expectStatus().isBadRequest();
+
+        // When & Then - blank header
+        webClient("NoAuth")
+            .post()
+            .uri(ENDPOINT + "/{referenceNumber}/copies", sourceReference)
+            .header(PlantProductsNotificationController.IDEMPOTENCY_KEY, "")
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail").isEqualTo("Idempotency-Key must not be blank");
+        assertThat(notificationRepository.findAllByStatusIn(List.of(DRAFT), Pageable.unpaged()))
+            .isEmpty();
+    }
+
+    @Test
+    void copyIdempotencyIndex_shouldRejectDuplicateStringsAndAllowMultipleNulls() {
+        // Given
+        PlantProductsNotification firstKeyed = PlantProductsNotification.builder()
+            .referenceNumber("GBN-PP-26-IDX001")
+            .copyIdempotencyKey("duplicate-index-key")
+            .status(DRAFT)
+            .build();
+        PlantProductsNotification secondKeyed = PlantProductsNotification.builder()
+            .referenceNumber("GBN-PP-26-IDX002")
+            .copyIdempotencyKey("duplicate-index-key")
+            .status(DRAFT)
+            .build();
+        notificationRepository.insert(firstKeyed);
+
+        // When & Then - the partial unique index rejects a repeated string key
+        assertThatThrownBy(() -> notificationRepository.insert(secondKeyed))
+            .isInstanceOf(DuplicateKeyException.class);
+
+        // When & Then - documents outside the partial filter do not collide
+        notificationRepository.insert(PlantProductsNotification.builder()
+            .referenceNumber("GBN-PP-26-IDX003")
+            .status(DRAFT)
+            .build());
+        notificationRepository.insert(PlantProductsNotification.builder()
+            .referenceNumber("GBN-PP-26-IDX004")
+            .status(DRAFT)
+            .build());
+        assertThat(notificationRepository.count()).isEqualTo(3);
     }
 
     @Test
@@ -406,6 +597,30 @@ class PlantProductsNotificationIT extends IntegrationBase {
             .expectBody(PlantProductsNotificationResponse.class)
             .returnResult()
             .getResponseBody();
+    }
+
+    private EntityExchangeResult<PlantProductsNotification> copy(
+        String referenceNumber, String idempotencyKey) {
+        return webClient("NoAuth")
+            .post()
+            .uri(ENDPOINT + "/{referenceNumber}/copies", referenceNumber)
+            .header(PlantProductsNotificationController.IDEMPOTENCY_KEY, idempotencyKey)
+            .exchange()
+            .expectStatus().isCreated()
+            .expectBody(PlantProductsNotification.class)
+            .returnResult();
+    }
+
+    private EntityExchangeResult<PlantProductsNotification> concurrentCopy(
+        String referenceNumber,
+        String idempotencyKey,
+        CountDownLatch requestsReady,
+        CountDownLatch startRequests) throws InterruptedException {
+        requestsReady.countDown();
+        if (!startRequests.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Concurrent copy requests did not start together");
+        }
+        return copy(referenceNumber, idempotencyKey);
     }
 
     private PlantProductsNotificationPageResponse findAll(
@@ -609,5 +824,66 @@ class PlantProductsNotificationIT extends IntegrationBase {
             .telephone("+44 7700 900123")
             .isAgent(agent)
             .build();
+    }
+
+    @TestConfiguration
+    static class ConcurrentCopyConfiguration {
+
+        @Bean
+        ConcurrentCopyLookupGate concurrentCopyLookupGate() {
+            return new ConcurrentCopyLookupGate();
+        }
+
+        @Bean
+        ConcurrentCopyLookupAspect concurrentCopyLookupAspect(ConcurrentCopyLookupGate gate) {
+            return new ConcurrentCopyLookupAspect(gate);
+        }
+    }
+
+    static class ConcurrentCopyLookupGate {
+
+        private final AtomicReference<String> idempotencyKey = new AtomicReference<>();
+        private volatile CountDownLatch initialLookupsCompleted = new CountDownLatch(0);
+
+        void arm(String key) {
+            initialLookupsCompleted = new CountDownLatch(2);
+            idempotencyKey.set(key);
+        }
+
+        void awaitConcurrentInitialLookups(String key) throws InterruptedException {
+            CountDownLatch latch = initialLookupsCompleted;
+            if (!key.equals(idempotencyKey.get()) || latch.getCount() == 0) {
+                return;
+            }
+            latch.countDown();
+            if (!latch.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Concurrent copy lookups did not overlap");
+            }
+        }
+
+        void disarm() {
+            idempotencyKey.set(null);
+            initialLookupsCompleted = new CountDownLatch(0);
+        }
+    }
+
+    @Aspect
+    static class ConcurrentCopyLookupAspect {
+
+        private final ConcurrentCopyLookupGate gate;
+
+        ConcurrentCopyLookupAspect(ConcurrentCopyLookupGate gate) {
+            this.gate = gate;
+        }
+
+        @Around("execution(* uk.gov.defra.trade.imports.plantproducts.notification."
+            + "PlantProductsNotificationRepository.findByCopyIdempotencyKey(..)) "
+            + "&& args(idempotencyKey)")
+        Object coordinateInitialLookups(
+            ProceedingJoinPoint joinPoint, String idempotencyKey) throws Throwable {
+            Object result = joinPoint.proceed();
+            gate.awaitConcurrentInitialLookups(idempotencyKey);
+            return result;
+        }
     }
 }

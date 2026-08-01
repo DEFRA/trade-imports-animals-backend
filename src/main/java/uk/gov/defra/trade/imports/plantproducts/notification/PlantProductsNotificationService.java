@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.plantproducts.notification;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
@@ -140,8 +141,18 @@ public class PlantProductsNotificationService {
         };
     }
 
-    @Transactional
-    public PlantProductsNotification copy(String referenceNumber) {
+    public PlantProductsNotification copy(String referenceNumber, String idempotencyKey) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            throw new PlantProductsBadRequestException("Idempotency-Key must not be blank");
+        }
+
+        PlantProductsNotification existingCopy = findCopy(idempotencyKey);
+        if (existingCopy != null) {
+            log.info("Returning existing plant-products notification copy {} for idempotency key",
+                existingCopy.getReferenceNumber());
+            return existingCopy;
+        }
+
         PlantProductsNotification source = notificationRepository
             .findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new PlantProductsNotFoundException(
@@ -153,9 +164,10 @@ public class PlantProductsNotificationService {
         }
         PlantProductsNotification copy = notificationCopyMapper.copyFrom(source);
         copy.setChedType(CHED_TYPE);
+        copy.setCopyIdempotencyKey(idempotencyKey);
         stampExpiry(copy);
         log.info("Copying plant-products notification {}", referenceNumber);
-        return saveWithMintedReference(copy);
+        return saveCopyWithMintedReference(copy, idempotencyKey);
     }
 
     @Transactional
@@ -271,6 +283,36 @@ public class PlantProductsNotificationService {
         }
         throw new IllegalStateException(
             "Failed to generate a unique reference number after " + MAX_REF_RETRIES + " attempts");
+    }
+
+    private PlantProductsNotification saveCopyWithMintedReference(
+        PlantProductsNotification copy, String idempotencyKey) {
+        for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
+            copy.setReferenceNumber(referenceNumberGenerator.generate());
+            try {
+                PlantProductsNotification saved = notificationRepository.insert(copy);
+                saved.setCreated(saved.getCreated().truncatedTo(ChronoUnit.MILLIS));
+                saved.setUpdated(saved.getUpdated().truncatedTo(ChronoUnit.MILLIS));
+                log.info("Plant-products notification saved with reference number: {}",
+                    saved.getReferenceNumber());
+                return saved;
+            } catch (DuplicateKeyException e) {
+                PlantProductsNotification existingCopy = findCopy(idempotencyKey);
+                if (existingCopy != null) {
+                    log.info("Returning concurrently-created plant-products notification copy {}",
+                        existingCopy.getReferenceNumber());
+                    return existingCopy;
+                }
+                log.warn("Reference number collision on copy persistence attempt {}/{}; retrying",
+                    attempt, MAX_REF_RETRIES);
+            }
+        }
+        throw new IllegalStateException(
+            "Failed to generate a unique reference number after " + MAX_REF_RETRIES + " attempts");
+    }
+
+    private PlantProductsNotification findCopy(String idempotencyKey) {
+        return notificationRepository.findByCopyIdempotencyKey(idempotencyKey).orElse(null);
     }
 
     public record ReplaceResult(PlantProductsNotification notification, boolean created) {
