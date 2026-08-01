@@ -34,6 +34,20 @@ public class PlantProductsNotificationContentSnapshot {
     }
 
     void applyTo(PlantProductsNotification notification) {
+        notification.setOrigin(null);
+        notification.setCommodity(null);
+        notification.setAdditionalDetails(null);
+        notification.setConsignor(null);
+        notification.setConsignee(null);
+        notification.setImporter(null);
+        notification.setDestination(null);
+        notification.setPacker(null);
+        notification.setResponsiblePerson(null);
+        notification.setNominatedContacts(null);
+        notification.setTransport(null);
+        notification.setGoodsMovementServices(null);
+        notification.setBilling(null);
+        notification.setDeclaration(null);
         MAPPER.restore(this, notification);
     }
 }

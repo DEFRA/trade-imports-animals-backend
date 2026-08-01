@@ -21,9 +21,11 @@ public final class PlantProductsNotificationSort {
         }
 
         String sortField = parts[0].trim();
-        Sort.Direction sortDirection = "asc".equalsIgnoreCase(parts[1].trim())
-            ? Sort.Direction.ASC
-            : Sort.Direction.DESC;
+        String direction = parts[1].trim();
+        if (!"asc".equalsIgnoreCase(direction) && !"desc".equalsIgnoreCase(direction)) {
+            return defaultSort();
+        }
+        Sort.Direction sortDirection = Sort.Direction.fromString(direction);
 
         return switch (sortField) {
             case "arrivalDate" -> Sort.by(sortDirection, ARRIVAL_DATE_FIELD);

@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.plantproducts.notification;
 
+import java.time.LocalDateTime;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -7,22 +8,14 @@ public class PlantProductsNotificationCopyMapper {
 
     public PlantProductsNotification copyFrom(PlantProductsNotification source) {
         PlantProductsNotification copy = new PlantProductsNotification();
-        copy.setOrigin(source.getOrigin());
-        copy.setReasonForImport(source.getReasonForImport());
-        copy.setCommodity(source.getCommodity());
-        copy.setAdditionalDetails(source.getAdditionalDetails());
-        copy.setConsignor(source.getConsignor());
-        copy.setConsignee(source.getConsignee());
-        copy.setImporter(source.getImporter());
-        copy.setDestination(source.getDestination());
-        copy.setPacker(source.getPacker());
-        copy.setResponsiblePerson(source.getResponsiblePerson());
-        copy.setNominatedContacts(source.getNominatedContacts());
-        copy.setTransport(source.getTransport());
-        copy.setGoodsMovementServices(source.getGoodsMovementServices());
-        copy.setIsCuc(source.getIsCuc());
-        copy.setBilling(source.getBilling());
-        copy.setOwnership(source.getOwnership());
+        PlantProductsNotificationContentSnapshot.from(source).applyTo(copy);
+        copy.setDeclaration(null);
+        copy.setStatus(PlantProductsNotificationStatus.DRAFT);
+        copy.setCreated(LocalDateTime.now());
+        copy.setUpdated(LocalDateTime.now());
+        if (source.getOwnership() != null) {
+            copy.setOwnership(source.getOwnership().toBuilder().build());
+        }
         return copy;
     }
 }

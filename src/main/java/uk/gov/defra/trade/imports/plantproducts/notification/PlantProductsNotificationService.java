@@ -153,9 +153,6 @@ public class PlantProductsNotificationService {
         }
         PlantProductsNotification copy = notificationCopyMapper.copyFrom(source);
         copy.setChedType(CHED_TYPE);
-        copy.setStatus(PlantProductsNotificationStatus.DRAFT);
-        copy.setCreated(LocalDateTime.now());
-        copy.setUpdated(LocalDateTime.now());
         stampExpiry(copy);
         log.info("Copying plant-products notification {}", referenceNumber);
         return saveWithMintedReference(copy);
