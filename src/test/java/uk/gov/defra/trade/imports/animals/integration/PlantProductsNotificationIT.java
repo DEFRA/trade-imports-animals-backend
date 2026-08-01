@@ -29,6 +29,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import uk.gov.defra.trade.imports.plantproducts.accompanyingdocument.DocumentFile;
@@ -572,6 +573,29 @@ class PlantProductsNotificationIT extends IntegrationBase {
         changeStatus(NONEXISTENT_REF, SUBMITTED, null).expectStatus().isNotFound();
     }
 
+    @Test
+    void changeStatus_shouldReturnProblem400ForMalformedBodies() {
+        // When / Then - a null status is rejected before the controller is invoked
+        assertMalformedStatusBody(webClient("NoAuth")
+            .put()
+            .uri(ENDPOINT + "/{referenceNumber}/status", NONEXISTENT_REF)
+            .bodyValue("{\"status\":null}")
+            .exchange());
+
+        // When / Then - a literal-null body is unreadable as a status-change request
+        assertMalformedStatusBody(webClient("NoAuth")
+            .put()
+            .uri(ENDPOINT + "/{referenceNumber}/status", NONEXISTENT_REF)
+            .bodyValue("null")
+            .exchange());
+
+        // When / Then - a missing body is rejected through the same problem handler
+        assertMalformedStatusBody(webClient("NoAuth")
+            .put()
+            .uri(ENDPOINT + "/{referenceNumber}/status", NONEXISTENT_REF)
+            .exchange());
+    }
+
     private PlantProductsNotification createFullNotification() {
         return create(fullNotificationDto());
     }
@@ -653,6 +677,17 @@ class PlantProductsNotificationIT extends IntegrationBase {
             .uri(ENDPOINT + "/{referenceNumber}/status", referenceNumber)
             .bodyValue(new StatusChangeRequest(status, discardChanges))
             .exchange();
+    }
+
+    private static void assertMalformedStatusBody(WebTestClient.ResponseSpec response) {
+        response
+            .expectStatus().isBadRequest()
+            .expectHeader().contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(400)
+            .jsonPath("$.title").isEqualTo("Bad Request")
+            .jsonPath("$.detail").isEqualTo("Request body is missing or malformed")
+            .jsonPath("$.stackTrace").doesNotExist();
     }
 
     private void replaceInternalReference(String referenceNumber, String internalReference) {

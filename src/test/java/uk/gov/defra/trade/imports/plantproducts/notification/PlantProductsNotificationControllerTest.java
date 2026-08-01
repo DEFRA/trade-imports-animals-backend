@@ -27,6 +27,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import uk.gov.defra.trade.imports.animals.exceptions.GlobalExceptionHandler;
 import uk.gov.defra.trade.imports.plantproducts.accompanyingdocument.PlantProductsAccompanyingDocumentMapper;
 import uk.gov.defra.trade.imports.plantproducts.accompanyingdocument.PlantProductsAccompanyingDocumentService;
 import uk.gov.defra.trade.imports.plantproducts.exceptions.PlantProductsBadRequestException;
@@ -36,7 +37,8 @@ import uk.gov.defra.trade.imports.plantproducts.exceptions.PlantProductsNotFound
 @WebMvcTest(PlantProductsNotificationController.class)
 @ContextConfiguration(classes = {
     PlantProductsNotificationController.class,
-    PlantProductsExceptionHandler.class
+    PlantProductsExceptionHandler.class,
+    GlobalExceptionHandler.class
 })
 @TestPropertySource(properties = {
     "admin.secret=test-secret",
@@ -242,7 +244,11 @@ class PlantProductsNotificationControllerTest {
             mockMvc.perform(put("/plant-products/notifications/{reference-number}/status", REFERENCE)
                     .contentType(MediaType.APPLICATION_JSON)
                     .content("{}"))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.title").value("Bad Request"))
+                .andExpect(jsonPath("$.detail").value("Request body is missing or malformed"))
+                .andExpect(jsonPath("$.stackTrace").doesNotExist());
         }
 
         @Test

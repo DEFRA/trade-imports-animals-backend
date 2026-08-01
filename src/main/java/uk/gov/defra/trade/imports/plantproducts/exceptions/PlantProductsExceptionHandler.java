@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -71,6 +72,14 @@ public class PlantProductsExceptionHandler {
         }
         problemDetail.setProperty("errors", errors);
         return respond(problemDetail);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ProblemDetail> handleUnreadableRequestBody(HttpMessageNotReadableException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Unreadable request body (trace: {}): {}", traceId, ex.getMessage());
+        return respond(problem(HttpStatus.BAD_REQUEST, "Request body is missing or malformed",
+            "bad-request", "Bad Request", traceId));
     }
 
     private static ProblemDetail problem(
