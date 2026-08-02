@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.fulfilment;
 
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -105,7 +106,6 @@ public class FulfilmentService {
                 CANNOT_FIND_FULFILMENT_WITH_ID + id));
     }
 
-    @Transactional
     public Fulfilment copy(String id, String idempotencyKey) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new BadRequestException("Idempotency-Key must not be blank");
@@ -137,6 +137,7 @@ public class FulfilmentService {
                 .build();
             try {
                 Fulfilment saved = fulfilmentRepository.insert(copy);
+                saved.setCreatedAt(saved.getCreatedAt().truncatedTo(ChronoUnit.MILLIS));
                 log.info("Copied fulfilment {} to {}", id, saved.getId());
                 return saved;
             } catch (DuplicateKeyException e) {

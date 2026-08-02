@@ -10,6 +10,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import org.aspectj.lang.ProceedingJoinPoint;
+import org.aspectj.lang.annotation.Around;
+import org.aspectj.lang.annotation.Aspect;
 import org.bson.Document;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +26,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
+import org.springframework.test.web.reactive.server.EntityExchangeResult;
 import uk.gov.defra.trade.imports.animals.fulfilment.Fulfilment;
 import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentController;
 import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentDto;
@@ -38,6 +52,7 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
+@Import(FulfilmentIT.ConcurrentCopyConfiguration.class)
 class FulfilmentIT extends IntegrationBase {
 
     private static final String FULFILMENT_ENDPOINT = "/fulfilments";
@@ -63,6 +78,9 @@ class FulfilmentIT extends IntegrationBase {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private ConcurrentCopyLookupGate concurrentCopyLookupGate;
 
     @BeforeEach
     void setUp() {
@@ -633,6 +651,44 @@ class FulfilmentIT extends IntegrationBase {
     }
 
     @Test
+    void copy_shouldReturnSameDraftAndLocationForConcurrentIdempotencyKey() throws Exception {
+        // Given
+        Fulfilment source = createFulfilment();
+        String idempotencyKey = "concurrent-copy-key";
+        concurrentCopyLookupGate.arm(idempotencyKey);
+        CountDownLatch requestsReady = new CountDownLatch(2);
+        CountDownLatch startRequests = new CountDownLatch(1);
+
+        // When
+        try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
+            Future<EntityExchangeResult<Fulfilment>> firstRequest = executor.submit(
+                () -> concurrentCopy(
+                    source.getId(), idempotencyKey, requestsReady, startRequests));
+            Future<EntityExchangeResult<Fulfilment>> secondRequest = executor.submit(
+                () -> concurrentCopy(
+                    source.getId(), idempotencyKey, requestsReady, startRequests));
+            assertThat(requestsReady.await(10, TimeUnit.SECONDS)).isTrue();
+            startRequests.countDown();
+
+            EntityExchangeResult<Fulfilment> first =
+                firstRequest.get(30, TimeUnit.SECONDS);
+            EntityExchangeResult<Fulfilment> second =
+                secondRequest.get(30, TimeUnit.SECONDS);
+
+            // Then
+            assertThat(first.getResponseBody()).isNotNull();
+            assertThat(second.getResponseBody()).isEqualTo(first.getResponseBody());
+            assertThat(second.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
+                .isEqualTo(first.getResponseHeaders().getFirst(HttpHeaders.LOCATION));
+            assertThat(fulfilmentRepository.findByCopyIdempotencyKey(idempotencyKey))
+                .contains(first.getResponseBody());
+            assertThat(fulfilmentRepository.count()).isEqualTo(2);
+        } finally {
+            concurrentCopyLookupGate.disarm();
+        }
+    }
+
+    @Test
     void copy_shouldReturn400ForDeletedSource() {
         Fulfilment source = createFulfilment();
         source.setStatus(FulfilmentStatus.DELETED);
@@ -999,6 +1055,25 @@ class FulfilmentIT extends IntegrationBase {
             .returnResult().getResponseBody();
     }
 
+    private EntityExchangeResult<Fulfilment> concurrentCopy(
+        String id,
+        String idempotencyKey,
+        CountDownLatch requestsReady,
+        CountDownLatch startRequests) throws InterruptedException {
+        requestsReady.countDown();
+        if (!startRequests.await(10, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Concurrent copy requests did not start together");
+        }
+        return webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/copy", id)
+            .header(FulfilmentController.IDEMPOTENCY_KEY, idempotencyKey)
+            .exchange()
+            .expectStatus().isCreated()
+            .expectHeader().valueMatches("Location", LOCATION_FORMAT_REGEX)
+            .expectBody(Fulfilment.class)
+            .returnResult();
+    }
+
     private Fulfilment softDelete(String id) {
         return webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/soft-delete", id)
@@ -1136,5 +1211,66 @@ class FulfilmentIT extends IntegrationBase {
         return List.of(
             new Document("obligationId", SCALAR_OBLIGATION_ID)
                 .append("value", value));
+    }
+
+    @TestConfiguration
+    static class ConcurrentCopyConfiguration {
+
+        @Bean
+        ConcurrentCopyLookupGate concurrentCopyLookupGate() {
+            return new ConcurrentCopyLookupGate();
+        }
+
+        @Bean
+        ConcurrentCopyLookupAspect concurrentCopyLookupAspect(ConcurrentCopyLookupGate gate) {
+            return new ConcurrentCopyLookupAspect(gate);
+        }
+    }
+
+    static class ConcurrentCopyLookupGate {
+
+        private final AtomicReference<String> idempotencyKey = new AtomicReference<>();
+        private volatile CountDownLatch initialLookupsCompleted = new CountDownLatch(0);
+
+        void arm(String key) {
+            initialLookupsCompleted = new CountDownLatch(2);
+            idempotencyKey.set(key);
+        }
+
+        void awaitConcurrentInitialLookups(String key) throws InterruptedException {
+            CountDownLatch latch = initialLookupsCompleted;
+            if (!key.equals(idempotencyKey.get()) || latch.getCount() == 0) {
+                return;
+            }
+            latch.countDown();
+            if (!latch.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("Concurrent copy lookups did not overlap");
+            }
+        }
+
+        void disarm() {
+            idempotencyKey.set(null);
+            initialLookupsCompleted = new CountDownLatch(0);
+        }
+    }
+
+    @Aspect
+    static class ConcurrentCopyLookupAspect {
+
+        private final ConcurrentCopyLookupGate gate;
+
+        ConcurrentCopyLookupAspect(ConcurrentCopyLookupGate gate) {
+            this.gate = gate;
+        }
+
+        @Around("execution(* uk.gov.defra.trade.imports.animals.fulfilment."
+            + "FulfilmentRepository.findByCopyIdempotencyKey(..)) "
+            + "&& args(idempotencyKey)")
+        Object coordinateInitialLookups(
+            ProceedingJoinPoint joinPoint, String idempotencyKey) throws Throwable {
+            Object result = joinPoint.proceed();
+            gate.awaitConcurrentInitialLookups(idempotencyKey);
+            return result;
+        }
     }
 }
