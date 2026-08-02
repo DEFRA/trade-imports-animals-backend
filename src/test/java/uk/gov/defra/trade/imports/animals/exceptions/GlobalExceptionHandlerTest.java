@@ -24,9 +24,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 
@@ -329,6 +332,48 @@ class GlobalExceptionHandlerTest {
             p -> assertThat(p).isNull(),
             p -> assertThat(p).doesNotContainKey("traceId")
         );
+    }
+
+    @Test
+    void handleUnreadableRequestBody_shouldReturnProblemBadRequestWithoutInternalDetails() {
+        // Given
+        String traceId = "test-trace-unreadable";
+        MDC.put("trace.id", traceId);
+        HttpMessageNotReadableException exception = new HttpMessageNotReadableException(
+            "JSON parse error: secret internal detail",
+            new MockHttpInputMessage(new byte[0]));
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleUnreadableRequestBody(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType())
+            .isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problemDetail.getTitle()).isEqualTo("Bad Request");
+        assertThat(problemDetail.getDetail()).isEqualTo("Request body is missing or malformed");
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/bad-request"));
+        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
+        assertThat(problemDetail.toString()).doesNotContain("secret internal detail", "stackTrace");
+    }
+
+    @Test
+    void handleException_shouldBeRegisteredAsRuntimeFallback() throws Exception {
+        // Given
+        Method method = GlobalExceptionHandler.class.getMethod(
+            "handleException", RuntimeException.class);
+
+        // When
+        ExceptionHandler annotation = method.getAnnotation(ExceptionHandler.class);
+
+        // Then
+        assertThat(annotation).isNotNull();
+        assertThat(annotation.value()).containsExactly(RuntimeException.class);
     }
 
     @Test
