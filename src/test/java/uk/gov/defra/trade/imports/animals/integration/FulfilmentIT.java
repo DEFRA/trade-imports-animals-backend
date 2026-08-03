@@ -8,7 +8,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import org.bson.Document;
 import org.hamcrest.Matchers;
@@ -25,18 +24,13 @@ import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentRepository;
 import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentStatus;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
-import uk.gov.defra.trade.imports.animals.notification.NotificationController;
-import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.Operator;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
-import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
-import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
-import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 class FulfilmentIT extends IntegrationBase {
 
@@ -221,192 +215,6 @@ class FulfilmentIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.detail").value(
                 Matchers.containsString("Cannot submit fulfilment with status: SUBMITTED"));
-    }
-
-    @Test
-    void submit_shouldCascadeNotificationAndWriteSubmittedOutboxEvent() {
-        // Given
-        Fulfilment created = createFulfilmentWithNotificationProjection();
-        Map<String, String> actor = actor("contact-submit-001", "Submitter");
-
-        // When
-        Fulfilment submitted =
-            submitFulfilment(created.getId(), "trace-submit-cascade", actor);
-
-        // Then
-        assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        assertThat(notificationRepository.findByReferenceNumber(created.getId()).orElseThrow()
-            .getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        List<OutboxEvent> events = outboxEvents(created.getId());
-        assertThat(events).hasSize(1);
-        assertThat(events.getFirst().getEventType())
-            .isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.value());
-        assertThat(events.getFirst().getMetadata().getCorrelationId())
-            .isEqualTo("trace-submit-cascade");
-        assertThat(events.getFirst().getActor().getId()).isEqualTo("contact-submit-001");
-        assertThat(events.getFirst().getStatusChanges()).hasSize(1);
-        assertThat(events.getFirst().getStatusChanges().getFirst().getActor())
-            .isEqualTo(events.getFirst().getActor());
-    }
-
-    @Test
-    void amend_shouldCascadeNotificationAndWriteAmendedOutboxEvent() {
-        // Given
-        Fulfilment created = createFulfilmentWithNotificationProjection();
-        submitFulfilment(
-            created.getId(), "trace-submit-before-amend",
-            actor("contact-submit-002", "Submitter"));
-
-        // When
-        Fulfilment amended = amendFulfilment(
-            created.getId(), "trace-amend-cascade",
-            actor("contact-amend-002", "Amender"));
-
-        // Then
-        assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.AMEND);
-        assertThat(notificationRepository.findByReferenceNumber(created.getId()).orElseThrow()
-            .getStatus()).isEqualTo(NotificationStatus.AMEND);
-        List<OutboxEvent> events = outboxEvents(created.getId());
-        assertThat(events).hasSize(2);
-        assertThat(events.get(1).getEventType())
-            .isEqualTo(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED.value());
-        assertThat(events.get(1).getMetadata().getCorrelationId())
-            .isEqualTo("trace-amend-cascade");
-        assertThat(events.get(1).getActor().getId()).isEqualTo("contact-amend-002");
-        assertThat(events.get(1).getStatusChanges()).hasSize(2);
-        assertThat(events.get(1).getStatusChanges().get(0).getActor().getId())
-            .isEqualTo("contact-submit-002");
-        assertThat(events.get(1).getStatusChanges().get(1).getActor().getId())
-            .isEqualTo("contact-amend-002");
-    }
-
-    @Test
-    void cancelAmend_shouldCascadeNotificationWithoutWritingNewOutboxEvent() {
-        // Given
-        Fulfilment created = createFulfilmentWithNotificationProjection();
-        submitFulfilment(created.getId(), "trace-submit-before-cancel");
-        amendFulfilment(created.getId(), "trace-amend-before-cancel");
-        long eventsBeforeCancel = outboxEventRepository.count();
-
-        // When
-        Fulfilment restored = webClient("NoAuth")
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/cancel-amend", created.getId())
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
-            .returnResult().getResponseBody();
-
-        // Then
-        assertThat(restored).isNotNull();
-        assertThat(restored.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        assertThat(notificationRepository.findByReferenceNumber(created.getId()).orElseThrow()
-            .getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(outboxEventRepository.count()).isEqualTo(eventsBeforeCancel);
-    }
-
-    @Test
-    void softDelete_shouldCascadeNotification() {
-        // Given
-        Fulfilment created = createFulfilmentWithNotificationProjection();
-
-        // When
-        Fulfilment deleted = softDelete(created.getId());
-
-        // Then
-        assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
-        assertThat(notificationRepository.findByReferenceNumber(created.getId()).orElseThrow()
-            .getStatus()).isEqualTo(NotificationStatus.DELETED);
-        assertThat(outboxEvents(created.getId())).isEmpty();
-    }
-
-    @Test
-    void fullRoundTrip_shouldCascadeAndEmitSecondSubmittedEvent() {
-        // Given
-        Fulfilment created = createFulfilmentWithNotificationProjection();
-
-        // When
-        submitFulfilment(created.getId(), "trace-first-submit");
-        amendFulfilment(created.getId(), "trace-round-trip-amend");
-        Fulfilment resubmitted = submitFulfilment(
-            created.getId(), "trace-second-submit");
-
-        // Then
-        assertThat(resubmitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        assertThat(notificationRepository.findByReferenceNumber(created.getId()).orElseThrow()
-            .getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        List<OutboxEvent> events = outboxEvents(created.getId());
-        assertThat(events).extracting(OutboxEvent::getEventType)
-            .containsExactly(
-                OutboxEventType.NOTIFICATION_SUBMITTED.value(),
-                OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED.value(),
-                OutboxEventType.NOTIFICATION_SUBMITTED.value());
-        assertThat(events.getLast().getMetadata().getCorrelationId())
-            .isEqualTo("trace-second-submit");
-    }
-
-    @Test
-    void submit_shouldSucceedWithoutNotificationProjectionOrOutboxEvent() {
-        // Given
-        Fulfilment created = createFulfilment();
-
-        // When
-        Fulfilment submitted = submitFulfilment(created.getId(), "trace-no-projection");
-
-        // Then
-        assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        assertThat(fulfilmentRepository.findById(created.getId()).orElseThrow().getStatus())
-            .isEqualTo(FulfilmentStatus.SUBMITTED);
-        assertThat(notificationRepository.findByReferenceNumber(created.getId())).isEmpty();
-        assertThat(outboxEvents(created.getId())).isEmpty();
-    }
-
-    @Test
-    void submit_shouldRollbackCanonicalWhenNotificationStateIsUnexpected() {
-        // Given
-        Fulfilment created = createFulfilmentWithNotificationProjection();
-        webClient("NoAuth")
-            .post().uri("/notifications/{id}/submit", created.getId())
-            .header(NotificationController.HEADER_TRACE_ID, "trace-direct-submit")
-            .exchange()
-            .expectStatus().isOk();
-
-        // When
-        webClient("NoAuth")
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
-            .header(NotificationController.HEADER_TRACE_ID, "trace-rejected-cascade")
-            .exchange()
-            .expectStatus().isBadRequest()
-            .expectBody()
-            .jsonPath("$.detail").value(
-                Matchers.containsString("Cannot submit notification with status: SUBMITTED"));
-
-        // Then
-        assertThat(fulfilmentRepository.findById(created.getId()).orElseThrow().getStatus())
-            .isEqualTo(FulfilmentStatus.DRAFT);
-        assertThat(notificationRepository.findByReferenceNumber(created.getId()).orElseThrow()
-            .getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(outboxEvents(created.getId())).hasSize(1);
-    }
-
-    @Test
-    void softDelete_shouldTolerateAlreadyDeletedNotificationProjection() {
-        // Given
-        Fulfilment created = createFulfilmentWithNotificationProjection();
-        webClient("NoAuth")
-            .post().uri("/notifications/{id}/soft-delete", created.getId())
-            .exchange()
-            .expectStatus().isOk();
-
-        // When
-        Fulfilment deleted = softDelete(created.getId());
-
-        // Then
-        assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
-        assertThat(fulfilmentRepository.findById(created.getId()).orElseThrow().getStatus())
-            .isEqualTo(FulfilmentStatus.DELETED);
-        assertThat(notificationRepository.findByReferenceNumber(created.getId()).orElseThrow()
-            .getStatus()).isEqualTo(NotificationStatus.DELETED);
-        assertThat(outboxEvents(created.getId())).isEmpty();
     }
 
     @Test
@@ -738,14 +546,16 @@ class FulfilmentIT extends IntegrationBase {
 
         Commodity commodity = Commodity.builder().name("Live animals").build();
         LocalDate arrivalDate = LocalDate.of(2026, 8, 12);
-        Notification notificationProjection = putNotificationProjection(
-            notificationDto(
-                created.getId(),
-                commodity,
-                "FR",
-                arrivalDate,
-                "Example consignor",
-                "Example consignee"));
+        Notification notificationProjection = notificationRepository.save(
+            Notification.builder()
+                .referenceNumber(created.getId())
+                .status(NotificationStatus.DRAFT)
+                .commodity(commodity)
+                .origin(Origin.builder().countryCode("FR").build())
+                .transport(Transport.builder().arrivalDate(arrivalDate).build())
+                .consignor(Operator.builder().name("Example consignor").build())
+                .consignee(Operator.builder().name("Example consignee").build())
+                .build());
         assertThat(notificationProjection).isNotNull();
         assertThat(notificationProjection.getStatus()).isEqualTo(NotificationStatus.DRAFT);
 
@@ -936,19 +746,6 @@ class FulfilmentIT extends IntegrationBase {
             .returnResult().getResponseBody();
     }
 
-    private Fulfilment createFulfilmentWithNotificationProjection() {
-        Fulfilment created = createFulfilment();
-        putNotificationProjection(
-            notificationDto(
-                created.getId(),
-                Commodity.builder().name("Live animals").build(),
-                "GB",
-                LocalDate.of(2026, 8, 12),
-                "Example consignor",
-                "Example consignee"));
-        return created;
-    }
-
     private Fulfilment stored(
         String id, LocalDateTime createdAt, LocalDateTime submittedAt) {
         return stored(id, FulfilmentStatus.SUBMITTED, createdAt, submittedAt);
@@ -1006,91 +803,6 @@ class FulfilmentIT extends IntegrationBase {
             .expectStatus().isOk()
             .expectBody(Fulfilment.class)
             .returnResult().getResponseBody();
-    }
-
-    private Fulfilment submitFulfilment(String id, String traceId) {
-        return webClient("NoAuth")
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", id)
-            .header(NotificationController.HEADER_TRACE_ID, traceId)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
-            .returnResult().getResponseBody();
-    }
-
-    private Fulfilment submitFulfilment(
-        String id, String traceId, Map<String, String> actor) {
-        return webClient("NoAuth")
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", id)
-            .header(NotificationController.HEADER_TRACE_ID, traceId)
-            .bodyValue(actor)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
-            .returnResult().getResponseBody();
-    }
-
-    private Fulfilment amendFulfilment(String id, String traceId) {
-        return webClient("NoAuth")
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/amend", id)
-            .header(NotificationController.HEADER_TRACE_ID, traceId)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
-            .returnResult().getResponseBody();
-    }
-
-    private Fulfilment amendFulfilment(
-        String id, String traceId, Map<String, String> actor) {
-        return webClient("NoAuth")
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/amend", id)
-            .header(NotificationController.HEADER_TRACE_ID, traceId)
-            .bodyValue(actor)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
-            .returnResult().getResponseBody();
-    }
-
-    private Map<String, String> actor(String id, String displayName) {
-        return Map.of(
-            "id", id,
-            "source", "dynamics-contact",
-            "userType", "B2C",
-            "displayName", displayName,
-            "organisationId", "org-fulfilment-001");
-    }
-
-    private List<OutboxEvent> outboxEvents(String referenceNumber) {
-        return outboxEventRepository.findAllByAggregateIdOrderByAggregateVersionAsc(
-            OutboxService.buildAggregateId(referenceNumber));
-    }
-
-    private Notification putNotificationProjection(NotificationDto dto) {
-        return webClient("NoAuth")
-            .put().uri("/notifications/{id}", dto.getReferenceNumber())
-            .bodyValue(dto)
-            .exchange()
-            .expectStatus().isCreated()
-            .expectBody(Notification.class)
-            .returnResult().getResponseBody();
-    }
-
-    private NotificationDto notificationDto(
-        String reference,
-        Commodity commodity,
-        String originCountryCode,
-        LocalDate arrivalDate,
-        String consignorName,
-        String consigneeName) {
-        return NotificationDto.builder()
-            .referenceNumber(reference)
-            .commodity(commodity)
-            .origin(Origin.builder().countryCode(originCountryCode).build())
-            .transport(Transport.builder().arrivalDate(arrivalDate).build())
-            .consignor(Operator.builder().name(consignorName).build())
-            .consignee(Operator.builder().name(consigneeName).build())
-            .build();
     }
 
     private FulfilmentPageResponse listFulfilments(int page, String sort) {

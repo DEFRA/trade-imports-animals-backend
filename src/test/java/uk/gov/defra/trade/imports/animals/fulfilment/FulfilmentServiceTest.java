@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.time.LocalDateTime;
@@ -27,11 +26,7 @@ import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
 import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Query;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
-import uk.gov.defra.trade.imports.animals.notification.NotificationResponse;
-import uk.gov.defra.trade.imports.animals.notification.NotificationService;
-import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
-import uk.gov.defra.trade.imports.animals.outbox.Actor;
 
 @ExtendWith(MockitoExtension.class)
 class FulfilmentServiceTest {
@@ -41,9 +36,6 @@ class FulfilmentServiceTest {
 
     @Mock
     private FulfilmentRepository fulfilmentRepository;
-
-    @Mock
-    private NotificationService notificationService;
 
     @Mock
     private ReferenceNumberGenerator referenceNumberGenerator;
@@ -57,7 +49,7 @@ class FulfilmentServiceTest {
     void setUp() {
         fulfilmentService =
             new FulfilmentService(
-                fulfilmentRepository, notificationService, referenceNumberGenerator,
+                fulfilmentRepository, referenceNumberGenerator,
                 mongoTemplate, 20);
     }
 
@@ -225,7 +217,6 @@ class FulfilmentServiceTest {
 
         assertThat(result).isSameAs(deleted);
         verify(fulfilmentRepository, never()).save(any());
-        verifyNoInteractions(notificationService);
     }
 
     @Test
@@ -314,104 +305,6 @@ class FulfilmentServiceTest {
         assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
         assertThat(submitted.getSubmittedFulfilment()).isNull();
         assertThat(submitted.getSubmittedAt()).isNotNull();
-    }
-
-    @Test
-    void submit_shouldCascadeNotificationWithTraceId() {
-        Fulfilment fulfilment = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
-        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
-        when(fulfilmentRepository.save(any(Fulfilment.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
-        when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
-        Actor actor = Actor.builder().id("contact-guid-001").build();
-
-        Fulfilment submitted = fulfilmentService.submit(ID, TRACE_ID, actor);
-
-        assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        verify(notificationService).submitNotification(ID, TRACE_ID, actor);
-    }
-
-    @Test
-    void amend_shouldCascadeNotificationWithTraceId() {
-        Fulfilment fulfilment = fulfilment(FulfilmentStatus.SUBMITTED, List.of(), null);
-        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
-        when(fulfilmentRepository.save(any(Fulfilment.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
-        when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
-        Actor actor = Actor.builder().id("contact-guid-002").build();
-
-        Fulfilment amended = fulfilmentService.amend(ID, TRACE_ID, actor);
-
-        assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.AMEND);
-        verify(notificationService).amendNotification(ID, TRACE_ID, actor);
-    }
-
-    @Test
-    void cancelAmend_shouldCascadeNotification() {
-        Fulfilment fulfilment = fulfilment(
-            FulfilmentStatus.AMEND, List.of(), List.of());
-        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
-        when(fulfilmentRepository.save(any(Fulfilment.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
-        when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
-
-        Fulfilment submitted = fulfilmentService.cancelAmend(ID);
-
-        assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        verify(notificationService).cancelAmendNotification(ID);
-    }
-
-    @Test
-    void softDelete_shouldCascadeNotification() {
-        Fulfilment fulfilment = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
-        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
-        when(fulfilmentRepository.save(any(Fulfilment.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
-        when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
-        when(notificationService.findByRef(ID))
-            .thenReturn(NotificationResponse.builder()
-                .status(NotificationStatus.DRAFT)
-                .build());
-
-        Fulfilment deleted = fulfilmentService.softDelete(ID);
-
-        assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
-        verify(notificationService).softDeleteNotification(ID);
-    }
-
-    @Test
-    void submit_shouldSucceedWithoutNotificationProjection() {
-        Fulfilment fulfilment = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
-        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
-        when(fulfilmentRepository.save(any(Fulfilment.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
-        when(notificationService.existsByReferenceNumber(ID)).thenReturn(false);
-
-        Fulfilment submitted = fulfilmentService.submit(ID, TRACE_ID, null);
-
-        assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        verify(notificationService, never()).submitNotification(any(), any(), any());
-        verify(notificationService, never()).amendNotification(any(), any(), any());
-        verify(notificationService, never()).cancelAmendNotification(any());
-        verify(notificationService, never()).softDeleteNotification(any());
-    }
-
-    @Test
-    void softDelete_shouldSkipAlreadyDeletedNotificationProjection() {
-        Fulfilment fulfilment = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
-        when(fulfilmentRepository.findById(ID)).thenReturn(Optional.of(fulfilment));
-        when(fulfilmentRepository.save(any(Fulfilment.class)))
-            .thenAnswer(invocation -> invocation.getArgument(0));
-        when(notificationService.existsByReferenceNumber(ID)).thenReturn(true);
-        when(notificationService.findByRef(ID))
-            .thenReturn(NotificationResponse.builder()
-                .status(NotificationStatus.DELETED)
-                .build());
-
-        Fulfilment deleted = fulfilmentService.softDelete(ID);
-
-        assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
-        verify(notificationService, never()).softDeleteNotification(any());
     }
 
     private Fulfilment fulfilment(

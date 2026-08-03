@@ -19,8 +19,6 @@ import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
-import uk.gov.defra.trade.imports.animals.notification.NotificationService;
-import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.outbox.Actor;
 
@@ -37,19 +35,16 @@ public class FulfilmentService {
         FulfilmentStatus.AMEND);
 
     private final FulfilmentRepository fulfilmentRepository;
-    private final NotificationService notificationService;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final MongoTemplate mongoTemplate;
     private final int listPageSize;
 
     public FulfilmentService(
         FulfilmentRepository fulfilmentRepository,
-        NotificationService notificationService,
         ReferenceNumberGenerator referenceNumberGenerator,
         MongoTemplate mongoTemplate,
         @Value("${fulfilment.list.page-size:20}") int listPageSize) {
         this.fulfilmentRepository = fulfilmentRepository;
-        this.notificationService = notificationService;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.mongoTemplate = mongoTemplate;
         this.listPageSize = listPageSize;
@@ -165,11 +160,7 @@ public class FulfilmentService {
         fulfilment.setSubmittedFulfilment(null);
         fulfilment.setSubmittedAt(LocalDateTime.now());
         log.info("Submitted fulfilment {}", id);
-        Fulfilment saved = fulfilmentRepository.save(fulfilment);
-        if (notificationProjectionExists(id)) {
-            notificationService.submitNotification(id, correlationId, actor);
-        }
-        return saved;
+        return fulfilmentRepository.save(fulfilment);
     }
 
     @Transactional
@@ -183,11 +174,7 @@ public class FulfilmentService {
         fulfilment.setStatus(FulfilmentStatus.AMEND);
         fulfilment.setSubmittedAt(null);
         log.info("Amended fulfilment {}", id);
-        Fulfilment saved = fulfilmentRepository.save(fulfilment);
-        if (notificationProjectionExists(id)) {
-            notificationService.amendNotification(id, correlationId, actor);
-        }
-        return saved;
+        return fulfilmentRepository.save(fulfilment);
     }
 
     @Transactional
@@ -208,11 +195,7 @@ public class FulfilmentService {
         fulfilment.setStatus(FulfilmentStatus.SUBMITTED);
         fulfilment.setSubmittedAt(LocalDateTime.now());
         log.info("Cancelled amendment for fulfilment {}", id);
-        Fulfilment saved = fulfilmentRepository.save(fulfilment);
-        if (notificationProjectionExists(id)) {
-            notificationService.cancelAmendNotification(id);
-        }
-        return saved;
+        return fulfilmentRepository.save(fulfilment);
     }
 
     @Transactional
@@ -228,12 +211,7 @@ public class FulfilmentService {
 
         fulfilment.setStatus(FulfilmentStatus.DELETED);
         log.info("Soft deleted fulfilment {}", id);
-        Fulfilment saved = fulfilmentRepository.save(fulfilment);
-        if (notificationProjectionExists(id)
-            && notificationService.findByRef(id).status() != NotificationStatus.DELETED) {
-            notificationService.softDeleteNotification(id);
-        }
-        return saved;
+        return fulfilmentRepository.save(fulfilment);
     }
 
     public FulfilmentPageResponse findAll(int page, String sort) {
@@ -316,17 +294,6 @@ public class FulfilmentService {
         return fulfilmentRepository
             .findByCopyIdempotencyKey(idempotencyKey)
             .orElse(null);
-    }
-
-    private boolean notificationProjectionExists(String id) {
-        if (notificationService.existsByReferenceNumber(id)) {
-            return true;
-        }
-        log.warn(
-            "Skipping notification lifecycle cascade for fulfilment {}: "
-                + "notification projection does not exist",
-            id);
-        return false;
     }
 
     public record ReplaceResult(Fulfilment fulfilment, boolean created) {

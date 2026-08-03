@@ -60,7 +60,6 @@ import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
-import uk.gov.defra.trade.imports.animals.outbox.Actor;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
@@ -115,19 +114,6 @@ class NotificationServiceTest {
     private static NotificationTtlConfig.Sweep sweep(boolean enabled) {
         return new NotificationTtlConfig.Sweep(
             enabled, 3_600_000, 10, Duration.ofSeconds(1), Duration.ofSeconds(30));
-    }
-
-    @Test
-    void existsByReferenceNumber_shouldDelegateToRepository() {
-        // Given
-        String referenceNumber = "GBN-AG-26-ABC123";
-        when(notificationRepository.existsByReferenceNumber(referenceNumber)).thenReturn(true);
-
-        // When
-        boolean exists = notificationService.existsByReferenceNumber(referenceNumber);
-
-        // Then
-        assertThat(exists).isTrue();
     }
 
     @Nested
@@ -328,8 +314,7 @@ class NotificationServiceTest {
             Page<Notification> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
             when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)),
-                any(Pageable.class)))
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
             // When
@@ -338,9 +323,7 @@ class NotificationServiceTest {
             // Then
             assertThat(result).isNotNull();
             verify(notificationRepository, times(1))
-                .findAllByStatusIn(
-                    eq(List.of(DRAFT, SUBMITTED, AMEND)),
-                    any(Pageable.class));
+                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
         }
 
         @Test
@@ -359,8 +342,7 @@ class NotificationServiceTest {
                 List.of(draft, submitted), PageRequest.of(0, 54), 0);
 
             when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)),
-                any(Pageable.class)))
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
             // When
@@ -373,9 +355,7 @@ class NotificationServiceTest {
             assertThat(result.page()).isEqualTo(1);
             assertThat(result.size()).isEqualTo(54);
             verify(notificationRepository, times(1))
-                .findAllByStatusIn(
-                    eq(List.of(DRAFT, SUBMITTED, AMEND)),
-                    any(Pageable.class));
+                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
         }
 
         @Test
@@ -389,8 +369,7 @@ class NotificationServiceTest {
             Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54),
                 1);
             when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)),
-                any(Pageable.class)))
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
             // When
@@ -417,8 +396,7 @@ class NotificationServiceTest {
                 List.of(amend), PageRequest.of(0, 54), 0);
 
             when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)),
-                any(Pageable.class)))
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
             NotificationPageResponse result = notificationService.findAll(1, null);
@@ -433,16 +411,14 @@ class NotificationServiceTest {
             Page<Notification> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
             when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)),
-                any(Pageable.class)))
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
             notificationService.findAll(1, "createdAt,asc");
 
             ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
             verify(notificationRepository).findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)),
-                pageableCaptor.capture());
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), pageableCaptor.capture());
             assertThat(pageableCaptor.getValue().getSort().getOrderFor("created").getDirection())
                 .isEqualTo(Sort.Direction.ASC);
         }
@@ -805,18 +781,16 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
-            Actor actor = Actor.builder().id("contact-guid-001").build();
 
             // When
-            Notification result =
-                notificationService.submitNotification(referenceNumber, "trace-001", actor);
+            Notification result = notificationService.submitNotification(referenceNumber,
+                "trace-001", null);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
-            verify(outboxService).appendEvent(
-                notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", actor);
+            verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
         }
 
         @Test
@@ -840,8 +814,7 @@ class NotificationServiceTest {
             // Then — save must happen before the outbox event is written
             InOrder inOrder = inOrder(notificationRepository, outboxService);
             inOrder.verify(notificationRepository).save(notification);
-            inOrder.verify(outboxService).appendEvent(
-                notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
+            inOrder.verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
         }
 
         @Test
@@ -932,15 +905,14 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            Notification result =
-                notificationService.submitNotification(referenceNumber, "trace-002", null);
+            Notification result = notificationService.submitNotification(referenceNumber,
+                "trace-002", null);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
-            verify(outboxService).appendEvent(
-                notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-002", null);
+            verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-002", null);
         }
 
         @Test
@@ -1015,20 +987,17 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
-            Actor actor = Actor.builder().id("contact-guid-002").build();
 
             // When
-            Notification result =
-                notificationService.amendNotification(referenceNumber, "trace-amd-1", actor);
+            Notification result = notificationService.amendNotification(referenceNumber,
+                "trace-amd-1", null);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(AMEND);
             assertThat(result.getUpdated()).isNotNull();
             assertThat(result.getSubmittedBaseline()).isNotNull();
             verify(notificationRepository).save(notification);
-            verify(outboxService).appendEvent(
-                notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED,
-                "trace-amd-1", actor);
+            verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-1", null);
         }
 
         @Test
@@ -1078,9 +1047,7 @@ class NotificationServiceTest {
             // Then — save must happen before the outbox event is written
             InOrder inOrder = inOrder(notificationRepository, outboxService);
             inOrder.verify(notificationRepository).save(notification);
-            inOrder.verify(outboxService).appendEvent(
-                notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED,
-                "trace-amd-2", null);
+            inOrder.verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-2", null);
         }
 
         @Test

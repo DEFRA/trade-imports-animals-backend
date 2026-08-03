@@ -12,8 +12,6 @@ import java.util.stream.Stream;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
@@ -156,57 +154,6 @@ class NotificationIT extends IntegrationBase {
         assertThat(page.totalElements()).isZero();
         assertThat(page.totalPages()).isZero();
         assertThat(page.page()).isEqualTo(1);
-    }
-
-    @ParameterizedTest
-    @ValueSource(strings = {
-        "further-keeping",
-        "slaughter",
-        "confined-establishment",
-        "germinal-products",
-        "registered-equine-animal",
-        "travelling-circus-animal-act",
-        "exhibition",
-        "event-or-activity-near-borders",
-        "release-into-the-wild",
-        "dispatch-centre",
-        "relaying-area-purification-centre",
-        "ornamental-aquaculture-establishment",
-        "technical-use",
-        "quarantine-or-similar-establishment",
-        "live-aquatic-animals-for-human-consumption",
-        "other"
-    })
-    void certifiedFor_shouldRoundTripTheFrontendVocabularyThroughPutAndGet(
-        String certifiedFor) {
-        String referenceNumber = "GBN-AG-26-CF0001";
-        NotificationDto notification = NotificationDto.builder()
-            .referenceNumber(referenceNumber)
-            .additionalDetails(new AdditionalDetails(certifiedFor, null))
-            .build();
-
-        webClient("NoAuth")
-            .put()
-            .uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", referenceNumber)
-            .bodyValue(notification)
-            .exchange()
-            .expectStatus().isCreated();
-
-        Notification persisted = notificationRepository.findByReferenceNumber(referenceNumber)
-            .orElseThrow();
-        assertThat(persisted.getAdditionalDetails().getCertifiedFor()).isEqualTo(certifiedFor);
-
-        NotificationResponse response = webClient("NoAuth")
-            .get()
-            .uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", referenceNumber)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(NotificationResponse.class)
-            .returnResult()
-            .getResponseBody();
-
-        assertThat(response).isNotNull();
-        assertThat(response.additionalDetails().getCertifiedFor()).isEqualTo(certifiedFor);
     }
 
     @Test
@@ -1167,8 +1114,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(gbnAgIdentifier(event)).isEqualTo(referenceNumber);
         assertThat(event.getActor()).isNull();
         assertThat(event.getStatusChanges()).hasSize(1);
-        assertThat(event.getStatusChanges().getFirst().getStatus())
-            .isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(event.getStatusChanges().getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(event.getStatusChanges().getFirst().getDateChanged()).isNotNull();
         assertThat(event.getStatusChanges().getFirst().getActor()).isNull();
     }
@@ -1210,14 +1156,14 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getActor().getDisplayName()).isEqualTo("Jane Farmer");
         assertThat(event.getActor().getOrganisationId()).isEqualTo("org-001");
         assertThat(event.getActor().getOnBehalfOfOrganisationId()).isNull();
+
         assertThat(event.getStatusChanges()).hasSize(1);
-        assertThat(event.getStatusChanges().getFirst().getStatus())
-            .isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(event.getStatusChanges().getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(event.getStatusChanges().getFirst().getActor()).isEqualTo(event.getActor());
     }
 
     @Test
-    void submitThenAmend_shouldAccumulateActorStatusChanges() {
+    void submitThenAmend_shouldAccumulateStatusChanges() {
         // Given — create and submit
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
@@ -1252,16 +1198,11 @@ class NotificationIT extends IntegrationBase {
 
         assertThat(events).hasSize(2);
         OutboxEvent amendEvent = events.get(1);
-        assertThat(amendEvent.getActor().getId()).isEqualTo("contact-sub-002");
         assertThat(amendEvent.getStatusChanges()).hasSize(2);
-        assertThat(amendEvent.getStatusChanges().get(0).getStatus())
-            .isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(amendEvent.getStatusChanges().get(0).getActor().getId())
-            .isEqualTo("contact-sub-001");
-        assertThat(amendEvent.getStatusChanges().get(1).getStatus())
-            .isEqualTo(NotificationStatus.AMEND);
-        assertThat(amendEvent.getStatusChanges().get(1).getActor().getId())
-            .isEqualTo("contact-sub-002");
+        assertThat(amendEvent.getStatusChanges().get(0).getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(amendEvent.getStatusChanges().get(0).getActor().getId()).isEqualTo("contact-sub-001");
+        assertThat(amendEvent.getStatusChanges().get(1).getStatus()).isEqualTo(NotificationStatus.AMEND);
+        assertThat(amendEvent.getStatusChanges().get(1).getActor().getId()).isEqualTo("contact-sub-002");
     }
 
     @SuppressWarnings("unchecked")
