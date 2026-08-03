@@ -12,6 +12,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.plantproducts.accompanyingdocument.PlantProductsAccompanyingDocumentRepository;
@@ -100,8 +101,10 @@ public class PlantProductsNotificationService {
     }
 
     public PlantProductsNotificationPageResponse findAll(int page, String sort, String referenceNumber) {
+        Sort rowSort = PlantProductsNotificationSort.toSort(sort)
+            .and(Sort.by(Sort.Direction.ASC, "_id"));
         Pageable pageable = PageRequest.of(
-            page - 1, listPageSize, PlantProductsNotificationSort.toSort(sort));
+            page - 1, listPageSize, rowSort);
 
         String trimmedReference = StringUtils.trimToNull(referenceNumber);
         Page<PlantProductsNotification> result;

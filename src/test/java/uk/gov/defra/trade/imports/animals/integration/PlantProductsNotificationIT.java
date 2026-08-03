@@ -10,6 +10,7 @@ import static uk.gov.defra.trade.imports.plantproducts.notification.PlantProduct
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -17,6 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Stream;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
@@ -258,6 +260,34 @@ class PlantProductsNotificationIT extends IntegrationBase {
             .singleElement()
             .extracting(PlantProductsNotificationDto::getReferenceNumber)
             .isEqualTo(matchingReference);
+    }
+
+    @Test
+    void findAll_shouldReturnDisjointAndCompletePagesWhenDefaultSortValuesTie() {
+        // Given
+        List<String> createdReferences = new ArrayList<>();
+        for (int i = 0; i < 26; i++) {
+            PlantProductsNotificationDto draftWithoutTransport = fullNotificationDto();
+            draftWithoutTransport.setTransport(null);
+            createdReferences.add(create(draftWithoutTransport).getReferenceNumber());
+        }
+
+        // When
+        PlantProductsNotificationPageResponse firstPage = findAll(1, null, null);
+        PlantProductsNotificationPageResponse secondPage = findAll(2, null, null);
+        List<String> firstPageReferences = firstPage.content().stream()
+            .map(PlantProductsNotificationDto::getReferenceNumber)
+            .toList();
+        List<String> secondPageReferences = secondPage.content().stream()
+            .map(PlantProductsNotificationDto::getReferenceNumber)
+            .toList();
+
+        // Then
+        assertThat(firstPageReferences).hasSize(firstPage.pageSize());
+        assertThat(secondPageReferences).hasSize(createdReferences.size() - firstPage.pageSize());
+        assertThat(firstPageReferences).doesNotContainAnyElementsOf(secondPageReferences);
+        assertThat(Stream.concat(firstPageReferences.stream(), secondPageReferences.stream()).toList())
+            .containsExactlyInAnyOrderElementsOf(createdReferences);
     }
 
     @Test

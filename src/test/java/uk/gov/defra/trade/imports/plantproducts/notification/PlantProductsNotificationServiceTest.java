@@ -272,6 +272,9 @@ class PlantProductsNotificationServiceTest {
             assertThat(pageable.getValue().getPageSize()).isEqualTo(25);
             assertThat(pageable.getValue().getSort().getOrderFor("created").getDirection())
                 .isEqualTo(org.springframework.data.domain.Sort.Direction.ASC);
+            assertThat(pageable.getValue().getSort().getOrderFor("_id"))
+                .as("Implementation pin: effective sort includes the stable pagination tiebreak")
+                .isEqualTo(org.springframework.data.domain.Sort.Order.asc("_id"));
             assertThat(result.content()).containsExactly(dto);
             assertThat(result.page()).isEqualTo(2);
             assertThat(result.pageSize()).isEqualTo(25);
