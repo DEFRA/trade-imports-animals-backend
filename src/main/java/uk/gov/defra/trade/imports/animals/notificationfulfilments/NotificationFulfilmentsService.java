@@ -4,21 +4,12 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.bson.Document;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.aggregation.Aggregation;
-import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
-import org.springframework.data.mongodb.core.query.Criteria;
-import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.outbox.Actor;
 
@@ -29,26 +20,15 @@ public class NotificationFulfilmentsService {
     private static final String CANNOT_FIND_FULFILMENT_WITH_ID =
         "Cannot find fulfilment with id: ";
     private static final int MAX_REF_RETRIES = 3;
-    private static final String FIELD_STATUS = "status";
-    private static final List<NotificationFulfilmentsStatus> LISTED_STATUSES = List.of(
-        NotificationFulfilmentsStatus.DRAFT,
-        NotificationFulfilmentsStatus.SUBMITTED,
-        NotificationFulfilmentsStatus.AMEND);
 
     private final NotificationFulfilmentsRepository notificationFulfilmentsRepository;
     private final ReferenceNumberGenerator referenceNumberGenerator;
-    private final MongoTemplate mongoTemplate;
-    private final int listPageSize;
 
     public NotificationFulfilmentsService(
         NotificationFulfilmentsRepository notificationFulfilmentsRepository,
-        ReferenceNumberGenerator referenceNumberGenerator,
-        MongoTemplate mongoTemplate,
-        @Value("${fulfilment.list.page-size:20}") int listPageSize) {
+        ReferenceNumberGenerator referenceNumberGenerator) {
         this.notificationFulfilmentsRepository = notificationFulfilmentsRepository;
         this.referenceNumberGenerator = referenceNumberGenerator;
-        this.mongoTemplate = mongoTemplate;
-        this.listPageSize = listPageSize;
     }
 
     public NotificationFulfilments create() {
@@ -213,63 +193,6 @@ public class NotificationFulfilmentsService {
         fulfilment.setStatus(NotificationFulfilmentsStatus.DELETED);
         log.info("Soft deleted fulfilment {}", id);
         return notificationFulfilmentsRepository.save(fulfilment);
-    }
-
-    public NotificationFulfilmentsPageResponse findAll(int page, String sort) {
-        return findAll(page, sort, null);
-    }
-
-    public NotificationFulfilmentsPageResponse findAll(
-        int page, String sort, String referenceNumber) {
-        int normalisedPage = Math.max(page, 1);
-        String trimmedReference = StringUtils.trimToNull(referenceNumber);
-        Criteria statusCriteria = listedCriteria(trimmedReference);
-        long totalElements = mongoTemplate.count(
-            Query.query(statusCriteria), NotificationFulfilments.class);
-        long offset = (normalisedPage - 1L) * listPageSize;
-        Sort rowSort = NotificationFulfilmentsSort.toSort(sort)
-            .and(Sort.by(Sort.Direction.ASC, "_id"));
-
-        Aggregation aggregation = Aggregation.newAggregation(
-            Aggregation.match(listedCriteria(trimmedReference)),
-            Aggregation.lookup(
-                mongoTemplate.getCollectionName(Notification.class),
-                "_id",
-                "referenceNumber",
-                "notification"),
-            Aggregation.unwind("notification", true),
-            enrichedRowProjection(),
-            Aggregation.sort(rowSort),
-            Aggregation.skip(offset),
-            Aggregation.limit(listPageSize));
-        List<NotificationFulfilmentsPageResponse.Item> items = mongoTemplate.aggregate(
-            aggregation,
-            NotificationFulfilments.class,
-            NotificationFulfilmentsPageResponse.Item.class).getMappedResults();
-
-        return NotificationFulfilmentsPageResponse.from(
-            normalisedPage, listPageSize, totalElements, items);
-    }
-
-    private Criteria listedCriteria(String referenceNumber) {
-        Criteria criteria = Criteria.where(FIELD_STATUS).in(LISTED_STATUSES);
-        if (referenceNumber != null) {
-            criteria.and("_id").is(referenceNumber);
-        }
-        return criteria;
-    }
-
-    private AggregationOperation enrichedRowProjection() {
-        return Aggregation.project()
-            .and(FIELD_STATUS).as(FIELD_STATUS)
-            .and("createdAt").as("createdAt")
-            .and("submittedAt").as("submittedAt")
-            .and("_id").as("reference")
-            .and("notification.commodity").as("commodityDisplay")
-            .and("notification.origin.countryCode").as("originCountryCode")
-            .and("notification.transport.arrivalDate").as("arrivalDate")
-            .and("notification.consignor.name").as("consignorName")
-            .and("notification.consignee.name").as("consigneeName");
     }
 
     private void assertWritable(NotificationFulfilments fulfilment) {

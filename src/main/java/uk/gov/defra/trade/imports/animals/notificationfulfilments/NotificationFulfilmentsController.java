@@ -19,7 +19,6 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.notification.ActorRequest;
@@ -112,24 +111,6 @@ public class NotificationFulfilmentsController {
         log.info("POST /notification-fulfilments/{}/copy - Copying fulfilment", id);
         NotificationFulfilments copy = notificationFulfilmentsService.copy(id, idempotencyKey);
         return ResponseEntity.created(buildLocationUri(copy.getId())).body(copy);
-    }
-
-    @GetMapping
-    @Operation(summary = "List fulfilments",
-        description = "Returns fulfilment summaries enriched with notification "
-            + "display fields. Optional sort: arrivalDate,desc (default), arrivalDate,asc, "
-            + "createdAt,desc, createdAt,asc. Optional referenceNumber: exact match against "
-            + "a complete notification reference.")
-    @ApiResponse(responseCode = "200", description = "Paginated fulfilment summaries returned",
-        content = @Content(schema = @Schema(implementation = NotificationFulfilmentsPageResponse.class)))
-    @Timed("controller.getAllFulfilments.time")
-    public NotificationFulfilmentsPageResponse findAll(
-        @RequestParam(defaultValue = "1") int page,
-        @RequestParam(required = false) String sort,
-        @RequestParam(required = false) String referenceNumber) {
-        log.debug("GET /notification-fulfilments?page={}&sort={}&referenceNumber={}",
-            page, sort, referenceNumber);
-        return notificationFulfilmentsService.findAll(page, sort, referenceNumber);
     }
 
     @PostMapping("/{id}/submit")

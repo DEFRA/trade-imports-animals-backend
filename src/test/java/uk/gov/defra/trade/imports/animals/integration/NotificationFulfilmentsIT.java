@@ -19,7 +19,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilments;
 import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsController;
 import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsDto;
-import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsPageResponse;
 import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsRepository;
 import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsStatus;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
@@ -488,14 +487,6 @@ class NotificationFulfilmentsIT extends IntegrationBase {
         assertThat(notificationFulfilmentsRepository.findById(source.getId()).orElseThrow().getStatus())
             .isEqualTo(NotificationFulfilmentsStatus.DELETED);
         assertThat(notificationFulfilmentsRepository.count()).isEqualTo(1);
-
-        webClient("NoAuth")
-            .get().uri(FULFILMENT_ENDPOINT)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody()
-            .jsonPath("$.totalElements").isEqualTo(0)
-            .jsonPath("$.items.length()").isEqualTo(0);
     }
 
     @Test
@@ -530,213 +521,6 @@ class NotificationFulfilmentsIT extends IntegrationBase {
             notificationFulfilmentsRepository.findById(created.getId()).orElseThrow().getFulfilments());
         assertThat(persisted).isEqualTo(expected);
         assertThat(persisted.toString()).isEqualTo(expected.toString());
-    }
-
-    @Test
-    void list_shouldEnrichFromNotificationWhenPresent() {
-        NotificationFulfilments created = createFulfilment();
-        replace(created.getId(), dto(created.getId(), scalarFulfilment("internalMarket")));
-        NotificationFulfilments submitted = webClient("NoAuth")
-            .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(NotificationFulfilments.class)
-            .returnResult().getResponseBody();
-        assertThat(submitted).isNotNull();
-
-        Commodity commodity = Commodity.builder().name("Live animals").build();
-        LocalDate arrivalDate = LocalDate.of(2026, 8, 12);
-        notificationRepository.save(
-            Notification.builder()
-                .referenceNumber(created.getId())
-                .status(NotificationStatus.DRAFT)
-                .commodity(commodity)
-                .origin(Origin.builder().countryCode("FR").build())
-                .transport(Transport.builder().arrivalDate(arrivalDate).build())
-                .consignor(Operator.builder().name("Example consignor").build())
-                .consignee(Operator.builder().name("Example consignee").build())
-                .build());
-
-        NotificationFulfilmentsPageResponse page = listFulfilments(1, "arrivalDate,desc");
-        NotificationFulfilments persistedCanonical =
-            notificationFulfilmentsRepository.findById(created.getId()).orElseThrow();
-        NotificationFulfilmentsPageResponse.Item enriched = page.items().getFirst();
-
-        assertThat(enriched.status()).isEqualTo(NotificationFulfilmentsStatus.SUBMITTED);
-        assertThat(enriched.createdAt()).isEqualTo(persistedCanonical.getCreatedAt());
-        assertThat(enriched.submittedAt()).isEqualTo(persistedCanonical.getSubmittedAt());
-        assertThat(enriched.reference()).isEqualTo(created.getId());
-        assertThat(enriched.commodityDisplay()).isEqualTo(commodity);
-        assertThat(enriched.originCountryCode()).isEqualTo("FR");
-        assertThat(enriched.arrivalDate()).isEqualTo(arrivalDate);
-        assertThat(enriched.consignorName()).isEqualTo("Example consignor");
-        assertThat(enriched.consigneeName()).isEqualTo("Example consignee");
-    }
-
-    @Test
-    void list_shouldLeaveNotificationFieldsBlankWhenNoNotificationExists() {
-        NotificationFulfilments created = createFulfilmentWithId(OTHER_REF);
-        NotificationFulfilments deleted = stored(
-            "GBN-AG-26-ABC125",
-            NotificationFulfilmentsStatus.DELETED,
-            LocalDateTime.of(2026, 7, 24, 12, 0),
-            null);
-        notificationFulfilmentsRepository.insert(deleted);
-
-        NotificationFulfilmentsPageResponse page = listFulfilments(1, "arrivalDate,desc");
-
-        assertThat(page.totalElements()).isEqualTo(1);
-        assertThat(page.items()).extracting(NotificationFulfilmentsPageResponse.Item::id)
-            .containsExactly(created.getId());
-        NotificationFulfilmentsPageResponse.Item blank = page.items().getFirst();
-        assertThat(blank.status()).isEqualTo(NotificationFulfilmentsStatus.DRAFT);
-        assertThat(blank.createdAt())
-            .isEqualTo(notificationFulfilmentsRepository.findById(OTHER_REF).orElseThrow().getCreatedAt());
-        assertThat(blank.submittedAt()).isNull();
-        assertThat(blank.reference()).isEqualTo(OTHER_REF);
-        assertThat(blank.commodityDisplay()).isNull();
-        assertThat(blank.originCountryCode()).isNull();
-        assertThat(blank.arrivalDate()).isNull();
-        assertThat(blank.consignorName()).isNull();
-        assertThat(blank.consigneeName()).isNull();
-    }
-
-    @Test
-    void list_shouldReturnOnlyExactReferenceMatch() {
-        createFulfilmentWithId(DIRECT_PUT_REF);
-        createFulfilmentWithId(OTHER_REF);
-
-        NotificationFulfilmentsPageResponse page =
-            listFulfilments(1, null, DIRECT_PUT_REF);
-
-        assertThat(page.totalElements()).isEqualTo(1);
-        assertThat(page.items()).extracting(NotificationFulfilmentsPageResponse.Item::id)
-            .containsExactly(DIRECT_PUT_REF);
-    }
-
-    @Test
-    void list_shouldReturnEmptyPageWhenReferenceDoesNotMatch() {
-        createFulfilmentWithId(DIRECT_PUT_REF);
-
-        NotificationFulfilmentsPageResponse page =
-            listFulfilments(1, null, "GBN-AG-26-ZZZZZZ");
-
-        assertThat(page.totalElements()).isZero();
-        assertThat(page.totalPages()).isZero();
-        assertThat(page.items()).isEmpty();
-    }
-
-    @Test
-    void list_shouldPreserveSortWhenFilteringByReference() {
-        LocalDateTime createdBase = LocalDateTime.of(2026, 7, 1, 10, 0);
-        notificationFulfilmentsRepository.insert(stored(
-            DIRECT_PUT_REF, NotificationFulfilmentsStatus.DRAFT, createdBase.plusHours(1), null));
-        notificationFulfilmentsRepository.insert(stored(
-            OTHER_REF, NotificationFulfilmentsStatus.DRAFT, createdBase, null));
-
-        NotificationFulfilmentsPageResponse page =
-            listFulfilments(1, "createdAt,asc", DIRECT_PUT_REF);
-
-        assertThat(page.totalElements()).isEqualTo(1);
-        assertThat(page.items()).extracting(NotificationFulfilmentsPageResponse.Item::id)
-            .containsExactly(DIRECT_PUT_REF);
-        assertThat(page.items().getFirst().createdAt())
-            .isEqualTo(createdBase.plusHours(1));
-    }
-
-    @Test
-    void list_shouldSortByJoinedArrivalDateAndFulfilmentCreatedAtAndPage() {
-        LocalDateTime createdBase = LocalDateTime.of(2026, 7, 1, 10, 0);
-        LocalDate arrivalBase = LocalDate.of(2026, 8, 1);
-        List<NotificationFulfilments> fulfilments = new ArrayList<>();
-        List<Notification> notifications = new ArrayList<>();
-        for (int index = 0; index < 21; index++) {
-            String id = "GBN-AG-26-P" + "%05d".formatted(index);
-            fulfilments.add(stored(
-                id,
-                NotificationFulfilmentsStatus.DRAFT,
-                createdBase.plusHours(index),
-                null));
-            notifications.add(Notification.builder()
-                .referenceNumber(id)
-                .status(NotificationStatus.DRAFT)
-                .transport(Transport.builder()
-                    .arrivalDate(arrivalBase.plusDays(index))
-                    .build())
-                .build());
-        }
-        notificationFulfilmentsRepository.insert(fulfilments);
-        notificationRepository.insert(notifications);
-
-        NotificationFulfilmentsPageResponse defaultFirstPage =
-            listFulfilmentsWithoutSort(1);
-        NotificationFulfilmentsPageResponse defaultSecondPage =
-            listFulfilmentsWithoutSort(2);
-        NotificationFulfilmentsPageResponse invalidSortPage =
-            listFulfilments(1, "submittedAt,asc");
-        NotificationFulfilmentsPageResponse createdAscendingPage =
-            listFulfilments(1, "createdAt,asc");
-
-        assertThat(defaultFirstPage.page()).isEqualTo(1);
-        assertThat(defaultFirstPage.size()).isEqualTo(20);
-        assertThat(defaultFirstPage.totalElements()).isEqualTo(21);
-        assertThat(defaultFirstPage.totalPages()).isEqualTo(2);
-        assertThat(defaultFirstPage.items()).hasSize(20);
-        assertThat(defaultFirstPage.items().getFirst().id()).isEqualTo("GBN-AG-26-P00020");
-        assertThat(defaultFirstPage.items().getFirst().arrivalDate())
-            .isEqualTo(arrivalBase.plusDays(20));
-
-        assertThat(defaultSecondPage.page()).isEqualTo(2);
-        assertThat(defaultSecondPage.size()).isEqualTo(20);
-        assertThat(defaultSecondPage.totalElements()).isEqualTo(21);
-        assertThat(defaultSecondPage.totalPages()).isEqualTo(2);
-        assertThat(defaultSecondPage.items()).hasSize(1);
-        assertThat(defaultSecondPage.items().getFirst().id()).isEqualTo("GBN-AG-26-P00000");
-
-        assertThat(invalidSortPage.items().getFirst().id()).isEqualTo("GBN-AG-26-P00020");
-        assertThat(createdAscendingPage.items().getFirst().id())
-            .isEqualTo("GBN-AG-26-P00000");
-        assertThat(createdAscendingPage.items().getFirst().createdAt())
-            .isEqualTo(createdBase);
-    }
-
-    @Test
-    void list_shouldNormaliseInvalidPageAndSort() {
-        LocalDateTime base = LocalDateTime.of(2026, 7, 24, 10, 0);
-        notificationFulfilmentsRepository.insert(stored(
-            DIRECT_PUT_REF, base, base.plusHours(3)));
-        notificationFulfilmentsRepository.insert(stored(
-            OTHER_REF, base.plusHours(1), base.plusHours(2)));
-        notificationFulfilmentsRepository.insert(stored(
-            "GBN-AG-26-ABC127",
-            NotificationFulfilmentsStatus.DELETED,
-            base.plusHours(4),
-            null));
-
-        webClient("NoAuth")
-            .get().uri(FULFILMENT_ENDPOINT + "?page=0&sort=not-a-sort")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody()
-            .jsonPath("$.page").isEqualTo(1)
-            .jsonPath("$.size").isEqualTo(20)
-            .jsonPath("$.totalElements").isEqualTo(2)
-            .jsonPath("$.totalPages").isEqualTo(1)
-            .jsonPath("$.items.length()").isEqualTo(2)
-            .jsonPath("$.items[0].id").isEqualTo(DIRECT_PUT_REF)
-            .jsonPath("$.items[0].status").isEqualTo("SUBMITTED")
-            .jsonPath("$.items[0].createdAt").exists()
-            .jsonPath("$.items[0].submittedAt").exists()
-            .jsonPath("$.items[0].reference").isEqualTo(DIRECT_PUT_REF)
-            .jsonPath("$.items[0].commodityDisplay").isEmpty()
-            .jsonPath("$.items[0].originCountryCode").isEmpty()
-            .jsonPath("$.items[0].arrivalDate").isEmpty()
-            .jsonPath("$.items[0].consignorName").isEmpty()
-            .jsonPath("$.items[0].consigneeName").isEmpty()
-            .jsonPath("$.items[0].idempotencyKey").doesNotExist()
-            .jsonPath("$.items[0].fulfilments").doesNotExist()
-            .jsonPath("$.items[0].submittedFulfilments").doesNotExist()
-            .jsonPath("$.items[1].id").isEqualTo(OTHER_REF);
     }
 
     private NotificationFulfilments createFulfilment() {
@@ -805,38 +589,6 @@ class NotificationFulfilmentsIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationFulfilments.class)
-            .returnResult().getResponseBody();
-    }
-
-    private NotificationFulfilmentsPageResponse listFulfilments(int page, String sort) {
-        return listFulfilments(page, sort, null);
-    }
-
-    private NotificationFulfilmentsPageResponse listFulfilments(
-        int page, String sort, String referenceNumber) {
-        return webClient("NoAuth")
-            .get().uri(uriBuilder -> uriBuilder
-                .path(FULFILMENT_ENDPOINT)
-                .queryParam("page", page)
-                .queryParamIfPresent("sort", Optional.ofNullable(sort))
-                .queryParamIfPresent(
-                    "referenceNumber", Optional.ofNullable(referenceNumber))
-                .build())
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(NotificationFulfilmentsPageResponse.class)
-            .returnResult().getResponseBody();
-    }
-
-    private NotificationFulfilmentsPageResponse listFulfilmentsWithoutSort(int page) {
-        return webClient("NoAuth")
-            .get().uri(uriBuilder -> uriBuilder
-                .path(FULFILMENT_ENDPOINT)
-                .queryParam("page", page)
-                .build())
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(NotificationFulfilmentsPageResponse.class)
             .returnResult().getResponseBody();
     }
 

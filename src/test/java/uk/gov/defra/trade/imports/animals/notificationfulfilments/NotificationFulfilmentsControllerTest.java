@@ -4,11 +4,9 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -32,20 +30,6 @@ class NotificationFulfilmentsControllerTest {
 
     @MockitoBean
     private NotificationFulfilmentsService notificationFulfilmentsService;
-
-    @Test
-    void findAll_shouldPassReferenceNumberWithPageAndSort() throws Exception {
-        when(notificationFulfilmentsService.findAll(2, "createdAt,asc", ID))
-            .thenReturn(NotificationFulfilmentsPageResponse.from(2, 20, 1, List.of()));
-
-        mockMvc.perform(get("/notification-fulfilments")
-                .param("page", "2")
-                .param("sort", "createdAt,asc")
-                .param("referenceNumber", ID))
-            .andExpect(status().isOk());
-
-        verify(notificationFulfilmentsService).findAll(2, "createdAt,asc", ID);
-    }
 
     @Test
     void submit_shouldAcceptMissingActorBody() throws Exception {

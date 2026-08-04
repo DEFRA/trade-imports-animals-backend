@@ -3,7 +3,6 @@ package uk.gov.defra.trade.imports.animals.notificationfulfilments;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,14 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.mongodb.core.MongoTemplate;
-import org.springframework.data.mongodb.core.aggregation.Aggregation;
-import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
-import org.springframework.data.mongodb.core.aggregation.AggregationResults;
-import org.springframework.data.mongodb.core.query.Query;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 
@@ -40,91 +33,13 @@ class NotificationFulfilmentsServiceTest {
     @Mock
     private ReferenceNumberGenerator referenceNumberGenerator;
 
-    @Mock
-    private MongoTemplate mongoTemplate;
-
     private NotificationFulfilmentsService notificationFulfilmentsService;
 
     @BeforeEach
     void setUp() {
         notificationFulfilmentsService =
             new NotificationFulfilmentsService(
-                notificationFulfilmentsRepository, referenceNumberGenerator,
-                mongoTemplate, 20);
-    }
-
-    @Test
-    void findAll_shouldComposeTrimmedReferenceWithStatusCriteriaAndSort() {
-        NotificationFulfilmentsPageResponse.Item item = new NotificationFulfilmentsPageResponse.Item(
-            ID,
-            NotificationFulfilmentsStatus.DRAFT,
-            LocalDateTime.of(2026, 7, 30, 12, 0),
-            null,
-            ID,
-            null,
-            null,
-            null,
-            null,
-            null);
-        when(mongoTemplate.count(any(Query.class), eq(NotificationFulfilments.class)))
-            .thenReturn(1L);
-        when(mongoTemplate.getCollectionName(
-            uk.gov.defra.trade.imports.animals.notification.Notification.class))
-            .thenReturn("notification");
-        when(mongoTemplate.aggregate(
-            any(Aggregation.class),
-            eq(NotificationFulfilments.class),
-            eq(NotificationFulfilmentsPageResponse.Item.class)))
-            .thenReturn(new AggregationResults<>(List.of(item), new Document()));
-
-        NotificationFulfilmentsPageResponse response =
-            notificationFulfilmentsService.findAll(1, "createdAt,asc", "  " + ID + "  ");
-
-        assertThat(response.totalElements()).isEqualTo(1);
-        assertThat(response.items()).containsExactly(item);
-
-        ArgumentCaptor<Query> queryCaptor = ArgumentCaptor.forClass(Query.class);
-        verify(mongoTemplate).count(queryCaptor.capture(), eq(NotificationFulfilments.class));
-        assertThat(queryCaptor.getValue().getQueryObject().getString("_id")).isEqualTo(ID);
-
-        ArgumentCaptor<Aggregation> aggregationCaptor =
-            ArgumentCaptor.forClass(Aggregation.class);
-        verify(mongoTemplate).aggregate(
-            aggregationCaptor.capture(),
-            eq(NotificationFulfilments.class),
-            eq(NotificationFulfilmentsPageResponse.Item.class));
-        List<AggregationOperation> operations =
-            aggregationCaptor.getValue().getPipeline().getOperations();
-        Document matchStage =
-            operations.getFirst().toDocument(Aggregation.DEFAULT_CONTEXT);
-        Document sortStage =
-            operations.get(4).toDocument(Aggregation.DEFAULT_CONTEXT);
-        assertThat(matchStage.get("$match", Document.class).getString("_id"))
-            .isEqualTo(ID);
-        assertThat(sortStage.get("$sort", Document.class))
-            .containsEntry("createdAt", 1)
-            .containsEntry("_id", 1);
-    }
-
-    @Test
-    void findAll_shouldReturnEmptyPageWhenReferenceDoesNotMatch() {
-        when(mongoTemplate.count(any(Query.class), eq(NotificationFulfilments.class)))
-            .thenReturn(0L);
-        when(mongoTemplate.getCollectionName(
-            uk.gov.defra.trade.imports.animals.notification.Notification.class))
-            .thenReturn("notification");
-        when(mongoTemplate.aggregate(
-            any(Aggregation.class),
-            eq(NotificationFulfilments.class),
-            eq(NotificationFulfilmentsPageResponse.Item.class)))
-            .thenReturn(new AggregationResults<>(List.of(), new Document()));
-
-        NotificationFulfilmentsPageResponse response =
-            notificationFulfilmentsService.findAll(1, null, "GBN-AG-26-ZZZZZZ");
-
-        assertThat(response.totalElements()).isZero();
-        assertThat(response.totalPages()).isZero();
-        assertThat(response.items()).isEmpty();
+                notificationFulfilmentsRepository, referenceNumberGenerator);
     }
 
     @ParameterizedTest
