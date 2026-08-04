@@ -534,11 +534,6 @@ class NotificationFulfilmentsIT extends IntegrationBase {
     }
 
     private NotificationFulfilments stored(
-        String id, LocalDateTime createdAt, LocalDateTime submittedAt) {
-        return stored(id, NotificationFulfilmentsStatus.SUBMITTED, createdAt, submittedAt);
-    }
-
-    private NotificationFulfilments stored(
         String id,
         NotificationFulfilmentsStatus status,
         LocalDateTime createdAt,

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,6 +19,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 
@@ -220,6 +222,89 @@ class NotificationFulfilmentsServiceTest {
         assertThat(submitted.getStatus()).isEqualTo(NotificationFulfilmentsStatus.SUBMITTED);
         assertThat(submitted.getSubmittedFulfilments()).isNull();
         assertThat(submitted.getSubmittedAt()).isNotNull();
+    }
+
+    @Test
+    void create_shouldRetryOnDuplicateReferenceCollision() {
+        String colliding = "GBN-AG-26-DUP001";
+        String survivor = "GBN-AG-26-NEW002";
+        when(referenceNumberGenerator.generate()).thenReturn(colliding, survivor);
+        when(notificationFulfilmentsRepository.insert(any(NotificationFulfilments.class)))
+            .thenThrow(new DuplicateKeyException("collision"))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        NotificationFulfilments created = notificationFulfilmentsService.create();
+
+        assertThat(created.getId()).isEqualTo(survivor);
+        verify(notificationFulfilmentsRepository, times(2)).insert(any(NotificationFulfilments.class));
+    }
+
+    @Test
+    void create_shouldThrowWhenReferenceRetriesAreExhausted() {
+        when(referenceNumberGenerator.generate()).thenReturn("dup-1", "dup-2", "dup-3");
+        when(notificationFulfilmentsRepository.insert(any(NotificationFulfilments.class)))
+            .thenThrow(new DuplicateKeyException("collision"));
+
+        assertThatThrownBy(() -> notificationFulfilmentsService.create())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Failed to generate a unique reference number");
+
+        verify(notificationFulfilmentsRepository, times(3)).insert(any(NotificationFulfilments.class));
+    }
+
+    @Test
+    void copy_shouldReturnConcurrentlyCreatedCopyWhenCollisionResolvesToExisting() {
+        String idempotencyKey = "copy-key";
+        NotificationFulfilments source = fulfilment(NotificationFulfilmentsStatus.SUBMITTED, List.of(), null);
+        NotificationFulfilments concurrentCopy = fulfilment(NotificationFulfilmentsStatus.DRAFT, List.of(), null);
+        when(notificationFulfilmentsRepository.findByIdempotencyKey(idempotencyKey))
+            .thenReturn(Optional.empty(), Optional.of(concurrentCopy));
+        when(notificationFulfilmentsRepository.findById(ID)).thenReturn(Optional.of(source));
+        when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-DUP001");
+        when(notificationFulfilmentsRepository.insert(any(NotificationFulfilments.class)))
+            .thenThrow(new DuplicateKeyException("collision"));
+
+        NotificationFulfilments result = notificationFulfilmentsService.copy(ID, idempotencyKey);
+
+        assertThat(result).isSameAs(concurrentCopy);
+        verify(notificationFulfilmentsRepository, times(1)).insert(any(NotificationFulfilments.class));
+    }
+
+    @Test
+    void copy_shouldRetryWhenCollisionHasNoConcurrentCreator() {
+        String idempotencyKey = "copy-key";
+        NotificationFulfilments source = fulfilment(NotificationFulfilmentsStatus.SUBMITTED, List.of(), null);
+        when(notificationFulfilmentsRepository.findByIdempotencyKey(idempotencyKey))
+            .thenReturn(Optional.empty());
+        when(notificationFulfilmentsRepository.findById(ID)).thenReturn(Optional.of(source));
+        when(referenceNumberGenerator.generate())
+            .thenReturn("GBN-AG-26-DUP001", "GBN-AG-26-NEW002");
+        when(notificationFulfilmentsRepository.insert(any(NotificationFulfilments.class)))
+            .thenThrow(new DuplicateKeyException("collision"))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+
+        NotificationFulfilments copy = notificationFulfilmentsService.copy(ID, idempotencyKey);
+
+        assertThat(copy.getId()).isEqualTo("GBN-AG-26-NEW002");
+        verify(notificationFulfilmentsRepository, times(2)).insert(any(NotificationFulfilments.class));
+    }
+
+    @Test
+    void copy_shouldThrowWhenReferenceRetriesAreExhausted() {
+        String idempotencyKey = "copy-key";
+        NotificationFulfilments source = fulfilment(NotificationFulfilmentsStatus.SUBMITTED, List.of(), null);
+        when(notificationFulfilmentsRepository.findByIdempotencyKey(idempotencyKey))
+            .thenReturn(Optional.empty());
+        when(notificationFulfilmentsRepository.findById(ID)).thenReturn(Optional.of(source));
+        when(referenceNumberGenerator.generate()).thenReturn("dup-1", "dup-2", "dup-3");
+        when(notificationFulfilmentsRepository.insert(any(NotificationFulfilments.class)))
+            .thenThrow(new DuplicateKeyException("collision"));
+
+        assertThatThrownBy(() -> notificationFulfilmentsService.copy(ID, idempotencyKey))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("Failed to generate a unique reference number");
+
+        verify(notificationFulfilmentsRepository, times(3)).insert(any(NotificationFulfilments.class));
     }
 
     private NotificationFulfilments fulfilment(

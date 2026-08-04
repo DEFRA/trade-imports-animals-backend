@@ -185,11 +185,6 @@ public class NotificationFulfilmentsService {
         if (fulfilment.getStatus() == NotificationFulfilmentsStatus.DELETED) {
             return fulfilment;
         }
-        if (!isCopyable(fulfilment.getStatus())) {
-            throw new BadRequestException(
-                "Cannot delete fulfilment with status: " + fulfilment.getStatus());
-        }
-
         fulfilment.setStatus(NotificationFulfilmentsStatus.DELETED);
         log.info("Soft deleted fulfilment {}", id);
         return notificationFulfilmentsRepository.save(fulfilment);
