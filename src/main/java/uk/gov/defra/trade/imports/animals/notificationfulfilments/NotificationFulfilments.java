@@ -39,10 +39,10 @@ import org.springframework.data.mongodb.core.index.CompoundIndexes;
         name = "submitted_at",
         def = "{'submittedAt': -1}"),
     @CompoundIndex(
-        name = "copy_idempotency_key",
-        def = "{'copyIdempotencyKey': 1}",
+        name = "idempotency_key",
+        def = "{'idempotencyKey': 1}",
         unique = true,
-        partialFilter = "{'copyIdempotencyKey': {'$type': 'string'}}")
+        partialFilter = "{'idempotencyKey': {'$type': 'string'}}")
 })
 @Data
 @Builder
@@ -76,5 +76,5 @@ public class NotificationFulfilments {
 
     private LocalDateTime submittedAt;
 
-    private String copyIdempotencyKey;
+    private String idempotencyKey;
 }

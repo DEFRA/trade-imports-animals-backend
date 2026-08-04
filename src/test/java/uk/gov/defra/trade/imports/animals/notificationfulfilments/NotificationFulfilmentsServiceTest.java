@@ -134,7 +134,7 @@ class NotificationFulfilmentsServiceTest {
         String idempotencyKey = "copy-key";
         List<Document> sourceContent = List.of(new Document("value", sourceStatus.name()));
         NotificationFulfilments source = fulfilment(sourceStatus, sourceContent, List.of());
-        when(notificationFulfilmentsRepository.findByCopyIdempotencyKey(idempotencyKey))
+        when(notificationFulfilmentsRepository.findByIdempotencyKey(idempotencyKey))
             .thenReturn(Optional.empty());
         when(notificationFulfilmentsRepository.findById(ID)).thenReturn(Optional.of(source));
         when(referenceNumberGenerator.generate()).thenReturn(copyId);
@@ -151,14 +151,14 @@ class NotificationFulfilmentsServiceTest {
         assertThat(copy.getFulfilments())
             .isEqualTo(sourceContent)
             .isNotSameAs(sourceContent);
-        assertThat(copy.getCopyIdempotencyKey()).isEqualTo(idempotencyKey);
+        assertThat(copy.getIdempotencyKey()).isEqualTo(idempotencyKey);
     }
 
     @Test
     void copy_shouldReturnExistingCopyForSameIdempotencyKey() {
         String idempotencyKey = "copy-key";
         NotificationFulfilments existingCopy = fulfilment(NotificationFulfilmentsStatus.DRAFT, List.of(), null);
-        when(notificationFulfilmentsRepository.findByCopyIdempotencyKey(idempotencyKey))
+        when(notificationFulfilmentsRepository.findByIdempotencyKey(idempotencyKey))
             .thenReturn(Optional.of(existingCopy));
 
         NotificationFulfilments result = notificationFulfilmentsService.copy(ID, idempotencyKey);
@@ -173,7 +173,7 @@ class NotificationFulfilmentsServiceTest {
     void copy_shouldRejectDeletedSource() {
         String idempotencyKey = "copy-key";
         NotificationFulfilments deleted = fulfilment(NotificationFulfilmentsStatus.DELETED, List.of(), null);
-        when(notificationFulfilmentsRepository.findByCopyIdempotencyKey(idempotencyKey))
+        when(notificationFulfilmentsRepository.findByIdempotencyKey(idempotencyKey))
             .thenReturn(Optional.empty());
         when(notificationFulfilmentsRepository.findById(ID)).thenReturn(Optional.of(deleted));
 

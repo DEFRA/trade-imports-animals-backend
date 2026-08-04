@@ -129,7 +129,7 @@ public class NotificationFulfilmentsService {
                 .fulfilments(copiedContent)
                 .status(NotificationFulfilmentsStatus.DRAFT)
                 .createdAt(LocalDateTime.now())
-                .copyIdempotencyKey(idempotencyKey)
+                .idempotencyKey(idempotencyKey)
                 .build();
             try {
                 NotificationFulfilments saved = notificationFulfilmentsRepository.insert(copy);
@@ -293,7 +293,7 @@ public class NotificationFulfilmentsService {
 
     private NotificationFulfilments findCopy(String idempotencyKey) {
         return notificationFulfilmentsRepository
-            .findByCopyIdempotencyKey(idempotencyKey)
+            .findByIdempotencyKey(idempotencyKey)
             .orElse(null);
     }
 

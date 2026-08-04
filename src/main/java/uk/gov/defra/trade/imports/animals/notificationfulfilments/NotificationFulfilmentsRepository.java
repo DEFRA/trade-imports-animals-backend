@@ -7,5 +7,5 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface NotificationFulfilmentsRepository extends MongoRepository<NotificationFulfilments, String> {
 
-    Optional<NotificationFulfilments> findByCopyIdempotencyKey(String copyIdempotencyKey);
+    Optional<NotificationFulfilments> findByIdempotencyKey(String idempotencyKey);
 }

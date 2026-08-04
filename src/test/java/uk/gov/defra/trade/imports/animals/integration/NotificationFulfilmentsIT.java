@@ -410,14 +410,14 @@ class NotificationFulfilmentsIT extends IntegrationBase {
         assertThat(copy.getCreatedAt()).isNotNull();
         assertThat(copy.getSubmittedAt()).isNull();
         assertThat(copy.getSubmittedFulfilments()).isNull();
-        assertThat(copy.getCopyIdempotencyKey()).isEqualTo("copy-" + sourceStatus);
+        assertThat(copy.getIdempotencyKey()).isEqualTo("copy-" + sourceStatus);
 
         NotificationFulfilments persisted = notificationFulfilmentsRepository.findById(copy.getId()).orElseThrow();
         assertThat(persisted.getFulfilments()).isEqualTo(sourceContent);
         assertThat(persisted.getStatus()).isEqualTo(NotificationFulfilmentsStatus.DRAFT);
         assertThat(persisted.getSubmittedAt()).isNull();
         assertThat(persisted.getSubmittedFulfilments()).isNull();
-        assertThat(persisted.getCopyIdempotencyKey()).isEqualTo("copy-" + sourceStatus);
+        assertThat(persisted.getIdempotencyKey()).isEqualTo("copy-" + sourceStatus);
         assertThat(notificationFulfilmentsRepository.count()).isEqualTo(2);
     }
 
@@ -432,9 +432,9 @@ class NotificationFulfilmentsIT extends IntegrationBase {
 
         assertThat(retry.getId()).isEqualTo(first.getId());
         assertThat(retry.getFulfilments()).isEqualTo(first.getFulfilments());
-        assertThat(retry.getCopyIdempotencyKey()).isEqualTo(first.getCopyIdempotencyKey());
+        assertThat(retry.getIdempotencyKey()).isEqualTo(first.getIdempotencyKey());
         assertThat(differentKey.getId()).isNotEqualTo(first.getId());
-        assertThat(notificationFulfilmentsRepository.findByCopyIdempotencyKey("same-key"))
+        assertThat(notificationFulfilmentsRepository.findByIdempotencyKey("same-key"))
             .map(NotificationFulfilments::getId)
             .contains(first.getId());
         assertThat(notificationFulfilmentsRepository.count()).isEqualTo(3);
@@ -733,7 +733,7 @@ class NotificationFulfilmentsIT extends IntegrationBase {
             .jsonPath("$.items[0].arrivalDate").isEmpty()
             .jsonPath("$.items[0].consignorName").isEmpty()
             .jsonPath("$.items[0].consigneeName").isEmpty()
-            .jsonPath("$.items[0].copyIdempotencyKey").doesNotExist()
+            .jsonPath("$.items[0].idempotencyKey").doesNotExist()
             .jsonPath("$.items[0].fulfilments").doesNotExist()
             .jsonPath("$.items[0].submittedFulfilments").doesNotExist()
             .jsonPath("$.items[1].id").isEqualTo(OTHER_REF);
