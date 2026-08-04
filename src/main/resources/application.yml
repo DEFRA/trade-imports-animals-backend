@@ -148,10 +148,6 @@ notification:
       lock-at-least-for: 1s
       lock-at-most-for: 30s
 
-fulfilment:
-  list:
-    page-size: ${FULFILMENT_LIST_PAGE_SIZE:20}
-
 # Transactional outbox SNS relay (ADR-EUDP-001)
 outbox:
   poller:
