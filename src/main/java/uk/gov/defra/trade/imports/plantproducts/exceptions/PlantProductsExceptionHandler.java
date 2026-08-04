@@ -42,6 +42,15 @@ public class PlantProductsExceptionHandler {
         return respond(problem(HttpStatus.NOT_FOUND, ex.getMessage(), "not-found", "Resource Not Found", traceId));
     }
 
+    @ExceptionHandler(PlantProductsUnprocessableEntityException.class)
+    public ResponseEntity<ProblemDetail> handleUnprocessableEntityException(
+        PlantProductsUnprocessableEntityException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Unprocessable request (trace: {}): {}", traceId, ex.getMessage());
+        return respond(problem(HttpStatus.UNPROCESSABLE_ENTITY, ex.getMessage(),
+            "unprocessable-entity", "Unprocessable Entity", traceId));
+    }
+
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ProblemDetail> handleConstraintViolationException(ConstraintViolationException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);

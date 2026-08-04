@@ -37,6 +37,9 @@ public class PlantProductsNotification extends PlantProductsNotificationBase {
     private String copyIdempotencyKey;
 
     @JsonIgnore
+    private String copySourceReference;
+
+    @JsonIgnore
     private PlantProductsNotificationContentSnapshot submittedBaseline;
 
     @JsonIgnore

@@ -628,6 +628,7 @@ class FulfilmentIT extends IntegrationBase {
         assertThat(persisted.getSubmittedAt()).isNull();
         assertThat(persisted.getSubmittedFulfilment()).isNull();
         assertThat(persisted.getCopyIdempotencyKey()).isEqualTo("copy-" + sourceStatus);
+        assertThat(persisted.getCopySourceReference()).isEqualTo(source.getId());
         assertThat(fulfilmentRepository.count()).isEqualTo(2);
     }
 
@@ -648,6 +649,71 @@ class FulfilmentIT extends IntegrationBase {
             .map(Fulfilment::getId)
             .contains(first.getId());
         assertThat(fulfilmentRepository.count()).isEqualTo(3);
+    }
+
+    @Test
+    void copy_shouldReplayExistingCopyAfterSourceIsRemoved() {
+        Fulfilment source = createFulfilment();
+        Fulfilment firstCopy = copyFulfilment(source.getId(), "removed-source-key");
+        fulfilmentRepository.deleteById(source.getId());
+
+        EntityExchangeResult<Fulfilment> replay = webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/copy", source.getId())
+            .header(FulfilmentController.IDEMPOTENCY_KEY, "removed-source-key")
+            .exchange()
+            .expectStatus().isCreated()
+            .expectBody(Fulfilment.class)
+            .returnResult();
+
+        assertThat(replay.getResponseBody()).isNotNull();
+        assertThat(replay.getResponseBody().getId()).isEqualTo(firstCopy.getId());
+        assertThat(fulfilmentRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void copy_shouldReturn422WhenIdempotencyKeyIsReusedForDifferentSource() {
+        // Given
+        Fulfilment firstSource = createFulfilment();
+        Fulfilment secondSource = createFulfilment();
+        Fulfilment firstCopy = copyFulfilment(firstSource.getId(), "reused-source-key");
+
+        // When / Then
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/copy", secondSource.getId())
+            .header(FulfilmentController.IDEMPOTENCY_KEY, "reused-source-key")
+            .exchange()
+            .expectStatus().isEqualTo(422)
+            .expectBody()
+            .jsonPath("$.detail").isEqualTo(
+                "Idempotency-Key has already been used for a different copy source");
+
+        assertThat(fulfilmentRepository.findByCopyIdempotencyKey("reused-source-key"))
+            .map(Fulfilment::getId)
+            .contains(firstCopy.getId());
+        assertThat(fulfilmentRepository.count()).isEqualTo(3);
+    }
+
+    @Test
+    void copy_shouldReturn422ForLegacyCopyWithoutSourceFingerprint() {
+        Fulfilment source = createFulfilment();
+        Fulfilment legacyCopy = copyFulfilment(source.getId(), "legacy-source-key");
+        legacyCopy.setCopySourceReference(null);
+        fulfilmentRepository.save(legacyCopy);
+
+        webClient("NoAuth")
+            .post().uri(FULFILMENT_ENDPOINT + "/{id}/copy", source.getId())
+            .header(FulfilmentController.IDEMPOTENCY_KEY, "legacy-source-key")
+            .exchange()
+            .expectStatus().isEqualTo(422)
+            .expectBody()
+            .jsonPath("$.detail").isEqualTo(
+                "Idempotency-Key has already been used for a different copy source");
+
+        assertThat(fulfilmentRepository.findByCopyIdempotencyKey("legacy-source-key"))
+            .get()
+            .extracting(Fulfilment::getCopySourceReference)
+            .isNull();
+        assertThat(fulfilmentRepository.count()).isEqualTo(2);
     }
 
     @Test
@@ -681,7 +747,8 @@ class FulfilmentIT extends IntegrationBase {
             assertThat(second.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
                 .isEqualTo(first.getResponseHeaders().getFirst(HttpHeaders.LOCATION));
             assertThat(fulfilmentRepository.findByCopyIdempotencyKey(idempotencyKey))
-                .contains(first.getResponseBody());
+                .map(Fulfilment::getId)
+                .contains(first.getResponseBody().getId());
             assertThat(fulfilmentRepository.count()).isEqualTo(2);
         } finally {
             concurrentCopyLookupGate.disarm();

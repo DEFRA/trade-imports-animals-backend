@@ -19,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.exceptions.UnprocessableEntityException;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
@@ -113,6 +114,7 @@ public class FulfilmentService {
 
         Fulfilment existingCopy = findCopy(idempotencyKey);
         if (existingCopy != null) {
+            assertCopySourceMatches(existingCopy, id);
             log.info("Returning existing fulfilment copy {} for idempotency key",
                 existingCopy.getId());
             return existingCopy;
@@ -134,6 +136,7 @@ public class FulfilmentService {
                 .status(FulfilmentStatus.DRAFT)
                 .createdAt(LocalDateTime.now())
                 .copyIdempotencyKey(idempotencyKey)
+                .copySourceReference(id)
                 .build();
             try {
                 Fulfilment saved = fulfilmentRepository.insert(copy);
@@ -143,6 +146,7 @@ public class FulfilmentService {
             } catch (DuplicateKeyException e) {
                 existingCopy = findCopy(idempotencyKey);
                 if (existingCopy != null) {
+                    assertCopySourceMatches(existingCopy, id);
                     log.info("Returning concurrently-created fulfilment copy {}",
                         existingCopy.getId());
                     return existingCopy;
@@ -317,6 +321,13 @@ public class FulfilmentService {
         return fulfilmentRepository
             .findByCopyIdempotencyKey(idempotencyKey)
             .orElse(null);
+    }
+
+    private void assertCopySourceMatches(Fulfilment existingCopy, String sourceReference) {
+        if (!sourceReference.equals(existingCopy.getCopySourceReference())) {
+            throw new UnprocessableEntityException(
+                "Idempotency-Key has already been used for a different copy source");
+        }
     }
 
     private boolean notificationProjectionExists(String id) {

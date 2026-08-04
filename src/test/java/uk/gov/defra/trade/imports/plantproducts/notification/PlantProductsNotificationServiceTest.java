@@ -39,6 +39,7 @@ import uk.gov.defra.trade.imports.plantproducts.accompanyingdocument.PlantProduc
 import uk.gov.defra.trade.imports.plantproducts.configuration.PlantProductsNotificationTtlConfig;
 import uk.gov.defra.trade.imports.plantproducts.exceptions.PlantProductsBadRequestException;
 import uk.gov.defra.trade.imports.plantproducts.exceptions.PlantProductsNotFoundException;
+import uk.gov.defra.trade.imports.plantproducts.exceptions.PlantProductsUnprocessableEntityException;
 
 @ExtendWith(MockitoExtension.class)
 class PlantProductsNotificationServiceTest {
@@ -529,6 +530,7 @@ class PlantProductsNotificationServiceTest {
             assertThat(result.getUpdated()).isNotNull();
             assertThat(result.getOrigin()).isEqualTo(source.getOrigin());
             assertThat(result.getCopyIdempotencyKey()).isEqualTo(idempotencyKey);
+            assertThat(result.getCopySourceReference()).isEqualTo(source.getReferenceNumber());
             verify(notificationCopyMapper).copyFrom(source);
             verify(notificationRepository).insert(copied);
             verifyNoInteractions(accompanyingDocumentRepository);
@@ -539,14 +541,51 @@ class PlantProductsNotificationServiceTest {
             // Given
             String idempotencyKey = "repeat-key";
             PlantProductsNotification existingCopy = withStatus(PlantProductsNotificationStatus.DRAFT);
+            existingCopy.setCopySourceReference(refNumber("S0ARC1"));
             when(notificationRepository.findByCopyIdempotencyKey(idempotencyKey))
                 .thenReturn(Optional.of(existingCopy));
 
             // When
-            PlantProductsNotification result = service.copy(refNumber("0THER1"), idempotencyKey);
+            PlantProductsNotification result = service.copy(refNumber("S0ARC1"), idempotencyKey);
 
             // Then
             assertThat(result).isSameAs(existingCopy);
+            verify(notificationRepository, never()).findByReferenceNumber(any());
+            verify(notificationRepository, never()).insert(any(PlantProductsNotification.class));
+        }
+
+        @Test
+        void copy_shouldRejectReusedIdempotencyKeyForDifferentSource() {
+            // Given
+            String idempotencyKey = "reused-key";
+            PlantProductsNotification source = withStatus(PlantProductsNotificationStatus.SUBMITTED);
+            PlantProductsNotification existingCopy = withStatus(PlantProductsNotificationStatus.DRAFT);
+            existingCopy.setCopySourceReference(refNumber("F1RST1"));
+            when(notificationRepository.findByCopyIdempotencyKey(idempotencyKey))
+                .thenReturn(Optional.of(existingCopy));
+
+            // When & Then
+            assertThatThrownBy(() -> service.copy(source.getReferenceNumber(), idempotencyKey))
+                .isInstanceOf(PlantProductsUnprocessableEntityException.class)
+                .hasMessage("Idempotency-Key has already been used for a different copy source");
+            verify(notificationRepository, never()).findByReferenceNumber(any());
+            verify(notificationRepository, never()).insert(any(PlantProductsNotification.class));
+        }
+
+        @Test
+        void copy_shouldRejectLegacyCopyWithoutSourceFingerprint() {
+            // Given
+            String idempotencyKey = "legacy-copy-key";
+            PlantProductsNotification legacyCopy = withStatus(
+                PlantProductsNotificationStatus.DRAFT);
+            legacyCopy.setCopyIdempotencyKey(idempotencyKey);
+            when(notificationRepository.findByCopyIdempotencyKey(idempotencyKey))
+                .thenReturn(Optional.of(legacyCopy));
+
+            // When & Then
+            assertThatThrownBy(() -> service.copy(refNumber("S0ARC1"), idempotencyKey))
+                .isInstanceOf(PlantProductsUnprocessableEntityException.class)
+                .hasMessage("Idempotency-Key has already been used for a different copy source");
             verify(notificationRepository, never()).findByReferenceNumber(any());
             verify(notificationRepository, never()).insert(any(PlantProductsNotification.class));
         }
@@ -605,6 +644,7 @@ class PlantProductsNotificationServiceTest {
                 .referenceNumber(refNumber("C0NC01"))
                 .status(PlantProductsNotificationStatus.DRAFT)
                 .copyIdempotencyKey(idempotencyKey)
+                .copySourceReference(source.getReferenceNumber())
                 .build();
             when(notificationRepository.findByCopyIdempotencyKey(idempotencyKey))
                 .thenReturn(Optional.empty(), Optional.of(concurrentCopy));

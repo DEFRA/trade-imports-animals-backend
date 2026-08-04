@@ -493,7 +493,28 @@ class PlantProductsNotificationIT extends IntegrationBase {
     }
 
     @Test
-    void copy_shouldReturnExistingCopyWhenKeyIsRepeatedAgainstDifferentSource() {
+    void copy_shouldReplayExistingCopyAfterSourceIsRemoved() {
+        String sourceReference = createFullNotification().getReferenceNumber();
+        changeStatus(sourceReference, SUBMITTED, null).expectStatus().isOk();
+        PlantProductsNotification firstCopy =
+            copy(sourceReference, "removed-source-key").getResponseBody();
+        assertThat(firstCopy).isNotNull();
+        PlantProductsNotification source = notificationRepository
+            .findByReferenceNumber(sourceReference)
+            .orElseThrow();
+        notificationRepository.delete(source);
+
+        EntityExchangeResult<PlantProductsNotification> replay =
+            copy(sourceReference, "removed-source-key");
+
+        assertThat(replay.getResponseBody()).isNotNull();
+        assertThat(replay.getResponseBody().getReferenceNumber())
+            .isEqualTo(firstCopy.getReferenceNumber());
+        assertThat(notificationRepository.count()).isEqualTo(1);
+    }
+
+    @Test
+    void copy_shouldReturn422WhenIdempotencyKeyIsReusedForDifferentSource() {
         // Given
         String firstSource = createFullNotification().getReferenceNumber();
         String secondSource = createFullNotification().getReferenceNumber();
@@ -502,17 +523,52 @@ class PlantProductsNotificationIT extends IntegrationBase {
 
         // When
         EntityExchangeResult<PlantProductsNotification> first = copy(firstSource, "scoped-key");
-        EntityExchangeResult<PlantProductsNotification> repeated = copy(secondSource, "scoped-key");
+        WebTestClient.ResponseSpec repeated = webClient("NoAuth")
+            .post()
+            .uri(ENDPOINT + "/{referenceNumber}/copies", secondSource)
+            .header(PlantProductsNotificationController.IDEMPOTENCY_KEY, "scoped-key")
+            .exchange();
 
         // Then
-        assertThat(repeated.getResponseBody()).isNotNull();
+        repeated.expectStatus().isEqualTo(422)
+            .expectBody()
+            .jsonPath("$.detail").isEqualTo(
+                "Idempotency-Key has already been used for a different copy source");
         assertThat(first.getResponseBody()).isNotNull();
-        assertThat(repeated.getResponseBody().getReferenceNumber())
-            .isEqualTo(first.getResponseBody().getReferenceNumber());
-        assertThat(repeated.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
-            .isEqualTo(first.getResponseHeaders().getFirst(HttpHeaders.LOCATION));
         assertThat(notificationRepository.findAllByStatusIn(List.of(DRAFT), Pageable.unpaged()))
-            .hasSize(1);
+            .singleElement()
+            .satisfies(copy -> {
+                assertThat(copy.getReferenceNumber())
+                    .isEqualTo(first.getResponseBody().getReferenceNumber());
+                assertThat(copy.getCopySourceReference()).isEqualTo(firstSource);
+            });
+    }
+
+    @Test
+    void copy_shouldReturn422ForLegacyCopyWithoutSourceFingerprint() {
+        String sourceReference = createFullNotification().getReferenceNumber();
+        changeStatus(sourceReference, SUBMITTED, null).expectStatus().isOk();
+        PlantProductsNotification legacyCopy =
+            copy(sourceReference, "legacy-source-key").getResponseBody();
+        assertThat(legacyCopy).isNotNull();
+        legacyCopy.setCopySourceReference(null);
+        notificationRepository.save(legacyCopy);
+
+        webClient("NoAuth")
+            .post()
+            .uri(ENDPOINT + "/{referenceNumber}/copies", sourceReference)
+            .header(PlantProductsNotificationController.IDEMPOTENCY_KEY, "legacy-source-key")
+            .exchange()
+            .expectStatus().isEqualTo(422)
+            .expectBody()
+            .jsonPath("$.detail").isEqualTo(
+                "Idempotency-Key has already been used for a different copy source");
+
+        assertThat(notificationRepository.findByCopyIdempotencyKey("legacy-source-key"))
+            .get()
+            .extracting(PlantProductsNotification::getCopySourceReference)
+            .isNull();
+        assertThat(notificationRepository.count()).isEqualTo(2);
     }
 
     @Test

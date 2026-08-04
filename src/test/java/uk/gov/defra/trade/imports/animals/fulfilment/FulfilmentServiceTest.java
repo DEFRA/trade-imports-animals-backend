@@ -27,6 +27,7 @@ import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
 import org.springframework.data.mongodb.core.aggregation.AggregationResults;
 import org.springframework.data.mongodb.core.query.Query;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
+import uk.gov.defra.trade.imports.animals.exceptions.UnprocessableEntityException;
 import uk.gov.defra.trade.imports.animals.notification.NotificationResponse;
 import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
@@ -160,18 +161,55 @@ class FulfilmentServiceTest {
             .isEqualTo(sourceContent)
             .isNotSameAs(sourceContent);
         assertThat(copy.getCopyIdempotencyKey()).isEqualTo(idempotencyKey);
+        assertThat(copy.getCopySourceReference()).isEqualTo(ID);
     }
 
     @Test
     void copy_shouldReturnExistingCopyForSameIdempotencyKey() {
         String idempotencyKey = "copy-key";
         Fulfilment existingCopy = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
+        existingCopy.setCopySourceReference(ID);
         when(fulfilmentRepository.findByCopyIdempotencyKey(idempotencyKey))
             .thenReturn(Optional.of(existingCopy));
 
         Fulfilment result = fulfilmentService.copy(ID, idempotencyKey);
 
         assertThat(result).isSameAs(existingCopy);
+        verify(fulfilmentRepository, never()).findById(any());
+        verify(fulfilmentRepository, never()).insert(any(Fulfilment.class));
+        verify(referenceNumberGenerator, never()).generate();
+    }
+
+    @Test
+    void copy_shouldRejectReusedIdempotencyKeyForDifferentSource() {
+        String idempotencyKey = "copy-key";
+        String differentSourceId = "GBN-AG-26-ABC125";
+        Fulfilment existingCopy = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
+        existingCopy.setCopySourceReference(ID);
+        when(fulfilmentRepository.findByCopyIdempotencyKey(idempotencyKey))
+            .thenReturn(Optional.of(existingCopy));
+
+        assertThatThrownBy(() -> fulfilmentService.copy(differentSourceId, idempotencyKey))
+            .isInstanceOf(UnprocessableEntityException.class)
+            .hasMessage("Idempotency-Key has already been used for a different copy source");
+
+        verify(fulfilmentRepository, never()).findById(any());
+        verify(fulfilmentRepository, never()).insert(any(Fulfilment.class));
+        verify(referenceNumberGenerator, never()).generate();
+    }
+
+    @Test
+    void copy_shouldRejectLegacyCopyWithoutSourceFingerprint() {
+        String idempotencyKey = "legacy-copy-key";
+        Fulfilment legacyCopy = fulfilment(FulfilmentStatus.DRAFT, List.of(), null);
+        legacyCopy.setCopyIdempotencyKey(idempotencyKey);
+        when(fulfilmentRepository.findByCopyIdempotencyKey(idempotencyKey))
+            .thenReturn(Optional.of(legacyCopy));
+
+        assertThatThrownBy(() -> fulfilmentService.copy(ID, idempotencyKey))
+            .isInstanceOf(UnprocessableEntityException.class)
+            .hasMessage("Idempotency-Key has already been used for a different copy source");
+
         verify(fulfilmentRepository, never()).findById(any());
         verify(fulfilmentRepository, never()).insert(any(Fulfilment.class));
         verify(referenceNumberGenerator, never()).generate();

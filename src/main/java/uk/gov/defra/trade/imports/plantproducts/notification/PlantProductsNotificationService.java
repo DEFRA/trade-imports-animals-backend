@@ -19,6 +19,7 @@ import uk.gov.defra.trade.imports.plantproducts.accompanyingdocument.PlantProduc
 import uk.gov.defra.trade.imports.plantproducts.configuration.PlantProductsNotificationTtlConfig;
 import uk.gov.defra.trade.imports.plantproducts.exceptions.PlantProductsBadRequestException;
 import uk.gov.defra.trade.imports.plantproducts.exceptions.PlantProductsNotFoundException;
+import uk.gov.defra.trade.imports.plantproducts.exceptions.PlantProductsUnprocessableEntityException;
 
 @Service
 @Slf4j
@@ -151,6 +152,7 @@ public class PlantProductsNotificationService {
 
         PlantProductsNotification existingCopy = findCopy(idempotencyKey);
         if (existingCopy != null) {
+            assertCopySourceMatches(existingCopy, referenceNumber);
             log.info("Returning existing plant-products notification copy {} for idempotency key",
                 existingCopy.getReferenceNumber());
             return existingCopy;
@@ -168,6 +170,7 @@ public class PlantProductsNotificationService {
         PlantProductsNotification copy = notificationCopyMapper.copyFrom(source);
         copy.setChedType(CHED_TYPE);
         copy.setCopyIdempotencyKey(idempotencyKey);
+        copy.setCopySourceReference(referenceNumber);
         stampExpiry(copy);
         log.info("Copying plant-products notification {}", referenceNumber);
         return saveCopyWithMintedReference(copy, idempotencyKey);
@@ -302,6 +305,7 @@ public class PlantProductsNotificationService {
             } catch (DuplicateKeyException e) {
                 PlantProductsNotification existingCopy = findCopy(idempotencyKey);
                 if (existingCopy != null) {
+                    assertCopySourceMatches(existingCopy, copy.getCopySourceReference());
                     log.info("Returning concurrently-created plant-products notification copy {}",
                         existingCopy.getReferenceNumber());
                     return existingCopy;
@@ -316,6 +320,14 @@ public class PlantProductsNotificationService {
 
     private PlantProductsNotification findCopy(String idempotencyKey) {
         return notificationRepository.findByCopyIdempotencyKey(idempotencyKey).orElse(null);
+    }
+
+    private void assertCopySourceMatches(
+        PlantProductsNotification existingCopy, String sourceReference) {
+        if (!sourceReference.equals(existingCopy.getCopySourceReference())) {
+            throw new PlantProductsUnprocessableEntityException(
+                "Idempotency-Key has already been used for a different copy source");
+        }
     }
 
     public record ReplaceResult(PlantProductsNotification notification, boolean created) {

@@ -205,6 +205,32 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle semantically unprocessable requests (422 Unprocessable Entity).
+     */
+    @ExceptionHandler(UnprocessableEntityException.class)
+    public ResponseEntity<ProblemDetail> handleUnprocessableEntityException(
+        UnprocessableEntityException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Unprocessable request (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            ex.getMessage()
+        );
+
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/unprocessable-entity"));
+        problemDetail.setTitle("Unprocessable Entity");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
      * Handle oversized multipart uploads (413 Payload Too Large).
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)

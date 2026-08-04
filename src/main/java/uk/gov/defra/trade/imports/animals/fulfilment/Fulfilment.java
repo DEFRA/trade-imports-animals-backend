@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.fulfilment;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDateTime;
 import java.util.List;
 import lombok.AllArgsConstructor;
@@ -45,4 +46,7 @@ public class Fulfilment {
     private LocalDateTime submittedAt;
 
     private String copyIdempotencyKey;
+
+    @JsonIgnore
+    private String copySourceReference;
 }
