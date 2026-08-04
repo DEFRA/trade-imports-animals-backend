@@ -110,7 +110,7 @@ public final class PlantProductsNotificationTestData {
             .status(PlantProductsNotificationStatus.SUBMITTED)
             .ownership(Ownership.builder()
                 .assignedOrganisationId("stub-org")
-                .assignedOrganisationName("Stubbed organisation")
+                .assignedOrganisationName("KING CHARLES III")
                 .build())
             .origin(dto.getOrigin())
             .reasonForImport(dto.getReasonForImport())

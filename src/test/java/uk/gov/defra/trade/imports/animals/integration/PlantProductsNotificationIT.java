@@ -117,7 +117,7 @@ class PlantProductsNotificationIT extends IntegrationBase {
         assertThat(created.getChedType()).isEqualTo("CHEDPP");
         assertThat(created.getOwnership().getAssignedOrganisationId()).isEqualTo("stub-org");
         assertThat(created.getOwnership().getAssignedOrganisationName())
-            .isEqualTo("Stubbed organisation");
+            .isEqualTo("KING CHARLES III");
         assertThat(created.getCreated()).isNotNull();
         assertThat(created.getUpdated()).isNotNull();
 

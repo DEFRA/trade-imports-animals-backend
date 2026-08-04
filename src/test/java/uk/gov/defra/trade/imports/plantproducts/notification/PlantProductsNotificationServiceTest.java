@@ -116,7 +116,7 @@ class PlantProductsNotificationServiceTest {
             assertThat(result.getStatus()).isEqualTo(PlantProductsNotificationStatus.DRAFT);
             assertThat(result.getChedType()).isEqualTo("CHEDPP");
             assertThat(result.getOwnership().getAssignedOrganisationId()).isEqualTo("stub-org");
-            assertThat(result.getOwnership().getAssignedOrganisationName()).isEqualTo("Stubbed organisation");
+            assertThat(result.getOwnership().getAssignedOrganisationName()).isEqualTo("KING CHARLES III");
             assertThat(result.getCreated()).isAfterOrEqualTo(start);
             assertThat(result.getUpdated()).isAfterOrEqualTo(start);
             assertThat(result.getExpireAt()).isEqualTo(result.getCreated().plusDays(7));

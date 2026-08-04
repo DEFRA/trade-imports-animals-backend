@@ -28,8 +28,8 @@ public class PlantProductsNotificationService {
     private static final String CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER =
         "Cannot find plant-products notification with reference number: ";
     private static final String CHED_TYPE = "CHEDPP";
-    private static final String STUB_ORGANISATION_ID = "stub-org";
-    private static final String STUB_ORGANISATION_NAME = "Stubbed organisation";
+    private static final String PLACEHOLDER_ORGANISATION_ID = "stub-org";
+    private static final String PLACEHOLDER_ORGANISATION_NAME = "KING CHARLES III";
     private static final int MAX_REF_RETRIES = 3;
     private static final List<PlantProductsNotificationStatus> DASHBOARD_STATUSES = List.of(
         PlantProductsNotificationStatus.DRAFT,
@@ -259,8 +259,8 @@ public class PlantProductsNotificationService {
         notification.setChedType(CHED_TYPE);
         notification.setStatus(PlantProductsNotificationStatus.DRAFT);
         notification.setOwnership(Ownership.builder()
-            .assignedOrganisationId(STUB_ORGANISATION_ID)
-            .assignedOrganisationName(STUB_ORGANISATION_NAME)
+            .assignedOrganisationId(PLACEHOLDER_ORGANISATION_ID)
+            .assignedOrganisationName(PLACEHOLDER_ORGANISATION_NAME)
             .build());
         notification.setCreated(LocalDateTime.now());
         notification.setUpdated(LocalDateTime.now());
