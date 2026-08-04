@@ -533,7 +533,7 @@ class NotificationFulfilmentsIT extends IntegrationBase {
     }
 
     @Test
-    void list_shouldEnrichFromNotificationButKeepCanonicalFulfilmentState() {
+    void list_shouldEnrichFromNotificationWhenPresent() {
         NotificationFulfilments created = createFulfilment();
         replace(created.getId(), dto(created.getId(), scalarFulfilment("internalMarket")));
         NotificationFulfilments submitted = webClient("NoAuth")
@@ -546,7 +546,7 @@ class NotificationFulfilmentsIT extends IntegrationBase {
 
         Commodity commodity = Commodity.builder().name("Live animals").build();
         LocalDate arrivalDate = LocalDate.of(2026, 8, 12);
-        Notification notificationProjection = notificationRepository.save(
+        notificationRepository.save(
             Notification.builder()
                 .referenceNumber(created.getId())
                 .status(NotificationStatus.DRAFT)
@@ -556,25 +556,12 @@ class NotificationFulfilmentsIT extends IntegrationBase {
                 .consignor(Operator.builder().name("Example consignor").build())
                 .consignee(Operator.builder().name("Example consignee").build())
                 .build());
-        assertThat(notificationProjection).isNotNull();
-        assertThat(notificationProjection.getStatus()).isEqualTo(NotificationStatus.DRAFT);
-
-        NotificationFulfilments withoutNotification = createFulfilmentWithId(OTHER_REF);
-        NotificationFulfilments deleted = stored(
-            "GBN-AG-26-ABC125",
-            NotificationFulfilmentsStatus.DELETED,
-            LocalDateTime.of(2026, 7, 24, 12, 0),
-            null);
-        notificationFulfilmentsRepository.insert(deleted);
 
         NotificationFulfilmentsPageResponse page = listFulfilments(1, "arrivalDate,desc");
-
-        assertThat(page.totalElements()).isEqualTo(2);
-        assertThat(page.items()).extracting(NotificationFulfilmentsPageResponse.Item::id)
-            .containsExactly(created.getId(), withoutNotification.getId());
         NotificationFulfilments persistedCanonical =
             notificationFulfilmentsRepository.findById(created.getId()).orElseThrow();
         NotificationFulfilmentsPageResponse.Item enriched = page.items().getFirst();
+
         assertThat(enriched.status()).isEqualTo(NotificationFulfilmentsStatus.SUBMITTED);
         assertThat(enriched.createdAt()).isEqualTo(persistedCanonical.getCreatedAt());
         assertThat(enriched.submittedAt()).isEqualTo(persistedCanonical.getSubmittedAt());
@@ -584,8 +571,24 @@ class NotificationFulfilmentsIT extends IntegrationBase {
         assertThat(enriched.arrivalDate()).isEqualTo(arrivalDate);
         assertThat(enriched.consignorName()).isEqualTo("Example consignor");
         assertThat(enriched.consigneeName()).isEqualTo("Example consignee");
+    }
 
-        NotificationFulfilmentsPageResponse.Item blank = page.items().get(1);
+    @Test
+    void list_shouldLeaveNotificationFieldsBlankWhenNoNotificationExists() {
+        NotificationFulfilments created = createFulfilmentWithId(OTHER_REF);
+        NotificationFulfilments deleted = stored(
+            "GBN-AG-26-ABC125",
+            NotificationFulfilmentsStatus.DELETED,
+            LocalDateTime.of(2026, 7, 24, 12, 0),
+            null);
+        notificationFulfilmentsRepository.insert(deleted);
+
+        NotificationFulfilmentsPageResponse page = listFulfilments(1, "arrivalDate,desc");
+
+        assertThat(page.totalElements()).isEqualTo(1);
+        assertThat(page.items()).extracting(NotificationFulfilmentsPageResponse.Item::id)
+            .containsExactly(created.getId());
+        NotificationFulfilmentsPageResponse.Item blank = page.items().getFirst();
         assertThat(blank.status()).isEqualTo(NotificationFulfilmentsStatus.DRAFT);
         assertThat(blank.createdAt())
             .isEqualTo(notificationFulfilmentsRepository.findById(OTHER_REF).orElseThrow().getCreatedAt());

@@ -29,6 +29,7 @@ public class NotificationFulfilmentsService {
     private static final String CANNOT_FIND_FULFILMENT_WITH_ID =
         "Cannot find fulfilment with id: ";
     private static final int MAX_REF_RETRIES = 3;
+    private static final String FIELD_STATUS = "status";
     private static final List<NotificationFulfilmentsStatus> LISTED_STATUSES = List.of(
         NotificationFulfilmentsStatus.DRAFT,
         NotificationFulfilmentsStatus.SUBMITTED,
@@ -251,7 +252,7 @@ public class NotificationFulfilmentsService {
     }
 
     private Criteria listedCriteria(String referenceNumber) {
-        Criteria criteria = Criteria.where("status").in(LISTED_STATUSES);
+        Criteria criteria = Criteria.where(FIELD_STATUS).in(LISTED_STATUSES);
         if (referenceNumber != null) {
             criteria.and("_id").is(referenceNumber);
         }
@@ -260,7 +261,7 @@ public class NotificationFulfilmentsService {
 
     private AggregationOperation enrichedRowProjection() {
         return Aggregation.project()
-            .and("status").as("status")
+            .and(FIELD_STATUS).as(FIELD_STATUS)
             .and("createdAt").as("createdAt")
             .and("submittedAt").as("submittedAt")
             .and("_id").as("reference")
