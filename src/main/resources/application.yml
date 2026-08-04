@@ -132,7 +132,7 @@ notification:
   admin:
     page-size: 50
   list:
-    page-size: 25
+    page-size: 20
   submit:
     lock-at-least-for: 50ms
   # Automatic expiry of app-created notifications in non-prod environments (EUDPA-273).
@@ -147,10 +147,6 @@ notification:
       batch-size: 10
       lock-at-least-for: 1s
       lock-at-most-for: 30s
-
-fulfilment:
-  list:
-    page-size: ${FULFILMENT_LIST_PAGE_SIZE:20}
 
 # Transactional outbox SNS relay (ADR-EUDP-001)
 outbox:
