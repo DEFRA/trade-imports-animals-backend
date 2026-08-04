@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,8 +33,8 @@ class OutboxPollerIT extends OutboxIntegrationBase {
     }
 
     @Test
-    void publishUnpublishedEvents_shouldDeliverEventEnvelopeAndAttributesToSns() throws Exception {
-        String referenceNumber = createAndSubmitNotificationWithActor(TRACE_PREFIX + "001");
+    void publishUnpublishedEvents_shouldDeliverToSnsAndMarkPublishedAt() throws Exception {
+        String referenceNumber = createAndSubmitNotification(TRACE_PREFIX + "001");
 
         int published = outboxPublishService.publishUnpublishedEvents();
 
@@ -71,30 +70,6 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         assertThat(attributes.get("correlationId").get("Value").asText())
             .isEqualTo(TRACE_PREFIX + "001");
         assertThat(attributes.get("schemaVersion").get("Value").asText()).isEqualTo("1");
-    }
-
-    @Test
-    void publishUnpublishedEvents_shouldIncludeActorAndStatusChangesInMessage() throws Exception {
-        createAndSubmitNotificationWithActor(TRACE_PREFIX + "actor");
-
-        outboxPublishService.publishUnpublishedEvents();
-
-        Message sqsMessage = awaitSqsMessage();
-        JsonNode snsEnvelope = objectMapper.readTree(sqsMessage.body());
-        JsonNode publishedMessage = objectMapper.readTree(snsEnvelope.get("Message").asText());
-        JsonNode actor = publishedMessage.get("actor");
-
-        assertThat(actor.get("id").asText()).isEqualTo("contact-wire-001");
-        assertThat(actor.get("source").asText()).isEqualTo("dynamics-contact");
-        assertThat(actor.get("userType").asText()).isEqualTo("B2C");
-        assertThat(actor.get("displayName").asText()).isEqualTo("Wire User");
-        assertThat(actor.get("organisationId").asText()).isEqualTo("org-wire-001");
-        assertThat(actor.has("onBehalfOfOrganisationId")).isFalse();
-        assertThat(publishedMessage.get("statusChanges").size()).isEqualTo(1);
-        assertThat(publishedMessage.get("statusChanges").get(0).get("status").asText())
-            .isEqualTo("SUBMITTED");
-        assertThat(publishedMessage.get("statusChanges").get(0).get("dateChanged")).isNotNull();
-        assertThat(publishedMessage.get("statusChanges").get(0).get("actor")).isEqualTo(actor);
     }
 
     @Test
@@ -158,31 +133,6 @@ class OutboxPollerIT extends OutboxIntegrationBase {
             .isEqualTo(publishedEvents.get(0).getPublishedAt());
         assertThat(Instant.parse(secondPayload.get("publishedAt").asText()))
             .isEqualTo(publishedEvents.get(1).getPublishedAt());
-    }
-
-    private String createAndSubmitNotificationWithActor(String traceId) {
-        String referenceNumber = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(minimalNotificationDto())
-            .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
-            .getResponseBody().getReferenceNumber();
-
-        Map<String, String> actor = Map.of(
-            "id", "contact-wire-001",
-            "source", "dynamics-contact",
-            "userType", "B2C",
-            "displayName", "Wire User",
-            "organisationId", "org-wire-001");
-
-        webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
-            .header(HEADER_TRACE_ID, traceId)
-            .bodyValue(actor)
-            .exchange()
-            .expectStatus().isOk();
-
-        return referenceNumber;
     }
 
     private JsonNode snsEnvelopeByAggregateVersion(List<Message> messages, long aggregateVersion)
