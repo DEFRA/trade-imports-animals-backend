@@ -1,11 +1,11 @@
-package uk.gov.defra.trade.imports.animals.fulfilment;
+package uk.gov.defra.trade.imports.animals.notificationfulfilments;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.Sort;
 
-class FulfilmentSortTest {
+class NotificationFulfilmentsSortTest {
 
     @Test
     void toSort_shouldSupportEveryContractSort() {
@@ -26,7 +26,7 @@ class FulfilmentSortTest {
     }
 
     private void assertSort(String parameter, String field, Sort.Direction direction) {
-        Sort.Order order = FulfilmentSort.toSort(parameter).getOrderFor(field);
+        Sort.Order order = NotificationFulfilmentsSort.toSort(parameter).getOrderFor(field);
 
         assertThat(order).isNotNull();
         assertThat(order.getDirection()).isEqualTo(direction);

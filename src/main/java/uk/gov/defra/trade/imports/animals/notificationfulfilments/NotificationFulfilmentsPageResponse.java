@@ -1,27 +1,27 @@
-package uk.gov.defra.trade.imports.animals.fulfilment;
+package uk.gov.defra.trade.imports.animals.notificationfulfilments;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 
-public record FulfilmentPageResponse(
+public record NotificationFulfilmentsPageResponse(
     int page,
     int size,
     long totalElements,
     int totalPages,
     List<Item> items) {
 
-    public FulfilmentPageResponse {
+    public NotificationFulfilmentsPageResponse {
         items = List.copyOf(items);
     }
 
-    public static FulfilmentPageResponse from(
+    public static NotificationFulfilmentsPageResponse from(
         int page,
         int size,
         long totalElements,
         List<Item> items) {
-        return new FulfilmentPageResponse(
+        return new NotificationFulfilmentsPageResponse(
             page,
             size,
             totalElements,
@@ -31,7 +31,7 @@ public record FulfilmentPageResponse(
 
     public record Item(
         String id,
-        FulfilmentStatus status,
+        NotificationFulfilmentsStatus status,
         LocalDateTime createdAt,
         LocalDateTime submittedAt,
         String reference,

@@ -1,13 +1,13 @@
-package uk.gov.defra.trade.imports.animals.fulfilment;
+package uk.gov.defra.trade.imports.animals.notificationfulfilments;
 
 import org.springframework.data.domain.Sort;
 
-public final class FulfilmentSort {
+public final class NotificationFulfilmentsSort {
 
     private static final String ARRIVAL_DATE = "arrivalDate";
     private static final String CREATED_AT = "createdAt";
 
-    private FulfilmentSort() {
+    private NotificationFulfilmentsSort() {
     }
 
     public static Sort toSort(String sortParam) {

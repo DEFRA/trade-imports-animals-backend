@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.fulfilment;
+package uk.gov.defra.trade.imports.animals.notificationfulfilments;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -24,43 +24,43 @@ import uk.gov.defra.trade.imports.animals.outbox.Actor;
 
 @Service
 @Slf4j
-public class FulfilmentService {
+public class NotificationFulfilmentsService {
 
     private static final String CANNOT_FIND_FULFILMENT_WITH_ID =
         "Cannot find fulfilment with id: ";
     private static final int MAX_REF_RETRIES = 3;
-    private static final List<FulfilmentStatus> LISTED_STATUSES = List.of(
-        FulfilmentStatus.DRAFT,
-        FulfilmentStatus.SUBMITTED,
-        FulfilmentStatus.AMEND);
+    private static final List<NotificationFulfilmentsStatus> LISTED_STATUSES = List.of(
+        NotificationFulfilmentsStatus.DRAFT,
+        NotificationFulfilmentsStatus.SUBMITTED,
+        NotificationFulfilmentsStatus.AMEND);
 
-    private final FulfilmentRepository fulfilmentRepository;
+    private final NotificationFulfilmentsRepository notificationFulfilmentsRepository;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final MongoTemplate mongoTemplate;
     private final int listPageSize;
 
-    public FulfilmentService(
-        FulfilmentRepository fulfilmentRepository,
+    public NotificationFulfilmentsService(
+        NotificationFulfilmentsRepository notificationFulfilmentsRepository,
         ReferenceNumberGenerator referenceNumberGenerator,
         MongoTemplate mongoTemplate,
         @Value("${fulfilment.list.page-size:20}") int listPageSize) {
-        this.fulfilmentRepository = fulfilmentRepository;
+        this.notificationFulfilmentsRepository = notificationFulfilmentsRepository;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.mongoTemplate = mongoTemplate;
         this.listPageSize = listPageSize;
     }
 
-    public Fulfilment create() {
+    public NotificationFulfilments create() {
         for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
-            Fulfilment fulfilment = Fulfilment.builder()
+            NotificationFulfilments fulfilment = NotificationFulfilments.builder()
                 .id(referenceNumberGenerator.generate())
-                .fulfilment(List.of())
-                .status(FulfilmentStatus.DRAFT)
+                .fulfilments(List.of())
+                .status(NotificationFulfilmentsStatus.DRAFT)
                 .createdAt(LocalDateTime.now())
                 .build();
             try {
-                Fulfilment saved = fulfilmentRepository.insert(fulfilment);
-                log.info("Fulfilment created with id: {}", saved.getId());
+                NotificationFulfilments saved = notificationFulfilmentsRepository.insert(fulfilment);
+                log.info("NotificationFulfilments created with id: {}", saved.getId());
                 return saved;
             } catch (DuplicateKeyException e) {
                 log.warn("Reference number collision on persistence attempt {}/{}; retrying",
@@ -71,67 +71,67 @@ public class FulfilmentService {
             "Failed to generate a unique reference number after " + MAX_REF_RETRIES + " attempts");
     }
 
-    public ReplaceResult replace(String id, FulfilmentDto dto) {
+    public ReplaceResult replace(String id, NotificationFulfilmentsDto dto) {
         if (dto.getId() != null && !id.equals(dto.getId())) {
             throw new BadRequestException(
                 "Path id and fulfilment body id must match");
         }
 
-        Fulfilment existing = fulfilmentRepository.findById(id).orElse(null);
+        NotificationFulfilments existing = notificationFulfilmentsRepository.findById(id).orElse(null);
         boolean created = existing == null;
-        Fulfilment fulfilment = created
-            ? Fulfilment.builder()
+        NotificationFulfilments fulfilment = created
+            ? NotificationFulfilments.builder()
                 .id(id)
-                .status(FulfilmentStatus.DRAFT)
+                .status(NotificationFulfilmentsStatus.DRAFT)
                 .createdAt(LocalDateTime.now())
                 .build()
             : existing;
 
         assertWritable(fulfilment);
-        fulfilment.setFulfilment(dto.getFulfilment());
-        Fulfilment saved = fulfilmentRepository.save(fulfilment);
+        fulfilment.setFulfilments(dto.getFulfilments());
+        NotificationFulfilments saved = notificationFulfilmentsRepository.save(fulfilment);
         log.info("{} fulfilment {}", created ? "Created" : "Replaced", id);
         return new ReplaceResult(saved, created);
     }
 
-    public Fulfilment findById(String id) {
-        return fulfilmentRepository.findById(id)
+    public NotificationFulfilments findById(String id) {
+        return notificationFulfilmentsRepository.findById(id)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_FULFILMENT_WITH_ID + id));
     }
 
     @Transactional
-    public Fulfilment copy(String id, String idempotencyKey) {
+    public NotificationFulfilments copy(String id, String idempotencyKey) {
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
             throw new BadRequestException("Idempotency-Key must not be blank");
         }
 
-        Fulfilment existingCopy = findCopy(idempotencyKey);
+        NotificationFulfilments existingCopy = findCopy(idempotencyKey);
         if (existingCopy != null) {
             log.info("Returning existing fulfilment copy {} for idempotency key",
                 existingCopy.getId());
             return existingCopy;
         }
 
-        Fulfilment source = findById(id);
+        NotificationFulfilments source = findById(id);
         if (!isCopyable(source.getStatus())) {
             throw new BadRequestException(
                 "Cannot copy fulfilment with status: " + source.getStatus());
         }
 
-        List<Document> copiedContent = source.getFulfilment() == null
+        List<Document> copiedContent = source.getFulfilments() == null
             ? List.of()
-            : new ArrayList<>(source.getFulfilment());
+            : new ArrayList<>(source.getFulfilments());
         for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
-            Fulfilment copy = Fulfilment.builder()
+            NotificationFulfilments copy = NotificationFulfilments.builder()
                 .id(referenceNumberGenerator.generate())
-                .fulfilment(copiedContent)
-                .status(FulfilmentStatus.DRAFT)
+                .fulfilments(copiedContent)
+                .status(NotificationFulfilmentsStatus.DRAFT)
                 .createdAt(LocalDateTime.now())
                 .copyIdempotencyKey(idempotencyKey)
                 .build();
             try {
-                Fulfilment saved = fulfilmentRepository.insert(copy);
+                NotificationFulfilments saved = notificationFulfilmentsRepository.insert(copy);
                 log.info("Copied fulfilment {} to {}", id, saved.getId());
                 return saved;
             } catch (DuplicateKeyException e) {
@@ -150,58 +150,58 @@ public class FulfilmentService {
     }
 
     @Transactional
-    public Fulfilment submit(String id, String correlationId, Actor actor) {
-        Fulfilment fulfilment = findById(id);
+    public NotificationFulfilments submit(String id, String correlationId, Actor actor) {
+        NotificationFulfilments fulfilment = findById(id);
         if (!isDraftOrAmend(fulfilment.getStatus())) {
             throw new BadRequestException(
                 "Cannot submit fulfilment with status: " + fulfilment.getStatus());
         }
-        fulfilment.setStatus(FulfilmentStatus.SUBMITTED);
-        fulfilment.setSubmittedFulfilment(null);
+        fulfilment.setStatus(NotificationFulfilmentsStatus.SUBMITTED);
+        fulfilment.setSubmittedFulfilments(null);
         fulfilment.setSubmittedAt(LocalDateTime.now());
         log.info("Submitted fulfilment {}", id);
-        return fulfilmentRepository.save(fulfilment);
+        return notificationFulfilmentsRepository.save(fulfilment);
     }
 
     @Transactional
-    public Fulfilment amend(String id, String correlationId, Actor actor) {
-        Fulfilment fulfilment = findById(id);
-        if (fulfilment.getStatus() != FulfilmentStatus.SUBMITTED) {
+    public NotificationFulfilments amend(String id, String correlationId, Actor actor) {
+        NotificationFulfilments fulfilment = findById(id);
+        if (fulfilment.getStatus() != NotificationFulfilmentsStatus.SUBMITTED) {
             throw new BadRequestException(
                 "Cannot amend fulfilment with status: " + fulfilment.getStatus());
         }
-        fulfilment.setSubmittedFulfilment(new ArrayList<>(fulfilment.getFulfilment()));
-        fulfilment.setStatus(FulfilmentStatus.AMEND);
+        fulfilment.setSubmittedFulfilments(new ArrayList<>(fulfilment.getFulfilments()));
+        fulfilment.setStatus(NotificationFulfilmentsStatus.AMEND);
         fulfilment.setSubmittedAt(null);
         log.info("Amended fulfilment {}", id);
-        return fulfilmentRepository.save(fulfilment);
+        return notificationFulfilmentsRepository.save(fulfilment);
     }
 
     @Transactional
-    public Fulfilment cancelAmend(String id) {
-        Fulfilment fulfilment = findById(id);
-        if (fulfilment.getStatus() != FulfilmentStatus.AMEND) {
+    public NotificationFulfilments cancelAmend(String id) {
+        NotificationFulfilments fulfilment = findById(id);
+        if (fulfilment.getStatus() != NotificationFulfilmentsStatus.AMEND) {
             throw new BadRequestException(
                 "Cannot cancel amendment for fulfilment with status: "
                     + fulfilment.getStatus());
         }
-        if (fulfilment.getSubmittedFulfilment() == null) {
+        if (fulfilment.getSubmittedFulfilments() == null) {
             throw new BadRequestException(
                 "Cannot cancel amendment: no submitted snapshot stored for fulfilment");
         }
 
-        fulfilment.setFulfilment(new ArrayList<>(fulfilment.getSubmittedFulfilment()));
-        fulfilment.setSubmittedFulfilment(null);
-        fulfilment.setStatus(FulfilmentStatus.SUBMITTED);
+        fulfilment.setFulfilments(new ArrayList<>(fulfilment.getSubmittedFulfilments()));
+        fulfilment.setSubmittedFulfilments(null);
+        fulfilment.setStatus(NotificationFulfilmentsStatus.SUBMITTED);
         fulfilment.setSubmittedAt(LocalDateTime.now());
         log.info("Cancelled amendment for fulfilment {}", id);
-        return fulfilmentRepository.save(fulfilment);
+        return notificationFulfilmentsRepository.save(fulfilment);
     }
 
     @Transactional
-    public Fulfilment softDelete(String id) {
-        Fulfilment fulfilment = findById(id);
-        if (fulfilment.getStatus() == FulfilmentStatus.DELETED) {
+    public NotificationFulfilments softDelete(String id) {
+        NotificationFulfilments fulfilment = findById(id);
+        if (fulfilment.getStatus() == NotificationFulfilmentsStatus.DELETED) {
             return fulfilment;
         }
         if (!isCopyable(fulfilment.getStatus())) {
@@ -209,24 +209,24 @@ public class FulfilmentService {
                 "Cannot delete fulfilment with status: " + fulfilment.getStatus());
         }
 
-        fulfilment.setStatus(FulfilmentStatus.DELETED);
+        fulfilment.setStatus(NotificationFulfilmentsStatus.DELETED);
         log.info("Soft deleted fulfilment {}", id);
-        return fulfilmentRepository.save(fulfilment);
+        return notificationFulfilmentsRepository.save(fulfilment);
     }
 
-    public FulfilmentPageResponse findAll(int page, String sort) {
+    public NotificationFulfilmentsPageResponse findAll(int page, String sort) {
         return findAll(page, sort, null);
     }
 
-    public FulfilmentPageResponse findAll(
+    public NotificationFulfilmentsPageResponse findAll(
         int page, String sort, String referenceNumber) {
         int normalisedPage = Math.max(page, 1);
         String trimmedReference = StringUtils.trimToNull(referenceNumber);
         Criteria statusCriteria = listedCriteria(trimmedReference);
         long totalElements = mongoTemplate.count(
-            Query.query(statusCriteria), Fulfilment.class);
+            Query.query(statusCriteria), NotificationFulfilments.class);
         long offset = (normalisedPage - 1L) * listPageSize;
-        Sort rowSort = FulfilmentSort.toSort(sort)
+        Sort rowSort = NotificationFulfilmentsSort.toSort(sort)
             .and(Sort.by(Sort.Direction.ASC, "_id"));
 
         Aggregation aggregation = Aggregation.newAggregation(
@@ -241,12 +241,12 @@ public class FulfilmentService {
             Aggregation.sort(rowSort),
             Aggregation.skip(offset),
             Aggregation.limit(listPageSize));
-        List<FulfilmentPageResponse.Item> items = mongoTemplate.aggregate(
+        List<NotificationFulfilmentsPageResponse.Item> items = mongoTemplate.aggregate(
             aggregation,
-            Fulfilment.class,
-            FulfilmentPageResponse.Item.class).getMappedResults();
+            NotificationFulfilments.class,
+            NotificationFulfilmentsPageResponse.Item.class).getMappedResults();
 
-        return FulfilmentPageResponse.from(
+        return NotificationFulfilmentsPageResponse.from(
             normalisedPage, listPageSize, totalElements, items);
     }
 
@@ -271,7 +271,7 @@ public class FulfilmentService {
             .and("notification.consignee.name").as("consigneeName");
     }
 
-    private void assertWritable(Fulfilment fulfilment) {
+    private void assertWritable(NotificationFulfilments fulfilment) {
         if (!isDraftOrAmend(fulfilment.getStatus())) {
             throw new BadRequestException(
                 "Journey \"" + fulfilment.getId() + "\" has status "
@@ -280,23 +280,23 @@ public class FulfilmentService {
     }
 
     // DRAFT and AMEND are the only editable and submittable lifecycle states.
-    private boolean isDraftOrAmend(FulfilmentStatus status) {
-        return status == FulfilmentStatus.DRAFT || status == FulfilmentStatus.AMEND;
+    private boolean isDraftOrAmend(NotificationFulfilmentsStatus status) {
+        return status == NotificationFulfilmentsStatus.DRAFT || status == NotificationFulfilmentsStatus.AMEND;
     }
 
-    private boolean isCopyable(FulfilmentStatus status) {
-        return status == FulfilmentStatus.DRAFT
-            || status == FulfilmentStatus.SUBMITTED
-            || status == FulfilmentStatus.AMEND;
+    private boolean isCopyable(NotificationFulfilmentsStatus status) {
+        return status == NotificationFulfilmentsStatus.DRAFT
+            || status == NotificationFulfilmentsStatus.SUBMITTED
+            || status == NotificationFulfilmentsStatus.AMEND;
     }
 
-    private Fulfilment findCopy(String idempotencyKey) {
-        return fulfilmentRepository
+    private NotificationFulfilments findCopy(String idempotencyKey) {
+        return notificationFulfilmentsRepository
             .findByCopyIdempotencyKey(idempotencyKey)
             .orElse(null);
     }
 
-    public record ReplaceResult(Fulfilment fulfilment, boolean created) {
+    public record ReplaceResult(NotificationFulfilments notificationFulfilments, boolean created) {
 
     }
 }

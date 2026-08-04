@@ -16,12 +16,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
-import uk.gov.defra.trade.imports.animals.fulfilment.Fulfilment;
-import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentController;
-import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentDto;
-import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentPageResponse;
-import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentRepository;
-import uk.gov.defra.trade.imports.animals.fulfilment.FulfilmentStatus;
+import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilments;
+import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsController;
+import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsDto;
+import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsPageResponse;
+import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsRepository;
+import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsStatus;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
@@ -32,12 +32,12 @@ import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
 
-class FulfilmentIT extends IntegrationBase {
+class NotificationFulfilmentsIT extends IntegrationBase {
 
-    private static final String FULFILMENT_ENDPOINT = "/fulfilments";
+    private static final String FULFILMENT_ENDPOINT = "/notification-fulfilments";
     private static final String REF_FORMAT_REGEX = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN;
     private static final String LOCATION_FORMAT_REGEX =
-        "http://localhost:8085/fulfilments/GBN-AG-\\d{2}-[0-9A-HJ-KM-NP-TV-Z]{6}";
+        "http://localhost:8085/notification-fulfilments/GBN-AG-\\d{2}-[0-9A-HJ-KM-NP-TV-Z]{6}";
     private static final String DIRECT_PUT_REF = "GBN-AG-26-ABC123";
     private static final String OTHER_REF = "GBN-AG-26-ABC124";
     private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
@@ -47,7 +47,7 @@ class FulfilmentIT extends IntegrationBase {
         "a12e5f6a-7b8c-4d9e-8f01-2a3b4c5d6e70";
 
     @Autowired
-    private FulfilmentRepository fulfilmentRepository;
+    private NotificationFulfilmentsRepository notificationFulfilmentsRepository;
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -60,27 +60,27 @@ class FulfilmentIT extends IntegrationBase {
 
     @BeforeEach
     void setUp() {
-        fulfilmentRepository.deleteAll();
+        notificationFulfilmentsRepository.deleteAll();
         notificationRepository.deleteAll();
         outboxEventRepository.deleteAll();
     }
 
     @Test
     void post_shouldMintReferenceAndCreateEmptyDraftFulfilment() {
-        Fulfilment created = createFulfilment();
+        NotificationFulfilments created = createFulfilment();
 
         assertThat(created.getId()).matches(REF_FORMAT_REGEX);
-        assertThat(created.getFulfilment()).isEmpty();
-        assertThat(created.getSubmittedFulfilment()).isNull();
-        assertThat(created.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
+        assertThat(created.getFulfilments()).isEmpty();
+        assertThat(created.getSubmittedFulfilments()).isNull();
+        assertThat(created.getStatus()).isEqualTo(NotificationFulfilmentsStatus.DRAFT);
         assertThat(created.getCreatedAt()).isNotNull();
         assertThat(created.getSubmittedAt()).isNull();
 
-        Fulfilment persisted = fulfilmentRepository.findById(created.getId()).orElseThrow();
+        NotificationFulfilments persisted = notificationFulfilmentsRepository.findById(created.getId()).orElseThrow();
         assertThat(persisted.getId()).isEqualTo(created.getId());
-        assertThat(persisted.getFulfilment()).isEmpty();
-        assertThat(persisted.getSubmittedFulfilment()).isNull();
-        assertThat(persisted.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
+        assertThat(persisted.getFulfilments()).isEmpty();
+        assertThat(persisted.getSubmittedFulfilments()).isNull();
+        assertThat(persisted.getStatus()).isEqualTo(NotificationFulfilmentsStatus.DRAFT);
         assertThat(persisted.getCreatedAt()).isEqualTo(created.getCreatedAt().withNano(
             created.getCreatedAt().getNano() / 1_000_000 * 1_000_000));
         assertThat(persisted.getSubmittedAt()).isNull();
@@ -95,29 +95,29 @@ class FulfilmentIT extends IntegrationBase {
 
     @Test
     void put_shouldCreateFulfilmentForClientKnownId() {
-        FulfilmentDto dto = dto(DIRECT_PUT_REF, scalarFulfilment("internalMarket"));
+        NotificationFulfilmentsDto dto = dto(DIRECT_PUT_REF, scalarFulfilment("internalMarket"));
 
-        Fulfilment created = webClient("NoAuth")
+        NotificationFulfilments created = webClient("NoAuth")
             .put().uri(FULFILMENT_ENDPOINT + "/{id}", DIRECT_PUT_REF)
             .bodyValue(dto)
             .exchange()
             .expectStatus().isCreated()
             .expectHeader().valueEquals(
-                "Location", "http://localhost:8085/fulfilments/" + DIRECT_PUT_REF)
-            .expectBody(Fulfilment.class)
+                "Location", "http://localhost:8085/notification-fulfilments/" + DIRECT_PUT_REF)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
 
         assertThat(created).isNotNull();
         assertThat(created.getId()).isEqualTo(DIRECT_PUT_REF);
-        assertThat(created.getFulfilment()).isEqualTo(dto.getFulfilment());
-        assertThat(created.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
+        assertThat(created.getFulfilments()).isEqualTo(dto.getFulfilments());
+        assertThat(created.getStatus()).isEqualTo(NotificationFulfilmentsStatus.DRAFT);
         assertThat(created.getCreatedAt()).isNotNull();
-        assertThat(fulfilmentRepository.count()).isEqualTo(1);
+        assertThat(notificationFulfilmentsRepository.count()).isEqualTo(1);
     }
 
     @Test
     void put_shouldWholeReplaceAndAllowIdempotentRetry() {
-        Fulfilment created = createFulfilment();
+        NotificationFulfilments created = createFulfilment();
         List<Document> firstSnapshot = List.of(
             new Document("obligationId", SCALAR_OBLIGATION_ID)
                 .append("value", "internalMarket"),
@@ -125,16 +125,16 @@ class FulfilmentIT extends IntegrationBase {
                 .append("value", "historic"));
         replace(created.getId(), dto(created.getId(), firstSnapshot));
 
-        FulfilmentDto replacement = dto(
+        NotificationFulfilmentsDto replacement = dto(
             created.getId(), scalarFulfilment("transit"));
-        Fulfilment replaced = replace(created.getId(), replacement);
-        Fulfilment retried = replace(created.getId(), replacement);
+        NotificationFulfilments replaced = replace(created.getId(), replacement);
+        NotificationFulfilments retried = replace(created.getId(), replacement);
 
-        assertThat(replaced.getFulfilment()).isEqualTo(replacement.getFulfilment());
+        assertThat(replaced.getFulfilments()).isEqualTo(replacement.getFulfilments());
         assertThat(retried).isEqualTo(replaced);
-        assertThat(retried.getFulfilment()).noneMatch(
+        assertThat(retried.getFulfilments()).noneMatch(
             entry -> entry.containsValue("historic"));
-        assertThat(fulfilmentRepository.count()).isEqualTo(1);
+        assertThat(notificationFulfilmentsRepository.count()).isEqualTo(1);
     }
 
     @Test
@@ -152,20 +152,20 @@ class FulfilmentIT extends IntegrationBase {
 
     @Test
     void get_shouldReturnStoredFulfilment() {
-        Fulfilment created = createFulfilment();
-        FulfilmentDto dto = dto(created.getId(), scalarFulfilment("internalMarket"));
+        NotificationFulfilments created = createFulfilment();
+        NotificationFulfilmentsDto dto = dto(created.getId(), scalarFulfilment("internalMarket"));
         replace(created.getId(), dto);
 
-        Fulfilment found = webClient("NoAuth")
+        NotificationFulfilments found = webClient("NoAuth")
             .get().uri(FULFILMENT_ENDPOINT + "/{id}", created.getId())
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
 
         assertThat(found).isNotNull();
         assertThat(found.getId()).isEqualTo(created.getId());
-        assertThat(found.getFulfilment()).isEqualTo(dto.getFulfilment());
+        assertThat(found.getFulfilments()).isEqualTo(dto.getFulfilments());
     }
 
     @Test
@@ -181,20 +181,20 @@ class FulfilmentIT extends IntegrationBase {
 
     @Test
     void submit_shouldSetSubmittedAtAndBlockFurtherWrites() {
-        Fulfilment created = createFulfilment();
-        FulfilmentDto beforeSubmit = dto(
+        NotificationFulfilments created = createFulfilment();
+        NotificationFulfilmentsDto beforeSubmit = dto(
             created.getId(), scalarFulfilment("internalMarket"));
         replace(created.getId(), beforeSubmit);
 
-        Fulfilment submitted = webClient("NoAuth")
+        NotificationFulfilments submitted = webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
 
         assertThat(submitted).isNotNull();
-        assertThat(submitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
+        assertThat(submitted.getStatus()).isEqualTo(NotificationFulfilmentsStatus.SUBMITTED);
         assertThat(submitted.getSubmittedAt()).isNotNull();
 
         webClient("NoAuth")
@@ -205,8 +205,8 @@ class FulfilmentIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.detail").value(Matchers.containsString("writes blocked"));
 
-        assertThat(fulfilmentRepository.findById(created.getId()).orElseThrow().getFulfilment())
-            .isEqualTo(beforeSubmit.getFulfilment());
+        assertThat(notificationFulfilmentsRepository.findById(created.getId()).orElseThrow().getFulfilments())
+            .isEqualTo(beforeSubmit.getFulfilments());
 
         webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
@@ -219,7 +219,7 @@ class FulfilmentIT extends IntegrationBase {
 
     @Test
     void amend_shouldSetAmendStatusAndAllowWritesAndResubmission() {
-        Fulfilment created = createFulfilment();
+        NotificationFulfilments created = createFulfilment();
         List<Document> submittedContent = scalarFulfilment("internalMarket");
         replace(created.getId(), dto(created.getId(), submittedContent));
         webClient("NoAuth")
@@ -227,41 +227,41 @@ class FulfilmentIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk();
 
-        Fulfilment amended = webClient("NoAuth")
+        NotificationFulfilments amended = webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/amend", created.getId())
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
 
         assertThat(amended).isNotNull();
-        assertThat(amended.getStatus()).isEqualTo(FulfilmentStatus.AMEND);
-        assertThat(amended.getSubmittedFulfilment()).isEqualTo(submittedContent);
-        assertThat(amended.getSubmittedFulfilment())
-            .isNotSameAs(amended.getFulfilment());
+        assertThat(amended.getStatus()).isEqualTo(NotificationFulfilmentsStatus.AMEND);
+        assertThat(amended.getSubmittedFulfilments()).isEqualTo(submittedContent);
+        assertThat(amended.getSubmittedFulfilments())
+            .isNotSameAs(amended.getFulfilments());
         assertThat(amended.getSubmittedAt()).isNull();
 
-        Fulfilment replaced = replace(
+        NotificationFulfilments replaced = replace(
             created.getId(), dto(created.getId(), scalarFulfilment("transit")));
-        assertThat(replaced.getFulfilment()).isEqualTo(scalarFulfilment("transit"));
-        assertThat(replaced.getSubmittedFulfilment()).isEqualTo(submittedContent);
+        assertThat(replaced.getFulfilments()).isEqualTo(scalarFulfilment("transit"));
+        assertThat(replaced.getSubmittedFulfilments()).isEqualTo(submittedContent);
 
-        Fulfilment resubmitted = webClient("NoAuth")
+        NotificationFulfilments resubmitted = webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
 
         assertThat(resubmitted).isNotNull();
-        assertThat(resubmitted.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        assertThat(resubmitted.getSubmittedFulfilment()).isNull();
+        assertThat(resubmitted.getStatus()).isEqualTo(NotificationFulfilmentsStatus.SUBMITTED);
+        assertThat(resubmitted.getSubmittedFulfilments()).isNull();
         assertThat(resubmitted.getSubmittedAt()).isNotNull();
     }
 
     @Test
     void cancelAmend_shouldDiscardEditsAndRestoreSubmittedContent() {
-        Fulfilment created = createFulfilment();
+        NotificationFulfilments created = createFulfilment();
         List<Document> submittedContent = scalarFulfilment("internalMarket");
         replace(created.getId(), dto(created.getId(), submittedContent));
         webClient("NoAuth")
@@ -274,42 +274,42 @@ class FulfilmentIT extends IntegrationBase {
             .expectStatus().isOk();
 
         List<Document> amendEdits = scalarFulfilment("transit");
-        Fulfilment edited = replace(
+        NotificationFulfilments edited = replace(
             created.getId(), dto(created.getId(), amendEdits));
 
-        assertThat(edited.getFulfilment()).isEqualTo(amendEdits);
-        assertThat(edited.getSubmittedFulfilment()).isEqualTo(submittedContent);
+        assertThat(edited.getFulfilments()).isEqualTo(amendEdits);
+        assertThat(edited.getSubmittedFulfilments()).isEqualTo(submittedContent);
 
-        Fulfilment restored = webClient("NoAuth")
+        NotificationFulfilments restored = webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/cancel-amend", created.getId())
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
 
         assertThat(restored).isNotNull();
-        assertThat(restored.getFulfilment()).isEqualTo(submittedContent);
-        assertThat(restored.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        assertThat(restored.getSubmittedFulfilment()).isNull();
+        assertThat(restored.getFulfilments()).isEqualTo(submittedContent);
+        assertThat(restored.getStatus()).isEqualTo(NotificationFulfilmentsStatus.SUBMITTED);
+        assertThat(restored.getSubmittedFulfilments()).isNull();
         assertThat(restored.getSubmittedAt()).isNotNull();
 
-        Fulfilment found = webClient("NoAuth")
+        NotificationFulfilments found = webClient("NoAuth")
             .get().uri(FULFILMENT_ENDPOINT + "/{id}", created.getId())
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
 
         assertThat(found).isNotNull();
-        assertThat(found.getFulfilment()).isEqualTo(submittedContent);
-        assertThat(found.getFulfilment()).isNotEqualTo(amendEdits);
-        assertThat(found.getStatus()).isEqualTo(FulfilmentStatus.SUBMITTED);
-        assertThat(found.getSubmittedFulfilment()).isNull();
+        assertThat(found.getFulfilments()).isEqualTo(submittedContent);
+        assertThat(found.getFulfilments()).isNotEqualTo(amendEdits);
+        assertThat(found.getStatus()).isEqualTo(NotificationFulfilmentsStatus.SUBMITTED);
+        assertThat(found.getSubmittedFulfilments()).isNull();
     }
 
     @Test
     void cancelAmend_shouldReturn400_whenFulfilmentIsNotAmend() {
-        Fulfilment created = createFulfilment();
+        NotificationFulfilments created = createFulfilment();
 
         webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/cancel-amend", created.getId())
@@ -323,11 +323,11 @@ class FulfilmentIT extends IntegrationBase {
 
     @Test
     void cancelAmend_shouldReturn400_whenSubmittedSnapshotIsMissing() {
-        Fulfilment created = createFulfilment();
-        Fulfilment withoutSnapshot =
-            fulfilmentRepository.findById(created.getId()).orElseThrow();
-        withoutSnapshot.setStatus(FulfilmentStatus.AMEND);
-        fulfilmentRepository.save(withoutSnapshot);
+        NotificationFulfilments created = createFulfilment();
+        NotificationFulfilments withoutSnapshot =
+            notificationFulfilmentsRepository.findById(created.getId()).orElseThrow();
+        withoutSnapshot.setStatus(NotificationFulfilmentsStatus.AMEND);
+        notificationFulfilmentsRepository.save(withoutSnapshot);
 
         webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/cancel-amend", created.getId())
@@ -340,7 +340,7 @@ class FulfilmentIT extends IntegrationBase {
 
     @Test
     void amend_shouldReturn400_whenFulfilmentIsDraft() {
-        Fulfilment created = createFulfilment();
+        NotificationFulfilments created = createFulfilment();
 
         webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/amend", created.getId())
@@ -353,10 +353,10 @@ class FulfilmentIT extends IntegrationBase {
 
     @Test
     void deletedFulfilment_shouldRejectSubmitAndReplace() {
-        Fulfilment created = createFulfilment();
-        Fulfilment deleted = fulfilmentRepository.findById(created.getId()).orElseThrow();
-        deleted.setStatus(FulfilmentStatus.DELETED);
-        fulfilmentRepository.save(deleted);
+        NotificationFulfilments created = createFulfilment();
+        NotificationFulfilments deleted = notificationFulfilmentsRepository.findById(created.getId()).orElseThrow();
+        deleted.setStatus(NotificationFulfilmentsStatus.DELETED);
+        notificationFulfilmentsRepository.save(deleted);
 
         webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
@@ -381,113 +381,113 @@ class FulfilmentIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.status").isEqualTo("DELETED");
 
-        assertThat(fulfilmentRepository.findById(created.getId()).orElseThrow().getFulfilment())
+        assertThat(notificationFulfilmentsRepository.findById(created.getId()).orElseThrow().getFulfilments())
             .isEmpty();
     }
 
     @ParameterizedTest
-    @EnumSource(value = FulfilmentStatus.class, names = {"DRAFT", "SUBMITTED", "AMEND"})
-    void copy_shouldPersistNewDraftFromCopyableStatus(FulfilmentStatus sourceStatus) {
+    @EnumSource(value = NotificationFulfilmentsStatus.class, names = {"DRAFT", "SUBMITTED", "AMEND"})
+    void copy_shouldPersistNewDraftFromCopyableStatus(NotificationFulfilmentsStatus sourceStatus) {
         List<Document> sourceContent = scalarFulfilment(sourceStatus.name());
-        Fulfilment source = stored(
+        NotificationFulfilments source = stored(
             DIRECT_PUT_REF,
             sourceStatus,
             LocalDateTime.of(2026, 7, 24, 10, 0),
-            sourceStatus == FulfilmentStatus.SUBMITTED
+            sourceStatus == NotificationFulfilmentsStatus.SUBMITTED
                 ? LocalDateTime.of(2026, 7, 24, 11, 0)
                 : null);
-        source.setFulfilment(sourceContent);
-        fulfilmentRepository.insert(source);
+        source.setFulfilments(sourceContent);
+        notificationFulfilmentsRepository.insert(source);
 
-        Fulfilment copy = copyFulfilment(source.getId(), "copy-" + sourceStatus);
+        NotificationFulfilments copy = copyFulfilment(source.getId(), "copy-" + sourceStatus);
 
         assertThat(copy).isNotNull();
         assertThat(copy.getId()).matches(REF_FORMAT_REGEX).isNotEqualTo(source.getId());
-        assertThat(copy.getFulfilment())
+        assertThat(copy.getFulfilments())
             .isEqualTo(sourceContent)
             .isNotSameAs(sourceContent);
-        assertThat(copy.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
+        assertThat(copy.getStatus()).isEqualTo(NotificationFulfilmentsStatus.DRAFT);
         assertThat(copy.getCreatedAt()).isNotNull();
         assertThat(copy.getSubmittedAt()).isNull();
-        assertThat(copy.getSubmittedFulfilment()).isNull();
+        assertThat(copy.getSubmittedFulfilments()).isNull();
         assertThat(copy.getCopyIdempotencyKey()).isEqualTo("copy-" + sourceStatus);
 
-        Fulfilment persisted = fulfilmentRepository.findById(copy.getId()).orElseThrow();
-        assertThat(persisted.getFulfilment()).isEqualTo(sourceContent);
-        assertThat(persisted.getStatus()).isEqualTo(FulfilmentStatus.DRAFT);
+        NotificationFulfilments persisted = notificationFulfilmentsRepository.findById(copy.getId()).orElseThrow();
+        assertThat(persisted.getFulfilments()).isEqualTo(sourceContent);
+        assertThat(persisted.getStatus()).isEqualTo(NotificationFulfilmentsStatus.DRAFT);
         assertThat(persisted.getSubmittedAt()).isNull();
-        assertThat(persisted.getSubmittedFulfilment()).isNull();
+        assertThat(persisted.getSubmittedFulfilments()).isNull();
         assertThat(persisted.getCopyIdempotencyKey()).isEqualTo("copy-" + sourceStatus);
-        assertThat(fulfilmentRepository.count()).isEqualTo(2);
+        assertThat(notificationFulfilmentsRepository.count()).isEqualTo(2);
     }
 
     @Test
     void copy_shouldDeduplicateSameKeyAndCreateForDifferentKey() {
-        Fulfilment source = createFulfilment();
+        NotificationFulfilments source = createFulfilment();
         replace(source.getId(), dto(source.getId(), scalarFulfilment("internalMarket")));
 
-        Fulfilment first = copyFulfilment(source.getId(), "same-key");
-        Fulfilment retry = copyFulfilment(source.getId(), "same-key");
-        Fulfilment differentKey = copyFulfilment(source.getId(), "different-key");
+        NotificationFulfilments first = copyFulfilment(source.getId(), "same-key");
+        NotificationFulfilments retry = copyFulfilment(source.getId(), "same-key");
+        NotificationFulfilments differentKey = copyFulfilment(source.getId(), "different-key");
 
         assertThat(retry.getId()).isEqualTo(first.getId());
-        assertThat(retry.getFulfilment()).isEqualTo(first.getFulfilment());
+        assertThat(retry.getFulfilments()).isEqualTo(first.getFulfilments());
         assertThat(retry.getCopyIdempotencyKey()).isEqualTo(first.getCopyIdempotencyKey());
         assertThat(differentKey.getId()).isNotEqualTo(first.getId());
-        assertThat(fulfilmentRepository.findByCopyIdempotencyKey("same-key"))
-            .map(Fulfilment::getId)
+        assertThat(notificationFulfilmentsRepository.findByCopyIdempotencyKey("same-key"))
+            .map(NotificationFulfilments::getId)
             .contains(first.getId());
-        assertThat(fulfilmentRepository.count()).isEqualTo(3);
+        assertThat(notificationFulfilmentsRepository.count()).isEqualTo(3);
     }
 
     @Test
     void copy_shouldReturn400ForDeletedSource() {
-        Fulfilment source = createFulfilment();
-        source.setStatus(FulfilmentStatus.DELETED);
-        fulfilmentRepository.save(source);
+        NotificationFulfilments source = createFulfilment();
+        source.setStatus(NotificationFulfilmentsStatus.DELETED);
+        notificationFulfilmentsRepository.save(source);
 
         webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/copy", source.getId())
-            .header(FulfilmentController.IDEMPOTENCY_KEY, "deleted-copy")
+            .header(NotificationFulfilmentsController.IDEMPOTENCY_KEY, "deleted-copy")
             .exchange()
             .expectStatus().isBadRequest()
             .expectBody()
             .jsonPath("$.detail").value(
                 Matchers.containsString("Cannot copy fulfilment with status: DELETED"));
 
-        assertThat(fulfilmentRepository.count()).isEqualTo(1);
+        assertThat(notificationFulfilmentsRepository.count()).isEqualTo(1);
     }
 
     @Test
     void copy_shouldReturn400ForMissingIdempotencyKey() {
-        Fulfilment source = createFulfilment();
+        NotificationFulfilments source = createFulfilment();
 
         webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/copy", source.getId())
             .exchange()
             .expectStatus().isBadRequest();
 
-        assertThat(fulfilmentRepository.count()).isEqualTo(1);
+        assertThat(notificationFulfilmentsRepository.count()).isEqualTo(1);
     }
 
     @ParameterizedTest
-    @EnumSource(value = FulfilmentStatus.class, names = {"DRAFT", "SUBMITTED", "AMEND"})
-    void softDelete_shouldPersistDeletedAndRemainIdempotent(FulfilmentStatus sourceStatus) {
-        Fulfilment source = stored(
+    @EnumSource(value = NotificationFulfilmentsStatus.class, names = {"DRAFT", "SUBMITTED", "AMEND"})
+    void softDelete_shouldPersistDeletedAndRemainIdempotent(NotificationFulfilmentsStatus sourceStatus) {
+        NotificationFulfilments source = stored(
             DIRECT_PUT_REF,
             sourceStatus,
             LocalDateTime.of(2026, 7, 24, 10, 0),
             null);
-        fulfilmentRepository.insert(source);
+        notificationFulfilmentsRepository.insert(source);
 
-        Fulfilment deleted = softDelete(source.getId());
-        Fulfilment retried = softDelete(source.getId());
+        NotificationFulfilments deleted = softDelete(source.getId());
+        NotificationFulfilments retried = softDelete(source.getId());
 
-        assertThat(deleted.getStatus()).isEqualTo(FulfilmentStatus.DELETED);
+        assertThat(deleted.getStatus()).isEqualTo(NotificationFulfilmentsStatus.DELETED);
         assertThat(retried).isEqualTo(deleted);
-        assertThat(fulfilmentRepository.findById(source.getId()).orElseThrow().getStatus())
-            .isEqualTo(FulfilmentStatus.DELETED);
-        assertThat(fulfilmentRepository.count()).isEqualTo(1);
+        assertThat(notificationFulfilmentsRepository.findById(source.getId()).orElseThrow().getStatus())
+            .isEqualTo(NotificationFulfilmentsStatus.DELETED);
+        assertThat(notificationFulfilmentsRepository.count()).isEqualTo(1);
 
         webClient("NoAuth")
             .get().uri(FULFILMENT_ENDPOINT)
@@ -500,7 +500,7 @@ class FulfilmentIT extends IntegrationBase {
 
     @Test
     void putAndGet_shouldRoundTripOpaqueScalarAndCompositeRecordsWithoutInterpretation() {
-        Fulfilment created = createFulfilment();
+        NotificationFulfilments created = createFulfilment();
         List<Document> opaqueFulfilment = List.of(
             new Document("obligationId", SCALAR_OBLIGATION_ID)
                 .append("value", "internalMarket"),
@@ -523,24 +523,24 @@ class FulfilmentIT extends IntegrationBase {
             .returnResult().getResponseBody();
 
         assertThat(response).isNotNull();
-        assertThat(response.get("fulfilment")).isEqualTo(expected);
-        assertThat(response.get("fulfilment").toString()).isEqualTo(expected.toString());
+        assertThat(response.get("fulfilments")).isEqualTo(expected);
+        assertThat(response.get("fulfilments").toString()).isEqualTo(expected.toString());
 
         JsonNode persisted = objectMapper.valueToTree(
-            fulfilmentRepository.findById(created.getId()).orElseThrow().getFulfilment());
+            notificationFulfilmentsRepository.findById(created.getId()).orElseThrow().getFulfilments());
         assertThat(persisted).isEqualTo(expected);
         assertThat(persisted.toString()).isEqualTo(expected.toString());
     }
 
     @Test
     void list_shouldEnrichFromNotificationButKeepCanonicalFulfilmentState() {
-        Fulfilment created = createFulfilment();
+        NotificationFulfilments created = createFulfilment();
         replace(created.getId(), dto(created.getId(), scalarFulfilment("internalMarket")));
-        Fulfilment submitted = webClient("NoAuth")
+        NotificationFulfilments submitted = webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/submit", created.getId())
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
         assertThat(submitted).isNotNull();
 
@@ -559,23 +559,23 @@ class FulfilmentIT extends IntegrationBase {
         assertThat(notificationProjection).isNotNull();
         assertThat(notificationProjection.getStatus()).isEqualTo(NotificationStatus.DRAFT);
 
-        Fulfilment withoutNotification = createFulfilmentWithId(OTHER_REF);
-        Fulfilment deleted = stored(
+        NotificationFulfilments withoutNotification = createFulfilmentWithId(OTHER_REF);
+        NotificationFulfilments deleted = stored(
             "GBN-AG-26-ABC125",
-            FulfilmentStatus.DELETED,
+            NotificationFulfilmentsStatus.DELETED,
             LocalDateTime.of(2026, 7, 24, 12, 0),
             null);
-        fulfilmentRepository.insert(deleted);
+        notificationFulfilmentsRepository.insert(deleted);
 
-        FulfilmentPageResponse page = listFulfilments(1, "arrivalDate,desc");
+        NotificationFulfilmentsPageResponse page = listFulfilments(1, "arrivalDate,desc");
 
         assertThat(page.totalElements()).isEqualTo(2);
-        assertThat(page.items()).extracting(FulfilmentPageResponse.Item::id)
+        assertThat(page.items()).extracting(NotificationFulfilmentsPageResponse.Item::id)
             .containsExactly(created.getId(), withoutNotification.getId());
-        Fulfilment persistedCanonical =
-            fulfilmentRepository.findById(created.getId()).orElseThrow();
-        FulfilmentPageResponse.Item enriched = page.items().getFirst();
-        assertThat(enriched.status()).isEqualTo(FulfilmentStatus.SUBMITTED);
+        NotificationFulfilments persistedCanonical =
+            notificationFulfilmentsRepository.findById(created.getId()).orElseThrow();
+        NotificationFulfilmentsPageResponse.Item enriched = page.items().getFirst();
+        assertThat(enriched.status()).isEqualTo(NotificationFulfilmentsStatus.SUBMITTED);
         assertThat(enriched.createdAt()).isEqualTo(persistedCanonical.getCreatedAt());
         assertThat(enriched.submittedAt()).isEqualTo(persistedCanonical.getSubmittedAt());
         assertThat(enriched.reference()).isEqualTo(created.getId());
@@ -585,10 +585,10 @@ class FulfilmentIT extends IntegrationBase {
         assertThat(enriched.consignorName()).isEqualTo("Example consignor");
         assertThat(enriched.consigneeName()).isEqualTo("Example consignee");
 
-        FulfilmentPageResponse.Item blank = page.items().get(1);
-        assertThat(blank.status()).isEqualTo(FulfilmentStatus.DRAFT);
+        NotificationFulfilmentsPageResponse.Item blank = page.items().get(1);
+        assertThat(blank.status()).isEqualTo(NotificationFulfilmentsStatus.DRAFT);
         assertThat(blank.createdAt())
-            .isEqualTo(fulfilmentRepository.findById(OTHER_REF).orElseThrow().getCreatedAt());
+            .isEqualTo(notificationFulfilmentsRepository.findById(OTHER_REF).orElseThrow().getCreatedAt());
         assertThat(blank.submittedAt()).isNull();
         assertThat(blank.reference()).isEqualTo(OTHER_REF);
         assertThat(blank.commodityDisplay()).isNull();
@@ -603,11 +603,11 @@ class FulfilmentIT extends IntegrationBase {
         createFulfilmentWithId(DIRECT_PUT_REF);
         createFulfilmentWithId(OTHER_REF);
 
-        FulfilmentPageResponse page =
+        NotificationFulfilmentsPageResponse page =
             listFulfilments(1, null, DIRECT_PUT_REF);
 
         assertThat(page.totalElements()).isEqualTo(1);
-        assertThat(page.items()).extracting(FulfilmentPageResponse.Item::id)
+        assertThat(page.items()).extracting(NotificationFulfilmentsPageResponse.Item::id)
             .containsExactly(DIRECT_PUT_REF);
     }
 
@@ -615,7 +615,7 @@ class FulfilmentIT extends IntegrationBase {
     void list_shouldReturnEmptyPageWhenReferenceDoesNotMatch() {
         createFulfilmentWithId(DIRECT_PUT_REF);
 
-        FulfilmentPageResponse page =
+        NotificationFulfilmentsPageResponse page =
             listFulfilments(1, null, "GBN-AG-26-ZZZZZZ");
 
         assertThat(page.totalElements()).isZero();
@@ -626,16 +626,16 @@ class FulfilmentIT extends IntegrationBase {
     @Test
     void list_shouldPreserveSortWhenFilteringByReference() {
         LocalDateTime createdBase = LocalDateTime.of(2026, 7, 1, 10, 0);
-        fulfilmentRepository.insert(stored(
-            DIRECT_PUT_REF, FulfilmentStatus.DRAFT, createdBase.plusHours(1), null));
-        fulfilmentRepository.insert(stored(
-            OTHER_REF, FulfilmentStatus.DRAFT, createdBase, null));
+        notificationFulfilmentsRepository.insert(stored(
+            DIRECT_PUT_REF, NotificationFulfilmentsStatus.DRAFT, createdBase.plusHours(1), null));
+        notificationFulfilmentsRepository.insert(stored(
+            OTHER_REF, NotificationFulfilmentsStatus.DRAFT, createdBase, null));
 
-        FulfilmentPageResponse page =
+        NotificationFulfilmentsPageResponse page =
             listFulfilments(1, "createdAt,asc", DIRECT_PUT_REF);
 
         assertThat(page.totalElements()).isEqualTo(1);
-        assertThat(page.items()).extracting(FulfilmentPageResponse.Item::id)
+        assertThat(page.items()).extracting(NotificationFulfilmentsPageResponse.Item::id)
             .containsExactly(DIRECT_PUT_REF);
         assertThat(page.items().getFirst().createdAt())
             .isEqualTo(createdBase.plusHours(1));
@@ -645,13 +645,13 @@ class FulfilmentIT extends IntegrationBase {
     void list_shouldSortByJoinedArrivalDateAndFulfilmentCreatedAtAndPage() {
         LocalDateTime createdBase = LocalDateTime.of(2026, 7, 1, 10, 0);
         LocalDate arrivalBase = LocalDate.of(2026, 8, 1);
-        List<Fulfilment> fulfilments = new ArrayList<>();
+        List<NotificationFulfilments> fulfilments = new ArrayList<>();
         List<Notification> notifications = new ArrayList<>();
         for (int index = 0; index < 21; index++) {
             String id = "GBN-AG-26-P" + "%05d".formatted(index);
             fulfilments.add(stored(
                 id,
-                FulfilmentStatus.DRAFT,
+                NotificationFulfilmentsStatus.DRAFT,
                 createdBase.plusHours(index),
                 null));
             notifications.add(Notification.builder()
@@ -662,16 +662,16 @@ class FulfilmentIT extends IntegrationBase {
                     .build())
                 .build());
         }
-        fulfilmentRepository.insert(fulfilments);
+        notificationFulfilmentsRepository.insert(fulfilments);
         notificationRepository.insert(notifications);
 
-        FulfilmentPageResponse defaultFirstPage =
+        NotificationFulfilmentsPageResponse defaultFirstPage =
             listFulfilmentsWithoutSort(1);
-        FulfilmentPageResponse defaultSecondPage =
+        NotificationFulfilmentsPageResponse defaultSecondPage =
             listFulfilmentsWithoutSort(2);
-        FulfilmentPageResponse invalidSortPage =
+        NotificationFulfilmentsPageResponse invalidSortPage =
             listFulfilments(1, "submittedAt,asc");
-        FulfilmentPageResponse createdAscendingPage =
+        NotificationFulfilmentsPageResponse createdAscendingPage =
             listFulfilments(1, "createdAt,asc");
 
         assertThat(defaultFirstPage.page()).isEqualTo(1);
@@ -700,13 +700,13 @@ class FulfilmentIT extends IntegrationBase {
     @Test
     void list_shouldNormaliseInvalidPageAndSort() {
         LocalDateTime base = LocalDateTime.of(2026, 7, 24, 10, 0);
-        fulfilmentRepository.insert(stored(
+        notificationFulfilmentsRepository.insert(stored(
             DIRECT_PUT_REF, base, base.plusHours(3)));
-        fulfilmentRepository.insert(stored(
+        notificationFulfilmentsRepository.insert(stored(
             OTHER_REF, base.plusHours(1), base.plusHours(2)));
-        fulfilmentRepository.insert(stored(
+        notificationFulfilmentsRepository.insert(stored(
             "GBN-AG-26-ABC127",
-            FulfilmentStatus.DELETED,
+            NotificationFulfilmentsStatus.DELETED,
             base.plusHours(4),
             null));
 
@@ -731,85 +731,85 @@ class FulfilmentIT extends IntegrationBase {
             .jsonPath("$.items[0].consignorName").isEmpty()
             .jsonPath("$.items[0].consigneeName").isEmpty()
             .jsonPath("$.items[0].copyIdempotencyKey").doesNotExist()
-            .jsonPath("$.items[0].fulfilment").doesNotExist()
-            .jsonPath("$.items[0].submittedFulfilment").doesNotExist()
+            .jsonPath("$.items[0].fulfilments").doesNotExist()
+            .jsonPath("$.items[0].submittedFulfilments").doesNotExist()
             .jsonPath("$.items[1].id").isEqualTo(OTHER_REF);
     }
 
-    private Fulfilment createFulfilment() {
+    private NotificationFulfilments createFulfilment() {
         return webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT)
             .exchange()
             .expectStatus().isCreated()
             .expectHeader().valueMatches("Location", LOCATION_FORMAT_REGEX)
-            .expectBody(Fulfilment.class)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
     }
 
-    private Fulfilment stored(
+    private NotificationFulfilments stored(
         String id, LocalDateTime createdAt, LocalDateTime submittedAt) {
-        return stored(id, FulfilmentStatus.SUBMITTED, createdAt, submittedAt);
+        return stored(id, NotificationFulfilmentsStatus.SUBMITTED, createdAt, submittedAt);
     }
 
-    private Fulfilment stored(
+    private NotificationFulfilments stored(
         String id,
-        FulfilmentStatus status,
+        NotificationFulfilmentsStatus status,
         LocalDateTime createdAt,
         LocalDateTime submittedAt) {
-        return Fulfilment.builder()
+        return NotificationFulfilments.builder()
             .id(id)
-            .fulfilment(List.of(new Document("sensitive", "body")))
+            .fulfilments(List.of(new Document("sensitive", "body")))
             .status(status)
             .createdAt(createdAt)
             .submittedAt(submittedAt)
             .build();
     }
 
-    private Fulfilment createFulfilmentWithId(String id) {
+    private NotificationFulfilments createFulfilmentWithId(String id) {
         return webClient("NoAuth")
             .put().uri(FULFILMENT_ENDPOINT + "/{id}", id)
             .bodyValue(dto(id, List.of()))
             .exchange()
             .expectStatus().isCreated()
-            .expectBody(Fulfilment.class)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
     }
 
-    private Fulfilment replace(String id, FulfilmentDto dto) {
+    private NotificationFulfilments replace(String id, NotificationFulfilmentsDto dto) {
         return webClient("NoAuth")
             .put().uri(FULFILMENT_ENDPOINT + "/{id}", id)
             .bodyValue(dto)
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
     }
 
-    private Fulfilment copyFulfilment(String id, String idempotencyKey) {
+    private NotificationFulfilments copyFulfilment(String id, String idempotencyKey) {
         return webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/copy", id)
-            .header(FulfilmentController.IDEMPOTENCY_KEY, idempotencyKey)
+            .header(NotificationFulfilmentsController.IDEMPOTENCY_KEY, idempotencyKey)
             .exchange()
             .expectStatus().isCreated()
             .expectHeader().valueMatches("Location", LOCATION_FORMAT_REGEX)
-            .expectBody(Fulfilment.class)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
     }
 
-    private Fulfilment softDelete(String id) {
+    private NotificationFulfilments softDelete(String id) {
         return webClient("NoAuth")
             .post().uri(FULFILMENT_ENDPOINT + "/{id}/soft-delete", id)
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Fulfilment.class)
+            .expectBody(NotificationFulfilments.class)
             .returnResult().getResponseBody();
     }
 
-    private FulfilmentPageResponse listFulfilments(int page, String sort) {
+    private NotificationFulfilmentsPageResponse listFulfilments(int page, String sort) {
         return listFulfilments(page, sort, null);
     }
 
-    private FulfilmentPageResponse listFulfilments(
+    private NotificationFulfilmentsPageResponse listFulfilments(
         int page, String sort, String referenceNumber) {
         return webClient("NoAuth")
             .get().uri(uriBuilder -> uriBuilder
@@ -821,11 +821,11 @@ class FulfilmentIT extends IntegrationBase {
                 .build())
             .exchange()
             .expectStatus().isOk()
-            .expectBody(FulfilmentPageResponse.class)
+            .expectBody(NotificationFulfilmentsPageResponse.class)
             .returnResult().getResponseBody();
     }
 
-    private FulfilmentPageResponse listFulfilmentsWithoutSort(int page) {
+    private NotificationFulfilmentsPageResponse listFulfilmentsWithoutSort(int page) {
         return webClient("NoAuth")
             .get().uri(uriBuilder -> uriBuilder
                 .path(FULFILMENT_ENDPOINT)
@@ -833,14 +833,14 @@ class FulfilmentIT extends IntegrationBase {
                 .build())
             .exchange()
             .expectStatus().isOk()
-            .expectBody(FulfilmentPageResponse.class)
+            .expectBody(NotificationFulfilmentsPageResponse.class)
             .returnResult().getResponseBody();
     }
 
-    private FulfilmentDto dto(String id, List<Document> fulfilment) {
-        return FulfilmentDto.builder()
+    private NotificationFulfilmentsDto dto(String id, List<Document> fulfilment) {
+        return NotificationFulfilmentsDto.builder()
             .id(id)
-            .fulfilment(fulfilment)
+            .fulfilments(fulfilment)
             .build();
     }
 

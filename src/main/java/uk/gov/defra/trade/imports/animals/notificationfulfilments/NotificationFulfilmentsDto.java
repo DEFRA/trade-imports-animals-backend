@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.fulfilment;
+package uk.gov.defra.trade.imports.animals.notificationfulfilments;
 
 import jakarta.validation.constraints.NotNull;
 import java.util.List;
@@ -12,10 +12,10 @@ import org.bson.Document;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class FulfilmentDto {
+public class NotificationFulfilmentsDto {
 
     private String id;
 
     @NotNull
-    private List<Document> fulfilment;
+    private List<Document> fulfilments;
 }

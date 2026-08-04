@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.fulfilment;
+package uk.gov.defra.trade.imports.animals.notificationfulfilments;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -16,7 +16,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndexes;
  * the payload (obligation UUIDs, composite ids, values or unknown fields all round-trip
  * byte-faithfully). See the EUDPA-288 spike for the design.
  *
- * <p>The payload — {@link #fulfilment} and its pre-amend twin {@link #submittedFulfilment} —
+ * <p>The payload — {@link #fulfilments} and its pre-amend twin {@link #submittedFulfilments} —
  * is a sequence of obligation entries, one per obligation the user has answered. Each entry
  * takes one of two shapes, decided by the obligation's cardinality:
  * <ul>
@@ -30,7 +30,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndexes;
  * Outer list order is the evaluator's map-iteration order and is preserved byte-faithfully —
  * this is load-bearing for the characterisation-oracle tests on the frontend side.
  */
-@org.springframework.data.mongodb.core.mapping.Document(collection = "fulfilment")
+@org.springframework.data.mongodb.core.mapping.Document(collection = "notification_fulfilments")
 @CompoundIndexes({
     @CompoundIndex(
         name = "created_at",
@@ -48,7 +48,7 @@ import org.springframework.data.mongodb.core.index.CompoundIndexes;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class Fulfilment {
+public class NotificationFulfilments {
 
     @Id
     private String id;
@@ -57,20 +57,20 @@ public class Fulfilment {
      * The live obligation entries — what the user is currently editing (DRAFT/AMEND) or
      * has most recently submitted (SUBMITTED). See the class Javadoc for the entry shape.
      */
-    private List<Document> fulfilment;
+    private List<Document> fulfilments;
 
     /**
-     * Pre-amend snapshot of {@link #fulfilment}, kept only while the aggregate is in AMEND
+     * Pre-amend snapshot of {@link #fulfilments}, kept only while the aggregate is in AMEND
      * so {@code cancelAmend} can restore what was previously submitted.
      *
-     * <p>Invariant: non-null iff {@link #status} is {@link FulfilmentStatus#AMEND}.
-     * {@code amend} copies {@code fulfilment} into this field on entry to AMEND;
+     * <p>Invariant: non-null iff {@link #status} is {@link NotificationFulfilmentsStatus#AMEND}.
+     * {@code amend} copies {@code fulfilments} into this field on entry to AMEND;
      * {@code cancelAmend} copies it back and clears this field; a submit from AMEND
      * accepts the edited content and clears this field.
      */
-    private List<Document> submittedFulfilment;
+    private List<Document> submittedFulfilments;
 
-    private FulfilmentStatus status;
+    private NotificationFulfilmentsStatus status;
 
     private LocalDateTime createdAt;
 
