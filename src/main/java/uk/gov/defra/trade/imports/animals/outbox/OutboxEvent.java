@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.outbox;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +42,8 @@ public class OutboxEvent {
     private Actor actor;
     private List<StatusChange> statusChanges;
 
-    /** Publish timestamp set before SNS publish and included in the published envelope. */
+    /** Publish timestamp set before SNS publish. 
+     * Ignored from published event but stores the published timestamp */
+    @JsonIgnore
     private Instant publishedAt;
 }

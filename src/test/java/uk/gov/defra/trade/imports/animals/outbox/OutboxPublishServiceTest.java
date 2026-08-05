@@ -15,7 +15,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,7 +89,7 @@ class OutboxPublishServiceTest {
         }
 
         @Test
-        void shouldSetPublishedAtBeforePublishingToSns() throws Exception {
+        void shouldSetPublishedAtForSavedEventButIgnoredForSentEvent() throws Exception {
             // Given
             OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
             when(outboxEventRepository
@@ -107,12 +106,11 @@ class OutboxPublishServiceTest {
             verify(snsClient).publish(publishCaptor.capture());
             assertThat(event.getPublishedAt()).isNotNull();
             JsonNode envelope = createObjectMapper().readTree(publishCaptor.getValue().message());
-            assertThat(Instant.parse(envelope.get("publishedAt").asText()))
-                .isEqualTo(event.getPublishedAt());
+            assertThat(envelope.get("publishedAt")).isNull();
         }
 
         @Test
-        void shouldUseMillisecondPrecisionForPublishedAt() throws Exception {
+        void shouldUseMillisecondPrecisionForPublishedAt() {
             // Given
             OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
             when(outboxEventRepository
@@ -125,11 +123,6 @@ class OutboxPublishServiceTest {
 
             // Then
             assertThat(event.getPublishedAt().getNano() % 1_000_000).isZero();
-            ArgumentCaptor<PublishRequest> captor = ArgumentCaptor.forClass(PublishRequest.class);
-            verify(snsClient).publish(captor.capture());
-            JsonNode body = createObjectMapper().readTree(captor.getValue().message());
-            assertThat(body.get("publishedAt").asText())
-                .matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z");
         }
 
         @Test
@@ -374,12 +367,6 @@ class OutboxPublishServiceTest {
             .isEqualTo(event.getMetadata().getSchemaVersion());
         assertThat(body.get("data").get("referenceNumber").asText())
             .isEqualTo(event.getData().get("referenceNumber"));
-        assertThat(body.has("publishedAt")).isTrue();
-        Instant envelopePublishedAt = Instant.parse(body.get("publishedAt").asText());
-        assertThat(envelopePublishedAt).isEqualTo(event.getPublishedAt());
-        assertThat(envelopePublishedAt).isEqualTo(
-            event.getPublishedAt().truncatedTo(ChronoUnit.MILLIS));
-        assertThat(body.get("publishedAt").asText())
-            .matches("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z");
+        assertThat(body.has("publishedAt")).isFalse();
     }
 }
