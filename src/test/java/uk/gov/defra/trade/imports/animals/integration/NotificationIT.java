@@ -1114,7 +1114,8 @@ class NotificationIT extends IntegrationBase {
         assertThat(gbnAgIdentifier(event)).isEqualTo(referenceNumber);
         assertThat(event.getActor()).isNull();
         assertThat(event.getStatusChanges()).hasSize(1);
-        assertThat(event.getStatusChanges().getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(event.getStatusChanges().getFirst().getStatus())
+            .isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(event.getStatusChanges().getFirst().getDateChanged()).isNotNull();
         assertThat(event.getStatusChanges().getFirst().getActor()).isNull();
     }
@@ -1156,14 +1157,14 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getActor().getDisplayName()).isEqualTo("Jane Farmer");
         assertThat(event.getActor().getOrganisationId()).isEqualTo("org-001");
         assertThat(event.getActor().getOnBehalfOfOrganisationId()).isNull();
-
         assertThat(event.getStatusChanges()).hasSize(1);
-        assertThat(event.getStatusChanges().getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(event.getStatusChanges().getFirst().getStatus())
+            .isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(event.getStatusChanges().getFirst().getActor()).isEqualTo(event.getActor());
     }
 
     @Test
-    void submitThenAmend_shouldAccumulateStatusChanges() {
+    void submitThenAmend_shouldAccumulateActorStatusChanges() {
         // Given — create and submit
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
@@ -1198,11 +1199,16 @@ class NotificationIT extends IntegrationBase {
 
         assertThat(events).hasSize(2);
         OutboxEvent amendEvent = events.get(1);
+        assertThat(amendEvent.getActor().getId()).isEqualTo("contact-sub-002");
         assertThat(amendEvent.getStatusChanges()).hasSize(2);
-        assertThat(amendEvent.getStatusChanges().get(0).getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(amendEvent.getStatusChanges().get(0).getActor().getId()).isEqualTo("contact-sub-001");
-        assertThat(amendEvent.getStatusChanges().get(1).getStatus()).isEqualTo(NotificationStatus.AMEND);
-        assertThat(amendEvent.getStatusChanges().get(1).getActor().getId()).isEqualTo("contact-sub-002");
+        assertThat(amendEvent.getStatusChanges().get(0).getStatus())
+            .isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(amendEvent.getStatusChanges().get(0).getActor().getId())
+            .isEqualTo("contact-sub-001");
+        assertThat(amendEvent.getStatusChanges().get(1).getStatus())
+            .isEqualTo(NotificationStatus.AMEND);
+        assertThat(amendEvent.getStatusChanges().get(1).getActor().getId())
+            .isEqualTo("contact-sub-002");
     }
 
     @SuppressWarnings("unchecked")

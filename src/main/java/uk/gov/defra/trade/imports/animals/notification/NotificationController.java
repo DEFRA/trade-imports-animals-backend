@@ -46,10 +46,12 @@ public class NotificationController {
     @PostMapping
     @Operation(summary = "Post Origin of the Import", description = "Submits an origin to the backend")
     @Timed("controller.postNotification.time")
-    public ResponseEntity<Notification> post(@Valid @RequestBody NotificationDto notificationDto) {
+    public ResponseEntity<Notification> post(
+        @Valid @RequestBody NotificationDto notificationDto) {
         log.info("POST /notifications - countryCode={}",
             notificationDto.getOrigin() != null ? notificationDto.getOrigin().getCountryCode() : null);
-        return ResponseEntity.ok(notificationService.saveOriginOfImport(notificationDto));
+        return ResponseEntity.ok(
+            notificationService.saveOriginOfImport(notificationDto));
     }
 
     @PostMapping("/{referenceNumber}/copy")
@@ -60,9 +62,11 @@ public class NotificationController {
     @ApiResponse(responseCode = "404", description = "Source notification not found", content = @Content)
     @Timed("controller.copyNotification.time")
     public ResponseEntity<Notification> copy(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+        @PathVariable String referenceNumber) {
         log.info("POST /notifications/{}/copy - Copying notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.copyNotification(referenceNumber));
+        return ResponseEntity.ok(
+            notificationService.copyNotification(referenceNumber));
     }
 
     @PostMapping("/{referenceNumber}/submit")
@@ -78,7 +82,7 @@ public class NotificationController {
     public ResponseEntity<Notification> submit(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
-        @RequestBody(required = false) ActorRequest actorRequest) {
+        @Valid @RequestBody(required = false) ActorRequest actorRequest) {
         log.info("POST /notifications/{}/submit - Submitting notification", referenceNumber);
         Actor actor = actorRequest != null ? actorRequest.toActor() : null;
         return ResponseEntity.ok(notificationService.submitNotification(referenceNumber, traceId, actor));
@@ -97,7 +101,7 @@ public class NotificationController {
     public ResponseEntity<Notification> amend(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
-        @RequestBody(required = false) ActorRequest actorRequest) {
+        @Valid @RequestBody(required = false) ActorRequest actorRequest) {
         log.info("POST /notifications/{}/amend - Amending notification", referenceNumber);
         Actor actor = actorRequest != null ? actorRequest.toActor() : null;
         return ResponseEntity.ok(notificationService.amendNotification(referenceNumber, traceId, actor));
@@ -113,7 +117,8 @@ public class NotificationController {
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.cancelAmendNotification.time")
     public ResponseEntity<Notification> cancelAmend(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+        @PathVariable String referenceNumber) {
         log.info("POST /notifications/{}/cancel-amend - Cancelling amendment", referenceNumber);
         return ResponseEntity.ok(notificationService.cancelAmendNotification(referenceNumber));
     }
@@ -127,7 +132,8 @@ public class NotificationController {
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.getNotificationByRef.time")
     public ResponseEntity<NotificationResponse> findByRef(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+        @PathVariable String referenceNumber) {
         log.debug("Fetching notification {}", referenceNumber);
         return ResponseEntity.ok(notificationService.findByRef(referenceNumber));
     }
@@ -202,7 +208,8 @@ public class NotificationController {
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.softDeleteNotification.time")
     public ResponseEntity<Notification> softDelete(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+        @PathVariable String referenceNumber) {
         log.info("POST /notifications/{}/soft-delete - Soft deleting notification", referenceNumber);
         return ResponseEntity.ok(notificationService.softDeleteNotification(referenceNumber));
     }

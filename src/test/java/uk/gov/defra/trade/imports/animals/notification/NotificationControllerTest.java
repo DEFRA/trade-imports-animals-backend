@@ -345,7 +345,8 @@ class NotificationControllerTest {
                     && "dynamics-contact".equals(a.getSource())
                     && "B2C".equals(a.getUserType())
                     && "Jane Farmer".equals(a.getDisplayName())
-                    && "org-001".equals(a.getOrganisationId())));
+                    && "org-001".equals(a.getOrganisationId())
+                    && a.getOnBehalfOfOrganisationId() == null));
         }
     }
 
@@ -419,6 +420,43 @@ class NotificationControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
                     "Cannot amend notification with status: DRAFT"));
+        }
+
+        @Test
+        void amend_shouldPassActorToService_whenActorBodyProvided() throws Exception {
+            Notification amended = new Notification();
+            amended.setId("notif-id-001");
+            amended.setReferenceNumber(REF_1);
+            amended.setStatus(NotificationStatus.AMEND);
+
+            when(notificationService.amendNotification(eq(REF_1), anyString(), any()))
+                .thenReturn(amended);
+
+            String actorBody = """
+                {
+                    "id": "user-guid-002",
+                    "source": "entra-oid",
+                    "userType": "B2B",
+                    "displayName": "Alex Agent",
+                    "organisationId": "org-002",
+                    "onBehalfOfOrganisationId": "org-003"
+                }
+                """;
+
+            mockMvc.perform(post("/notifications/{referenceNumber}/amend", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(actorBody))
+                .andExpect(status().isOk());
+
+            verify(notificationService).amendNotification(
+                eq(REF_1), anyString(),
+                argThat(a -> a != null
+                    && "user-guid-002".equals(a.getId())
+                    && "entra-oid".equals(a.getSource())
+                    && "B2B".equals(a.getUserType())
+                    && "Alex Agent".equals(a.getDisplayName())
+                    && "org-002".equals(a.getOrganisationId())
+                    && "org-003".equals(a.getOnBehalfOfOrganisationId())));
         }
     }
 

@@ -9,13 +9,20 @@ import java.util.Map;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.MDC;
+import org.springframework.beans.TypeMismatchException;
+import org.springframework.core.annotation.AnnotatedElementUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageConversionException;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.validation.method.MethodValidationException;
+import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
@@ -198,6 +205,32 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle semantically unprocessable requests (422 Unprocessable Entity).
+     */
+    @ExceptionHandler(UnprocessableEntityException.class)
+    public ResponseEntity<ProblemDetail> handleUnprocessableEntityException(
+        UnprocessableEntityException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Unprocessable request (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.UNPROCESSABLE_ENTITY,
+            ex.getMessage()
+        );
+
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/unprocessable-entity"));
+        problemDetail.setTitle("Unprocessable Entity");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
      * Handle oversized multipart uploads (413 Payload Too Large).
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
@@ -252,15 +285,41 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handle unexpected errors (500 Internal Server Error).
+     * Handle unreadable request bodies (400 Bad Request).
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ProblemDetail> handleUnreadableRequestBody(HttpMessageNotReadableException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Unreadable request body (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST,
+            "Request body is missing or malformed"
+        );
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/bad-request"));
+        problemDetail.setTitle("Bad Request");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
+     * Handle unexpected application errors (500 Internal Server Error).
      *
-     * Note: Does NOT catch Spring framework exceptions like NoResourceFoundException
-     * (404) or other HTTP-related exceptions. Only catches application-level exceptions.
-     * This allows Spring to handle its own exceptions appropriately (e.g., 404 for
-     * missing endpoints).
+     * <p>Spring MVC exceptions that carry framework-defined HTTP semantics are
+     * rethrown so the next resolver can preserve their status and response headers.
      */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ProblemDetail> handleException(RuntimeException ex) {
+        if (hasFrameworkManagedStatus(ex)) {
+            throw ex;
+        }
+
         String traceId = MDC.get(MDC_TRACE_ID);
         log.error("Unexpected error (trace: {}): {}", traceId, ex.getMessage(), ex);
 
@@ -279,5 +338,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
             .body(problemDetail);
+    }
+
+    private static boolean hasFrameworkManagedStatus(Throwable exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof ErrorResponse
+                || current instanceof TypeMismatchException
+                || current instanceof HttpMessageConversionException
+                || current instanceof MethodValidationException
+                || AnnotatedElementUtils.hasAnnotation(current.getClass(), ResponseStatus.class)) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
     }
 }
