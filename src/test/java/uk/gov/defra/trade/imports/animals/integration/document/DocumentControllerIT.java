@@ -77,6 +77,7 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 class DocumentControllerIT extends IntegrationBase {
 
     private static final String NOTIFICATION_REF = "GBN-AG-25-TC0001";
+    private static final String PLANT_NOTIFICATION_REF = "GBN-PP-25-TC0001";
     private static final String AWS_REGION = "eu-west-2";
 
     private static final Duration SCAN_TIMEOUT = Duration.ofSeconds(20);
@@ -196,7 +197,7 @@ class DocumentControllerIT extends IntegrationBase {
             List<AccompanyingDocument> persisted =
                 accompanyingDocumentRepository.findAllByNotificationReferenceNumber(NOTIFICATION_REF);
             assertThat(persisted).hasSize(1);
-            AccompanyingDocument doc = persisted.get(0);
+            AccompanyingDocument doc = persisted.getFirst();
             assertThat(doc.getUploadId()).isEqualTo(uploadId);
             assertThat(doc.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
             assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.PENDING);
@@ -222,7 +223,7 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
             assertThat(persisted.getFiles()).hasSize(1);
 
-            var file = persisted.getFiles().get(0);
+            var file = persisted.getFiles().getFirst();
             assertThat(file.filename()).isEqualTo("clean.pdf");
             assertThat(file.contentType()).isEqualTo("application/pdf");
             assertThat(file.fileStatus()).isEqualTo(FileStatus.COMPLETE);
@@ -246,10 +247,47 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
             assertThat(persisted.getFiles()).hasSize(1);
 
-            var file = persisted.getFiles().get(0);
+            var file = persisted.getFiles().getFirst();
             assertThat(file.filename()).isEqualTo("virus.pdf");
             assertThat(file.fileStatus()).isEqualTo(FileStatus.REJECTED);
             assertThat(file.s3Key()).isNull();
+        }
+    }
+
+    @Nested
+    class PlantProductsDocument {
+
+        @Test
+        void shouldInitiateAndReachTheFileLegWithAPlantTypeAndHyphenatedReference()
+            throws IOException {
+            EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
+                .post()
+                .uri("/notifications/" + PLANT_NOTIFICATION_REF + "/document-uploads")
+                .bodyValue(plantInitiateBody())
+                .exchange()
+                .expectStatus().isCreated()
+                .expectBody(DocumentUploadResponse.class)
+                .returnResult();
+
+            DocumentUploadResponse initiateResponse = result.getResponseBody();
+            assertThat(initiateResponse).isNotNull();
+
+            byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
+            uploadFile(initiateResponse.uploadId(), pdfBytes, "phyto.pdf", "application/pdf");
+
+            AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
+            assertThat(persisted.getNotificationReferenceNumber()).isEqualTo(PLANT_NOTIFICATION_REF);
+            assertThat(persisted.getDocumentType())
+                .isEqualTo(DocumentType.PHYTOSANITARY_CERTIFICATE);
+            assertThat(persisted.getDocumentReference()).isEqualTo("PHYTO-001");
+            assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+            assertThat(persisted.getFiles()).hasSize(1);
+
+            var file = persisted.getFiles().getFirst();
+            assertThat(file.filename()).isEqualTo("phyto.pdf");
+            assertThat(file.fileStatus()).isEqualTo(FileStatus.COMPLETE);
+            assertThat(file.contentLength()).isEqualTo(pdfBytes.length);
+            assertThat(file.s3Bucket()).isEqualTo(CdpUploaderTestSupport.DOCUMENTS_BUCKET);
         }
     }
 
@@ -271,7 +309,7 @@ class DocumentControllerIT extends IntegrationBase {
             DocumentListResponse listResponse = result.getResponseBody();
             assertThat(listResponse).isNotNull();
             assertThat(listResponse.items()).hasSize(1);
-            AccompanyingDocumentDto item = listResponse.items().get(0);
+            AccompanyingDocumentDto item = listResponse.items().getFirst();
             assertThat(item.uploadId()).isEqualTo(uploadId);
             assertThat(item.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
             assertThat(item.scanStatus()).isEqualTo(ScanStatus.PENDING);
@@ -389,7 +427,7 @@ class DocumentControllerIT extends IntegrationBase {
 
             AccompanyingDocument persisted = awaitScanCallback(initiateResponse.uploadId());
             assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
-            String s3Key = persisted.getFiles().get(0).s3Key();
+            String s3Key = persisted.getFiles().getFirst().s3Key();
 
             flociS3Client.deleteObject(DeleteObjectRequest.builder()
                 .bucket(CdpUploaderTestSupport.DOCUMENTS_BUCKET)
@@ -497,6 +535,12 @@ class DocumentControllerIT extends IntegrationBase {
     private static String initiateBody() {
         return """
             {"documentType":"ITAHC","documentReference":"UKGB2026001234","dateOfIssue":"2026-01-15"}
+            """;
+    }
+
+    private static String plantInitiateBody() {
+        return """
+            {"documentType":"PHYTOSANITARY_CERTIFICATE","documentReference":"PHYTO-001","dateOfIssue":"2026-01-15"}
             """;
     }
 

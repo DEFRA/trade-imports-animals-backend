@@ -2,11 +2,7 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-/**
- * Classification of an accompanying document submitted with an import notification.
- *
- * <p>The complete V4 set is aligned with the frontend accompanying-document options.
- */
+/** Classification of an accompanying document submitted with an import notification. */
 public enum DocumentType {
   @Schema(description = "Intra-Trade Animal Health Certificate (ITAHC)")
   ITAHC,
@@ -48,5 +44,29 @@ public enum DocumentType {
   JOURNEY_LOG,
 
   @Schema(description = "Other accompanying document")
-  OTHER
+  OTHER,
+
+  @Schema(description = "Cargo manifest")
+  CARGO_MANIFEST,
+
+  @Schema(description = "Inspection certificate")
+  INSPECTION_CERTIFICATE,
+
+  @Schema(description = "Phytosanitary certificate")
+  PHYTOSANITARY_CERTIFICATE,
+
+  @Schema(description = "Certificate of origin")
+  ORIGIN_CERTIFICATE,
+
+  @Schema(description = "Heat treatment certificate")
+  HEAT_TREATMENT_CERTIFICATE,
+
+  @Schema(description = "Container manifest")
+  CONTAINER_MANIFEST,
+
+  @Schema(description = "Customs declaration")
+  CUSTOMS_DECLARATION,
+
+  @Schema(description = "Certificate of conformity")
+  CONFORMITY_CERTIFICATE
 }

@@ -114,6 +114,27 @@ class DocumentControllerTest {
     }
 
     @Test
+    void shouldAcceptAHyphenatedPlantProductsDocumentReference() throws Exception {
+      String ref = "GBN-PP-26-000001";
+      DocumentUploadRequest expectedRequest = new DocumentUploadRequest(
+          DocumentType.PHYTOSANITARY_CERTIFICATE, "PHYTO-001", LocalDate.of(2026, 1, 15));
+      DocumentUploadResponse serviceResponse = new DocumentUploadResponse(
+          "upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
+      String body = """
+          {"documentType":"PHYTOSANITARY_CERTIFICATE","documentReference":"PHYTO-001","dateOfIssue":"2026-01-15"}
+          """;
+
+      when(documentService.initiate(ref, expectedRequest)).thenReturn(serviceResponse);
+
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isCreated());
+
+      verify(documentService).initiate(ref, expectedRequest);
+    }
+
+    @Test
     void shouldReturn400_whenDocumentReferenceIsBlank() throws Exception {
       String body = """
           {"documentType":"ITAHC","documentReference":"","dateOfIssue":"2026-01-15"}
