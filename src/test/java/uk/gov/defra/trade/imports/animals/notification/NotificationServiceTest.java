@@ -117,19 +117,6 @@ class NotificationServiceTest {
             enabled, 3_600_000, 10, Duration.ofSeconds(1), Duration.ofSeconds(30));
     }
 
-    @Test
-    void existsByReferenceNumber_shouldDelegateToRepository() {
-        // Given
-        String referenceNumber = "GBN-AG-26-ABC123";
-        when(notificationRepository.existsByReferenceNumber(referenceNumber)).thenReturn(true);
-
-        // When
-        boolean exists = notificationService.existsByReferenceNumber(referenceNumber);
-
-        // Then
-        assertThat(exists).isTrue();
-    }
-
     @Nested
     class SaveOriginOfImport {
 

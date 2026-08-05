@@ -14,8 +14,6 @@ public interface NotificationRepository extends MongoRepository<Notification, St
 
     Optional<Notification> findByReferenceNumber(String referenceNumber);
 
-    boolean existsByReferenceNumber(String referenceNumber);
-
     Optional<Notification> findByReferenceNumberAndStatusIn(
         String referenceNumber, List<NotificationStatus> statuses);
 

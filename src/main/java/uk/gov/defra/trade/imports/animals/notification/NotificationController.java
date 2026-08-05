@@ -9,7 +9,6 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
-import java.net.URI;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,13 +18,11 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.outbox.Actor;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxReplayService;
@@ -45,7 +42,6 @@ public class NotificationController {
     private final NotificationService notificationService;
     private final OutboxService outboxService;
     private final OutboxReplayService outboxReplayService;
-    private final AppConfig appConfig;
 
     @PostMapping
     @Operation(summary = "Post Origin of the Import", description = "Submits an origin to the backend")
@@ -56,30 +52,6 @@ public class NotificationController {
             notificationDto.getOrigin() != null ? notificationDto.getOrigin().getCountryCode() : null);
         return ResponseEntity.ok(
             notificationService.saveOriginOfImport(notificationDto));
-    }
-
-    @PutMapping("/{referenceNumber}")
-    @Operation(summary = "Replace notification",
-        description = "Creates or wholly replaces the current notification projection")
-    @ApiResponse(responseCode = "200", description = "Notification replaced",
-        content = @Content(schema = @Schema(implementation = Notification.class)))
-    @ApiResponse(responseCode = "201", description = "Notification created",
-        content = @Content(schema = @Schema(implementation = Notification.class)))
-    @ApiResponse(responseCode = "400", description = "Reference numbers do not match",
-        content = @Content)
-    @Timed("controller.putNotification.time")
-    public ResponseEntity<Notification> replace(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-        @PathVariable String referenceNumber,
-        @Valid @RequestBody NotificationDto notificationDto) {
-        log.info("PUT /notifications/{} - Replacing notification", referenceNumber);
-        NotificationService.ReplaceResult result =
-            notificationService.replaceNotification(referenceNumber, notificationDto);
-        if (result.created()) {
-            return ResponseEntity.created(buildLocationUri(referenceNumber))
-                .body(result.notification());
-        }
-        return ResponseEntity.ok(result.notification());
     }
 
     @PostMapping("/{referenceNumber}/copy")
@@ -254,13 +226,5 @@ public class NotificationController {
         log.info("DELETE /notifications - Deleting {} notifications", referenceNumbers.size());
         notificationService.deleteByReferenceNumbers(referenceNumbers, new AuditContext(traceId, userId));
         return ResponseEntity.noContent().build();
-    }
-
-    private URI buildLocationUri(String referenceNumber) {
-        String baseUrl = appConfig.baseUrl();
-        if (baseUrl.endsWith("/")) {
-            baseUrl = baseUrl.substring(0, baseUrl.length() - 1);
-        }
-        return URI.create(baseUrl + "/notifications/" + referenceNumber);
     }
 }
