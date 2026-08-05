@@ -19,8 +19,8 @@ class RequestBodyExceptionHandlingIT extends IntegrationBase {
     }
 
     @Test
-    void fulfilments_shouldReturnProblem400ForUnreadableBodies() {
-        assertUnreadableBodies(HttpMethod.PUT, "/fulfilments/" + REFERENCE);
+    void notificationFulfilments_shouldReturnProblem400ForUnreadableBodies() {
+        assertUnreadableBodies(HttpMethod.PUT, "/notification-fulfilments/" + REFERENCE);
     }
 
     @Test
