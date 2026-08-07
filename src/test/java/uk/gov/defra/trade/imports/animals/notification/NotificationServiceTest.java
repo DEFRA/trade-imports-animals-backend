@@ -12,6 +12,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.AMEND;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DRAFT;
@@ -49,8 +50,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Sort.Direction;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.client.HttpServerErrorException;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
+import uk.gov.defra.trade.imports.animals.addressbook.AddressBookClient;
+import uk.gov.defra.trade.imports.animals.addressbook.AddressBookRecord;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
@@ -62,12 +68,15 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
+import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
 
     private static final String TEST_TRACE_ID = "test-trace-id";
     private static final String TEST_USER_ID = "test-user-id";
+    /** The reader's organisation, as the controller forwards it from their session. */
+    private static final String ORG_ID = "5900002";
 
     @Mock
     private NotificationRepository notificationRepository;
@@ -86,6 +95,9 @@ class NotificationServiceTest {
 
     @Mock
     private ReferenceNumberGenerator referenceNumberGenerator;
+
+    @Mock
+    private AddressBookClient addressBookClient;
 
     private NotificationService notificationService;
 
@@ -107,7 +119,8 @@ class NotificationServiceTest {
     private NotificationService buildService(NotificationTtlConfig ttlConfig) {
         return new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            notificationMapper, new NotificationCopyMapper(), referenceNumberGenerator, ttlConfig,
+            notificationMapper, new NotificationCopyMapper(), new PartyResolver(addressBookClient),
+            referenceNumberGenerator, ttlConfig,
             Duration.ZERO, 54, 50);
     }
 
@@ -287,20 +300,21 @@ class NotificationServiceTest {
             assertThat(result.getConsignor().getName()).isEqualTo("Astra Rosales");
             assertThat(result.getConsignor().getAddress().getAddressLine1()).isEqualTo(
                 "43 East Hague Extension");
-            assertThat(result.getConsignor().getAddress().getCountry()).isEqualTo("Switzerland");
+            assertThat(result.getConsignor().getAddress().getTownOrCity()).isEqualTo("Vernier");
+            assertThat(result.getConsignor().getAddress().getPostcode()).isEqualTo("30055");
+            assertThat(result.getConsignor().getAddress().getCountryCode()).isEqualTo("CH");
             assertThat(result.getDestination().getName()).isEqualTo("United Commerce");
             assertThat(result.getDestination().getAddress().getAddressLine1()).isEqualTo(
                 "446 Church Lane");
-            assertThat(result.getDestination().getAddress().getCountry()).isEqualTo(
-                "United Kingdom");
+            assertThat(result.getDestination().getAddress().getCountryCode()).isEqualTo("GB");
             assertThat(result.getCphNumber()).isEqualTo("123456789");
             assertThat(result.getTransport()).isEqualTo(transport);
             assertThat(result.getConsignment().getName())
                 .isEqualTo("Animal and Plant Health Agency");
             assertThat(result.getConsignment().getAddress().getAddressLine1())
                 .isEqualTo("Woodham Lane");
-            assertThat(result.getConsignment().getAddress().getCountry())
-                .isEqualTo("United Kingdom");
+            assertThat(result.getConsignment().getAddress().getCountryCode())
+                .isEqualTo("GB");
             verify(notificationRepository, times(1)).save(any(Notification.class));
         }
     }
@@ -318,7 +332,7 @@ class NotificationServiceTest {
                 .thenReturn(emptyPage);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1, null);
+            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
 
             // Then
             assertThat(result).isNotNull();
@@ -346,7 +360,7 @@ class NotificationServiceTest {
                 .thenReturn(page);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1, null);
+            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
 
             // Then — only DRAFT and SUBMITTED are returned
             assertThat(result.content()).hasSize(2);
@@ -373,7 +387,7 @@ class NotificationServiceTest {
                 .thenReturn(page);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1, null);
+            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
 
             // Then
             assertThat(result.content()).hasSize(1);
@@ -399,7 +413,7 @@ class NotificationServiceTest {
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
-            NotificationPageResponse result = notificationService.findAll(1, null);
+            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
 
             assertThat(result.content()).hasSize(1);
             assertThat(result.content()).extracting(NotificationDto::getStatus)
@@ -414,7 +428,7 @@ class NotificationServiceTest {
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
-            notificationService.findAll(1, "createdAt,asc");
+            notificationService.findAll(1, "createdAt,asc", null, ORG_ID);
 
             ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
             verify(notificationRepository).findAllByStatusIn(
@@ -435,7 +449,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(draft));
 
             NotificationPageResponse result =
-                notificationService.findAll(1, null, "GBN-AG-26-ABC123");
+                notificationService.findAll(1, null, "GBN-AG-26-ABC123", ORG_ID);
 
             assertThat(result.content()).hasSize(1);
             assertThat(result.content().getFirst().getReferenceNumber())
@@ -452,7 +466,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             NotificationPageResponse result =
-                notificationService.findAll(1, null, "GBN-AG-26-ZZZZZZ");
+                notificationService.findAll(1, null, "GBN-AG-26-ZZZZZZ", ORG_ID);
 
             assertThat(result.content()).isEmpty();
             assertThat(result.totalElements()).isZero();
@@ -466,7 +480,7 @@ class NotificationServiceTest {
                 "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND)))
                 .thenReturn(Optional.empty());
 
-            notificationService.findAll(1, null, "  GBN-AG-26-ABC123  ");
+            notificationService.findAll(1, null, "  GBN-AG-26-ABC123  ", ORG_ID);
 
             verify(notificationRepository).findByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND));
@@ -1293,7 +1307,7 @@ class NotificationServiceTest {
                 .thenReturn(List.of(document));
 
             // When
-            NotificationResponse response = notificationService.findByRef(referenceNumber);
+            NotificationResponse response = notificationService.findByRef(referenceNumber, ORG_ID);
 
             // Then
             assertThat(response).isNotNull();
@@ -1327,7 +1341,7 @@ class NotificationServiceTest {
                 .thenReturn(Collections.emptyList());
 
             // When
-            NotificationResponse response = notificationService.findByRef(referenceNumber);
+            NotificationResponse response = notificationService.findByRef(referenceNumber, ORG_ID);
 
             // Then
             assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
@@ -1342,11 +1356,164 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.findByRef(referenceNumber))
+            assertThatThrownBy(() -> notificationService.findByRef(referenceNumber, ORG_ID))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(referenceNumber);
 
             verify(documentService, never()).findByNotificationRef(any());
+        }
+    }
+
+    /**
+     * A party stored as an address-book reference is filled in when the notification is read
+     * (EUDPA-294), so an address edited in the address book shows through without the notification
+     * being rewritten. What is stored is only ever the reference.
+     */
+    @Nested
+    class ResolveReferencedParties {
+
+        private static final String ADDRESS_ID = "665f1c2ab3e4d51a2c9d0e77";
+
+        private Notification notificationWithReferencedConsignor(String referenceNumber) {
+            return Notification.builder()
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .consignor(NotificationTestData.reference(ADDRESS_ID))
+                .build();
+        }
+
+        private AddressBookRecord record(boolean deleted) {
+            return new AddressBookRecord(ADDRESS_ID, "Astra Rosales", "43 East Hague Extension",
+                null, "Vernier", "Soleure", "30055", "CH", "+41 22 000 0000",
+                "astra@example.com", deleted);
+        }
+
+        @Test
+        void findByRef_shouldFillInReferencedParty_fromTheAddressBook() {
+            String ref = "GBN-AG-26-REF001";
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notificationWithReferencedConsignor(ref)));
+            when(documentService.findByNotificationRef(ref)).thenReturn(Collections.emptyList());
+            when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
+                .thenReturn(Optional.of(record(false)));
+
+            NotificationResponse response = notificationService.findByRef(ref, ORG_ID);
+
+            assertThat(response.consignor().getAddressId()).isEqualTo(ADDRESS_ID);
+            assertThat(response.consignor().getName()).isEqualTo("Astra Rosales");
+            assertThat(response.consignor().getEmail()).isEqualTo("astra@example.com");
+            assertThat(response.consignor().getAddress().getPostcode()).isEqualTo("30055");
+            assertThat(response.consignor().getAddress().getCountryCode()).isEqualTo("CH");
+        }
+
+        @Test
+        void findByRef_shouldResolveUsingTheReadersOrganisation_andNoOther() {
+            String ref = "GBN-AG-26-REF002";
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notificationWithReferencedConsignor(ref)));
+            when(documentService.findByNotificationRef(ref)).thenReturn(Collections.emptyList());
+            when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
+                .thenReturn(Optional.of(record(false)));
+
+            notificationService.findByRef(ref, ORG_ID);
+
+            verify(addressBookClient).findById(ORG_ID, ADDRESS_ID);
+        }
+
+        @Test
+        void findByRef_shouldTreatDeletedAddressAsNeverEntered() {
+            String ref = "GBN-AG-26-REF003";
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notificationWithReferencedConsignor(ref)));
+            when(documentService.findByNotificationRef(ref)).thenReturn(Collections.emptyList());
+            when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
+                .thenReturn(Optional.of(record(true)));
+
+            NotificationResponse response = notificationService.findByRef(ref, ORG_ID);
+
+            assertThat(response.consignor()).isNull();
+        }
+
+        @Test
+        void findByRef_shouldResolveToNothing_whenTheAddressBelongsToAnotherOrganisation() {
+            // The address book scopes its lookup on the organisation, so a cross-organisation
+            // reference finds nothing. The party reads as "not provided" — a blank, not a leak.
+            String ref = "GBN-AG-26-REF004";
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notificationWithReferencedConsignor(ref)));
+            when(documentService.findByNotificationRef(ref)).thenReturn(Collections.emptyList());
+            when(addressBookClient.findById(ORG_ID, ADDRESS_ID)).thenReturn(Optional.empty());
+
+            NotificationResponse response = notificationService.findByRef(ref, ORG_ID);
+
+            assertThat(response.consignor()).isNull();
+        }
+
+        @Test
+        void findByRef_shouldPropagateOutage_ratherThanRenderItAsADeletion() {
+            String ref = "GBN-AG-26-REF005";
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notificationWithReferencedConsignor(ref)));
+            when(documentService.findByNotificationRef(ref)).thenReturn(Collections.emptyList());
+            when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
+                .thenThrow(HttpServerErrorException.create(HttpStatus.INTERNAL_SERVER_ERROR,
+                    "Server Error", HttpHeaders.EMPTY, new byte[0], null));
+
+            assertThatThrownBy(() -> notificationService.findByRef(ref, ORG_ID))
+                .isInstanceOf(HttpServerErrorException.class);
+        }
+
+        @Test
+        void findByRef_shouldLeaveInlinePartiesUntouched() {
+            String ref = "GBN-AG-26-REF006";
+            Notification notification = Notification.builder()
+                .referenceNumber(ref)
+                .status(DRAFT)
+                .consignor(consignors().getFirst())
+                .build();
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notification));
+            when(documentService.findByNotificationRef(ref)).thenReturn(Collections.emptyList());
+
+            NotificationResponse response = notificationService.findByRef(ref, ORG_ID);
+
+            assertThat(response.consignor()).isEqualTo(consignors().getFirst());
+            verifyNoInteractions(addressBookClient);
+        }
+
+        @Test
+        void findAll_shouldFillInReferencedParties_fetchingASharedAddressOnlyOnce() {
+            Notification first = notificationWithReferencedConsignor("GBN-AG-26-REF007");
+            Notification second = notificationWithReferencedConsignor("GBN-AG-26-REF008");
+            when(notificationRepository.findAllByStatusIn(
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(first, second), PageRequest.of(0, 54), 2));
+            when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
+                .thenReturn(Optional.of(record(false)));
+
+            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
+
+            assertThat(result.content()).extracting(dto -> dto.getConsignor().getName())
+                .containsExactly("Astra Rosales", "Astra Rosales");
+            verify(addressBookClient, times(1)).findById(ORG_ID, ADDRESS_ID);
+        }
+
+        @Test
+        void findAll_shouldNotWriteResolvedDetailsBackOntoTheStoredNotification() {
+            // The reference is the stored truth. Persisting resolved details would grow a stale
+            // copy beside it, which is exactly what storing a reference is meant to avoid.
+            Notification stored = notificationWithReferencedConsignor("GBN-AG-26-REF009");
+            when(notificationRepository.findAllByStatusIn(
+                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(stored), PageRequest.of(0, 54), 1));
+            when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
+                .thenReturn(Optional.of(record(false)));
+
+            notificationService.findAll(1, null, null, ORG_ID);
+
+            assertThat(stored.getConsignor().getName()).isNull();
+            assertThat(stored.getConsignor().getAddress()).isNull();
+            verify(notificationRepository, never()).save(any(Notification.class));
         }
     }
 

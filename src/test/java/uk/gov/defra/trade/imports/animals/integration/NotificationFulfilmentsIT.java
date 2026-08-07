@@ -25,7 +25,7 @@ import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
-import uk.gov.defra.trade.imports.animals.notification.Operator;
+import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.notification.Transport;

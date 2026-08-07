@@ -1,7 +1,7 @@
 package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
 import java.util.List;
-import uk.gov.defra.trade.imports.animals.notification.Operator;
+import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
 import uk.gov.defra.trade.imports.animals.notification.Transporter;
 
 public record TradeParty(
@@ -18,14 +18,17 @@ public record TradeParty(
         "https://traces-codelists.ec.europa.eu/operator_activity_type";
     private static final String UK_TRANSPORTER_AUTHORISATION =
         "https://refdata.tbc.defra.gov.uk/uk_transporter_authorisation";
-    static TradeParty from(Operator operator) {
-        if (operator == null) {
+    // TODO(EUDPA-294 gap): the party now carries email and phone, which DefinedContact has slots //NOSONAR
+    // for, but the mapping is left unpopulated until it can be checked against the authoritative
+    // GBNAG schema sample rather than inferred from field names (see EUDPA-274).
+    static TradeParty from(ConsignmentParty party) {
+        if (party == null) {
             return null;
         }
         return new TradeParty(
-            null, null, operator.getName(),
+            null, null, party.getName(),
             null,
-            null, TradeAddress.from(operator.getAddress()), null);
+            null, TradeAddress.from(party.getAddress()), null);
     }
 
     static TradeParty from(Transporter transporter) {

@@ -16,7 +16,7 @@ import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.MeansOfTransport;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
-import uk.gov.defra.trade.imports.animals.notification.Operator;
+import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Species;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
@@ -78,6 +78,11 @@ class GbnAgMapperTest {
             assertThat(address.lineTwo()).isEqualTo("Delectus sit odio p");
             assertThat(address.cityName()).isEqualTo("Quas occaecat ut ear");
             assertThat(address.countryId()).isEqualTo("CH");
+            // EUDPA-294 added postcode and county to the domain model, so these two are no
+            // longer the hardcoded nulls they were when the fields did not exist.
+            assertThat(address.postcodeCode()).isEqualTo("2051");
+            assertThat(address.countrySubDivisionName()).isEqualTo("Soleure");
+            assertThat(address.countryName()).isNull(); // still a gap - the domain holds the code only
             assertThat(consignor.definedContact()).isNull(); // gap G4
         }
 
@@ -328,19 +333,20 @@ class GbnAgMapperTest {
             .origin(new Origin("FR", "true", "Imports456_GB"))
             .reasonForImport("INTERNAL_MARKET")
             .additionalDetails(new AdditionalDetails("BREEDING_AND_PRODUCTION", "true"))
-            .consignor(operator("Astra Rosales",
+            .consignor(party("Astra Rosales",
                 Address.builder()
                     .addressLine1("43 East Hague Extension")
                     .addressLine2("Delectus sit odio p")
-                    .addressLine3("Building 4")
-                    .city("Quas occaecat ut ear")
-                    .country("CH")
+                    .townOrCity("Quas occaecat ut ear")
+                    .county("Soleure")
+                    .postcode("2051")
+                    .countryCode("CH")
                     .build()))
-            .consignee(operator("Linus George Ltd", simpleAddress("558 Oak Street", "CH")))
-            .destination(operator("Linus George Ltd", simpleAddress("558 Oak Street", "CH")))
-            .importer(operator("GB Animal Imports", simpleAddress("5 Port Way", "GB")))
-            .placeOfOrigin(operator("Ferme du Massif Central", simpleAddress("Route de la Vallée 12", "FR")))
-            .consignment(operator("Animal and Plant Health Agency", simpleAddress("Woodham Lane", "GB")))
+            .consignee(party("Linus George Ltd", simpleAddress("558 Oak Street", "CH")))
+            .destination(party("Linus George Ltd", simpleAddress("558 Oak Street", "CH")))
+            .importer(party("GB Animal Imports", simpleAddress("5 Port Way", "GB")))
+            .placeOfOrigin(party("Ferme du Massif Central", simpleAddress("Route de la Vallée 12", "FR")))
+            .consignment(party("Animal and Plant Health Agency", simpleAddress("Woodham Lane", "GB")))
             .cphNumber("CPH19876")
             .commodity(Commodity.builder()
                 .name("Live bovine animals")
@@ -372,11 +378,11 @@ class GbnAgMapperTest {
             .build();
     }
 
-    private static Operator operator(String name, Address address) {
-        return Operator.builder().name(name).address(address).build();
+    private static ConsignmentParty party(String name, Address address) {
+        return ConsignmentParty.builder().name(name).address(address).build();
     }
 
-    private static Address simpleAddress(String line1, String country) {
-        return Address.builder().addressLine1(line1).country(country).build();
+    private static Address simpleAddress(String line1, String countryCode) {
+        return Address.builder().addressLine1(line1).countryCode(countryCode).build();
     }
 }

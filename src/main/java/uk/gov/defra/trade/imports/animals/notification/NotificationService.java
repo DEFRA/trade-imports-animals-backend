@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
@@ -50,6 +51,7 @@ public class NotificationService {
     private final LockingTaskExecutor lockingTaskExecutor;
     private final NotificationMapper notificationMapper;
     private final NotificationCopyMapper notificationCopyMapper;
+    private final PartyResolver partyResolver;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final NotificationTtlConfig ttlConfig;
     private final Duration lockAtLeastFor;
@@ -64,6 +66,7 @@ public class NotificationService {
         LockingTaskExecutor lockingTaskExecutor,
         NotificationMapper notificationMapper,
         NotificationCopyMapper notificationCopyMapper,
+        PartyResolver partyResolver,
         ReferenceNumberGenerator referenceNumberGenerator,
         NotificationTtlConfig ttlConfig,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
@@ -76,6 +79,7 @@ public class NotificationService {
         this.lockingTaskExecutor = lockingTaskExecutor;
         this.notificationMapper = notificationMapper;
         this.notificationCopyMapper = notificationCopyMapper;
+        this.partyResolver = partyResolver;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.ttlConfig = ttlConfig;
         this.lockAtLeastFor = lockAtLeastFor;
@@ -105,26 +109,38 @@ public class NotificationService {
         return createNotification(notificationCopyMapper.toCopyDto(source));
     }
 
-    public NotificationResponse findByRef(String referenceNumber) {
+    /**
+     * Reads one notification, with any party held as an address-book reference filled in from the
+     * address book.
+     *
+     * @param organisationId the reader's organisation, forwarded from their authenticated session
+     */
+    public NotificationResponse findByRef(String referenceNumber, String organisationId) {
         log.debug("Fetching notification for reference {}", referenceNumber);
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
         List<AccompanyingDocument> documents = documentService.findByNotificationRef(
             referenceNumber);
-        return notificationMapper.toResponse(notification).toBuilder()
+        NotificationResponse response = notificationMapper.toResponse(notification).toBuilder()
             .accompanyingDocuments(documents.stream().map(AccompanyingDocumentDto::from).toList())
             .build();
+        return partyResolver.resolveAll(response, partyResolver.forOrganisation(organisationId));
     }
 
-    public NotificationPageResponse findAll(int page, String sort) {
-        return findAll(page, sort, null);
-    }
-
-    public NotificationPageResponse findAll(int page, String sort, String referenceNumber) {
+    /**
+     * Reads a page of notifications for the dashboard, with referenced parties filled in from the
+     * address book. One resolver serves the whole page, so an address shared by several rows is
+     * fetched once.
+     *
+     * @param organisationId the reader's organisation, forwarded from their authenticated session
+     */
+    public NotificationPageResponse findAll(
+        int page, String sort, String referenceNumber, String organisationId) {
         List<NotificationStatus> dashboardStatuses = List.of(
             NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
         var pageable = PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort));
+        UnaryOperator<ConsignmentParty> resolver = partyResolver.forOrganisation(organisationId);
 
         String trimmedReference = StringUtils.trimToNull(referenceNumber);
         if (trimmedReference != null) {
@@ -136,7 +152,7 @@ public class NotificationService {
                 .orElseGet(() -> Page.empty(pageable));
             log.debug("Found {} notifications for reference {}", matched.getNumberOfElements(),
                 trimmedReference);
-            return NotificationPageResponse.from(matched);
+            return NotificationPageResponse.from(matched, resolver);
         }
 
         log.debug("Fetching notifications page {} (size {}) with sort {}", page, listPageSize, sort);
@@ -144,7 +160,7 @@ public class NotificationService {
             dashboardStatuses, pageable);
         log.debug("Found {} notifications on page {} of {}",
             result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
-        return NotificationPageResponse.from(result);
+        return NotificationPageResponse.from(result, resolver);
     }
 
     @Transactional

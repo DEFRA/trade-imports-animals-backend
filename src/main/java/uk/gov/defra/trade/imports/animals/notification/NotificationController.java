@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,14 @@ public class NotificationController {
 
     public static final String HEADER_TRACE_ID = "x-cdp-request-id";
     public static final String HEADER_USER_ID = "User-Id";
+
+    /**
+     * The organisation whose address book the read resolves against, forwarded by the BFF from the
+     * signed-in user's session. Required on the read endpoints and never defaulted: the address
+     * book has no authentication of its own and treats this value as the authenticated
+     * organisation, so guessing one here would be asserting an identity rather than passing one on.
+     */
+    public static final String HEADER_ORGANISATION_ID = "Trade-Imports-Organisation-Id";
 
     private final NotificationService notificationService;
     private final OutboxService outboxService;
@@ -123,13 +132,15 @@ public class NotificationController {
         description = "Returns a single notification with its accompanying documents")
     @ApiResponse(responseCode = "200", description = "Notification returned",
         content = @Content(schema = @Schema(implementation = NotificationResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Organisation header missing", content = @Content)
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.getNotificationByRef.time")
     public ResponseEntity<NotificationResponse> findByRef(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
+        @RequestHeader(HEADER_ORGANISATION_ID) @NotBlank String organisationId) {
         log.debug("Fetching notification {}", referenceNumber);
-        return ResponseEntity.ok(notificationService.findByRef(referenceNumber));
+        return ResponseEntity.ok(notificationService.findByRef(referenceNumber, organisationId));
     }
 
     @GetMapping
@@ -139,13 +150,15 @@ public class NotificationController {
             + "Optional referenceNumber: exact match against a complete notification reference.")
     @ApiResponse(responseCode = "200", description = "Paginated notifications returned",
         content = @Content(schema = @Schema(implementation = NotificationPageResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Organisation header missing", content = @Content)
     @Timed("controller.getAllNotifications.time")
     public NotificationPageResponse findAll(
         @RequestParam(defaultValue = "1") @Min(1) int page,
         @RequestParam(required = false) String sort,
-        @RequestParam(required = false) String referenceNumber) {
+        @RequestParam(required = false) String referenceNumber,
+        @RequestHeader(HEADER_ORGANISATION_ID) @NotBlank String organisationId) {
         log.debug("GET /notifications?page={}&sort={}&referenceNumber={}", page, sort, referenceNumber);
-        return notificationService.findAll(page, sort, referenceNumber);
+        return notificationService.findAll(page, sort, referenceNumber, organisationId);
     }
 
     @GetMapping("/reference-numbers")

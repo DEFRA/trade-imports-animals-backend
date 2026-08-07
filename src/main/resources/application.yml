@@ -47,6 +47,10 @@ cdp:
   s3:
     documents-bucket: ${CDP_DOCUMENTS_BUCKET:trade-imports-animals-documents}
 
+# Address book — system of record for saved addresses; referenced parties resolve against it on read
+address-book:
+  base-url: ${TRADE_IMPORTS_ADDRESS_BOOK_URL:http://localhost:8089}
+
 # Application-level AWS overrides
 app:
   base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:}

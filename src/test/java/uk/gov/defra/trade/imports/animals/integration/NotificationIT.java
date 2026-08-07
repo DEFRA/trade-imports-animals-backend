@@ -52,6 +52,8 @@ class NotificationIT extends IntegrationBase {
     private static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
     private static final String REF_FORMAT_REGEX = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN;
     private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
+    /** The reader's organisation, as the BFF forwards it from their session. */
+    private static final String ORG_ID = "5900002";
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -1457,6 +1459,7 @@ class NotificationIT extends IntegrationBase {
         // When
         NotificationResponse response = webClient("NoAuth")
             .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
+            .header(NotificationController.HEADER_ORGANISATION_ID, ORG_ID)
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationResponse.class)
@@ -1485,6 +1488,7 @@ class NotificationIT extends IntegrationBase {
         // When
         NotificationResponse response = webClient("NoAuth")
             .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
+            .header(NotificationController.HEADER_ORGANISATION_ID, ORG_ID)
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationResponse.class)
@@ -1501,12 +1505,31 @@ class NotificationIT extends IntegrationBase {
         // When / Then — no notification exists for NONEXISTENT_REF
         webClient("NoAuth")
             .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", NONEXISTENT_REF)
+            .header(NotificationController.HEADER_ORGANISATION_ID, ORG_ID)
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value(
                 Matchers.containsString(NONEXISTENT_REF));
+    }
+
+    @Test
+    void findByRef_shouldReturn400_whenOrganisationHeaderMissing() {
+        // The header is the authorisation for the address-book lookups the read triggers, so a
+        // read without one is rejected rather than served against a guessed organisation.
+        webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", NONEXISTENT_REF)
+            .exchange()
+            .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void findAll_shouldReturn400_whenOrganisationHeaderMissing() {
+        webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "?page=1")
+            .exchange()
+            .expectStatus().isBadRequest();
     }
 
     @Test
@@ -1584,6 +1607,7 @@ class NotificationIT extends IntegrationBase {
         return webClient("NoAuth")
             .get()
             .uri(uri)
+            .header(NotificationController.HEADER_ORGANISATION_ID, ORG_ID)
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationPageResponse.class)

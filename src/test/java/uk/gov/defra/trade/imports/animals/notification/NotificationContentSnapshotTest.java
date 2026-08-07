@@ -137,17 +137,17 @@ class NotificationContentSnapshotTest {
         }
 
         @Test
-        void from_shouldHandleOperatorWithNullAddress() {
+        void from_shouldHandlePartyWithNullAddress() {
             // Given
             Notification source = Notification.builder()
-                .consignor(Operator.builder().name("No address operator").address(null).build())
+                .consignor(ConsignmentParty.builder().name("No address party").address(null).build())
                 .build();
 
             // When
             NotificationContentSnapshot snapshot = NotificationContentSnapshot.from(source);
 
             // Then
-            assertThat(snapshot.getConsignor().getName()).isEqualTo("No address operator");
+            assertThat(snapshot.getConsignor().getName()).isEqualTo("No address party");
             assertThat(snapshot.getConsignor().getAddress()).isNull();
         }
     }

@@ -11,6 +11,7 @@ import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestTemplate;
+import uk.gov.defra.trade.imports.animals.addressbook.AddressBookConfig;
 import uk.gov.defra.trade.imports.animals.interceptor.TraceIdPropagationInterceptor;
 
 /**
@@ -127,5 +128,16 @@ public class RestClientConfig {
   public RestClient cdpUploaderRestClient(RestClient.Builder builder, CdpConfig cdpConfig) {
     log.debug("Creating cdpUploaderRestClient with base URL: {}", cdpConfig.uploader().baseUrl());
     return builder.baseUrl(cdpConfig.uploader().baseUrl()).build();
+  }
+
+  /**
+   * RestClient pre-configured with the address-book base URL, used to resolve referenced parties on
+   * read. Shares the builder above, so it inherits the custom SSL context and trace ID propagation.
+   */
+  @Bean
+  public RestClient addressBookRestClient(
+      RestClient.Builder builder, AddressBookConfig addressBookConfig) {
+    log.debug("Creating addressBookRestClient with base URL: {}", addressBookConfig.baseUrl());
+    return builder.baseUrl(addressBookConfig.baseUrl()).build();
   }
 }

@@ -28,17 +28,17 @@ public abstract class NotificationBase {
 
     private AdditionalDetails additionalDetails;
 
-    private Operator placeOfOrigin;
+    private ConsignmentParty placeOfOrigin;
 
-    private Operator consignor;
+    private ConsignmentParty consignor;
 
-    private Operator consignee;
+    private ConsignmentParty consignee;
 
-    private Operator importer;
+    private ConsignmentParty importer;
 
-    private Operator destination;
+    private ConsignmentParty destination;
 
-    private Operator consignment;
+    private ConsignmentParty consignment;
 
     private String cphNumber;
 
