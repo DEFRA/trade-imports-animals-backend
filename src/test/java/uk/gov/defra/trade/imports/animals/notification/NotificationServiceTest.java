@@ -14,6 +14,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.AMEND;
+import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DELETED;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DRAFT;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.SUBMITTED;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
@@ -26,9 +27,11 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Month;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import org.bson.Document;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -1576,6 +1579,261 @@ class NotificationServiceTest {
                 .hasMessageContaining("DELETED");
 
             verify(notificationRepository, never()).save(any());
+        }
+    }
+
+    // EUDPA-323 — merged-aggregate fulfilments handling. Covers the new fields, the PUT/replace
+    // path, the extended amend/cancelAmend/submit snapshot semantics, and copy carrying fulfilments.
+    @Nested
+    class FulfilmentsMerge {
+
+        @BeforeEach
+        void setUp() {
+            // For tests that go through writeWithOutbox (submit path).
+            lenient().when(lockProvider.lock(any()))
+                .thenReturn(Optional.of(mock(SimpleLock.class)));
+        }
+
+        @Test
+        void replace_shouldReplaceContentIncludingFulfilments_whenDraft() {
+            // Given
+            String ref = "GBN-AG-26-REP001";
+            Notification existing = Notification.builder()
+                .id("db-id-1")
+                .referenceNumber(ref)
+                .status(DRAFT)
+                .origin(new Origin("FR", "no", "OLD"))
+                .build();
+            List<Document> newFulfilments = List.of(new Document("obligationId", "abc"));
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(ref)
+                .origin(new Origin("GB", "no", "NEW"))
+                .fulfilments(newFulfilments)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.replace(ref, dto);
+
+            // Then
+            assertThat(result.getOrigin().getCountryCode()).isEqualTo("GB");
+            assertThat(result.getFulfilments()).isEqualTo(newFulfilments);
+            assertThat(result.getUpdated()).isNotNull();
+            verify(notificationRepository).save(existing);
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
+        }
+
+        @Test
+        void replace_shouldReplaceContentIncludingFulfilments_whenAmend() {
+            // Given
+            String ref = "GBN-AG-26-REP002";
+            Notification existing = Notification.builder()
+                .referenceNumber(ref)
+                .status(AMEND)
+                .build();
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(ref)
+                .origin(new Origin("GB", "no", "AMEND-EDIT"))
+                .fulfilments(List.of(new Document("obligationId", "xyz")))
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.replace(ref, dto);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(AMEND);
+            assertThat(result.getOrigin().getInternalReference()).isEqualTo("AMEND-EDIT");
+            assertThat(result.getFulfilments()).hasSize(1);
+        }
+
+        @Test
+        void replace_shouldThrowBadRequest_whenSubmitted() {
+            // Given
+            String ref = "GBN-AG-26-REP003";
+            Notification existing = Notification.builder()
+                .referenceNumber(ref)
+                .status(SUBMITTED)
+                .build();
+            NotificationDto dto = NotificationDto.builder().referenceNumber(ref).build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(existing));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.replace(ref, dto))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("SUBMITTED");
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void replace_shouldThrowBadRequest_whenDeleted() {
+            // Given
+            String ref = "GBN-AG-26-REP004";
+            Notification existing = Notification.builder()
+                .referenceNumber(ref)
+                .status(DELETED)
+                .build();
+            NotificationDto dto = NotificationDto.builder().referenceNumber(ref).build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(existing));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.replace(ref, dto))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("DELETED");
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void replace_shouldThrowNotFound_whenReferenceUnknown() {
+            when(notificationRepository.findByReferenceNumber("GBN-AG-26-ABSENT"))
+                .thenReturn(Optional.empty());
+
+            assertThatThrownBy(
+                () -> notificationService.replace("GBN-AG-26-ABSENT",
+                    NotificationDto.builder().build()))
+                .isInstanceOf(NotFoundException.class);
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void amend_shouldSnapshotFulfilmentsIntoBaseline() {
+            // Given
+            String ref = "GBN-AG-26-AMD001";
+            List<Document> fulfilments = new ArrayList<>(
+                List.of(new Document("obligationId", "abc")));
+            Notification notification = Notification.builder()
+                .id("db-id-a")
+                .referenceNumber(ref)
+                .status(SUBMITTED)
+                .origin(new Origin("GB", "no", "REF"))
+                .fulfilments(fulfilments)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.amendNotification(ref, "trace", null);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(AMEND);
+            assertThat(result.getSubmittedFulfilmentsBaseline()).isEqualTo(fulfilments);
+            // Defensive copy — mutating source after snapshot must not affect baseline.
+            fulfilments.add(new Document("obligationId", "post-snapshot"));
+            assertThat(result.getSubmittedFulfilmentsBaseline()).hasSize(1);
+        }
+
+        @Test
+        void cancelAmend_shouldRestoreFulfilmentsAndSetSubmittedAt() {
+            // Given
+            String ref = "GBN-AG-26-CAN001";
+            List<Document> priorFulfilments = List.of(new Document("obligationId", "prior"));
+            NotificationContentSnapshot baseline = NotificationContentSnapshot.builder()
+                .origin(new Origin("GB", "no", "ORIGINAL"))
+                .build();
+            Notification notification = Notification.builder()
+                .id("db-id-c")
+                .referenceNumber(ref)
+                .status(AMEND)
+                .origin(new Origin("FR", "yes", "EDITED"))
+                .submittedBaseline(baseline)
+                .submittedFulfilmentsBaseline(new ArrayList<>(priorFulfilments))
+                .fulfilments(List.of(new Document("obligationId", "in-flight-edit")))
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.cancelAmendNotification(ref);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
+            assertThat(result.getSubmittedBaseline()).isNull();
+            assertThat(result.getSubmittedFulfilmentsBaseline()).isNull();
+            assertThat(result.getFulfilments()).isEqualTo(priorFulfilments);
+            assertThat(result.getSubmittedAt()).isNotNull();
+            assertThat(result.getOrigin().getInternalReference()).isEqualTo("ORIGINAL");
+        }
+
+        @Test
+        void submit_shouldSetSubmittedAt_andClearBothBaselines_whenSubmittingFromAmend() {
+            // Given
+            String ref = "GBN-AG-26-SBM001";
+            Notification notification = Notification.builder()
+                .id("db-id-s")
+                .referenceNumber(ref)
+                .status(AMEND)
+                .submittedBaseline(NotificationContentSnapshot.builder().build())
+                .submittedFulfilmentsBaseline(new ArrayList<>(
+                    List.of(new Document("obligationId", "prior"))))
+                .fulfilments(List.of(new Document("obligationId", "current")))
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.submitNotification(ref, "trace", null);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
+            assertThat(result.getSubmittedAt()).isNotNull();
+            assertThat(result.getSubmittedBaseline()).isNull();
+            assertThat(result.getSubmittedFulfilmentsBaseline()).isNull();
+            // Fulfilments are the in-flight edit, NOT the baseline (submit-from-amend accepts the edit).
+            assertThat(result.getFulfilments()).extracting("obligationId").containsExactly("current");
+        }
+
+        @Test
+        void copy_shouldCarryFulfilmentsAcross() {
+            // Given
+            String sourceRef = "GBN-AG-26-CPY001";
+            String newRef = "GBN-AG-26-CPY002";
+            List<Document> sourceFulfilments = new ArrayList<>(
+                List.of(new Document("obligationId", "source")));
+            Notification source = Notification.builder()
+                .referenceNumber(sourceRef)
+                .status(SUBMITTED)
+                .origin(new Origin("GB", "no", "SOURCE-REF"))
+                .fulfilments(sourceFulfilments)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+            when(referenceNumberGenerator.generate()).thenReturn(newRef);
+            ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+            when(notificationRepository.save(captor.capture()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.copyNotification(sourceRef);
+
+            // Then — the saved (new) notification carries the source fulfilments.
+            Notification saved = captor.getValue();
+            assertThat(saved.getReferenceNumber()).isEqualTo(newRef);
+            assertThat(saved.getFulfilments()).isEqualTo(sourceFulfilments);
+            // Defensive copy — mutating the source after copy must not affect the new aggregate.
+            sourceFulfilments.add(new Document("obligationId", "post-copy"));
+            assertThat(saved.getFulfilments()).hasSize(1);
         }
     }
 
