@@ -20,6 +20,25 @@ public interface NotificationRepository extends MongoRepository<Notification, St
     List<NotificationReferenceOnly> findAllByReferenceNumberIn(List<String> referenceNumbers);
 
     /**
+     * Fulfilment-view projection over the merged aggregate. Backs {@code GET /notification-fulfilments/{id}}
+     * where {@code {id}} is the caller-passed reference number (see {@link NotificationFulfilmentsView}
+     * for the wire-shape preservation).
+     */
+    Optional<NotificationFulfilmentsView> findFulfilmentsViewByReferenceNumber(String referenceNumber);
+
+    /**
+     * Notification-shape display-view projection over the merged aggregate. Backs
+     * {@code GET /notifications/{ref}} if kept.
+     */
+    Optional<NotificationView> findViewByReferenceNumber(String referenceNumber);
+
+    /**
+     * Paginated notification-shape display-view projection. Backs {@code GET /notifications?…} for
+     * the current temporary dashboard.
+     */
+    Page<NotificationView> findAllViewByStatusIn(List<NotificationStatus> statuses, Pageable pageable);
+
+    /**
      * Notifications due for automatic expiry: a non-null {@code expireAt} at or before {@code now}.
      * The explicit {@code $ne: null} clause guarantees pre-existing notifications (which have no
      * {@code expireAt}) are never selected. Expressed as a {@code @Query} because a derived
