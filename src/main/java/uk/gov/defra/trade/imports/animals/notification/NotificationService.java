@@ -11,7 +11,6 @@ import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -42,6 +41,7 @@ public class NotificationService {
     private static final String CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER = "Cannot find notification with reference number: ";
     private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
     private static final int MAX_REF_RETRIES = 3;
+    private static final int MAX_LOCK_RETRIES = 2;
   
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
@@ -165,7 +165,6 @@ public class NotificationService {
             correlationId,
             NotificationStatus.SUBMITTED,
             OutboxEventType.NOTIFICATION_SUBMITTED,
-            "submission",
             actor);
     }
 
@@ -188,7 +187,6 @@ public class NotificationService {
             correlationId,
             NotificationStatus.AMEND,
             OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED,
-            "amend",
             actor);
     }
 
@@ -221,43 +219,57 @@ public class NotificationService {
         String correlationId,
         NotificationStatus targetStatus,
         OutboxEventType eventType,
-        String operationLabel,
         Actor actor) {
-        String aggregateId = OutboxService.buildAggregateId(referenceNumber);
-        LockConfiguration lockConfig = new LockConfiguration(
-            Instant.now(),
-            "outbox-write:" + aggregateId,
-            LOCK_AT_MOST_FOR,
-            lockAtLeastFor);
+        return executeWithOutboxLock(
+            OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
+                if (targetStatus == NotificationStatus.SUBMITTED
+                    && notification.getStatus() == NotificationStatus.AMEND) {
+                    notification.setSubmittedBaseline(null);
+                }
+                notification.setStatus(targetStatus);
+                notification.setUpdated(LocalDateTime.now());
+                Notification saved = notificationRepository.save(notification);
+                outboxService.appendEvent(saved, eventType, correlationId, actor);
+                return saved;
+            });
+    }
 
-        try {
-            LockingTaskExecutor.TaskResult<Notification> result = lockingTaskExecutor.executeWithLock(
-                (LockingTaskExecutor.TaskWithResult<Notification>) () -> {
-                    if (targetStatus == NotificationStatus.SUBMITTED
-                        && notification.getStatus() == NotificationStatus.AMEND) {
-                        notification.setSubmittedBaseline(null);
-                    }
-                    notification.setStatus(targetStatus);
-                    notification.setUpdated(LocalDateTime.now());
-                    Notification saved = notificationRepository.save(notification);
-                    outboxService.appendEvent(saved, eventType, correlationId, actor);
-                    return saved;
-                },
-                lockConfig);
-
-            if (!result.wasExecuted()) {
-                throw new OutboxWriteException(
-                    "Could not acquire outbox lock for " + operationLabel,
-                    aggregateId, null, correlationId);
+    private <T> T executeWithOutboxLock(
+        String aggregateId,
+        String correlationId,
+        String operationLabel,
+        LockingTaskExecutor.TaskWithResult<T> task) {
+        String lockName = "outbox-write:" + aggregateId;
+        for (int attempt = 0; attempt <= MAX_LOCK_RETRIES; attempt++) {
+            if (attempt > 0) {
+                try {
+                    Thread.sleep(lockAtLeastFor.toMillis());
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw new OutboxWriteException(
+                        "Interrupted waiting for outbox lock for " + operationLabel,
+                        aggregateId, null, correlationId, ie);
+                }
             }
-            return result.getResult();
-        } catch (OutboxWriteException | DataAccessException e) {
-            throw e;
-        } catch (Throwable e) {
-            throw new OutboxWriteException(
-                "Outbox write failed during " + operationLabel,
-                aggregateId, null, correlationId, e);
+            LockConfiguration lockConfig = new LockConfiguration(
+                Instant.now(), lockName, LOCK_AT_MOST_FOR, lockAtLeastFor);
+            try {
+                LockingTaskExecutor.TaskResult<T> result =
+                    lockingTaskExecutor.executeWithLock(task, lockConfig);
+                if (result.wasExecuted()) {
+                    return result.getResult();
+                }
+            } catch (RuntimeException e) {
+                throw e;
+            } catch (Throwable e) {
+                throw new OutboxWriteException(
+                    "Outbox write failed during " + operationLabel,
+                    aggregateId, null, correlationId, e);
+            }
         }
+        throw new OutboxWriteException(
+            "Could not acquire outbox lock for " + operationLabel,
+            aggregateId, null, correlationId);
     }
 
     @Transactional
@@ -380,45 +392,18 @@ public class NotificationService {
 
     private Notification updateNotification(NotificationDto dto, String correlationId, Actor actor) {
         String referenceNumber = dto.getReferenceNumber();
-        String aggregateId = OutboxService.buildAggregateId(referenceNumber);
-        LockConfiguration lockConfig = new LockConfiguration(
-            Instant.now(),
-            "outbox-write:" + aggregateId,
-            LOCK_AT_MOST_FOR,
-            lockAtLeastFor);
-
-        try {
-            LockingTaskExecutor.TaskResult<Notification> result = lockingTaskExecutor.executeWithLock(
-                (LockingTaskExecutor.TaskWithResult<Notification>) () -> {
-                    Notification existing = notificationRepository.findByReferenceNumber(referenceNumber)
-                        .orElseThrow(() -> new NotFoundException(
-                            CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-                    if (existing.getStatus() != NotificationStatus.DRAFT
-                        && existing.getStatus() != NotificationStatus.AMEND) {
-                        throw new BadRequestException(
-                            "Cannot save notification with status: " + existing.getStatus());
-                    }
-                    log.info("Updating notification {}", referenceNumber);
-                    setNotificationDetails(dto, existing);
-                    Notification saved = notificationRepository.save(existing);
-                    outboxService.appendEvent(saved, OutboxEventType.NOTIFICATION_EDITED, correlationId, actor);
-                    return saved;
-                },
-                lockConfig);
-
-            if (!result.wasExecuted()) {
-                throw new OutboxWriteException(
-                    "Could not acquire outbox lock for notification save",
-                    aggregateId, null, correlationId);
-            }
-            return result.getResult();
-        } catch (OutboxWriteException | DataAccessException | NotFoundException | BadRequestException e) {
-            throw e;
-        } catch (Throwable e) {
-            throw new OutboxWriteException(
-                "Outbox write failed during notification save",
-                aggregateId, null, correlationId, e);
+        Notification existing = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+        if (existing.getStatus() != NotificationStatus.DRAFT
+            && existing.getStatus() != NotificationStatus.AMEND) {
+            throw new BadRequestException(
+                "Cannot save notification with status: " + existing.getStatus());
         }
+        log.info("Updating notification {}", referenceNumber);
+        setNotificationDetails(dto, existing);
+        return writeWithOutbox(existing, referenceNumber, correlationId, existing.getStatus(),
+            OutboxEventType.NOTIFICATION_EDITED, actor);
     }
 
     private void setNotificationDetails(NotificationDto dto, Notification notification) {

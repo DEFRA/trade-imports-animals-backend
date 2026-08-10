@@ -345,6 +345,9 @@ class NotificationServiceTest {
         void saveNotification_shouldThrowOutboxWriteException_whenLockNotAcquired() {
             // Given
             String referenceNumber = "GBN-AG-26-LOCK01";
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(Notification.builder()
+                    .referenceNumber(referenceNumber).status(DRAFT).build()));
             when(lockProvider.lock(any())).thenReturn(Optional.empty());
 
             NotificationDto dto = NotificationDto.builder().referenceNumber(referenceNumber).build();
@@ -359,8 +362,41 @@ class NotificationServiceTest {
                     assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
                 });
 
+            verify(lockProvider, times(3)).lock(any());
             verify(notificationRepository, never()).save(any());
             verify(outboxService, never()).appendEvent(any(), any(), any(), any());
+        }
+
+        @Test
+        void saveNotification_shouldRetryAndSucceed_whenFirstLockAttemptFails() {
+            // Given — first lock attempt fails, second succeeds
+            String referenceNumber = "GBN-AG-26-RETRY1";
+            Notification existing = Notification.builder()
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .build();
+            Notification saved = Notification.builder()
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(Notification.class))).thenReturn(saved);
+
+            when(lockProvider.lock(any()))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.of(mock(SimpleLock.class)));
+
+            NotificationDto dto = NotificationDto.builder().referenceNumber(referenceNumber).build();
+
+            // When
+            Notification result = notificationService.saveNotification(dto, "trace-retry", null);
+
+            // Then
+            assertThat(result).isEqualTo(saved);
+            verify(lockProvider, times(2)).lock(any());
+            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_EDITED), any(), any());
         }
 
         @Test
@@ -970,6 +1006,7 @@ class NotificationServiceTest {
                     assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
                 });
 
+            verify(lockProvider, times(3)).lock(any());
             verify(notificationRepository, never()).save(any());
         }
 
@@ -1225,6 +1262,7 @@ class NotificationServiceTest {
                     assertThat(owe.getCorrelationId()).isEqualTo("trace-amd-6");
                 });
 
+            verify(lockProvider, times(3)).lock(any());
             verify(notificationRepository, never()).save(any());
         }
 
