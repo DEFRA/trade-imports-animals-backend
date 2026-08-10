@@ -22,6 +22,7 @@ import uk.gov.defra.trade.imports.animals.notification.Species;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
 import uk.gov.defra.trade.imports.animals.notification.Transporter;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
+import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 class GbnAgMapperTest {
 
@@ -376,6 +377,48 @@ class GbnAgMapperTest {
                     .build())
                 .build())
             .build();
+    }
+
+    @Test
+    void shouldEmitNullNameAndPostalAddress_whenConsignorIsUnresolvedReference() {
+        // TradeParty.from does not resolve address-book references; NotificationService must call
+        // PartyResolver.resolveForOutbox before appendEvent, or GBNAG receives nulls.
+        Notification notification = Notification.builder()
+            .referenceNumber("GBN-AG-26-REFMAP")
+            .consignor(NotificationTestData.reference("665f1c2ab3e4d51a2c9d0e77"))
+            .build();
+
+        TradeParty consignor = mapper.toGbnAgEventData(notification)
+            .specifiedConsignment().consignorParty();
+
+        assertThat(consignor.name()).isNull();
+        assertThat(consignor.postalAddress()).isNull();
+    }
+
+    @Test
+    void shouldMapResolvedReferencedParty_toConsignorNameAndPostalAddress() {
+        // Shape after PartyResolver.resolveForOutbox: addressId retained with filled details.
+        Notification notification = Notification.builder()
+            .referenceNumber("GBN-AG-26-REFRES")
+            .consignor(ConsignmentParty.builder()
+                .addressId("665f1c2ab3e4d51a2c9d0e77")
+                .name("Astra Rosales")
+                .address(Address.builder()
+                    .addressLine1("43 East Hague Extension")
+                    .townOrCity("Vernier")
+                    .postcode("30055")
+                    .countryCode("CH")
+                    .build())
+                .build())
+            .build();
+
+        TradeParty consignor = mapper.toGbnAgEventData(notification)
+            .specifiedConsignment().consignorParty();
+
+        assertThat(consignor.name()).isEqualTo("Astra Rosales");
+        assertThat(consignor.postalAddress().lineOne()).isEqualTo("43 East Hague Extension");
+        assertThat(consignor.postalAddress().cityName()).isEqualTo("Vernier");
+        assertThat(consignor.postalAddress().countryId()).isEqualTo("CH");
     }
 
     private static ConsignmentParty party(String name, Address address) {

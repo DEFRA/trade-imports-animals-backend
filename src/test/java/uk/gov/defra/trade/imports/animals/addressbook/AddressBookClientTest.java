@@ -64,17 +64,14 @@ class AddressBookClientTest {
             // cv-010 — the address book requires the header to match the organisation in the path.
             server.expect(requestTo(ADDRESS_URL))
                 .andExpect(method(HttpMethod.GET))
-                .andExpect(header(AddressBookClient.ORGANISATION_ID_HEADER, ORG_ID))
+                .andExpect(header("Trade-Imports-Organisation-Id", ORG_ID))
                 .andRespond(withSuccess(ADDRESS_JSON, MediaType.APPLICATION_JSON));
 
             Optional<AddressBookRecord> result = addressBookClient.findById(ORG_ID, ADDRESS_ID);
 
-            assertThat(result).isPresent();
-            assertThat(result.get().name()).isEqualTo("Astra Rosales");
-            assertThat(result.get().postcode()).isEqualTo("30055");
-            assertThat(result.get().countryCode()).isEqualTo("CH");
-            assertThat(result.get().email()).isEqualTo("astra@example.com");
-            assertThat(result.get().deleted()).isFalse();
+            assertThat(result).contains(new AddressBookRecord(
+                ADDRESS_ID, "Astra Rosales", "43 East Hague Extension", null, "Vernier",
+                "Soleure", "30055", "CH", "+41 22 000 0000", "astra@example.com", false));
             server.verify();
         }
 

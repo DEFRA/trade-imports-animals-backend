@@ -51,7 +51,7 @@ public class PartyResolver {
         Map<String, Optional<AddressBookRecord>> lookups = new HashMap<>();
         Function<String, Optional<AddressBookRecord>> lookup = addressId ->
             lookups.computeIfAbsent(addressId, id -> addressBookClient.findById(organisationId, id));
-        return party -> resolve(party, lookup);
+        return party -> resolve(party, organisationId, lookup);
     }
 
     /**
@@ -111,7 +111,7 @@ public class PartyResolver {
             return party;
         }
         ConsignmentParty resolved = resolve(
-            party, id -> addressBookClient.findById(organisationId, id));
+            party, organisationId, id -> addressBookClient.findById(organisationId, id));
         if (resolved == null) {
             log.error(
                 "Address-book party could not be resolved for outbox (addressId={})",
@@ -132,14 +132,27 @@ public class PartyResolver {
      * propagates, because an outage must not look identical to a deletion.
      */
     private ConsignmentParty resolve(
-        ConsignmentParty party, Function<String, Optional<AddressBookRecord>> lookup) {
+        ConsignmentParty party,
+        String organisationId,
+        Function<String, Optional<AddressBookRecord>> lookup) {
         if (party == null || party.getAddressId() == null) {
             return party;
         }
-        return lookup.apply(party.getAddressId())
-            .filter(record -> !record.deleted())
-            .map(record -> toParty(party.getAddressId(), record))
-            .orElse(null);
+        Optional<AddressBookRecord> found = lookup.apply(party.getAddressId());
+        if (found.isEmpty()) {
+            log.info(
+                "Address-book party not found (organisationId={}, addressId={})",
+                organisationId, party.getAddressId());
+            return null;
+        }
+        AddressBookRecord record = found.get();
+        if (record.deleted()) {
+            log.info(
+                "Address-book party is soft-deleted (organisationId={}, addressId={})",
+                organisationId, party.getAddressId());
+            return null;
+        }
+        return toParty(party.getAddressId(), record);
     }
 
     private ConsignmentParty toParty(String addressId, AddressBookRecord record) {

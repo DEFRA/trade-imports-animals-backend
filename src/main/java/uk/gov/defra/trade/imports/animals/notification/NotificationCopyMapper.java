@@ -44,8 +44,10 @@ public class NotificationCopyMapper {
         if (source == null) {
             return null;
         }
+        if (source.getAddressId() != null) {
+            return ConsignmentParty.reference(source.getAddressId());
+        }
         return ConsignmentParty.builder()
-            .addressId(source.getAddressId())
             .name(source.getName())
             .email(source.getEmail())
             .phone(source.getPhone())

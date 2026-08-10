@@ -13,6 +13,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.AMEND;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DRAFT;
@@ -66,6 +67,7 @@ import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.outbox.Actor;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
@@ -808,6 +810,36 @@ class NotificationServiceTest {
         }
 
         @Test
+        void submitNotification_shouldResolveReferencedParty_beforeAppendingOutboxEvent() {
+            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+            String referenceNumber = "GBN-AG-26-REF011";
+            Notification notification = Notification.builder()
+                .id("notif-id-ref")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .consignor(NotificationTestData.reference(addressId))
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            when(addressBookClient.findById(ORG_ID, addressId))
+                .thenReturn(Optional.of(new AddressBookRecord(
+                    addressId, "Astra Rosales", "43 East Hague Extension", null, "Vernier",
+                    "Soleure", "30055", "CH", "+41 22 000 0000", "astra@example.com", false)));
+            Actor actor = Actor.builder().organisationId(ORG_ID).build();
+
+            notificationService.submitNotification(referenceNumber, "trace-ref-001", actor);
+
+            ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+            verify(outboxService).appendEvent(
+                captor.capture(), eq(OutboxEventType.NOTIFICATION_SUBMITTED), eq("trace-ref-001"),
+                eq(actor));
+            assertThat(captor.getValue().getConsignor().getName()).isEqualTo("Astra Rosales");
+            assertThat(captor.getValue().getConsignor().getAddress().getPostcode()).isEqualTo("30055");
+        }
+
+        @Test
         void submitNotification_shouldWriteOutboxEvent_afterSavingNotification() {
             // Given
             String referenceNumber = "GBN-AG-26-ABC123";
@@ -1399,11 +1431,20 @@ class NotificationServiceTest {
 
             NotificationResponse response = notificationService.findByRef(ref, ORG_ID);
 
-            assertThat(response.consignor().getAddressId()).isEqualTo(ADDRESS_ID);
-            assertThat(response.consignor().getName()).isEqualTo("Astra Rosales");
-            assertThat(response.consignor().getEmail()).isEqualTo("astra@example.com");
-            assertThat(response.consignor().getAddress().getPostcode()).isEqualTo("30055");
-            assertThat(response.consignor().getAddress().getCountryCode()).isEqualTo("CH");
+            assertThat(response.consignor()).isEqualTo(ConsignmentParty.builder()
+                .addressId(ADDRESS_ID)
+                .name("Astra Rosales")
+                .email("astra@example.com")
+                .phone("+41 22 000 0000")
+                .address(Address.builder()
+                    .addressLine1("43 East Hague Extension")
+                    .addressLine2(null)
+                    .townOrCity("Vernier")
+                    .county("Soleure")
+                    .postcode("30055")
+                    .countryCode("CH")
+                    .build())
+                .build());
         }
 
         @Test
@@ -1415,9 +1456,48 @@ class NotificationServiceTest {
             when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
                 .thenReturn(Optional.of(record(false)));
 
-            notificationService.findByRef(ref, ORG_ID);
+            NotificationResponse response = notificationService.findByRef(ref, ORG_ID);
 
+            assertThat(response.consignor().getName()).isEqualTo("Astra Rosales");
             verify(addressBookClient).findById(ORG_ID, ADDRESS_ID);
+            verifyNoMoreInteractions(addressBookClient);
+        }
+
+        @Test
+        void findByRef_shouldFillInAllSixReferencedRoles_andFetchSharedAddressOnce() {
+            String ref = "GBN-AG-26-REF010";
+            String sharedId = ADDRESS_ID;
+            String otherId = "665f1c2ab3e4d51a2c9d0e88";
+            Notification notification = Notification.builder()
+                .referenceNumber(ref)
+                .status(DRAFT)
+                .placeOfOrigin(NotificationTestData.reference(sharedId))
+                .consignor(NotificationTestData.reference(sharedId))
+                .consignee(NotificationTestData.reference(otherId))
+                .importer(NotificationTestData.reference(otherId))
+                .destination(NotificationTestData.reference(sharedId))
+                .consignment(NotificationTestData.reference(otherId))
+                .build();
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notification));
+            when(documentService.findByNotificationRef(ref)).thenReturn(Collections.emptyList());
+            when(addressBookClient.findById(ORG_ID, sharedId))
+                .thenReturn(Optional.of(record(false)));
+            when(addressBookClient.findById(ORG_ID, otherId))
+                .thenReturn(Optional.of(new AddressBookRecord(
+                    otherId, "Other Party", "1 Other Street", null, "Leeds", "West Yorkshire",
+                    "LS1 1AA", "GB", "+44 113 000 0000", "other@example.com", false)));
+
+            NotificationResponse response = notificationService.findByRef(ref, ORG_ID);
+
+            assertThat(response.placeOfOrigin().getName()).isEqualTo("Astra Rosales");
+            assertThat(response.consignor().getName()).isEqualTo("Astra Rosales");
+            assertThat(response.destination().getName()).isEqualTo("Astra Rosales");
+            assertThat(response.consignee().getName()).isEqualTo("Other Party");
+            assertThat(response.importer().getName()).isEqualTo("Other Party");
+            assertThat(response.consignment().getName()).isEqualTo("Other Party");
+            verify(addressBookClient, times(1)).findById(ORG_ID, sharedId);
+            verify(addressBookClient, times(1)).findById(ORG_ID, otherId);
         }
 
         @Test

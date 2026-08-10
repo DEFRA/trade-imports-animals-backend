@@ -132,13 +132,16 @@ public class NotificationController {
         description = "Returns a single notification with its accompanying documents")
     @ApiResponse(responseCode = "200", description = "Notification returned",
         content = @Content(schema = @Schema(implementation = NotificationResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Organisation header missing", content = @Content)
+    @ApiResponse(responseCode = "400", description = "Organisation header missing or malformed", content = @Content)
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.getNotificationByRef.time")
     public ResponseEntity<NotificationResponse> findByRef(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @RequestHeader(HEADER_ORGANISATION_ID) @NotBlank String organisationId) {
+        @RequestHeader(HEADER_ORGANISATION_ID)
+        @NotBlank
+        @Pattern(regexp = "^[A-Za-z0-9_-]{1,64}$")
+        String organisationId) {
         log.debug("Fetching notification {}", referenceNumber);
         return ResponseEntity.ok(notificationService.findByRef(referenceNumber, organisationId));
     }
@@ -150,13 +153,16 @@ public class NotificationController {
             + "Optional referenceNumber: exact match against a complete notification reference.")
     @ApiResponse(responseCode = "200", description = "Paginated notifications returned",
         content = @Content(schema = @Schema(implementation = NotificationPageResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Organisation header missing", content = @Content)
+    @ApiResponse(responseCode = "400", description = "Organisation header missing or malformed", content = @Content)
     @Timed("controller.getAllNotifications.time")
     public NotificationPageResponse findAll(
         @RequestParam(defaultValue = "1") @Min(1) int page,
         @RequestParam(required = false) String sort,
         @RequestParam(required = false) String referenceNumber,
-        @RequestHeader(HEADER_ORGANISATION_ID) @NotBlank String organisationId) {
+        @RequestHeader(HEADER_ORGANISATION_ID)
+        @NotBlank
+        @Pattern(regexp = "^[A-Za-z0-9_-]{1,64}$")
+        String organisationId) {
         log.debug("GET /notifications?page={}&sort={}&referenceNumber={}", page, sort, referenceNumber);
         return notificationService.findAll(page, sort, referenceNumber, organisationId);
     }

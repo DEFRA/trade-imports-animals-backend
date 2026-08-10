@@ -7,6 +7,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.cons
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.importers;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.placesOfOrigin;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.reference;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
@@ -150,6 +151,19 @@ class NotificationContentSnapshotTest {
             assertThat(snapshot.getConsignor().getName()).isEqualTo("No address party");
             assertThat(snapshot.getConsignor().getAddress()).isNull();
         }
+
+        @Test
+        void from_shouldRoundTripReferencedPartyAddressId() {
+            Notification source = Notification.builder()
+                .consignor(reference("addr-1"))
+                .build();
+
+            NotificationContentSnapshot snapshot = NotificationContentSnapshot.from(source);
+
+            assertThat(snapshot.getConsignor().getAddressId()).isEqualTo("addr-1");
+            assertThat(snapshot.getConsignor().getName()).isNull();
+            assertThat(snapshot.getConsignor().getAddress()).isNull();
+        }
     }
 
     @Nested
@@ -212,6 +226,19 @@ class NotificationContentSnapshotTest {
             assertThat(target.getAdditionalDetails()).isNull();
             assertThat(target.getConsignor()).isNull();
             assertThat(target.getTransport()).isNull();
+        }
+
+        @Test
+        void applyTo_shouldRestoreReferencedPartyAddressId() {
+            NotificationContentSnapshot snapshot = NotificationContentSnapshot.from(
+                Notification.builder().consignor(reference("addr-1")).build());
+            Notification target = Notification.builder().build();
+
+            snapshot.applyTo(target);
+
+            assertThat(target.getConsignor().getAddressId()).isEqualTo("addr-1");
+            assertThat(target.getConsignor().getName()).isNull();
+            assertThat(target.getConsignor().getAddress()).isNull();
         }
     }
 

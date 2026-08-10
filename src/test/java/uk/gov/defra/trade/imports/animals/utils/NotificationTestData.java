@@ -59,7 +59,7 @@ public final class NotificationTestData {
 
     /** A party held as an address-book reference — no details until it is resolved on read. */
     public static ConsignmentParty reference(String addressId) {
-        return ConsignmentParty.builder().addressId(addressId).build();
+        return ConsignmentParty.reference(addressId);
     }
 
     public static List<Transporter> transporters() {
@@ -99,7 +99,9 @@ public final class NotificationTestData {
         String addressLine1, String townOrCity, String postcode, String countryCode) {
         return Address.builder()
             .addressLine1(addressLine1)
+            .addressLine2("Suite 1")
             .townOrCity(townOrCity)
+            .county("Test County")
             .postcode(postcode)
             .countryCode(countryCode)
             .build();

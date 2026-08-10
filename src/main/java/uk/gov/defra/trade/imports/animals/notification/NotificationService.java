@@ -411,14 +411,14 @@ public class NotificationService {
         notification.setCommodity(dto.getCommodity());
         notification.setReasonForImport(dto.getReasonForImport());
         notification.setAdditionalDetails(dto.getAdditionalDetails());
-        notification.setPlaceOfOrigin(dto.getPlaceOfOrigin());
-        notification.setConsignor(dto.getConsignor());
-        notification.setConsignee(dto.getConsignee());
-        notification.setImporter(dto.getImporter());
-        notification.setDestination(dto.getDestination());
+        notification.setPlaceOfOrigin(ConsignmentParty.forStorage(dto.getPlaceOfOrigin()));
+        notification.setConsignor(ConsignmentParty.forStorage(dto.getConsignor()));
+        notification.setConsignee(ConsignmentParty.forStorage(dto.getConsignee()));
+        notification.setImporter(ConsignmentParty.forStorage(dto.getImporter()));
+        notification.setDestination(ConsignmentParty.forStorage(dto.getDestination()));
         notification.setCphNumber(dto.getCphNumber());
         notification.setTransport(dto.getTransport());
-        notification.setConsignment(dto.getConsignment());
+        notification.setConsignment(ConsignmentParty.forStorage(dto.getConsignment()));
         notification.setUpdated(LocalDateTime.now());
     }
 

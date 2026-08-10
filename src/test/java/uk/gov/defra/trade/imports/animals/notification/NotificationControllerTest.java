@@ -737,13 +737,21 @@ class NotificationControllerTest {
                 /* dateOfIssue */ null, ScanStatus.COMPLETE,
                 /* files */ Collections.emptyList(), /* created */ null, /* updated */ null);
 
+            ConsignmentParty resolvedConsignor = ConsignmentParty.builder()
+                .addressId("665f1c2ab3e4d51a2c9d0e77")
+                .name(consignors().getFirst().getName())
+                .email(consignors().getFirst().getEmail())
+                .phone(consignors().getFirst().getPhone())
+                .address(consignors().getFirst().getAddress())
+                .build();
+
             NotificationResponse response = NotificationResponse.builder()
                 .id("notif-id-001")
                 .referenceNumber(REF_1)
                 .origin(origin)
                 .commodity(Commodity.builder().name("Live bovine animals").build())
                 .reasonForImport("PERMANENT")
-                .consignor(consignors().getFirst())
+                .consignor(resolvedConsignor)
                 .destination(destinations().getFirst())
                 .consignment(consignments().getFirst())
                 .accompanyingDocuments(List.of(document))
@@ -758,6 +766,7 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
+                .andExpect(jsonPath("$.consignor.addressId").value("665f1c2ab3e4d51a2c9d0e77"))
                 .andExpect(jsonPath("$.consignor.name").value(consignors().getFirst().getName()))
                 .andExpect(jsonPath("$.destination.name").value(destinations().getFirst().getName()))
                 .andExpect(jsonPath("$.consignment.name")

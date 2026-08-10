@@ -36,4 +36,22 @@ public class ConsignmentParty {
     private String email;
     private String phone;
     private Address address;
+
+    /**
+     * A party held as an address-book reference — details are empty until resolved on read.
+     */
+    public static ConsignmentParty reference(String addressId) {
+        return ConsignmentParty.builder().addressId(addressId).build();
+    }
+
+    /**
+     * Normalises a party for persistence: when {@code addressId} is set, drop inline details so a
+     * resolved (or stale) copy is never stored beside the reference. Inline parties pass through.
+     */
+    public static ConsignmentParty forStorage(ConsignmentParty party) {
+        if (party == null || party.getAddressId() == null) {
+            return party;
+        }
+        return reference(party.getAddressId());
+    }
 }

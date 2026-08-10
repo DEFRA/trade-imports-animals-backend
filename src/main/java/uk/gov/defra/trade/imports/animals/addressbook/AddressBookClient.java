@@ -21,7 +21,7 @@ import org.springframework.web.client.RestClient;
 @Slf4j
 public class AddressBookClient {
 
-    static final String ORGANISATION_ID_HEADER = "Trade-Imports-Organisation-Id";
+    private static final String ORGANISATION_ID_HEADER = "Trade-Imports-Organisation-Id";
 
     private static final String ADDRESS_BY_ID_PATH = "/organisation/{orgId}/addresses/{addressId}";
 
