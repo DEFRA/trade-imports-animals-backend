@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -50,6 +51,21 @@ public class NotificationController {
         log.info("POST /notifications - countryCode={}",
             notificationDto.getOrigin() != null ? notificationDto.getOrigin().getCountryCode() : null);
         return ResponseEntity.ok(notificationService.saveOriginOfImport(notificationDto));
+    }
+
+    @PutMapping("/{referenceNumber}")
+    @Operation(summary = "Replace notification content",
+        description = "Replaces the merged notification content (notification-shape fields + opaque fulfilments payload) at the given reference. Requires DRAFT or AMEND status.")
+    @ApiResponse(responseCode = "200", description = "Notification content replaced",
+        content = @Content(schema = @Schema(implementation = Notification.class)))
+    @ApiResponse(responseCode = "400", description = "Notification not in a replaceable state", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
+    @Timed("controller.replaceNotification.time")
+    public ResponseEntity<Notification> replace(
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
+        @Valid @RequestBody NotificationDto notificationDto) {
+        log.info("PUT /notifications/{} - Replacing notification content", referenceNumber);
+        return ResponseEntity.ok(notificationService.replace(referenceNumber, notificationDto));
     }
 
     @PostMapping("/{referenceNumber}/copy")

@@ -92,6 +92,26 @@ public class NotificationService {
         }
     }
 
+    /**
+     * Replace the merged notification content (notification-shape fields + opaque fulfilments
+     * payload) at the given reference. Backs {@code PUT /notifications/{ref}}. Requires DRAFT or
+     * AMEND status — SUBMITTED or DELETED notifications cannot be replaced via this path
+     * (submit / amend / cancelAmend / softDelete are the state-transition entrypoints).
+     */
+    @Transactional
+    public Notification replace(String referenceNumber, NotificationDto dto) {
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+        if (notification.getStatus() != NotificationStatus.DRAFT
+            && notification.getStatus() != NotificationStatus.AMEND) {
+            throw new BadRequestException(
+                "Cannot replace notification content with status: " + notification.getStatus());
+        }
+        setNotificationDetails(dto, notification);
+        return notificationRepository.save(notification);
+    }
+
     @Transactional
     public Notification copyNotification(String referenceNumber) {
         Notification source = notificationRepository.findByReferenceNumber(referenceNumber)
