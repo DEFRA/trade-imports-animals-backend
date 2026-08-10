@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -181,6 +182,8 @@ public class NotificationService {
         }
 
         notification.setSubmittedBaseline(NotificationContentSnapshot.from(notification));
+        notification.setSubmittedFulfilmentsBaseline(
+            notification.getFulfilments() == null ? null : new ArrayList<>(notification.getFulfilments()));
 
         return writeWithOutbox(
             notification,
@@ -209,8 +212,14 @@ public class NotificationService {
 
         notification.getSubmittedBaseline().applyTo(notification);
         notification.setSubmittedBaseline(null);
+        notification.setFulfilments(
+            notification.getSubmittedFulfilmentsBaseline() == null
+                ? null
+                : new ArrayList<>(notification.getSubmittedFulfilmentsBaseline()));
+        notification.setSubmittedFulfilmentsBaseline(null);
         notification.setStatus(NotificationStatus.SUBMITTED);
         notification.setUpdated(LocalDateTime.now());
+        notification.setSubmittedAt(LocalDateTime.now());
         log.info("Cancelled amendment for notification {}", referenceNumber);
         return notificationRepository.save(notification);
     }
@@ -236,9 +245,13 @@ public class NotificationService {
                     if (targetStatus == NotificationStatus.SUBMITTED
                         && notification.getStatus() == NotificationStatus.AMEND) {
                         notification.setSubmittedBaseline(null);
+                        notification.setSubmittedFulfilmentsBaseline(null);
                     }
                     notification.setStatus(targetStatus);
                     notification.setUpdated(LocalDateTime.now());
+                    if (targetStatus == NotificationStatus.SUBMITTED) {
+                        notification.setSubmittedAt(LocalDateTime.now());
+                    }
                     Notification saved = notificationRepository.save(notification);
                     outboxService.appendEvent(saved, eventType, correlationId, actor);
                     return saved;
