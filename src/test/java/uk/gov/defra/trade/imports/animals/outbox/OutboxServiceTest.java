@@ -306,10 +306,34 @@ class OutboxServiceTest {
         }
 
         @Test
-        void appendEvent_shouldNotAppendStatusChange_whenStatusUnchangedFromPriorEvent() {
-            // Given — prior event already records DRAFT, new event is also DRAFT (page save)
+        void appendEvent_shouldAppendDraftStatusChange_forFirstPageSave() {
+            // Given — first-ever event for this notification is a DRAFT page save (no prior events)
             Notification notification = Notification.builder()
                 .referenceNumber("GBN-AG-26-EDIT01")
+                .status(NotificationStatus.DRAFT)
+                .build();
+
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
+                "Imports.Notification.GBN-AG.GBN-AG-26-EDIT01"))
+                .thenReturn(Optional.empty());
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            outboxService.appendEvent(
+                notification, OutboxEventType.NOTIFICATION_EDITED, "trace-edit-1", null);
+
+            // Then — DRAFT recorded as the starting state
+            ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+            verify(outboxEventRepository).save(captor.capture());
+            assertThat(captor.getValue().getStatusChanges()).hasSize(1);
+            assertThat(captor.getValue().getStatusChanges().getFirst().getStatus()).isEqualTo(NotificationStatus.DRAFT);
+        }
+
+        @Test
+        void appendEvent_shouldNotDuplicateStatusChange_forConsecutivePageSavesWithSameStatus() {
+            // Given — second DRAFT page save; prior event already records DRAFT
+            Notification notification = Notification.builder()
+                .referenceNumber("GBN-AG-26-EDIT02")
                 .status(NotificationStatus.DRAFT)
                 .build();
             StatusChange priorChange = StatusChange.builder()
@@ -318,26 +342,59 @@ class OutboxServiceTest {
                 .actor(null)
                 .build();
             OutboxEvent latestEvent = OutboxEvent.builder()
-                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-EDIT01")
+                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-EDIT02")
                 .aggregateVersion(1L)
                 .statusChanges(List.of(priorChange))
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-EDIT01"))
+                "Imports.Notification.GBN-AG.GBN-AG-26-EDIT02"))
                 .thenReturn(Optional.of(latestEvent));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             // When
             outboxService.appendEvent(
-                notification, OutboxEventType.NOTIFICATION_EDITED, "trace-edit-1", null);
+                notification, OutboxEventType.NOTIFICATION_EDITED, "trace-edit-2", null);
 
-            // Then — statusChanges still has only the original DRAFT entry
+            // Then — statusChanges unchanged; DRAFT already recorded
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
             verify(outboxEventRepository).save(captor.capture());
-            OutboxEvent saved = captor.getValue();
-            assertThat(saved.getStatusChanges()).hasSize(1);
-            assertThat(saved.getStatusChanges().getFirst().getStatus()).isEqualTo(NotificationStatus.DRAFT);
+            assertThat(captor.getValue().getStatusChanges()).hasSize(1);
+            assertThat(captor.getValue().getStatusChanges().getFirst().getStatus()).isEqualTo(NotificationStatus.DRAFT);
+        }
+
+        @Test
+        void appendEvent_shouldNotDuplicateStatusChange_forAmendPhasePageSave() {
+            // Given — AMEND phase page save; prior event already records AMEND
+            Notification notification = Notification.builder()
+                .referenceNumber("GBN-AG-26-EDIT03")
+                .status(NotificationStatus.AMEND)
+                .build();
+            StatusChange priorChange = StatusChange.builder()
+                .status(NotificationStatus.AMEND)
+                .dateChanged(java.time.Instant.parse("2026-01-01T11:00:00Z"))
+                .actor(null)
+                .build();
+            OutboxEvent latestEvent = OutboxEvent.builder()
+                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-EDIT03")
+                .aggregateVersion(2L)
+                .statusChanges(List.of(priorChange))
+                .build();
+
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
+                "Imports.Notification.GBN-AG.GBN-AG-26-EDIT03"))
+                .thenReturn(Optional.of(latestEvent));
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            outboxService.appendEvent(
+                notification, OutboxEventType.NOTIFICATION_EDITED, "trace-edit-3", null);
+
+            // Then — statusChanges unchanged; AMEND already recorded
+            ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+            verify(outboxEventRepository).save(captor.capture());
+            assertThat(captor.getValue().getStatusChanges()).hasSize(1);
+            assertThat(captor.getValue().getStatusChanges().getFirst().getStatus()).isEqualTo(NotificationStatus.AMEND);
         }
 
         @Test
