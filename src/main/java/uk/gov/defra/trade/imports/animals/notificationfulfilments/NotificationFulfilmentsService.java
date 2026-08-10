@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.outbox.Actor;
 
@@ -23,12 +24,15 @@ public class NotificationFulfilmentsService {
 
     private final NotificationFulfilmentsRepository notificationFulfilmentsRepository;
     private final ReferenceNumberGenerator referenceNumberGenerator;
+    private final NotificationService notificationService;
 
     public NotificationFulfilmentsService(
         NotificationFulfilmentsRepository notificationFulfilmentsRepository,
-        ReferenceNumberGenerator referenceNumberGenerator) {
+        ReferenceNumberGenerator referenceNumberGenerator,
+        NotificationService notificationService) {
         this.notificationFulfilmentsRepository = notificationFulfilmentsRepository;
         this.referenceNumberGenerator = referenceNumberGenerator;
+        this.notificationService = notificationService;
     }
 
     public NotificationFulfilments create() {
@@ -111,10 +115,9 @@ public class NotificationFulfilmentsService {
                 .createdAt(LocalDateTime.now())
                 .idempotencyKey(idempotencyKey)
                 .build();
+            NotificationFulfilments saved;
             try {
-                NotificationFulfilments saved = notificationFulfilmentsRepository.insert(copy);
-                log.info("Copied fulfilment {} to {}", id, saved.getId());
-                return saved;
+                saved = notificationFulfilmentsRepository.insert(copy);
             } catch (DuplicateKeyException e) {
                 existingCopy = findCopy(idempotencyKey);
                 if (existingCopy != null) {
@@ -124,7 +127,11 @@ public class NotificationFulfilmentsService {
                 }
                 log.warn("Reference number collision on copy persistence attempt {}/{}; retrying",
                     attempt, MAX_REF_RETRIES);
+                continue;
             }
+            notificationService.createCopyAtReference(id, saved.getId());
+            log.info("Copied fulfilment {} to {}", id, saved.getId());
+            return saved;
         }
         throw new IllegalStateException(
             "Failed to generate a unique reference number after " + MAX_REF_RETRIES + " attempts");

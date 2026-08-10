@@ -52,19 +52,6 @@ public class NotificationController {
         return ResponseEntity.ok(notificationService.saveOriginOfImport(notificationDto));
     }
 
-    @PostMapping("/{referenceNumber}/copy")
-    @Operation(summary = "Copy notification", description = "Creates a new DRAFT notification copied from an existing one")
-    @ApiResponse(responseCode = "200", description = "New DRAFT notification created",
-        content = @Content(schema = @Schema(implementation = Notification.class)))
-    @ApiResponse(responseCode = "400", description = "Source notification is not in a copyable status", content = @Content)
-    @ApiResponse(responseCode = "404", description = "Source notification not found", content = @Content)
-    @Timed("controller.copyNotification.time")
-    public ResponseEntity<Notification> copy(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
-        log.info("POST /notifications/{}/copy - Copying notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.copyNotification(referenceNumber));
-    }
-
     @PostMapping("/{referenceNumber}/submit")
     @Operation(summary = "Submit notification",
         description = "Transitions notification status to SUBMITTED. Accepts DRAFT or AMEND as the source state.")

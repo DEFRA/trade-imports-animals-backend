@@ -49,7 +49,6 @@ public class NotificationService {
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
     private final NotificationMapper notificationMapper;
-    private final NotificationCopyMapper notificationCopyMapper;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final NotificationTtlConfig ttlConfig;
     private final Duration lockAtLeastFor;
@@ -63,7 +62,6 @@ public class NotificationService {
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
         NotificationMapper notificationMapper,
-        NotificationCopyMapper notificationCopyMapper,
         ReferenceNumberGenerator referenceNumberGenerator,
         NotificationTtlConfig ttlConfig,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
@@ -75,7 +73,6 @@ public class NotificationService {
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
         this.notificationMapper = notificationMapper;
-        this.notificationCopyMapper = notificationCopyMapper;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.ttlConfig = ttlConfig;
         this.lockAtLeastFor = lockAtLeastFor;
@@ -91,18 +88,24 @@ public class NotificationService {
         }
     }
 
-    @Transactional
-    public Notification copyNotification(String referenceNumber) {
-        Notification source = notificationRepository.findByReferenceNumber(referenceNumber)
-            .orElseThrow(() -> new NotFoundException(
-                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        if (source.getStatus() != NotificationStatus.DRAFT
-            && source.getStatus() != NotificationStatus.SUBMITTED
-            && source.getStatus() != NotificationStatus.AMEND) {
-            throw new BadRequestException("Cannot copy notification with status: " + source.getStatus());
-        }
-        log.info("Copying notification {}", referenceNumber);
-        return createNotification(notificationCopyMapper.toCopyDto(source));
+    /**
+     * Writes the notification projection for a notification-fulfilments copy — a DRAFT carrying the
+     * source's content verbatim at {@code newReferenceNumber}, or an empty DRAFT when the source has
+     * no paired notification. It runs in the caller's transaction, so a failure here rolls back the
+     * fulfilments insert; the two aggregates are only ever written together.
+     *
+     * @param sourceReferenceNumber reference of the notification being copied from
+     * @param newReferenceNumber    reference the fulfilments copy was minted at
+     * @return the saved copy
+     */
+    public Notification createCopyAtReference(String sourceReferenceNumber, String newReferenceNumber) {
+        NotificationDto content = notificationRepository.findByReferenceNumber(sourceReferenceNumber)
+            .map(NotificationService::toContentDto)
+            .orElseGet(() -> NotificationDto.builder().build());
+        Notification copy = newDraft(content);
+        copy.setReferenceNumber(newReferenceNumber);
+        log.info("Copying notification {} to {}", sourceReferenceNumber, newReferenceNumber);
+        return notificationRepository.save(copy);
     }
 
     public NotificationResponse findByRef(String referenceNumber) {
@@ -358,12 +361,34 @@ public class NotificationService {
         notification.setExpireAt(notification.getCreated().plusDays(days));
     }
 
-    private Notification createNotification(NotificationDto dto) {
+    private Notification newDraft(NotificationDto dto) {
         Notification notification = new Notification();
         notification.setCreated(LocalDateTime.now());
         notification.setStatus(NotificationStatus.DRAFT);
         stampExpiry(notification);
         setNotificationDetails(dto, notification);
+        return notification;
+    }
+
+    private static NotificationDto toContentDto(Notification source) {
+        return NotificationDto.builder()
+            .origin(source.getOrigin())
+            .commodity(source.getCommodity())
+            .reasonForImport(source.getReasonForImport())
+            .additionalDetails(source.getAdditionalDetails())
+            .placeOfOrigin(source.getPlaceOfOrigin())
+            .consignor(source.getConsignor())
+            .consignee(source.getConsignee())
+            .importer(source.getImporter())
+            .destination(source.getDestination())
+            .consignment(source.getConsignment())
+            .cphNumber(source.getCphNumber())
+            .transport(source.getTransport())
+            .build();
+    }
+
+    private Notification createNotification(NotificationDto dto) {
+        Notification notification = newDraft(dto);
         for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
             notification.setReferenceNumber(referenceNumberGenerator.generate());
             try {

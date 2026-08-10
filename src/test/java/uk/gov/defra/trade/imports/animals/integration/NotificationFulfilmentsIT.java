@@ -418,6 +418,73 @@ class NotificationFulfilmentsIT extends IntegrationBase {
         assertThat(persisted.getSubmittedFulfilments()).isNull();
         assertThat(persisted.getIdempotencyKey()).isEqualTo("copy-" + sourceStatus);
         assertThat(notificationFulfilmentsRepository.count()).isEqualTo(2);
+        assertThat(notificationRepository.findByReferenceNumber(copy.getId()))
+            .get()
+            .extracting(Notification::getStatus)
+            .isEqualTo(NotificationStatus.DRAFT);
+    }
+
+    @Test
+    void copy_shouldCreateTheNotificationAtTheCopyReference() {
+        NotificationFulfilments source = stored(
+            DIRECT_PUT_REF,
+            NotificationFulfilmentsStatus.SUBMITTED,
+            LocalDateTime.of(2026, 7, 24, 10, 0),
+            LocalDateTime.of(2026, 7, 24, 11, 0));
+        notificationFulfilmentsRepository.insert(source);
+        notificationRepository.save(sourceNotification(DIRECT_PUT_REF));
+
+        NotificationFulfilments copy = copyFulfilment(DIRECT_PUT_REF, "copy-with-notification");
+
+        Optional<Notification> copied = notificationRepository.findByReferenceNumber(copy.getId());
+        assertThat(copied).isPresent();
+        Notification notification = copied.orElseThrow();
+        assertThat(notification.getStatus()).isEqualTo(NotificationStatus.DRAFT);
+        assertThat(notification.getOrigin()).isEqualTo(new Origin("FR", "yes", "INTERNAL-REF-1"));
+        assertThat(notification.getCommodity().getName()).isEqualTo("Live bovine animals");
+        assertThat(notification.getTransport().getArrivalDate())
+            .isEqualTo(LocalDate.of(2026, 9, 1));
+        assertThat(notification.getConsignor().getName()).isEqualTo("Consignor Ltd");
+        assertThat(notification.getConsignee().getName()).isEqualTo("Consignee Ltd");
+        assertThat(notification.getCphNumber()).isEqualTo("12/345/6789");
+        assertThat(notification.getCreated()).isNotNull();
+        assertThat(notification.getSubmittedBaseline()).isNull();
+
+        webClient("NoAuth")
+            .get().uri("/notifications")
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.content[*].referenceNumber")
+            .value(Matchers.hasItem(copy.getId()));
+    }
+
+    @Test
+    void copy_shouldNotCreateASecondNotificationOnIdempotentReplay() {
+        NotificationFulfilments source = createFulfilment();
+        notificationRepository.save(sourceNotification(source.getId()));
+
+        NotificationFulfilments first = copyFulfilment(source.getId(), "replayed-key");
+        long afterFirstCopy = notificationRepository.count();
+        NotificationFulfilments replay = copyFulfilment(source.getId(), "replayed-key");
+
+        assertThat(replay.getId()).isEqualTo(first.getId());
+        assertThat(afterFirstCopy).isEqualTo(2);
+        assertThat(notificationRepository.count()).isEqualTo(afterFirstCopy);
+        assertThat(notificationFulfilmentsRepository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void copy_shouldStillCreateADraftNotificationWhenTheSourceHasNone() {
+        NotificationFulfilments source = createFulfilment();
+
+        NotificationFulfilments copy = copyFulfilment(source.getId(), "orphan-source");
+
+        Optional<Notification> copied = notificationRepository.findByReferenceNumber(copy.getId());
+        assertThat(copied).isPresent();
+        assertThat(copied.orElseThrow().getStatus()).isEqualTo(NotificationStatus.DRAFT);
+        assertThat(copied.orElseThrow().getOrigin()).isNull();
+        assertThat(notificationRepository.count()).isEqualTo(1);
     }
 
     @Test
@@ -544,6 +611,23 @@ class NotificationFulfilmentsIT extends IntegrationBase {
             .status(status)
             .createdAt(createdAt)
             .submittedAt(submittedAt)
+            .build();
+    }
+
+    private Notification sourceNotification(String referenceNumber) {
+        return Notification.builder()
+            .referenceNumber(referenceNumber)
+            .status(NotificationStatus.SUBMITTED)
+            .created(LocalDateTime.of(2026, 7, 24, 10, 0))
+            .origin(new Origin("FR", "yes", "INTERNAL-REF-1"))
+            .commodity(Commodity.builder().name("Live bovine animals").build())
+            .consignor(Operator.builder().name("Consignor Ltd").build())
+            .consignee(Operator.builder().name("Consignee Ltd").build())
+            .cphNumber("12/345/6789")
+            .transport(Transport.builder()
+                .portOfEntry("GBABD")
+                .arrivalDate(LocalDate.of(2026, 9, 1))
+                .build())
             .build();
     }
 
