@@ -83,7 +83,6 @@ public class NotificationService {
         this.adminPageSize = adminPageSize;
     }
 
-    @Transactional(noRollbackFor = DuplicateKeyException.class)
     public Notification saveNotification(NotificationDto notificationDto, String correlationId, Actor actor) {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
             return createNotification(notificationDto);
