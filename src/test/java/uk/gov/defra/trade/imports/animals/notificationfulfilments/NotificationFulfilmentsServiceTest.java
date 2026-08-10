@@ -21,6 +21,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
+import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 
 @ExtendWith(MockitoExtension.class)
@@ -35,13 +36,16 @@ class NotificationFulfilmentsServiceTest {
     @Mock
     private ReferenceNumberGenerator referenceNumberGenerator;
 
+    @Mock
+    private NotificationService notificationService;
+
     private NotificationFulfilmentsService notificationFulfilmentsService;
 
     @BeforeEach
     void setUp() {
         notificationFulfilmentsService =
             new NotificationFulfilmentsService(
-                notificationFulfilmentsRepository, referenceNumberGenerator);
+                notificationFulfilmentsRepository, referenceNumberGenerator, notificationService);
     }
 
     @ParameterizedTest

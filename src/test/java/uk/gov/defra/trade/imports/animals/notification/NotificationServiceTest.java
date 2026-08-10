@@ -16,9 +16,12 @@ import static org.mockito.Mockito.when;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.AMEND;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DRAFT;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.SUBMITTED;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignees;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.importers;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.placesOfOrigin;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
@@ -107,7 +110,7 @@ class NotificationServiceTest {
     private NotificationService buildService(NotificationTtlConfig ttlConfig) {
         return new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            notificationMapper, new NotificationCopyMapper(), referenceNumberGenerator, ttlConfig,
+            notificationMapper, referenceNumberGenerator, ttlConfig,
             Duration.ZERO, 54, 50);
     }
 
@@ -1351,231 +1354,102 @@ class NotificationServiceTest {
     }
 
     @Nested
-    class CopyNotification {
+    class CreateCopyAtReference {
 
-        @Test
-        void copyNotification_shouldCreateNewDraftWithNewReferenceNumber() {
-            // Given
-            String sourceRef = "GBN-AG-26-SRC001";
-            String newRef = "GBN-AG-26-NEW001";
-            Notification source = Notification.builder()
-                .referenceNumber(sourceRef)
-                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
-                .status(NotificationStatus.DRAFT)
-                .build();
+        private static final String SOURCE_REF = "GBN-AG-26-SRC001";
+        private static final String COPY_REF = "GBN-AG-26-CPY001";
 
-            Notification created = Notification.builder()
-                .referenceNumber(newRef)
-                .status(NotificationStatus.DRAFT)
-                .build();
-
-            when(notificationRepository.findByReferenceNumber(sourceRef))
-                .thenReturn(Optional.of(source));
-            when(referenceNumberGenerator.generate()).thenReturn(newRef);
-            when(notificationRepository.save(any(Notification.class))).thenReturn(created);
-
-            // When
-            Notification result = notificationService.copyNotification(sourceRef);
-
-            // Then
-            assertThat(result.getReferenceNumber()).isEqualTo(newRef);
-            assertThat(result.getStatus()).isEqualTo(NotificationStatus.DRAFT);
-        }
-
-        @Test
-        void copyNotification_shouldCreateNewDraftFromSubmittedSource() {
-            // Given
-            String sourceRef = "GBN-AG-26-SUB001";
-            String newRef = "GBN-AG-26-NEW002";
-            Notification source = Notification.builder()
-                .referenceNumber(sourceRef)
-                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
-                .status(NotificationStatus.SUBMITTED)
-                .build();
-
-            Notification created = Notification.builder()
-                .referenceNumber(newRef)
-                .status(NotificationStatus.DRAFT)
-                .build();
-
-            when(notificationRepository.findByReferenceNumber(sourceRef))
-                .thenReturn(Optional.of(source));
-            when(referenceNumberGenerator.generate()).thenReturn(newRef);
-            when(notificationRepository.save(any(Notification.class))).thenReturn(created);
-
-            // When
-            Notification result = notificationService.copyNotification(sourceRef);
-
-            // Then
-            assertThat(result.getReferenceNumber()).isEqualTo(newRef);
-            assertThat(result.getStatus()).isEqualTo(NotificationStatus.DRAFT);
-        }
-
-        @Test
-        void copyNotification_shouldRetainCopiedFields() {
-            // Given
-            String sourceRef = "GBN-AG-26-SRC002";
-            Origin origin = new Origin("DE", "yes", "INTERNAL-REF");
-            AdditionalDetails additionalDetails = new AdditionalDetails("Breeding", "yes");
-            CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
-                List.of(species()));
-            Commodity commodity = Commodity.builder()
-                .name("Live bovine animals")
-                .commodityComplement(List.of(complement))
-                .build();
-
-            Notification source = Notification.builder()
-                .referenceNumber(sourceRef)
-                .status(NotificationStatus.DRAFT)
-                .origin(origin)
-                .commodity(commodity)
+        private Notification fullSource() {
+            return Notification.builder()
+                .referenceNumber(SOURCE_REF)
+                .status(SUBMITTED)
+                .created(LocalDateTime.of(2026, Month.JANUARY, 2, 9, 30))
+                .submittedBaseline(NotificationContentSnapshot.builder()
+                    .origin(new Origin("GB", "true", "BASELINE-REF"))
+                    .build())
+                .origin(new Origin("DE", "yes", "INTERNAL-REF"))
+                .commodity(Commodity.builder()
+                    .name("Live bovine animals")
+                    .commodityComplement(List.of(
+                        new CommodityComplement("LIVE", 10, 5, List.of(species()))))
+                    .build())
                 .reasonForImport("internalMarket")
-                .additionalDetails(additionalDetails)
+                .additionalDetails(new AdditionalDetails("Breeding", "yes"))
+                .placeOfOrigin(placesOfOrigin().getFirst())
                 .consignor(consignors().getFirst())
+                .consignee(consignees().getFirst())
+                .importer(importers().getFirst())
                 .destination(destinations().getFirst())
+                .consignment(consignments().getFirst())
                 .cphNumber("12/345/6789")
                 .transport(Transport.builder()
                     .portOfEntry("GBDVR")
                     .arrivalDate(LocalDate.of(2026, Month.MAY, 1))
                     .transporter(transporters().getFirst())
                     .build())
-                .consignment(consignments().getFirst())
                 .build();
+        }
 
-            when(notificationRepository.findByReferenceNumber(sourceRef))
-                .thenReturn(Optional.of(source));
-            when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-CPY002");
+        private Notification saveCopyOf(Notification source) {
+            when(notificationRepository.findByReferenceNumber(SOURCE_REF))
+                .thenReturn(Optional.ofNullable(source));
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-            // When
-            notificationService.copyNotification(sourceRef);
-
-            // Then — capture what was saved and assert retained fields
-            ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
-            verify(notificationRepository).save(captor.capture());
-            Notification saved = captor.getValue();
-
-            // Retained
-            assertThat(saved.getStatus()).isEqualTo(NotificationStatus.DRAFT);
-            assertThat(saved.getOrigin().getCountryCode()).isEqualTo("DE");
-            assertThat(saved.getOrigin().getRequiresRegionCode()).isEqualTo("yes");
-            assertThat(saved.getReasonForImport()).isEqualTo("internalMarket");
-            assertThat(saved.getCommodity().getName()).isEqualTo("Live bovine animals");
-            assertThat(saved.getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
-            assertThat(saved.getConsignor()).isEqualTo(consignors().getFirst());
-            assertThat(saved.getDestination()).isEqualTo(destinations().getFirst());
-            assertThat(saved.getCphNumber()).isEqualTo("12/345/6789");
+            return notificationService.createCopyAtReference(SOURCE_REF, COPY_REF);
         }
 
         @Test
-        void copyNotification_shouldResetExcludedFields() {
-            // Given
-            String sourceRef = "GBN-AG-26-SRC003";
-            CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
-                List.of(species()));
-            Notification source = Notification.builder()
-                .referenceNumber(sourceRef)
-                .status(NotificationStatus.DRAFT)
-                .origin(new Origin("FR", "no", "DO-NOT-COPY"))
-                .commodity(Commodity.builder()
-                    .name("Cattle")
-                    .commodityComplement(List.of(complement))
-                    .build())
-                .additionalDetails(new AdditionalDetails("Slaughter", "no"))
-                .transport(Transport.builder()
-                    .portOfEntry("GBFXT")
-                    .arrivalDate(LocalDate.of(2026, Month.JUNE, 1))
-                    .build())
-                .consignment(consignments().getFirst())
-                .build();
+        void createCopyAtReference_shouldWriteADraftAtTheSuppliedReference() {
+            Notification copy = saveCopyOf(fullSource());
 
-            when(notificationRepository.findByReferenceNumber(sourceRef))
-                .thenReturn(Optional.of(source));
-            when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-CPY003");
-            when(notificationRepository.save(any(Notification.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
-
-            // When
-            notificationService.copyNotification(sourceRef);
-
-            // Then — excluded fields must be null on the saved copy
-            ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
-            verify(notificationRepository).save(captor.capture());
-            Notification saved = captor.getValue();
-
-            assertThat(saved.getOrigin().getInternalReference()).isNull();
-            assertThat(saved.getAdditionalDetails().getUnweanedAnimals()).isNull();
-            assertThat(saved.getTransport()).isNull();
-            assertThat(saved.getConsignment()).isNull();
-            // Commodity complement strips per-animal data
-            CommodityComplement cc = saved.getCommodity().getCommodityComplement().getFirst();
-            assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
-            assertThat(cc.getTotalNoOfAnimals()).isNull();
-            assertThat(cc.getTotalNoOfPackages()).isNull();
-            assertThat(cc.getSpecies()).isNull();
+            assertThat(copy.getReferenceNumber()).isEqualTo(COPY_REF);
+            assertThat(copy.getStatus()).isEqualTo(DRAFT);
+            assertThat(copy.getCreated()).isAfter(LocalDateTime.of(2026, Month.JANUARY, 2, 9, 30));
+            assertThat(copy.getUpdated()).isNotNull();
+            verify(referenceNumberGenerator, never()).generate();
         }
 
         @Test
-        void copyNotification_shouldCreateNewDraftFromAmendSource() {
-            // Regression: AMEND notifications were rejected by copyNotification's
-            // status guard before AMEND was added to the allow-list (EUDPA-171).
-            String sourceRef = "GBN-AG-26-AMD001";
-            String newRef = "GBN-AG-26-NEW-AMD";
-            Notification source = Notification.builder()
-                .referenceNumber(sourceRef)
-                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
-                .status(AMEND)
-                .build();
+        void createCopyAtReference_shouldCarryTheSourceContentVerbatim() {
+            Notification source = fullSource();
 
-            Notification created = Notification.builder()
-                .referenceNumber(newRef)
-                .status(DRAFT)
-                .build();
+            Notification copy = saveCopyOf(source);
 
-            when(notificationRepository.findByReferenceNumber(sourceRef))
-                .thenReturn(Optional.of(source));
-            when(referenceNumberGenerator.generate()).thenReturn(newRef);
-            when(notificationRepository.save(any(Notification.class))).thenReturn(created);
-
-            Notification result = notificationService.copyNotification(sourceRef);
-
-            assertThat(result.getReferenceNumber()).isEqualTo(newRef);
-            assertThat(result.getStatus()).isEqualTo(DRAFT);
+            assertThat(copy.getOrigin()).isEqualTo(new Origin("DE", "yes", "INTERNAL-REF"));
+            assertThat(copy.getCommodity()).isEqualTo(source.getCommodity());
+            assertThat(copy.getCommodity().getCommodityComplement().getFirst())
+                .isEqualTo(new CommodityComplement("LIVE", 10, 5, List.of(species())));
+            assertThat(copy.getReasonForImport()).isEqualTo("internalMarket");
+            assertThat(copy.getAdditionalDetails())
+                .isEqualTo(new AdditionalDetails("Breeding", "yes"));
+            assertThat(copy.getPlaceOfOrigin()).isEqualTo(placesOfOrigin().getFirst());
+            assertThat(copy.getConsignor()).isEqualTo(consignors().getFirst());
+            assertThat(copy.getConsignee()).isEqualTo(consignees().getFirst());
+            assertThat(copy.getImporter()).isEqualTo(importers().getFirst());
+            assertThat(copy.getDestination()).isEqualTo(destinations().getFirst());
+            assertThat(copy.getConsignment()).isEqualTo(consignments().getFirst());
+            assertThat(copy.getCphNumber()).isEqualTo("12/345/6789");
+            assertThat(copy.getTransport()).isEqualTo(source.getTransport());
         }
 
         @Test
-        void copyNotification_shouldThrowNotFoundException_whenSourceNotFound() {
-            // Given
-            String sourceRef = "GBN-AG-26-ABSENT";
-            when(notificationRepository.findByReferenceNumber(sourceRef))
-                .thenReturn(Optional.empty());
+        void createCopyAtReference_shouldLeaveTheSubmittedBaselineUnset() {
+            Notification copy = saveCopyOf(fullSource());
 
-            // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef))
-                .isInstanceOf(NotFoundException.class)
-                .hasMessageContaining(sourceRef);
-
-            verify(notificationRepository, never()).save(any());
+            assertThat(copy.getSubmittedBaseline()).isNull();
         }
 
         @Test
-        void copyNotification_shouldThrowBadRequestException_whenSourceIsDeleted() {
-            // Given
-            String sourceRef = "GBN-AG-26-DELETED";
-            Notification deleted = Notification.builder()
-                .referenceNumber(sourceRef)
-                .status(NotificationStatus.DELETED)
-                .build();
-            when(notificationRepository.findByReferenceNumber(sourceRef))
-                .thenReturn(Optional.of(deleted));
+        void createCopyAtReference_shouldWriteAnEmptyDraft_whenTheSourceReferenceIsUnknown() {
+            Notification copy = saveCopyOf(null);
 
-            // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("DELETED");
-
-            verify(notificationRepository, never()).save(any());
+            assertThat(copy.getReferenceNumber()).isEqualTo(COPY_REF);
+            assertThat(copy.getStatus()).isEqualTo(DRAFT);
+            assertThat(copy.getOrigin()).isNull();
+            assertThat(copy.getCommodity()).isNull();
+            assertThat(copy.getTransport()).isNull();
+            assertThat(copy.getSubmittedBaseline()).isNull();
         }
     }
 
