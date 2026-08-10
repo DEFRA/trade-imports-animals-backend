@@ -15,6 +15,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.outbox.gbnag.GbnAgEventDataMapper;
 
 @Service
@@ -43,18 +44,24 @@ public class OutboxService {
 
         Instant now = Instant.now().truncatedTo(ChronoUnit.MILLIS);
 
-        StatusChange currentChange = StatusChange.builder()
-            .status(notification.getStatus())
-            .dateChanged(now)
-            .actor(actor)
-            .build();
-
         List<StatusChange> priorChanges = latestEvent
             .map(e -> e.getStatusChanges() != null ? e.getStatusChanges() : List.<StatusChange>of())
             .orElseGet(List::of);
 
-        List<StatusChange> statusChanges = Stream.concat(priorChanges.stream(), Stream.of(currentChange))
-            .toList();
+        NotificationStatus lastStatus = priorChanges.isEmpty() ? null
+            : priorChanges.getLast().getStatus();
+
+        List<StatusChange> statusChanges;
+        if (notification.getStatus() != lastStatus) {
+            StatusChange currentChange = StatusChange.builder()
+                .status(notification.getStatus())
+                .dateChanged(now)
+                .actor(actor)
+                .build();
+            statusChanges = Stream.concat(priorChanges.stream(), Stream.of(currentChange)).toList();
+        } else {
+            statusChanges = priorChanges;
+        }
 
         Map<String, Object> data = objectMapper.convertValue(
             gbnAgEventDataMapper.toGbnAgEventData(notification), MAP_TYPE);
