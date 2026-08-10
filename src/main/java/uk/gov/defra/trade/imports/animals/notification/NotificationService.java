@@ -83,11 +83,12 @@ public class NotificationService {
         this.adminPageSize = adminPageSize;
     }
 
-    public Notification saveOriginOfImport(NotificationDto notificationDto) {
+    @Transactional(noRollbackFor = DuplicateKeyException.class)
+    public Notification saveNotification(NotificationDto notificationDto, String correlationId, Actor actor) {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
             return createNotification(notificationDto);
         } else {
-            return updateNotification(notificationDto);
+            return updateNotification(notificationDto, correlationId, actor);
         }
     }
 
@@ -378,13 +379,47 @@ public class NotificationService {
             "Failed to generate a unique reference number after " + MAX_REF_RETRIES + " attempts");
     }
 
-    private Notification updateNotification(NotificationDto dto) {
-        Notification existingNotification = notificationRepository.findByReferenceNumber(
-            dto.getReferenceNumber()).orElseThrow(() -> new NotFoundException(
-            CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + dto.getReferenceNumber()));
-        log.info("Notification already exists, updating {}", dto.getReferenceNumber());
-        setNotificationDetails(dto, existingNotification);
-        return notificationRepository.save(existingNotification);
+    private Notification updateNotification(NotificationDto dto, String correlationId, Actor actor) {
+        String referenceNumber = dto.getReferenceNumber();
+        String aggregateId = OutboxService.buildAggregateId(referenceNumber);
+        LockConfiguration lockConfig = new LockConfiguration(
+            Instant.now(),
+            "outbox-write:" + aggregateId,
+            LOCK_AT_MOST_FOR,
+            lockAtLeastFor);
+
+        try {
+            LockingTaskExecutor.TaskResult<Notification> result = lockingTaskExecutor.executeWithLock(
+                (LockingTaskExecutor.TaskWithResult<Notification>) () -> {
+                    Notification existing = notificationRepository.findByReferenceNumber(referenceNumber)
+                        .orElseThrow(() -> new NotFoundException(
+                            CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+                    if (existing.getStatus() != NotificationStatus.DRAFT
+                        && existing.getStatus() != NotificationStatus.AMEND) {
+                        throw new BadRequestException(
+                            "Cannot save notification with status: " + existing.getStatus());
+                    }
+                    log.info("Updating notification {}", referenceNumber);
+                    setNotificationDetails(dto, existing);
+                    Notification saved = notificationRepository.save(existing);
+                    outboxService.appendEvent(saved, OutboxEventType.NOTIFICATION_EDITED, correlationId, actor);
+                    return saved;
+                },
+                lockConfig);
+
+            if (!result.wasExecuted()) {
+                throw new OutboxWriteException(
+                    "Could not acquire outbox lock for notification save",
+                    aggregateId, null, correlationId);
+            }
+            return result.getResult();
+        } catch (OutboxWriteException | DataAccessException | NotFoundException | BadRequestException e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new OutboxWriteException(
+                "Outbox write failed during notification save",
+                aggregateId, null, correlationId, e);
+        }
     }
 
     private void setNotificationDetails(NotificationDto dto, Notification notification) {

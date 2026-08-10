@@ -117,10 +117,16 @@ class NotificationServiceTest {
     }
 
     @Nested
-    class SaveOriginOfImport {
+    class SaveNotification {
+
+        @BeforeEach
+        void setUp() {
+            lenient().when(lockProvider.lock(any()))
+                .thenReturn(Optional.of(mock(SimpleLock.class)));
+        }
 
         @Test
-        void saveOriginOfImport_shouldCreateNotificationWithGeneratedReferenceNumber() {
+        void saveNotification_shouldCreateNotificationWithGeneratedReferenceNumber() {
             // Given - new notification without referenceNumber
             Origin origin = new Origin("GB", "true", "REF123");
             NotificationDto notificationDto = NotificationDto.builder()
@@ -139,7 +145,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class))).thenReturn(saved);
 
             // When
-            Notification result = notificationService.saveOriginOfImport(notificationDto);
+            Notification result = notificationService.saveNotification(notificationDto, "", null);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(expectedRef);
@@ -147,10 +153,11 @@ class NotificationServiceTest {
             assertThat(result.getOrigin()).isEqualTo(origin);
             verify(referenceNumberGenerator).generate();
             verify(notificationRepository, times(1)).save(any(Notification.class));
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
         }
 
         @Test
-        void saveOriginOfImport_shouldRetryPersistence_whenDuplicateKeyExceptionOnFirstAttempt() {
+        void saveNotification_shouldRetryPersistence_whenDuplicateKeyExceptionOnFirstAttempt() {
             // Given — first persistence attempt collides, second succeeds
             Origin origin = new Origin("GB", "true", "REF123");
             NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
@@ -169,7 +176,7 @@ class NotificationServiceTest {
                 .thenReturn(saved);
 
             // When
-            Notification result = notificationService.saveOriginOfImport(notificationDto);
+            Notification result = notificationService.saveNotification(notificationDto, "", null);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo("GBN-AG-26-ABC002");
@@ -178,7 +185,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void saveOriginOfImport_shouldThrowIllegalStateException_whenAllPersistenceRetriesExhausted() {
+        void saveNotification_shouldThrowIllegalStateException_whenAllPersistenceRetriesExhausted() {
             // Given — all three persistence attempts collide
             Origin origin = new Origin("GB", "true", "REF123");
             NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
@@ -190,7 +197,7 @@ class NotificationServiceTest {
                 .thenThrow(new DuplicateKeyException("duplicate reference number"));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.saveOriginOfImport(notificationDto))
+            assertThatThrownBy(() -> notificationService.saveNotification(notificationDto, "", null))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("3");
 
@@ -199,22 +206,19 @@ class NotificationServiceTest {
         }
 
         @Test
-        void saveOriginOfImport_shouldUpdateExistingNotification() {
-            // Given - existing notification with ID and reference number
+        void saveNotification_shouldUpdateNotificationFieldsAndWriteEditedEvent_whenDraft() {
+            // Given
             String existingId = "507f191e810c19729de860ea";
             String referenceNumber = "GBN-AG-26-507F19";
             Origin origin = new Origin("FR", "false", "REF456");
-            AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION",
-                "true");
+            AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Species species = species();
-            CommodityComplement complement = new CommodityComplement("LIVE", 5, null,
-                List.of(species));
+            CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species));
             Commodity commodity = Commodity.builder()
                 .name("Fish")
                 .commodityComplement(List.of(complement))
                 .build();
             String cphNumber = "123456789";
-
             Transport transport = Transport.builder()
                 .portOfEntry("ABERDEEN")
                 .arrivalDate(LocalDate.of(2026, Month.JANUARY, 1))
@@ -224,10 +228,27 @@ class NotificationServiceTest {
             Notification existingNotification = new Notification();
             existingNotification.setId(existingId);
             existingNotification.setReferenceNumber(referenceNumber);
+            existingNotification.setStatus(DRAFT);
             existingNotification.setOrigin(origin);
+
+            Notification updatedNotification = Notification.builder()
+                .id(existingId)
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .origin(origin)
+                .commodity(commodity)
+                .consignor(consignors().getFirst())
+                .destination(destinations().getFirst())
+                .additionalDetails(additionalDetails)
+                .reasonForImport("PERMANENT")
+                .cphNumber(cphNumber)
+                .transport(transport)
+                .consignment(consignments().getFirst())
+                .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.of(existingNotification));
+            when(notificationRepository.save(any(Notification.class))).thenReturn(updatedNotification);
 
             NotificationDto updateDto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
@@ -242,66 +263,129 @@ class NotificationServiceTest {
                 .consignment(consignments().getFirst())
                 .build();
 
-            Notification updatedNotification = Notification.builder()
-                .id(existingId)
-                .referenceNumber(referenceNumber)
-                .origin(origin)
-                .commodity(commodity)
-                .consignor(consignors().getFirst())
-                .destination(destinations().getFirst())
-                .additionalDetails(additionalDetails)
-                .reasonForImport("PERMANENT")
-                .cphNumber(cphNumber)
-                .transport(transport)
-                .consignment(consignments().getFirst())
-                .build();
-
-            when(notificationRepository.save(any(Notification.class))).thenReturn(
-                updatedNotification);
-
             // When
-            Notification result = notificationService.saveOriginOfImport(updateDto);
+            Notification result = notificationService.saveNotification(updateDto, "trace-upd-001", null);
 
             // Then
             assertThat(result).isNotNull();
-            assertThat(result.getReferenceNumber()).isEqualTo("GBN-AG-26-507F19");
+            assertThat(result.getReferenceNumber()).isEqualTo(referenceNumber);
             assertThat(result.getId()).isEqualTo(existingId);
-            assertThat(result.getOrigin()).isEqualTo(origin);
             assertThat(result.getCommodity().getName()).isEqualTo("Fish");
-            assertThat(result.getCommodity().getCommodityComplement()).hasSize(1);
-            assertThat(result.getCommodity().getCommodityComplement().getFirst()
-                .getTypeOfCommodity()).isEqualTo("LIVE");
-            assertThat(
-                result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst()
-                    .getValue()).isEqualTo("BOV");
-            assertThat(
-                result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst()
-                    .getEarTag()).isEqualTo("UK01234567890");
-            assertThat(
-                result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst()
-                    .getPassport()).isEqualTo("UK0123456700999");
-            assertThat(result.getAdditionalDetails().getCertifiedFor()).isEqualTo(
-                "HUMAN_CONSUMPTION");
-            assertThat(result.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
-            assertThat(result.getReasonForImport()).isEqualTo("PERMANENT");
-            assertThat(result.getConsignor().getName()).isEqualTo("Astra Rosales");
-            assertThat(result.getConsignor().getAddress().getAddressLine1()).isEqualTo(
-                "43 East Hague Extension");
-            assertThat(result.getConsignor().getAddress().getCountry()).isEqualTo("Switzerland");
-            assertThat(result.getDestination().getName()).isEqualTo("United Commerce");
-            assertThat(result.getDestination().getAddress().getAddressLine1()).isEqualTo(
-                "446 Church Lane");
-            assertThat(result.getDestination().getAddress().getCountry()).isEqualTo(
-                "United Kingdom");
             assertThat(result.getCphNumber()).isEqualTo("123456789");
             assertThat(result.getTransport()).isEqualTo(transport);
-            assertThat(result.getConsignment().getName())
-                .isEqualTo("Animal and Plant Health Agency");
-            assertThat(result.getConsignment().getAddress().getAddressLine1())
-                .isEqualTo("Woodham Lane");
-            assertThat(result.getConsignment().getAddress().getCountry())
-                .isEqualTo("United Kingdom");
             verify(notificationRepository, times(1)).save(any(Notification.class));
+            verify(outboxService).appendEvent(updatedNotification, OutboxEventType.NOTIFICATION_EDITED, "trace-upd-001", null);
+        }
+
+        @Test
+        void saveNotification_shouldWriteEditedEvent_whenAmend() {
+            // Given
+            String referenceNumber = "GBN-AG-26-AMEND1";
+            Notification existing = Notification.builder()
+                .referenceNumber(referenceNumber)
+                .status(AMEND)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            NotificationDto dto = NotificationDto.builder().referenceNumber(referenceNumber).build();
+
+            // When
+            notificationService.saveNotification(dto, "trace-amd-001", null);
+
+            // Then
+            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_EDITED), eq("trace-amd-001"), eq(null));
+        }
+
+        @Test
+        void saveNotification_shouldThrowBadRequest_whenStatusIsSubmitted() {
+            // Given
+            String referenceNumber = "GBN-AG-26-SUBM01";
+            Notification existing = Notification.builder()
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(existing));
+
+            NotificationDto dto = NotificationDto.builder().referenceNumber(referenceNumber).build();
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.saveNotification(dto, "trace-001", null))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("SUBMITTED");
+
+            verify(notificationRepository, never()).save(any());
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
+        }
+
+        @Test
+        void saveNotification_shouldThrowNotFound_whenRefUnknown() {
+            // Given
+            String referenceNumber = "GBN-AG-26-ABSENT";
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.empty());
+
+            NotificationDto dto = NotificationDto.builder().referenceNumber(referenceNumber).build();
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.saveNotification(dto, "trace-001", null))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining(referenceNumber);
+
+            verify(notificationRepository, never()).save(any());
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
+        }
+
+        @Test
+        void saveNotification_shouldThrowOutboxWriteException_whenLockNotAcquired() {
+            // Given
+            String referenceNumber = "GBN-AG-26-LOCK01";
+            when(lockProvider.lock(any())).thenReturn(Optional.empty());
+
+            NotificationDto dto = NotificationDto.builder().referenceNumber(referenceNumber).build();
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.saveNotification(dto, "trace-001", null))
+                .isInstanceOf(OutboxWriteException.class)
+                .satisfies(ex -> {
+                    OutboxWriteException owe = (OutboxWriteException) ex;
+                    assertThat(owe.getAggregateId())
+                        .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
+                    assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
+                });
+
+            verify(notificationRepository, never()).save(any());
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
+        }
+
+        @Test
+        void saveNotification_shouldSaveBeforeAppendingOutboxEvent() {
+            // Given — save must precede outbox write
+            String referenceNumber = "GBN-AG-26-ORDER1";
+            Notification existing = Notification.builder()
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            NotificationDto dto = NotificationDto.builder().referenceNumber(referenceNumber).build();
+
+            // When
+            notificationService.saveNotification(dto, "trace-ord-001", null);
+
+            // Then
+            InOrder inOrder = inOrder(notificationRepository, outboxService);
+            inOrder.verify(notificationRepository).save(existing);
+            inOrder.verify(outboxService).appendEvent(existing, OutboxEventType.NOTIFICATION_EDITED, "trace-ord-001", null);
         }
     }
 
@@ -675,8 +759,8 @@ class NotificationServiceTest {
 
         private Notification create(NotificationTtlConfig ttlConfig) {
             NotificationService service = buildService(ttlConfig);
-            return service.saveOriginOfImport(
-                NotificationDto.builder().origin(new Origin("GB", "true", "REF123")).build());
+            return service.saveNotification(
+                NotificationDto.builder().origin(new Origin("GB", "true", "REF123")).build(), "", null);
         }
 
         @Test

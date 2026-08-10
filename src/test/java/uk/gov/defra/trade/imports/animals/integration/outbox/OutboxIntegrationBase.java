@@ -172,6 +172,28 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
         return referenceNumber;
     }
 
+    protected String createAndSaveNotification(String traceId) {
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(minimalNotificationDto())
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .header(HEADER_TRACE_ID, traceId)
+            .bodyValue(NotificationDto.builder()
+                .referenceNumber(referenceNumber)
+                .origin(new Origin("GB", "true", "REF123"))
+                .commodity(Commodity.builder().name("Live cattle").build())
+                .build())
+            .exchange()
+            .expectStatus().isOk();
+
+        return referenceNumber;
+    }
+
     protected static NotificationDto minimalNotificationDto() {
         return NotificationDto.builder()
             .origin(new Origin("GB", "true", "REF123"))
