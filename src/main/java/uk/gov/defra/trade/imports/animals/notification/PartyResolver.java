@@ -5,10 +5,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import uk.gov.defra.trade.imports.animals.addressbook.AddressBookClient;
 import uk.gov.defra.trade.imports.animals.addressbook.AddressBookRecord;
+import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 
 /**
  * Fills in the details of parties held as address-book references, at the moment a notification is
@@ -22,9 +25,13 @@ import uk.gov.defra.trade.imports.animals.addressbook.AddressBookRecord;
  * session. It is never taken from the notification, which has no owner. A reference to an address
  * in another organisation therefore resolves to nothing and renders as "not provided" — a blank
  * rather than a leak, because the address book scopes its lookups on the organisation.
+ *
+ * <p>Outbox / GBNAG transmission uses {@link #resolveForOutbox}: referenced parties must be filled
+ * in before mapping, and a miss fails the submit rather than emitting a null-name party.
  */
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class PartyResolver {
 
     private final AddressBookClient addressBookClient;
@@ -62,6 +69,58 @@ public class PartyResolver {
             .destination(resolver.apply(response.destination()))
             .consignment(resolver.apply(response.consignment()))
             .build();
+    }
+
+    /**
+     * Resolves address-book references on the notification for GBNAG outbox mapping.
+     *
+     * <p>Mutates the given instance (already persisted — do not save it again). Inline parties and
+     * notifications with no {@code addressId} are unchanged. When any GBNAG-mapped role holds a
+     * reference, {@code organisationId} is required and every such reference must resolve; a miss
+     * fails the submit instead of emitting {@code name=null} / {@code postalAddress=null} to GBNAG.
+     */
+    public Notification resolveForOutbox(Notification notification, String organisationId) {
+        if (!hasGbnAgAddressBookReference(notification)) {
+            return notification;
+        }
+        if (organisationId == null || organisationId.isBlank()) {
+            throw new BadRequestException(
+                "Cannot resolve address-book parties for outbox transmission: organisation id is required");
+        }
+        notification.setConsignor(requireResolved(notification.getConsignor(), organisationId));
+        notification.setConsignee(requireResolved(notification.getConsignee(), organisationId));
+        notification.setImporter(requireResolved(notification.getImporter(), organisationId));
+        notification.setDestination(requireResolved(notification.getDestination(), organisationId));
+        notification.setPlaceOfOrigin(
+            requireResolved(notification.getPlaceOfOrigin(), organisationId));
+        return notification;
+    }
+
+    private static boolean hasGbnAgAddressBookReference(Notification notification) {
+        return Stream.of(
+                notification.getConsignor(),
+                notification.getConsignee(),
+                notification.getImporter(),
+                notification.getDestination(),
+                notification.getPlaceOfOrigin())
+            .anyMatch(party -> party != null && party.getAddressId() != null);
+    }
+
+    private ConsignmentParty requireResolved(ConsignmentParty party, String organisationId) {
+        if (party == null || party.getAddressId() == null) {
+            return party;
+        }
+        ConsignmentParty resolved = resolve(
+            party, id -> addressBookClient.findById(organisationId, id));
+        if (resolved == null) {
+            log.error(
+                "Address-book party could not be resolved for outbox (addressId={})",
+                party.getAddressId());
+            throw new BadRequestException(
+                "Cannot submit notification: address-book party could not be resolved (addressId="
+                    + party.getAddressId() + ")");
+        }
+        return resolved;
     }
 
     /**

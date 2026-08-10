@@ -256,7 +256,10 @@ public class NotificationService {
                     notification.setStatus(targetStatus);
                     notification.setUpdated(LocalDateTime.now());
                     Notification saved = notificationRepository.save(notification);
-                    outboxService.appendEvent(saved, eventType, correlationId, actor);
+                    // Resolve address-book references for GBNAG (in-memory only — already saved).
+                    String organisationId = actor != null ? actor.getOrganisationId() : null;
+                    Notification forOutbox = partyResolver.resolveForOutbox(saved, organisationId);
+                    outboxService.appendEvent(forOutbox, eventType, correlationId, actor);
                     return saved;
                 },
                 lockConfig);
@@ -267,7 +270,7 @@ public class NotificationService {
                     aggregateId, null, correlationId);
             }
             return result.getResult();
-        } catch (OutboxWriteException | DataAccessException e) {
+        } catch (OutboxWriteException | DataAccessException | BadRequestException e) {
             throw e;
         } catch (Throwable e) {
             throw new OutboxWriteException(
