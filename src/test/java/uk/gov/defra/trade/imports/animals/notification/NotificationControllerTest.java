@@ -107,7 +107,7 @@ class NotificationControllerTest {
             savedNotification.setTransport(Transport.builder().transporter(transporters().getFirst()).build());
             savedNotification.setConsignment(consignments().getFirst());
 
-            when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
+            when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(savedNotification);
 
             // When & Then
@@ -156,7 +156,7 @@ class NotificationControllerTest {
             savedNotification.setReferenceNumber(REF_2);
             savedNotification.setOrigin(origin);
 
-            when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
+            when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(savedNotification);
 
             // When & Then
@@ -172,7 +172,7 @@ class NotificationControllerTest {
 
         @Test
         void post_shouldAcceptNotificationWithExistingId() throws Exception {
-            // Given - updating existing notification
+            // Given
             String existingId = "507f1f77bcf86cd799439011";
             Origin origin = new Origin("DE", "true", "UPDATE-REF");
             NotificationDto notificationDto = NotificationDto.builder()
@@ -185,7 +185,7 @@ class NotificationControllerTest {
             savedNotification.setReferenceNumber(REF_3);
             savedNotification.setOrigin(origin);
 
-            when(notificationService.saveOriginOfImport(any(NotificationDto.class)))
+            when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(savedNotification);
 
             // When & Then
@@ -197,6 +197,27 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.referenceNumber").value(REF_3))
                 .andExpect(jsonPath("$.origin.countryCode").value("DE"))
                 .andExpect(jsonPath("$.origin.internalReference").value("UPDATE-REF"));
+        }
+
+        @Test
+        void post_shouldForwardTraceIdHeader_toSaveNotification() throws Exception {
+            // Given
+            NotificationDto notificationDto = NotificationDto.builder()
+                .origin(new Origin("GB", "true", "REF"))
+                .build();
+            Notification saved = new Notification();
+            saved.setReferenceNumber(REF_1);
+            when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
+                .thenReturn(saved);
+
+            // When & Then
+            mockMvc.perform(post("/notifications")
+                    .header(HEADER_TRACE_ID, "my-trace-id")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(notificationDto)))
+                .andExpect(status().isOk());
+
+            verify(notificationService).saveNotification(any(NotificationDto.class), eq("my-trace-id"), eq(null));
         }
 
     }

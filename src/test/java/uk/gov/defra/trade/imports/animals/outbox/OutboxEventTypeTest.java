@@ -28,4 +28,13 @@ class OutboxEventTypeTest {
                     + "schemas/profiles/imports/gb/events/"
                     + "gbn-ag-event-notification-submission-amended-v1.schema.json");
     }
+
+    @Test
+    void notificationEdited_schemaUrl_matchesGoverningSchema() {
+        assertThat(OutboxEventType.NOTIFICATION_EDITED.schemaUrl())
+            .isEqualTo(
+                "https://github.com/DEFRA/trade-imports-schemas/blob/main/"
+                    + "schemas/profiles/imports/gb/events/"
+                    + "gbn-ag-event-notification-edited-v1.schema.json");
+    }
 }

@@ -53,12 +53,13 @@ public class NotificationController {
     private final OutboxReplayService outboxReplayService;
 
     @PostMapping
-    @Operation(summary = "Post Origin of the Import", description = "Submits an origin to the backend")
+    @Operation(summary = "Save notification", description = "Creates or updates a notification")
     @Timed("controller.postNotification.time")
-    public ResponseEntity<Notification> post(@Valid @RequestBody NotificationDto notificationDto) {
-        log.info("POST /notifications - countryCode={}",
-            notificationDto.getOrigin() != null ? notificationDto.getOrigin().getCountryCode() : null);
-        return ResponseEntity.ok(notificationService.saveOriginOfImport(notificationDto));
+    public ResponseEntity<Notification> post(
+        @Valid @RequestBody NotificationDto notificationDto,
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId) {
+        log.info("POST /notifications - referenceNumber={}", notificationDto.getReferenceNumber());
+        return ResponseEntity.ok(notificationService.saveNotification(notificationDto, traceId, null));
     }
 
     @PostMapping("/{referenceNumber}/copy")
