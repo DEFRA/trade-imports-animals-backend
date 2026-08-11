@@ -15,9 +15,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.notification.NotificationFulfilmentsView;
-import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 
 /**
@@ -25,7 +23,9 @@ import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
  * transitions moved to {@code /notifications} under {@code NotificationController} when the
  * aggregates folded (EUDPA-312 option 2a); this class exists solely to serve the frontend's
  * journey-rehydrate read at {@code GET /notification-fulfilments/{id}} backed by the merged
- * {@code notification} collection via {@link NotificationFulfilmentsView}.
+ * {@code notification} collection via {@link NotificationFulfilmentsView}, sourced through
+ * {@link NotificationFulfilmentsService} to keep the controller-service-repository layering
+ * consistent with every other controller in this backend.
  */
 @RestController
 @RequestMapping("/notification-fulfilments")
@@ -35,7 +35,7 @@ import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 @Validated
 public class NotificationFulfilmentsController {
 
-    private final NotificationRepository notificationRepository;
+    private final NotificationFulfilmentsService notificationFulfilmentsService;
 
     @GetMapping("/{id}")
     @Operation(summary = "Get fulfilment view by reference number",
@@ -48,7 +48,6 @@ public class NotificationFulfilmentsController {
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
         @PathVariable String id) {
         log.debug("GET /notification-fulfilments/{} - Fetching fulfilment view", id);
-        return ResponseEntity.ok(notificationRepository.findFulfilmentsViewByReferenceNumber(id)
-            .orElseThrow(() -> new NotFoundException("Cannot find notification with reference number: " + id)));
+        return ResponseEntity.ok(notificationFulfilmentsService.findByReferenceNumber(id));
     }
 }

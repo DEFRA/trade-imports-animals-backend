@@ -1,12 +1,16 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
-import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
 import org.mapstruct.ReportingPolicy;
 
 /**
- * Maps a {@link Notification} entity to a {@link NotificationResponse}.
+ * Maps a {@link NotificationView} projection to a {@link NotificationResponse}.
+ *
+ * <p>Sourced from the notification-shape projection (not the full {@link Notification} aggregate)
+ * so the opaque {@code fulfilments} payload is never loaded from Mongo for the read endpoints —
+ * this is the AC-mandated separation ("each read API endpoint uses its corresponding projection;
+ * there is no shared read method returning the full merged aggregate").
  *
  * <p>Accompanying documents are intentionally excluded ({@code ignore = true}) because they live
  * in a separate collection and are fetched and assembled by the service layer after mapping.
@@ -17,9 +21,6 @@ import org.mapstruct.ReportingPolicy;
 @Mapper(unmappedTargetPolicy = ReportingPolicy.ERROR, unmappedSourcePolicy = ReportingPolicy.ERROR)
 public interface NotificationMapper {
 
-    @BeanMapping(ignoreUnmappedSourceProperties = {
-        "submittedBaseline", "expireAt", "submittedAt", "fulfilments", "submittedFulfilmentsBaseline"
-    })
     @Mapping(target = "accompanyingDocuments", ignore = true)
-    NotificationResponse toResponse(Notification notification);
+    NotificationResponse toResponse(NotificationView notification);
 }

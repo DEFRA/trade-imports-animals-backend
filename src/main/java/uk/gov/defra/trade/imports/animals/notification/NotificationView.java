@@ -4,22 +4,24 @@ import java.time.LocalDateTime;
 
 /**
  * Spring Data interface projection over the merged {@code notification} collection that exposes
- * the notification-shape display fields consumed by the temporary dashboard endpoint
+ * every notification-shape field the read API surfaces — the paginated list endpoint
  * ({@code GET /notifications?page&sort&referenceNumber}) and the single-ref endpoint
- * ({@code GET /notifications/{ref}}, if kept).
+ * ({@code GET /notifications/{ref}}). Backs both today and any internal Java code that needs
+ * notification-shape data.
  *
- * <p>YAGNI-trimmed to the fields the frontend list marshaller actually reads (see
- * {@code marshal/list-item.js}): {@code referenceNumber}, {@code status}, {@code created},
- * plus the nested display objects {@code commodity}, {@code origin}, {@code transport},
- * {@code consignor}, {@code consignee}. Fields on {@code NotificationBase} that no consumer
- * currently reads ({@code updated}, {@code reasonForImport}, {@code additionalDetails},
- * {@code placeOfOrigin}, {@code importer}, {@code destination}, {@code consignment},
- * {@code cphNumber}) are intentionally excluded; the opaque fulfilments payload and server-only
- * snapshots are excluded by design (this is the notification-shape view).
+ * <p>Exposes the full notification-shape surface (all typed display fields from
+ * {@link NotificationBase} plus the Mongo {@code _id}) so the mapper can populate
+ * {@link NotificationResponse} without loading the opaque {@code fulfilments} payload. Server-only
+ * lifecycle machinery ({@code submittedBaseline}, {@code submittedFulfilmentsBaseline},
+ * {@code submittedAt}, {@code expireAt}) is intentionally excluded — it is not part of the
+ * notification-shape read contract; the opaque fulfilments payload is excluded by design (that is
+ * what the sibling {@link NotificationFulfilmentsView} projection is for).
  *
  * <p>Follows the pattern established by {@link NotificationReferenceOnly}.
  */
 public interface NotificationView {
+
+    String getId();
 
     String getReferenceNumber();
 
@@ -27,13 +29,29 @@ public interface NotificationView {
 
     LocalDateTime getCreated();
 
-    Commodity getCommodity();
+    LocalDateTime getUpdated();
 
     Origin getOrigin();
 
-    Transport getTransport();
+    Commodity getCommodity();
+
+    String getReasonForImport();
+
+    AdditionalDetails getAdditionalDetails();
+
+    Operator getPlaceOfOrigin();
 
     Operator getConsignor();
 
     Operator getConsignee();
+
+    Operator getImporter();
+
+    Operator getDestination();
+
+    Operator getConsignment();
+
+    String getCphNumber();
+
+    Transport getTransport();
 }

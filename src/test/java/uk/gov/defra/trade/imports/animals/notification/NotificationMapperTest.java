@@ -17,8 +17,8 @@ class NotificationMapperTest {
     private final NotificationMapper mapper = Mappers.getMapper(NotificationMapper.class);
 
     @Test
-    void toResponse_shouldMapAllEntityFieldsToResponse() {
-        Notification notification = Notification.builder()
+    void toResponse_shouldMapAllViewFieldsToResponse() {
+        NotificationView view = view()
             .id("notif-id-001")
             .referenceNumber("IMP.GB.2026.1001401")
             .origin(Origin.builder()
@@ -46,7 +46,7 @@ class NotificationMapperTest {
             .updated(LocalDateTime.of(2026, 4, 16, 9, 0))
             .build();
 
-        NotificationResponse response = mapper.toResponse(notification);
+        NotificationResponse response = mapper.toResponse(view);
 
         assertThat(response.id()).isEqualTo("notif-id-001");
         assertThat(response.referenceNumber()).isEqualTo("IMP.GB.2026.1001401");
@@ -69,18 +69,18 @@ class NotificationMapperTest {
 
     @Test
     void toResponse_shouldLeaveAccompanyingDocumentsNull() {
-        NotificationResponse response = mapper.toResponse(Notification.builder().build());
+        NotificationResponse response = mapper.toResponse(view().build());
 
         assertThat(response.accompanyingDocuments()).isNull();
     }
 
     @Test
     void toResponse_shouldHandleNullFieldsGracefully() {
-        Notification notification = Notification.builder()
+        NotificationView view = view()
             .referenceNumber("IMP.GB.2026.0000001")
             .build();
 
-        NotificationResponse response = mapper.toResponse(notification);
+        NotificationResponse response = mapper.toResponse(view);
 
         assertThat(response.referenceNumber()).isEqualTo("IMP.GB.2026.0000001");
         assertThat(response.placeOfOrigin()).isNull();
@@ -90,5 +90,69 @@ class NotificationMapperTest {
         assertThat(response.destination()).isNull();
         assertThat(response.consignment()).isNull();
         assertThat(response.origin()).isNull();
+    }
+
+    private static ViewBuilder view() {
+        return new ViewBuilder();
+    }
+
+    private static final class ViewBuilder {
+        private String id;
+        private String referenceNumber;
+        private NotificationStatus status;
+        private LocalDateTime created;
+        private LocalDateTime updated;
+        private Origin origin;
+        private Commodity commodity;
+        private String reasonForImport;
+        private AdditionalDetails additionalDetails;
+        private Operator placeOfOrigin;
+        private Operator consignor;
+        private Operator consignee;
+        private Operator importer;
+        private Operator destination;
+        private Operator consignment;
+        private String cphNumber;
+        private Transport transport;
+
+        ViewBuilder id(String v) { this.id = v; return this; }
+        ViewBuilder referenceNumber(String v) { this.referenceNumber = v; return this; }
+        ViewBuilder status(NotificationStatus v) { this.status = v; return this; }
+        ViewBuilder created(LocalDateTime v) { this.created = v; return this; }
+        ViewBuilder updated(LocalDateTime v) { this.updated = v; return this; }
+        ViewBuilder origin(Origin v) { this.origin = v; return this; }
+        ViewBuilder commodity(Commodity v) { this.commodity = v; return this; }
+        ViewBuilder reasonForImport(String v) { this.reasonForImport = v; return this; }
+        ViewBuilder additionalDetails(AdditionalDetails v) { this.additionalDetails = v; return this; }
+        ViewBuilder placeOfOrigin(Operator v) { this.placeOfOrigin = v; return this; }
+        ViewBuilder consignor(Operator v) { this.consignor = v; return this; }
+        ViewBuilder consignee(Operator v) { this.consignee = v; return this; }
+        ViewBuilder importer(Operator v) { this.importer = v; return this; }
+        ViewBuilder destination(Operator v) { this.destination = v; return this; }
+        ViewBuilder consignment(Operator v) { this.consignment = v; return this; }
+        ViewBuilder cphNumber(String v) { this.cphNumber = v; return this; }
+        ViewBuilder transport(Transport v) { this.transport = v; return this; }
+
+        NotificationView build() {
+            return new NotificationView() {
+                @Override public String getId() { return id; }
+                @Override public String getReferenceNumber() { return referenceNumber; }
+                @Override public NotificationStatus getStatus() { return status; }
+                @Override public LocalDateTime getCreated() { return created; }
+                @Override public LocalDateTime getUpdated() { return updated; }
+                @Override public Origin getOrigin() { return origin; }
+                @Override public Commodity getCommodity() { return commodity; }
+                @Override public String getReasonForImport() { return reasonForImport; }
+                @Override public AdditionalDetails getAdditionalDetails() { return additionalDetails; }
+                @Override public Operator getPlaceOfOrigin() { return placeOfOrigin; }
+                @Override public Operator getConsignor() { return consignor; }
+                @Override public Operator getConsignee() { return consignee; }
+                @Override public Operator getImporter() { return importer; }
+                @Override public Operator getDestination() { return destination; }
+                @Override public Operator getConsignment() { return consignment; }
+                @Override public String getCphNumber() { return cphNumber; }
+                @Override public Transport getTransport() { return transport; }
+            };
+        }
     }
 }

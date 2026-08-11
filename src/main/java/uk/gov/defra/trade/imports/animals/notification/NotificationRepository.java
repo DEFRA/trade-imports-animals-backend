@@ -14,9 +14,6 @@ public interface NotificationRepository extends MongoRepository<Notification, St
 
     Optional<Notification> findByReferenceNumber(String referenceNumber);
 
-    Optional<Notification> findByReferenceNumberAndStatusIn(
-        String referenceNumber, List<NotificationStatus> statuses);
-
     List<NotificationReferenceOnly> findAllByReferenceNumberIn(List<String> referenceNumbers);
 
     /**
@@ -28,9 +25,17 @@ public interface NotificationRepository extends MongoRepository<Notification, St
 
     /**
      * Notification-shape display-view projection over the merged aggregate. Backs
-     * {@code GET /notifications/{ref}} if kept.
+     * {@code GET /notifications/{ref}}.
      */
     Optional<NotificationView> findViewByReferenceNumber(String referenceNumber);
+
+    /**
+     * Notification-shape display-view projection restricted to a status set. Backs the
+     * exact-reference-number branch of {@code GET /notifications?…&referenceNumber=…} so the
+     * dashboard search is filtered to the same statuses as the paginated list.
+     */
+    Optional<NotificationView> findViewByReferenceNumberAndStatusIn(
+        String referenceNumber, List<NotificationStatus> statuses);
 
     /**
      * Paginated notification-shape display-view projection. Backs {@code GET /notifications?…} for
@@ -49,8 +54,6 @@ public interface NotificationRepository extends MongoRepository<Notification, St
     List<NotificationReferenceOnly> findExpired(LocalDateTime now, Pageable pageable);
 
     Page<NotificationReferenceOnly> findAllProjectedBy(Pageable pageable);
-
-    Page<Notification> findAllByStatusIn(List<NotificationStatus> statuses, Pageable pageable);
 
     void deleteAllByReferenceNumberIn(List<String> referenceNumbers);
 

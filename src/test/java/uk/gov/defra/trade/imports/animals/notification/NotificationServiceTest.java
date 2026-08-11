@@ -314,9 +314,9 @@ class NotificationServiceTest {
         @Test
         void findAll_shouldReturnEmptyPage() {
             // Given
-            Page<Notification> emptyPage = new PageImpl<>(
+            Page<NotificationView> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
-            when(notificationRepository.findAllByStatusIn(
+            when(notificationRepository.findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
@@ -326,25 +326,25 @@ class NotificationServiceTest {
             // Then
             assertThat(result).isNotNull();
             verify(notificationRepository, times(1))
-                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
+                .findAllViewByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
         }
 
         @Test
         void findAll_shouldExcludeDeletedNotifications() {
             // Given — only DRAFT and SUBMITTED are passed as the allowlist; DELETED is excluded
-            Notification draft = Notification.builder()
+            NotificationView draft = notificationView()
                 .referenceNumber("GBN-AG-26-000DFT")
                 .status(DRAFT)
                 .build();
-            Notification submitted = Notification.builder()
+            NotificationView submitted = notificationView()
                 .referenceNumber("GBN-AG-26-000SUB")
                 .status(SUBMITTED)
                 .build();
 
-            Page<Notification> page = new PageImpl<>(
+            Page<NotificationView> page = new PageImpl<>(
                 List.of(draft, submitted), PageRequest.of(0, 54), 0);
 
-            when(notificationRepository.findAllByStatusIn(
+            when(notificationRepository.findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
@@ -358,20 +358,20 @@ class NotificationServiceTest {
             assertThat(result.page()).isEqualTo(1);
             assertThat(result.size()).isEqualTo(54);
             verify(notificationRepository, times(1))
-                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
+                .findAllViewByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
         }
 
         @Test
         void findAll_shouldMapStatusToNotificationDto() {
             // Given
-            Notification notification = Notification.builder()
+            NotificationView view = notificationView()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .origin(new Origin("GB", "true", "REF-1"))
                 .status(SUBMITTED)
                 .build();
-            Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54),
-                1);
-            when(notificationRepository.findAllByStatusIn(
+            Page<NotificationView> page = new PageImpl<>(
+                List.of(view), PageRequest.of(0, 54), 1);
+            when(notificationRepository.findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
@@ -390,15 +390,15 @@ class NotificationServiceTest {
         void findAll_shouldIncludeAmendNotifications() {
             // Regression: notifications in AMEND were silently excluded from the
             // dashboard before AMEND was added to the allow-list (EUDPA-171).
-            Notification amend = Notification.builder()
+            NotificationView amend = notificationView()
                 .referenceNumber("GBN-AG-26-000AMD")
                 .status(AMEND)
                 .build();
 
-            Page<Notification> page = new PageImpl<>(
+            Page<NotificationView> page = new PageImpl<>(
                 List.of(amend), PageRequest.of(0, 54), 0);
 
-            when(notificationRepository.findAllByStatusIn(
+            when(notificationRepository.findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
@@ -411,16 +411,16 @@ class NotificationServiceTest {
 
         @Test
         void findAll_shouldUseCreatedAtSort_whenRequested() {
-            Page<Notification> emptyPage = new PageImpl<>(
+            Page<NotificationView> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
-            when(notificationRepository.findAllByStatusIn(
+            when(notificationRepository.findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
             notificationService.findAll(1, "createdAt,asc");
 
             ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-            verify(notificationRepository).findAllByStatusIn(
+            verify(notificationRepository).findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), pageableCaptor.capture());
             assertThat(pageableCaptor.getValue().getSort().getOrderFor("created").getDirection())
                 .isEqualTo(Sort.Direction.ASC);
@@ -428,12 +428,12 @@ class NotificationServiceTest {
 
         @Test
         void findAll_shouldReturnMatchingNotification_whenReferenceNumberProvided() {
-            Notification draft = Notification.builder()
+            NotificationView draft = notificationView()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .status(DRAFT)
                 .build();
 
-            when(notificationRepository.findByReferenceNumberAndStatusIn(
+            when(notificationRepository.findViewByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND)))
                 .thenReturn(Optional.of(draft));
 
@@ -445,12 +445,12 @@ class NotificationServiceTest {
                 .isEqualTo("GBN-AG-26-ABC123");
             assertThat(result.totalElements()).isEqualTo(1);
             verify(notificationRepository, never())
-                .findAllByStatusIn(any(), any(Pageable.class));
+                .findAllViewByStatusIn(any(), any(Pageable.class));
         }
 
         @Test
         void findAll_shouldReturnEmptyPage_whenReferenceNumberNotFound() {
-            when(notificationRepository.findByReferenceNumberAndStatusIn(
+            when(notificationRepository.findViewByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ZZZZZZ", List.of(DRAFT, SUBMITTED, AMEND)))
                 .thenReturn(Optional.empty());
 
@@ -460,18 +460,18 @@ class NotificationServiceTest {
             assertThat(result.content()).isEmpty();
             assertThat(result.totalElements()).isZero();
             verify(notificationRepository, never())
-                .findAllByStatusIn(any(), any(Pageable.class));
+                .findAllViewByStatusIn(any(), any(Pageable.class));
         }
 
         @Test
         void findAll_shouldTrimReferenceNumber_beforeLookup() {
-            when(notificationRepository.findByReferenceNumberAndStatusIn(
+            when(notificationRepository.findViewByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND)))
                 .thenReturn(Optional.empty());
 
             notificationService.findAll(1, null, "  GBN-AG-26-ABC123  ");
 
-            verify(notificationRepository).findByReferenceNumberAndStatusIn(
+            verify(notificationRepository).findViewByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND));
         }
     }
@@ -1270,7 +1270,7 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-ABC123";
             Origin origin = new Origin("GB", "true", "REF-001");
-            Notification notification = Notification.builder()
+            NotificationView view = notificationView()
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
                 .origin(origin)
@@ -1290,8 +1290,8 @@ class NotificationServiceTest {
                 .files(Collections.emptyList())
                 .build();
 
-            when(notificationRepository.findByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.of(notification));
+            when(notificationRepository.findViewByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(view));
             when(documentService.findByNotificationRef(referenceNumber))
                 .thenReturn(List.of(document));
 
@@ -1318,14 +1318,14 @@ class NotificationServiceTest {
         void findByRef_shouldReturnNotificationWithEmptyDocuments_whenNoneUploaded() {
             // Given
             String referenceNumber = "GBN-AG-26-XYZ456";
-            Notification notification = Notification.builder()
+            NotificationView view = notificationView()
                 .id("notif-id-002")
                 .referenceNumber(referenceNumber)
                 .origin(new Origin("IE", "false", null))
                 .build();
 
-            when(notificationRepository.findByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.of(notification));
+            when(notificationRepository.findViewByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(view));
             when(documentService.findByNotificationRef(referenceNumber))
                 .thenReturn(Collections.emptyList());
 
@@ -1341,7 +1341,7 @@ class NotificationServiceTest {
         void findByRef_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
             // Given
             String referenceNumber = "GBN-AG-26-ABSENT";
-            when(notificationRepository.findByReferenceNumber(referenceNumber))
+            when(notificationRepository.findViewByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.empty());
 
             // When / Then
@@ -1738,9 +1738,12 @@ class NotificationServiceTest {
         }
 
         @Test
-        void cancelAmend_shouldRestoreFulfilmentsAndSetSubmittedAt() {
-            // Given
+        void cancelAmend_shouldRestoreFulfilmentsAndPreserveOriginalSubmittedAt() {
+            // Given — an in-flight amendment carries the original submittedAt (writeWithOutbox
+            // does not touch it on the SUBMITTED -> AMEND transition), so cancel-amend must
+            // return that same timestamp untouched.
             String ref = "GBN-AG-26-CAN001";
+            LocalDateTime originalSubmittedAt = LocalDateTime.of(2026, 4, 15, 10, 0);
             List<Document> priorFulfilments = List.of(new Document("obligationId", "prior"));
             NotificationContentSnapshot baseline = NotificationContentSnapshot.builder()
                 .origin(new Origin("GB", "no", "ORIGINAL"))
@@ -1753,6 +1756,7 @@ class NotificationServiceTest {
                 .submittedBaseline(baseline)
                 .submittedFulfilmentsBaseline(new ArrayList<>(priorFulfilments))
                 .fulfilments(List.of(new Document("obligationId", "in-flight-edit")))
+                .submittedAt(originalSubmittedAt)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(ref))
@@ -1768,8 +1772,45 @@ class NotificationServiceTest {
             assertThat(result.getSubmittedBaseline()).isNull();
             assertThat(result.getSubmittedFulfilmentsBaseline()).isNull();
             assertThat(result.getFulfilments()).isEqualTo(priorFulfilments);
-            assertThat(result.getSubmittedAt()).isNotNull();
+            assertThat(result.getSubmittedAt()).isEqualTo(originalSubmittedAt);
             assertThat(result.getOrigin().getInternalReference()).isEqualTo("ORIGINAL");
+        }
+
+        @Test
+        void submittedAt_shouldReflectLatestSubmission_acrossFullAmendCycle() {
+            // Given — a fresh DRAFT that is submitted, amended, then re-submitted. This pins the
+            // agreed semantics for submittedAt: it tracks the LATEST submission event (see the
+            // Javadoc on Notification#submittedAt), not the original submit time. That is what
+            // downstream consumers of the outbox event's submittedAt field see for a
+            // resubmitted notification. Cancel-amend, by contrast, preserves the original —
+            // covered by cancelAmend_shouldRestoreFulfilmentsAndPreserveOriginalSubmittedAt.
+            String ref = "GBN-AG-26-SBMT02";
+            Notification notification = Notification.builder()
+                .id("db-id-cycle")
+                .referenceNumber(ref)
+                .status(DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When — DRAFT -> SUBMITTED (first submit)
+            Notification afterFirstSubmit = notificationService.submitNotification(ref, "t1", null);
+            LocalDateTime firstSubmittedAt = afterFirstSubmit.getSubmittedAt();
+            assertThat(firstSubmittedAt).isNotNull();
+
+            // And — SUBMITTED -> AMEND (submittedAt preserved through the transition)
+            Notification afterAmend = notificationService.amendNotification(ref, "t2", null);
+            assertThat(afterAmend.getSubmittedAt()).isEqualTo(firstSubmittedAt);
+
+            // And — AMEND -> SUBMITTED (resubmit updates submittedAt to the new submission moment)
+            Notification afterResubmit = notificationService.submitNotification(ref, "t3", null);
+
+            // Then — submittedAt reflects the RESUBMISSION, not the original submit.
+            assertThat(afterResubmit.getSubmittedAt()).isNotNull();
+            assertThat(afterResubmit.getSubmittedAt()).isAfterOrEqualTo(firstSubmittedAt);
         }
 
         @Test
@@ -1949,6 +1990,73 @@ class NotificationServiceTest {
                 .hasMessageContaining(referenceNumber);
 
             verify(notificationRepository, never()).save(any());
+        }
+    }
+
+    // Test double for the Spring Data interface projection {@link NotificationView}. The projection
+    // is created by Spring at query time in production; unit tests build one via this builder so
+    // repository stubs can return realistic view instances without a running Mongo.
+    private static NotificationViewBuilder notificationView() {
+        return new NotificationViewBuilder();
+    }
+
+    private static final class NotificationViewBuilder {
+        private String id;
+        private String referenceNumber;
+        private NotificationStatus status;
+        private LocalDateTime created;
+        private LocalDateTime updated;
+        private Origin origin;
+        private Commodity commodity;
+        private String reasonForImport;
+        private AdditionalDetails additionalDetails;
+        private Operator placeOfOrigin;
+        private Operator consignor;
+        private Operator consignee;
+        private Operator importer;
+        private Operator destination;
+        private Operator consignment;
+        private String cphNumber;
+        private Transport transport;
+
+        NotificationViewBuilder id(String id) { this.id = id; return this; }
+        NotificationViewBuilder referenceNumber(String v) { this.referenceNumber = v; return this; }
+        NotificationViewBuilder status(NotificationStatus v) { this.status = v; return this; }
+        NotificationViewBuilder created(LocalDateTime v) { this.created = v; return this; }
+        NotificationViewBuilder updated(LocalDateTime v) { this.updated = v; return this; }
+        NotificationViewBuilder origin(Origin v) { this.origin = v; return this; }
+        NotificationViewBuilder commodity(Commodity v) { this.commodity = v; return this; }
+        NotificationViewBuilder reasonForImport(String v) { this.reasonForImport = v; return this; }
+        NotificationViewBuilder additionalDetails(AdditionalDetails v) { this.additionalDetails = v; return this; }
+        NotificationViewBuilder placeOfOrigin(Operator v) { this.placeOfOrigin = v; return this; }
+        NotificationViewBuilder consignor(Operator v) { this.consignor = v; return this; }
+        NotificationViewBuilder consignee(Operator v) { this.consignee = v; return this; }
+        NotificationViewBuilder importer(Operator v) { this.importer = v; return this; }
+        NotificationViewBuilder destination(Operator v) { this.destination = v; return this; }
+        NotificationViewBuilder consignment(Operator v) { this.consignment = v; return this; }
+        NotificationViewBuilder cphNumber(String v) { this.cphNumber = v; return this; }
+        NotificationViewBuilder transport(Transport v) { this.transport = v; return this; }
+
+        NotificationView build() {
+            return new NotificationView() {
+                @Override public String getId() { return id; }
+                @Override public String getReferenceNumber() { return referenceNumber; }
+                @Override public NotificationStatus getStatus() { return status; }
+                @Override public LocalDateTime getCreated() { return created; }
+                @Override public LocalDateTime getUpdated() { return updated; }
+                @Override public Origin getOrigin() { return origin; }
+                @Override public Commodity getCommodity() { return commodity; }
+                @Override public String getReasonForImport() { return reasonForImport; }
+                @Override public AdditionalDetails getAdditionalDetails() { return additionalDetails; }
+                @Override public Operator getPlaceOfOrigin() { return placeOfOrigin; }
+                @Override public Operator getConsignor() { return consignor; }
+                @Override public Operator getConsignee() { return consignee; }
+                @Override public Operator getImporter() { return importer; }
+                @Override public Operator getDestination() { return destination; }
+                @Override public Operator getConsignment() { return consignment; }
+                @Override public String getCphNumber() { return cphNumber; }
+                @Override public Transport getTransport() { return transport; }
+            };
         }
     }
 }

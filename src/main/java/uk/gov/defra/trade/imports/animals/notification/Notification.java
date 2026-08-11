@@ -38,7 +38,13 @@ public class Notification extends NotificationBase {
     @Indexed
     private LocalDateTime expireAt;
 
-    /** When this notification was submitted. Set by {@code submitNotification}; carried into the fulfilment-view projection. */
+    /**
+     * When this notification was last submitted — updated on every DRAFT-or-AMEND -> SUBMITTED
+     * transition (including submit-from-amend), so it reflects the most recent submission event,
+     * not the original one. Preserved unchanged across SUBMITTED -> AMEND and AMEND -> SUBMITTED
+     * (cancel-amend). Set by {@code submitNotification}; carried into the fulfilment-view
+     * projection.
+     */
     private LocalDateTime submittedAt;
 
     /** Opaque obligation-fulfilment payload — persisted byte-faithfully; never interpreted by the backend. */

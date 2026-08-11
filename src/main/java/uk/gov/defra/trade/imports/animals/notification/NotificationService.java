@@ -126,14 +126,19 @@ public class NotificationService {
         return createNotification(notificationCopyMapper.toCopyDto(source));
     }
 
+    /**
+     * Serves {@code GET /notifications/{ref}} via the notification-shape projection. The opaque
+     * {@code fulfilments} payload is never loaded from Mongo for this read; the fulfilment view is
+     * served separately by {@code GET /notification-fulfilments/{id}}.
+     */
     public NotificationResponse findByRef(String referenceNumber) {
         log.debug("Fetching notification for reference {}", referenceNumber);
-        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationView view = notificationRepository.findViewByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
         List<AccompanyingDocument> documents = documentService.findByNotificationRef(
             referenceNumber);
-        return notificationMapper.toResponse(notification).toBuilder()
+        return notificationMapper.toResponse(view).toBuilder()
             .accompanyingDocuments(documents.stream().map(AccompanyingDocumentDto::from).toList())
             .build();
     }
@@ -142,6 +147,10 @@ public class NotificationService {
         return findAll(page, sort, null);
     }
 
+    /**
+     * Serves {@code GET /notifications?…} via the notification-shape projection. The opaque
+     * {@code fulfilments} payload is never loaded from Mongo for this read.
+     */
     public NotificationPageResponse findAll(int page, String sort, String referenceNumber) {
         List<NotificationStatus> dashboardStatuses = List.of(
             NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
@@ -150,9 +159,9 @@ public class NotificationService {
         String trimmedReference = StringUtils.trimToNull(referenceNumber);
         if (trimmedReference != null) {
             log.debug("Fetching notification by reference {} for dashboard", trimmedReference);
-            Page<Notification> matched = notificationRepository
-                .findByReferenceNumberAndStatusIn(trimmedReference, dashboardStatuses)
-                .<Page<Notification>>map(notification ->
+            Page<NotificationView> matched = notificationRepository
+                .findViewByReferenceNumberAndStatusIn(trimmedReference, dashboardStatuses)
+                .<Page<NotificationView>>map(notification ->
                     new PageImpl<>(List.of(notification), pageable, 1))
                 .orElseGet(() -> Page.empty(pageable));
             log.debug("Found {} notifications for reference {}", matched.getNumberOfElements(),
@@ -161,7 +170,7 @@ public class NotificationService {
         }
 
         log.debug("Fetching notifications page {} (size {}) with sort {}", page, listPageSize, sort);
-        Page<Notification> result = notificationRepository.findAllByStatusIn(
+        Page<NotificationView> result = notificationRepository.findAllViewByStatusIn(
             dashboardStatuses, pageable);
         log.debug("Found {} notifications on page {} of {}",
             result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
@@ -202,6 +211,10 @@ public class NotificationService {
         }
 
         notification.setSubmittedBaseline(NotificationContentSnapshot.from(notification));
+        // Shallow copy — see the matching restore in cancelAmendNotification. Documents in the
+        // fulfilments list are written whole by the frontend and never mutated in place after
+        // read, so sharing the inner Document references between the baseline and the live list
+        // is safe.
         notification.setSubmittedFulfilmentsBaseline(
             notification.getFulfilments() == null ? null : new ArrayList<>(notification.getFulfilments()));
 
@@ -232,6 +245,10 @@ public class NotificationService {
 
         notification.getSubmittedBaseline().applyTo(notification);
         notification.setSubmittedBaseline(null);
+        // Shallow copy of the pre-amend fulfilments baseline. Safe because Documents in the
+        // fulfilments list are written whole by the frontend and never mutated in place after
+        // read (invariant enforced by the JS lifecycle module); see the symmetric snapshot in
+        // amendNotification.
         notification.setFulfilments(
             notification.getSubmittedFulfilmentsBaseline() == null
                 ? null
@@ -239,7 +256,10 @@ public class NotificationService {
         notification.setSubmittedFulfilmentsBaseline(null);
         notification.setStatus(NotificationStatus.SUBMITTED);
         notification.setUpdated(LocalDateTime.now());
-        notification.setSubmittedAt(LocalDateTime.now());
+        // submittedAt is deliberately NOT reset — the amendment is being cancelled to revert to the
+        // previously-submitted state, so the original submission timestamp must be preserved.
+        // (submittedAt is never touched during the SUBMITTED -> AMEND transition, so it still
+        // holds the last-submit value when we get here.)
         log.info("Cancelled amendment for notification {}", referenceNumber);
         return notificationRepository.save(notification);
     }
