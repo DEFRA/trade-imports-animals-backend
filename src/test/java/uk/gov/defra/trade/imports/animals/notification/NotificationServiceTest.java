@@ -278,45 +278,9 @@ class NotificationServiceTest {
             Notification result = notificationService.saveOriginOfImport(updateDto);
 
             // Then
-            assertThat(result).isNotNull();
-            assertThat(result.getReferenceNumber()).isEqualTo("GBN-AG-26-507F19");
-            assertThat(result.getId()).isEqualTo(existingId);
-            assertThat(result.getOrigin()).isEqualTo(origin);
-            assertThat(result.getCommodity().getName()).isEqualTo("Fish");
-            assertThat(result.getCommodity().getCommodityComplement()).hasSize(1);
-            assertThat(result.getCommodity().getCommodityComplement().getFirst()
-                .getTypeOfCommodity()).isEqualTo("LIVE");
-            assertThat(
-                result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst()
-                    .getValue()).isEqualTo("BOV");
-            assertThat(
-                result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst()
-                    .getEarTag()).isEqualTo("UK01234567890");
-            assertThat(
-                result.getCommodity().getCommodityComplement().getFirst().getSpecies().getFirst()
-                    .getPassport()).isEqualTo("UK0123456700999");
-            assertThat(result.getAdditionalDetails().getCertifiedFor()).isEqualTo(
-                "HUMAN_CONSUMPTION");
-            assertThat(result.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("true");
-            assertThat(result.getReasonForImport()).isEqualTo("PERMANENT");
-            assertThat(result.getConsignor().getName()).isEqualTo("Astra Rosales");
-            assertThat(result.getConsignor().getAddress().getAddressLine1()).isEqualTo(
-                "43 East Hague Extension");
-            assertThat(result.getConsignor().getAddress().getTownOrCity()).isEqualTo("Vernier");
-            assertThat(result.getConsignor().getAddress().getPostcode()).isEqualTo("30055");
-            assertThat(result.getConsignor().getAddress().getCountryCode()).isEqualTo("CH");
-            assertThat(result.getDestination().getName()).isEqualTo("United Commerce");
-            assertThat(result.getDestination().getAddress().getAddressLine1()).isEqualTo(
-                "446 Church Lane");
-            assertThat(result.getDestination().getAddress().getCountryCode()).isEqualTo("GB");
-            assertThat(result.getCphNumber()).isEqualTo("123456789");
-            assertThat(result.getTransport()).isEqualTo(transport);
-            assertThat(result.getConsignment().getName())
-                .isEqualTo("Animal and Plant Health Agency");
-            assertThat(result.getConsignment().getAddress().getAddressLine1())
-                .isEqualTo("Woodham Lane");
-            assertThat(result.getConsignment().getAddress().getCountryCode())
-                .isEqualTo("GB");
+            assertThat(result)
+                .usingRecursiveComparison()
+                .isEqualTo(updatedNotification);
             verify(notificationRepository, times(1)).save(any(Notification.class));
         }
     }
@@ -1414,7 +1378,7 @@ class NotificationServiceTest {
                 .build();
         }
 
-        private AddressBookRecord record(boolean deleted) {
+        private AddressBookRecord addressBookRecord(boolean deleted) {
             return new AddressBookRecord(ADDRESS_ID, "Astra Rosales", "43 East Hague Extension",
                 null, "Vernier", "Soleure", "30055", "CH", "+41 22 000 0000",
                 "astra@example.com", deleted);
@@ -1427,7 +1391,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notificationWithReferencedConsignor(ref)));
             when(documentService.findByNotificationRef(ref)).thenReturn(Collections.emptyList());
             when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
-                .thenReturn(Optional.of(record(false)));
+                .thenReturn(Optional.of(addressBookRecord(false)));
 
             NotificationResponse response = notificationService.findByRef(ref, ORG_ID);
 
@@ -1454,7 +1418,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notificationWithReferencedConsignor(ref)));
             when(documentService.findByNotificationRef(ref)).thenReturn(Collections.emptyList());
             when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
-                .thenReturn(Optional.of(record(false)));
+                .thenReturn(Optional.of(addressBookRecord(false)));
 
             NotificationResponse response = notificationService.findByRef(ref, ORG_ID);
 
@@ -1482,7 +1446,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notification));
             when(documentService.findByNotificationRef(ref)).thenReturn(Collections.emptyList());
             when(addressBookClient.findById(ORG_ID, sharedId))
-                .thenReturn(Optional.of(record(false)));
+                .thenReturn(Optional.of(addressBookRecord(false)));
             when(addressBookClient.findById(ORG_ID, otherId))
                 .thenReturn(Optional.of(new AddressBookRecord(
                     otherId, "Other Party", "1 Other Street", null, "Leeds", "West Yorkshire",
@@ -1507,7 +1471,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notificationWithReferencedConsignor(ref)));
             when(documentService.findByNotificationRef(ref)).thenReturn(Collections.emptyList());
             when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
-                .thenReturn(Optional.of(record(true)));
+                .thenReturn(Optional.of(addressBookRecord(true)));
 
             NotificationResponse response = notificationService.findByRef(ref, ORG_ID);
 
@@ -1569,7 +1533,7 @@ class NotificationServiceTest {
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(first, second), PageRequest.of(0, 54), 2));
             when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
-                .thenReturn(Optional.of(record(false)));
+                .thenReturn(Optional.of(addressBookRecord(false)));
 
             NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
 
@@ -1587,7 +1551,7 @@ class NotificationServiceTest {
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(stored), PageRequest.of(0, 54), 1));
             when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
-                .thenReturn(Optional.of(record(false)));
+                .thenReturn(Optional.of(addressBookRecord(false)));
 
             notificationService.findAll(1, null, null, ORG_ID);
 

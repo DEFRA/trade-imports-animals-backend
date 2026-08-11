@@ -145,29 +145,29 @@ public class PartyResolver {
                 organisationId, party.getAddressId());
             return null;
         }
-        AddressBookRecord record = found.get();
-        if (record.deleted()) {
+        AddressBookRecord addressBookRecord = found.get();
+        if (addressBookRecord.deleted()) {
             log.info(
                 "Address-book party is soft-deleted (organisationId={}, addressId={})",
                 organisationId, party.getAddressId());
             return null;
         }
-        return toParty(party.getAddressId(), record);
+        return toParty(party.getAddressId(), addressBookRecord);
     }
 
-    private ConsignmentParty toParty(String addressId, AddressBookRecord record) {
+    private ConsignmentParty toParty(String addressId, AddressBookRecord addressBookRecord) {
         return ConsignmentParty.builder()
             .addressId(addressId)
-            .name(record.name())
-            .email(record.email())
-            .phone(record.phone())
+            .name(addressBookRecord.name())
+            .email(addressBookRecord.email())
+            .phone(addressBookRecord.phone())
             .address(Address.builder()
-                .addressLine1(record.addressLine1())
-                .addressLine2(record.addressLine2())
-                .townOrCity(record.townOrCity())
-                .county(record.county())
-                .postcode(record.postcode())
-                .countryCode(record.countryCode())
+                .addressLine1(addressBookRecord.addressLine1())
+                .addressLine2(addressBookRecord.addressLine2())
+                .townOrCity(addressBookRecord.townOrCity())
+                .county(addressBookRecord.county())
+                .postcode(addressBookRecord.postcode())
+                .countryCode(addressBookRecord.countryCode())
                 .build())
             .build();
     }

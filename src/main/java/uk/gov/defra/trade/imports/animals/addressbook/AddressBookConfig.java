@@ -12,10 +12,12 @@ import org.springframework.validation.annotation.Validated;
  * @param baseUrl the base URL of the address-book API
  * @param connectTimeout connect timeout for address-book HTTP calls (short — on the notification read path)
  * @param readTimeout read timeout for address-book HTTP calls (short — on the notification read path)
+ * @param addressByIdPath path template for a single-address GET (org- and id-scoped)
  */
 @Validated
 @ConfigurationProperties(prefix = "address-book")
 public record AddressBookConfig(
     @NotBlank String baseUrl,
     @DefaultValue("2s") Duration connectTimeout,
-    @DefaultValue("2s") Duration readTimeout) {}
+    @DefaultValue("2s") Duration readTimeout,
+    @DefaultValue("/organisation/{orgId}/addresses/{addressId}") String addressByIdPath) {}

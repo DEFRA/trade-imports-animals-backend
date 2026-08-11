@@ -4,11 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
+import java.time.Month;
 import java.util.List;
-import java.util.Optional;
 import org.bson.Document;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,14 +19,8 @@ import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFu
 import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsDto;
 import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsRepository;
 import uk.gov.defra.trade.imports.animals.notificationfulfilments.NotificationFulfilmentsStatus;
-import uk.gov.defra.trade.imports.animals.notification.Commodity;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
-import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
-import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
-import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
-import uk.gov.defra.trade.imports.animals.notification.Transport;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
 
 class NotificationFulfilmentsIT extends IntegrationBase {
@@ -391,9 +383,9 @@ class NotificationFulfilmentsIT extends IntegrationBase {
         NotificationFulfilments source = stored(
             DIRECT_PUT_REF,
             sourceStatus,
-            LocalDateTime.of(2026, 7, 24, 10, 0),
+            LocalDateTime.of(2026, Month.JULY, 24, 10, 0),
             sourceStatus == NotificationFulfilmentsStatus.SUBMITTED
-                ? LocalDateTime.of(2026, 7, 24, 11, 0)
+                ? LocalDateTime.of(2026, Month.JULY, 24, 11, 0)
                 : null);
         source.setFulfilments(sourceContent);
         notificationFulfilmentsRepository.insert(source);
@@ -475,7 +467,7 @@ class NotificationFulfilmentsIT extends IntegrationBase {
         NotificationFulfilments source = stored(
             DIRECT_PUT_REF,
             sourceStatus,
-            LocalDateTime.of(2026, 7, 24, 10, 0),
+            LocalDateTime.of(2026, Month.JULY, 24, 10, 0),
             null);
         notificationFulfilmentsRepository.insert(source);
 
@@ -515,12 +507,12 @@ class NotificationFulfilmentsIT extends IntegrationBase {
 
         assertThat(response).isNotNull();
         assertThat(response.get("fulfilments")).isEqualTo(expected);
-        assertThat(response.get("fulfilments").toString()).isEqualTo(expected.toString());
+        assertThat(response.get("fulfilments")).hasToString(expected.toString());
 
         JsonNode persisted = objectMapper.valueToTree(
             notificationFulfilmentsRepository.findById(created.getId()).orElseThrow().getFulfilments());
         assertThat(persisted).isEqualTo(expected);
-        assertThat(persisted.toString()).isEqualTo(expected.toString());
+        assertThat(persisted).hasToString(expected.toString());
     }
 
     private NotificationFulfilments createFulfilment() {

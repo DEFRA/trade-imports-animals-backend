@@ -23,10 +23,10 @@ public class AddressBookClient {
 
     private static final String ORGANISATION_ID_HEADER = "Trade-Imports-Organisation-Id";
 
-    private static final String ADDRESS_BY_ID_PATH = "/organisation/{orgId}/addresses/{addressId}";
-
     /** Resolved by bean name to the address-book-scoped client, not the shared default. */
     private final RestClient addressBookRestClient;
+
+    private final AddressBookConfig addressBookConfig;
 
     /**
      * Fetches one address by id, within the given organisation.
@@ -46,7 +46,7 @@ public class AddressBookClient {
     public Optional<AddressBookRecord> findById(String organisationId, String addressId) {
         try {
             return Optional.ofNullable(addressBookRestClient.get()
-                .uri(ADDRESS_BY_ID_PATH, organisationId, addressId)
+                .uri(addressBookConfig.addressByIdPath(), organisationId, addressId)
                 .header(ORGANISATION_ID_HEADER, organisationId)
                 .retrieve()
                 .body(AddressBookRecord.class));

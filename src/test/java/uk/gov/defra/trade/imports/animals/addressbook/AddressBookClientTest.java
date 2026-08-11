@@ -9,6 +9,7 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import java.time.Duration;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -46,6 +47,11 @@ class AddressBookClientTest {
         }
         """;
 
+    private static final String ADDRESS_BY_ID_PATH =
+        "/organisation/{orgId}/addresses/{addressId}";
+    private static final AddressBookConfig ADDRESS_BOOK_CONFIG = new AddressBookConfig(
+        BASE_URL, Duration.ofSeconds(2), Duration.ofSeconds(2), ADDRESS_BY_ID_PATH);
+
     private MockRestServiceServer server;
     private AddressBookClient addressBookClient;
 
@@ -53,7 +59,7 @@ class AddressBookClientTest {
     void setUp() {
         RestClient.Builder builder = RestClient.builder().baseUrl(BASE_URL);
         server = MockRestServiceServer.bindTo(builder).build();
-        addressBookClient = new AddressBookClient(builder.build());
+        addressBookClient = new AddressBookClient(builder.build(), ADDRESS_BOOK_CONFIG);
     }
 
     @Nested
