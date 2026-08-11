@@ -1339,7 +1339,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void softDelete_shouldReturn400_whenNotificationIsAlreadyDeleted() {
+    void softDelete_shouldBeIdempotent_whenNotificationIsAlreadyDeleted() {
         // Given — create and soft-delete a notification
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
@@ -1352,11 +1352,13 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
             .exchange().expectStatus().isOk();
 
-        // When — attempt to soft-delete again
+        // When — a repeat soft-delete returns the already-DELETED aggregate unchanged (REST DELETE idempotency).
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
             .exchange()
-            .expectStatus().isBadRequest();
+            .expectStatus().isOk()
+            .expectBody(Notification.class)
+            .value(n -> assertThat(n.getStatus()).isEqualTo(NotificationStatus.DELETED));
     }
 
     @Test

@@ -298,6 +298,10 @@ public class NotificationService {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+        // Idempotent per REST DELETE convention — a repeat call after a lost response is a no-op.
+        if (notification.getStatus() == NotificationStatus.DELETED) {
+            return notification;
+        }
         if (notification.getStatus() != NotificationStatus.DRAFT
             && notification.getStatus() != NotificationStatus.SUBMITTED
             && notification.getStatus() != NotificationStatus.AMEND) {

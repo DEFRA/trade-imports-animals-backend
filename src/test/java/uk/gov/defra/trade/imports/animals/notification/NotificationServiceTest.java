@@ -1804,6 +1804,27 @@ class NotificationServiceTest {
         }
 
         @Test
+        void softDelete_shouldBeIdempotent_onAlreadyDeleted() {
+            // Given
+            String ref = "GBN-AG-26-DEL001";
+            Notification alreadyDeleted = Notification.builder()
+                .referenceNumber(ref)
+                .status(DELETED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(alreadyDeleted));
+
+            // When
+            Notification result = notificationService.softDeleteNotification(ref);
+
+            // Then — returns the existing aggregate unchanged, no save.
+            assertThat(result).isSameAs(alreadyDeleted);
+            assertThat(result.getStatus()).isEqualTo(DELETED);
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
         void copy_shouldCarryFulfilmentsAcross() {
             // Given
             String sourceRef = "GBN-AG-26-CPY001";
@@ -1912,26 +1933,8 @@ class NotificationServiceTest {
             verify(notificationRepository).save(notification);
         }
 
-        @Test
-        void softDeleteNotification_shouldThrowBadRequestException_whenAlreadyDeleted() {
-            // Given
-            String referenceNumber = "GBN-AG-26-ABC789";
-            Notification notification = Notification.builder()
-                .id("notif-id-003")
-                .referenceNumber(referenceNumber)
-                .status(NotificationStatus.DELETED)
-                .build();
-
-            when(notificationRepository.findByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.of(notification));
-
-            // When / Then
-            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("DELETED");
-
-            verify(notificationRepository, never()).save(any());
-        }
+        // NB: soft-delete on an already-DELETED notification is idempotent under EUDPA-323 —
+        // returns the existing aggregate unchanged. See FulfilmentsMerge.softDelete_shouldBeIdempotent_onAlreadyDeleted.
 
         @Test
         void softDeleteNotification_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
