@@ -41,7 +41,6 @@ import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
 import org.junit.jupiter.api.BeforeEach;
-import org.mapstruct.factory.Mappers;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -97,9 +96,6 @@ class NotificationServiceTest {
     @InjectMocks
     private DefaultLockingTaskExecutor lockingTaskExecutor;
 
-    private final NotificationMapper notificationMapper = Mappers.getMapper(
-        NotificationMapper.class);
-
     @BeforeEach
     void setUp() {
         // Default: TTL unconfigured (days null) so create tests keep their original behaviour and
@@ -110,7 +106,7 @@ class NotificationServiceTest {
     private NotificationService buildService(NotificationTtlConfig ttlConfig) {
         return new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            notificationMapper, new NotificationCopyMapper(), referenceNumberGenerator, ttlConfig,
+            new NotificationCopyMapper(), referenceNumberGenerator, ttlConfig,
             Duration.ZERO, 54, 50);
     }
 
@@ -353,7 +349,7 @@ class NotificationServiceTest {
 
             // Then — only DRAFT and SUBMITTED are returned
             assertThat(result.content()).hasSize(2);
-            assertThat(result.content()).extracting(NotificationDto::getStatus)
+            assertThat(result.content()).extracting(NotificationView::status)
                 .containsExactlyInAnyOrder(DRAFT, SUBMITTED);
             assertThat(result.page()).isEqualTo(1);
             assertThat(result.size()).isEqualTo(54);
@@ -380,9 +376,9 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result.content()).hasSize(1);
-            assertThat(result.content().getFirst().getReferenceNumber()).isEqualTo(
+            assertThat(result.content().getFirst().referenceNumber()).isEqualTo(
                 "GBN-AG-26-ABC123");
-            assertThat(result.content().getFirst().getStatus()).isEqualTo(
+            assertThat(result.content().getFirst().status()).isEqualTo(
                 SUBMITTED);
         }
 
@@ -405,7 +401,7 @@ class NotificationServiceTest {
             NotificationPageResponse result = notificationService.findAll(1, null);
 
             assertThat(result.content()).hasSize(1);
-            assertThat(result.content()).extracting(NotificationDto::getStatus)
+            assertThat(result.content()).extracting(NotificationView::status)
                 .containsExactly(AMEND);
         }
 
@@ -441,7 +437,7 @@ class NotificationServiceTest {
                 notificationService.findAll(1, null, "GBN-AG-26-ABC123");
 
             assertThat(result.content()).hasSize(1);
-            assertThat(result.content().getFirst().getReferenceNumber())
+            assertThat(result.content().getFirst().referenceNumber())
                 .isEqualTo("GBN-AG-26-ABC123");
             assertThat(result.totalElements()).isEqualTo(1);
             verify(notificationRepository, never())
@@ -1263,97 +1259,6 @@ class NotificationServiceTest {
     }
 
     @Nested
-    class FindByRef {
-
-        @Test
-        void findByRef_shouldReturnHydratedNotification_withDocuments() {
-            // Given
-            String referenceNumber = "GBN-AG-26-ABC123";
-            Origin origin = new Origin("GB", "true", "REF-001");
-            NotificationView view = notificationView()
-                .id("notif-id-001")
-                .referenceNumber(referenceNumber)
-                .origin(origin)
-                .commodity(Commodity.builder().name("Live bovine animals").build())
-                .consignor(consignors().getFirst())
-                .destination(destinations().getFirst())
-                .consignment(consignments().getFirst())
-                .build();
-
-            AccompanyingDocument document = AccompanyingDocument.builder()
-                .id("doc-id-001")
-                .notificationReferenceNumber(referenceNumber)
-                .uploadId("upload-abc-123")
-                .documentType(DocumentType.ITAHC)
-                .documentReference("UKGB2026001")
-                .scanStatus(ScanStatus.COMPLETE)
-                .files(Collections.emptyList())
-                .build();
-
-            when(notificationRepository.findViewByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.of(view));
-            when(documentService.findByNotificationRef(referenceNumber))
-                .thenReturn(List.of(document));
-
-            // When
-            NotificationResponse response = notificationService.findByRef(referenceNumber);
-
-            // Then
-            assertThat(response).isNotNull();
-            assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
-            assertThat(response.origin().getCountryCode()).isEqualTo("GB");
-            assertThat(response.commodity().getName()).isEqualTo("Live bovine animals");
-            assertThat(response.consignor().getName()).isEqualTo(consignors().getFirst().getName());
-            assertThat(response.destination().getName()).isEqualTo(
-                destinations().getFirst().getName());
-            assertThat(response.consignment()).isEqualTo(consignments().getFirst());
-            assertThat(response.accompanyingDocuments()).hasSize(1);
-            assertThat(response.accompanyingDocuments().getFirst().uploadId()).isEqualTo(
-                "upload-abc-123");
-            assertThat(response.accompanyingDocuments().getFirst().scanStatus()).isEqualTo(
-                ScanStatus.COMPLETE);
-        }
-
-        @Test
-        void findByRef_shouldReturnNotificationWithEmptyDocuments_whenNoneUploaded() {
-            // Given
-            String referenceNumber = "GBN-AG-26-XYZ456";
-            NotificationView view = notificationView()
-                .id("notif-id-002")
-                .referenceNumber(referenceNumber)
-                .origin(new Origin("IE", "false", null))
-                .build();
-
-            when(notificationRepository.findViewByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.of(view));
-            when(documentService.findByNotificationRef(referenceNumber))
-                .thenReturn(Collections.emptyList());
-
-            // When
-            NotificationResponse response = notificationService.findByRef(referenceNumber);
-
-            // Then
-            assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
-            assertThat(response.accompanyingDocuments()).isEmpty();
-        }
-
-        @Test
-        void findByRef_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
-            // Given
-            String referenceNumber = "GBN-AG-26-ABSENT";
-            when(notificationRepository.findViewByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.empty());
-
-            // When / Then
-            assertThatThrownBy(() -> notificationService.findByRef(referenceNumber))
-                .isInstanceOf(NotFoundException.class)
-                .hasMessageContaining(referenceNumber);
-
-            verify(documentService, never()).findByNotificationRef(any());
-        }
-    }
-
-    @Nested
     class CopyNotification {
 
         @Test
@@ -2027,70 +1932,34 @@ class NotificationServiceTest {
         }
     }
 
-    // Test double for the Spring Data interface projection {@link NotificationView}. The projection
-    // is created by Spring at query time in production; unit tests build one via this builder so
-    // repository stubs can return realistic view instances without a running Mongo.
+    // Small fluent builder over the {@link NotificationView} record so tests can construct
+    // view instances by naming only the fields they care about (nulls elsewhere).
     private static NotificationViewBuilder notificationView() {
         return new NotificationViewBuilder();
     }
 
     private static final class NotificationViewBuilder {
-        private String id;
         private String referenceNumber;
         private NotificationStatus status;
         private LocalDateTime created;
-        private LocalDateTime updated;
         private Origin origin;
         private Commodity commodity;
-        private String reasonForImport;
-        private AdditionalDetails additionalDetails;
-        private Operator placeOfOrigin;
         private Operator consignor;
         private Operator consignee;
-        private Operator importer;
-        private Operator destination;
-        private Operator consignment;
-        private String cphNumber;
         private Transport transport;
 
-        NotificationViewBuilder id(String id) { this.id = id; return this; }
         NotificationViewBuilder referenceNumber(String v) { this.referenceNumber = v; return this; }
         NotificationViewBuilder status(NotificationStatus v) { this.status = v; return this; }
         NotificationViewBuilder created(LocalDateTime v) { this.created = v; return this; }
-        NotificationViewBuilder updated(LocalDateTime v) { this.updated = v; return this; }
         NotificationViewBuilder origin(Origin v) { this.origin = v; return this; }
         NotificationViewBuilder commodity(Commodity v) { this.commodity = v; return this; }
-        NotificationViewBuilder reasonForImport(String v) { this.reasonForImport = v; return this; }
-        NotificationViewBuilder additionalDetails(AdditionalDetails v) { this.additionalDetails = v; return this; }
-        NotificationViewBuilder placeOfOrigin(Operator v) { this.placeOfOrigin = v; return this; }
         NotificationViewBuilder consignor(Operator v) { this.consignor = v; return this; }
         NotificationViewBuilder consignee(Operator v) { this.consignee = v; return this; }
-        NotificationViewBuilder importer(Operator v) { this.importer = v; return this; }
-        NotificationViewBuilder destination(Operator v) { this.destination = v; return this; }
-        NotificationViewBuilder consignment(Operator v) { this.consignment = v; return this; }
-        NotificationViewBuilder cphNumber(String v) { this.cphNumber = v; return this; }
         NotificationViewBuilder transport(Transport v) { this.transport = v; return this; }
 
         NotificationView build() {
-            return new NotificationView() {
-                @Override public String getId() { return id; }
-                @Override public String getReferenceNumber() { return referenceNumber; }
-                @Override public NotificationStatus getStatus() { return status; }
-                @Override public LocalDateTime getCreated() { return created; }
-                @Override public LocalDateTime getUpdated() { return updated; }
-                @Override public Origin getOrigin() { return origin; }
-                @Override public Commodity getCommodity() { return commodity; }
-                @Override public String getReasonForImport() { return reasonForImport; }
-                @Override public AdditionalDetails getAdditionalDetails() { return additionalDetails; }
-                @Override public Operator getPlaceOfOrigin() { return placeOfOrigin; }
-                @Override public Operator getConsignor() { return consignor; }
-                @Override public Operator getConsignee() { return consignee; }
-                @Override public Operator getImporter() { return importer; }
-                @Override public Operator getDestination() { return destination; }
-                @Override public Operator getConsignment() { return consignment; }
-                @Override public String getCphNumber() { return cphNumber; }
-                @Override public Transport getTransport() { return transport; }
-            };
+            return new NotificationView(
+                referenceNumber, status, created, origin, commodity, consignor, consignee, transport);
         }
     }
 }

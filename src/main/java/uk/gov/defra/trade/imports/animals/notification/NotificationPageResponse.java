@@ -4,13 +4,12 @@ import java.util.List;
 import org.springframework.data.domain.Page;
 
 /**
- * Paginated notification-shape list response. Sourced from the {@link NotificationView} projection
- * (never from the full {@link Notification} aggregate) so the opaque {@code fulfilments} payload is
- * not loaded for the list endpoint — see the AC-mandated projection separation on
- * {@link NotificationMapper}.
+ * Paginated notification-shape list response. Items are the {@link NotificationView} projection
+ * serialized directly — no intermediate DTO — so the wire response carries exactly the fields the
+ * projection exposes and the opaque {@code fulfilments} payload is never loaded from Mongo.
  */
 public record NotificationPageResponse(
-    List<NotificationDto> content,
+    List<NotificationView> content,
     int page,
     int size,
     int numberOfElements,
@@ -19,34 +18,11 @@ public record NotificationPageResponse(
 
   public static NotificationPageResponse from(Page<NotificationView> pageResult) {
     return new NotificationPageResponse(
-        pageResult.getContent().stream()
-            .map(NotificationPageResponse::toDto)
-            .toList(),
+        pageResult.getContent(),
         pageResult.getNumber() + 1,
         pageResult.getSize(),
         pageResult.getNumberOfElements(),
         pageResult.getTotalElements(),
         pageResult.getTotalPages());
-  }
-
-  private static NotificationDto toDto(NotificationView view) {
-    return NotificationDto.builder()
-        .referenceNumber(view.getReferenceNumber())
-        .origin(view.getOrigin())
-        .commodity(view.getCommodity())
-        .reasonForImport(view.getReasonForImport())
-        .additionalDetails(view.getAdditionalDetails())
-        .placeOfOrigin(view.getPlaceOfOrigin())
-        .consignor(view.getConsignor())
-        .consignee(view.getConsignee())
-        .importer(view.getImporter())
-        .destination(view.getDestination())
-        .consignment(view.getConsignment())
-        .cphNumber(view.getCphNumber())
-        .transport(view.getTransport())
-        .status(view.getStatus())
-        .created(view.getCreated())
-        .updated(view.getUpdated())
-        .build();
   }
 }

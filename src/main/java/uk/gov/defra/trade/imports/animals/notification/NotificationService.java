@@ -22,8 +22,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
@@ -50,7 +48,6 @@ public class NotificationService {
     private final DocumentService documentService;
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
-    private final NotificationMapper notificationMapper;
     private final NotificationCopyMapper notificationCopyMapper;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final NotificationTtlConfig ttlConfig;
@@ -64,7 +61,6 @@ public class NotificationService {
         DocumentService documentService,
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
-        NotificationMapper notificationMapper,
         NotificationCopyMapper notificationCopyMapper,
         ReferenceNumberGenerator referenceNumberGenerator,
         NotificationTtlConfig ttlConfig,
@@ -76,7 +72,6 @@ public class NotificationService {
         this.documentService = documentService;
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
-        this.notificationMapper = notificationMapper;
         this.notificationCopyMapper = notificationCopyMapper;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.ttlConfig = ttlConfig;
@@ -125,23 +120,6 @@ public class NotificationService {
         }
         log.info("Copying notification {}", referenceNumber);
         return createNotification(notificationCopyMapper.toCopyDto(source));
-    }
-
-    /**
-     * Serves {@code GET /notifications/{ref}} via the notification-shape projection. The opaque
-     * {@code fulfilments} payload is never loaded from Mongo for this read; the fulfilment view is
-     * served separately by {@code GET /notification-fulfilments/{id}}.
-     */
-    public NotificationResponse findByRef(String referenceNumber) {
-        log.debug("Fetching notification for reference {}", referenceNumber);
-        NotificationView view = notificationRepository.findViewByReferenceNumber(referenceNumber)
-            .orElseThrow(() -> new NotFoundException(
-                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        List<AccompanyingDocument> documents = documentService.findByNotificationRef(
-            referenceNumber);
-        return notificationMapper.toResponse(view).toBuilder()
-            .accompanyingDocuments(documents.stream().map(AccompanyingDocumentDto::from).toList())
-            .build();
     }
 
     public NotificationPageResponse findAll(int page, String sort) {

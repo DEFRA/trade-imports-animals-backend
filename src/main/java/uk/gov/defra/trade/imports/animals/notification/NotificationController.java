@@ -134,20 +134,6 @@ public class NotificationController {
         return ResponseEntity.ok(notificationService.cancelAmendNotification(referenceNumber));
     }
 
-    @GetMapping("/{referenceNumber}")
-    @Operation(summary = "Get notification by reference number",
-        description = "Returns a single notification with its accompanying documents")
-    @ApiResponse(responseCode = "200", description = "Notification returned",
-        content = @Content(schema = @Schema(implementation = NotificationResponse.class)))
-    @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
-    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
-    @Timed("controller.getNotificationByRef.time")
-    public ResponseEntity<NotificationResponse> findByRef(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
-        log.debug("Fetching notification {}", referenceNumber);
-        return ResponseEntity.ok(notificationService.findByRef(referenceNumber));
-    }
-
     @GetMapping
     @Operation(summary = "List notifications",
         description = "Returns a paginated list of import notifications. "

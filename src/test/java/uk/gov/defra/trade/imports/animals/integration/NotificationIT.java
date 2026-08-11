@@ -31,8 +31,8 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationPageResponse;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
-import uk.gov.defra.trade.imports.animals.notification.NotificationResponse;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
+import uk.gov.defra.trade.imports.animals.notification.NotificationView;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberPageResponse;
@@ -174,7 +174,7 @@ class NotificationIT extends IntegrationBase {
         NotificationPageResponse page = findAllNotificationsPage(1, null, matchingRef);
 
         assertThat(page.content()).hasSize(1);
-        assertThat(page.content().getFirst().getReferenceNumber()).isEqualTo(matchingRef);
+        assertThat(page.content().getFirst().referenceNumber()).isEqualTo(matchingRef);
         assertThat(page.totalElements()).isEqualTo(1);
     }
 
@@ -248,12 +248,12 @@ class NotificationIT extends IntegrationBase {
         // Then — arrival dates across pages are ordered descending
         assertThat(page0.content()).hasSize(2);
         assertThat(page0.content())
-            .extracting(n -> n.getTransport().getArrivalDate())
+            .extracting(n -> n.transport().getArrivalDate())
             .containsExactly(
                 LocalDate.of(2026, Month.JUNE, 15),
                 LocalDate.of(2026, Month.MARCH, 1));
         assertThat(page1.content()).hasSize(1);
-        assertThat(page1.content().getFirst().getTransport().getArrivalDate())
+        assertThat(page1.content().getFirst().transport().getArrivalDate())
             .isEqualTo(LocalDate.of(2026, Month.JANUARY, 10));
     }
 
@@ -292,8 +292,8 @@ class NotificationIT extends IntegrationBase {
         NotificationPageResponse page = findAllNotificationsPage(1, "createdAt,asc");
 
         assertThat(page.content()).hasSize(2);
-        assertThat(page.content().getFirst().getReferenceNumber()).isEqualTo(refOlder);
-        assertThat(page.content().get(1).getReferenceNumber()).isEqualTo(refNewer);
+        assertThat(page.content().getFirst().referenceNumber()).isEqualTo(refOlder);
+        assertThat(page.content().get(1).referenceNumber()).isEqualTo(refNewer);
     }
 
     @Test
@@ -336,7 +336,7 @@ class NotificationIT extends IntegrationBase {
             .containsOnlyNulls();
         assertThat(page1.content()).hasSize(2);
         assertThat(page1.content())
-            .extracting(n -> n.getTransport().getArrivalDate())
+            .extracting(n -> n.transport().getArrivalDate())
             .containsExactly(LocalDate.of(2026, Month.JANUARY, 10), LocalDate.of(2026, Month.JUNE, 15));
     }
 
@@ -376,7 +376,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(page0.totalElements()).isEqualTo(4);
         assertThat(page0.content()).hasSize(2);
         assertThat(page0.content())
-            .extracting(n -> n.getTransport().getArrivalDate())
+            .extracting(n -> n.transport().getArrivalDate())
             .containsExactly(LocalDate.of(2026, Month.JUNE, 15), LocalDate.of(2026, Month.JANUARY, 10));
         assertThat(page1.content()).hasSize(2);
         assertThat(page1.content())
@@ -424,21 +424,21 @@ class NotificationIT extends IntegrationBase {
 
         // Then — no status filter; drafts and submitted both appear, ordered by arrival date desc
         assertThat(page0.totalElements()).isEqualTo(3);
-        List<NotificationDto> all = new java.util.ArrayList<>(page0.content());
+        List<NotificationView> all = new java.util.ArrayList<>(page0.content());
         all.addAll(page1.content());
 
         assertThat(all).hasSize(3);
         assertThat(all)
-            .extracting(NotificationDto::getStatus)
+            .extracting(NotificationView::status)
             .containsExactlyInAnyOrder(
                 NotificationStatus.DRAFT,
                 NotificationStatus.DRAFT,
                 NotificationStatus.SUBMITTED);
-        assertThat(all.getFirst().getReferenceNumber()).isEqualTo(submittedRef);
-        assertThat(all.getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(all.getFirst().getTransport().getArrivalDate())
+        assertThat(all.getFirst().referenceNumber()).isEqualTo(submittedRef);
+        assertThat(all.getFirst().status()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(all.getFirst().transport().getArrivalDate())
             .isEqualTo(LocalDate.of(2026, Month.JUNE, 15));
-        assertThat(all.get(1).getTransport().getArrivalDate())
+        assertThat(all.get(1).transport().getArrivalDate())
             .isEqualTo(LocalDate.of(2026, Month.MARCH, 1));
         assertThat(extractArrivalDate(all.get(2))).isNull();
     }
@@ -476,15 +476,15 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         // When
-        List<NotificationDto> notifications = findAllNotificationsPage(1).content();
+        List<NotificationView> notifications = findAllNotificationsPage(1).content();
 
         // Then — only DRAFT and SUBMITTED are returned; DELETED is excluded
         assertThat(notifications).hasSize(2);
         assertThat(notifications)
-            .extracting(NotificationDto::getReferenceNumber)
+            .extracting(NotificationView::referenceNumber)
             .containsExactlyInAnyOrder(draftRef, submittedRef);
         assertThat(notifications)
-            .extracting(NotificationDto::getStatus)
+            .extracting(NotificationView::status)
             .doesNotContain(NotificationStatus.DELETED);
     }
 
@@ -520,14 +520,14 @@ class NotificationIT extends IntegrationBase {
         // Then - verify all notifications were created with generated referenceNumbers
         NotificationPageResponse pageResponse = findAllNotificationsPage(1);
         NotificationPageResponse page1Response = findAllNotificationsPage(2);
-        List<NotificationDto> allNotifications = new java.util.ArrayList<>(pageResponse.content());
+        List<NotificationView> allNotifications = new java.util.ArrayList<>(pageResponse.content());
         allNotifications.addAll(page1Response.content());
         assertThat(allNotifications).hasSize(3);
         assertThat(allNotifications)
-            .extracting(NotificationDto::getReferenceNumber)
+            .extracting(NotificationView::referenceNumber)
             .allMatch(ref -> ref != null && ref.startsWith("GBN-AG-"));
         assertThat(allNotifications)
-            .extracting(n -> n.getOrigin().getCountryCode())
+            .extracting(n -> n.origin().getCountryCode())
             .containsExactlyInAnyOrder("GB", "IE", "FR");
     }
 
@@ -589,7 +589,7 @@ class NotificationIT extends IntegrationBase {
         assertNotificationMappedFields(updated, "REF-updated");
 
         // Verify only one notification exists and reload via API
-        List<NotificationDto> all = findAllNotifications();
+        List<NotificationView> all = findAllNotifications();
         assertThat(all).hasSize(1);
         Notification persisted = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
@@ -771,9 +771,9 @@ class NotificationIT extends IntegrationBase {
             .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
 
         // Then — the existing notification was NOT deleted (all-or-nothing)
-        List<NotificationDto> remaining = findAllNotifications();
+        List<NotificationView> remaining = findAllNotifications();
         assertThat(remaining).hasSize(1);
-        assertThat(remaining.getFirst().getReferenceNumber()).isEqualTo(existingRef);
+        assertThat(remaining.getFirst().referenceNumber()).isEqualTo(existingRef);
     }
 
     @Test
@@ -1437,81 +1437,6 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void findByRef_shouldReturnHydratedNotification_withAccompanyingDocuments() {
-        // Given — create a notification
-        String referenceNumber = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live bovine animals"))
-            .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
-            .getResponseBody().getReferenceNumber();
-
-        // And directly persist an accompanying document (bypasses cdp-uploader)
-        AccompanyingDocument document = AccompanyingDocument.builder()
-            .notificationReferenceNumber(referenceNumber)
-            .uploadId("upload-it-test-001")
-            .documentType(DocumentType.ITAHC)
-            .documentReference("UK/GB/2026/IT-001")
-            .scanStatus(ScanStatus.COMPLETE)
-            .build();
-        accompanyingDocumentRepository.save(document);
-
-        // When
-        NotificationResponse response = webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(NotificationResponse.class)
-            .returnResult().getResponseBody();
-
-        // Then
-        assertThat(response).isNotNull();
-        assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
-        assertThat(response.origin().getCountryCode()).isEqualTo("GB");
-        assertThat(response.accompanyingDocuments()).hasSize(1);
-        assertThat(response.accompanyingDocuments().getFirst().uploadId()).isEqualTo("upload-it-test-001");
-        assertThat(response.accompanyingDocuments().getFirst().documentType()).isEqualTo(DocumentType.ITAHC);
-        assertThat(response.accompanyingDocuments().getFirst().scanStatus()).isEqualTo(ScanStatus.COMPLETE);
-    }
-
-    @Test
-    void findByRef_shouldReturn200WithEmptyDocuments_whenNoDocumentsUploaded() {
-        // Given — notification with no documents
-        String referenceNumber = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("IE", "Live sheep"))
-            .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
-            .getResponseBody().getReferenceNumber();
-
-        // When
-        NotificationResponse response = webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(NotificationResponse.class)
-            .returnResult().getResponseBody();
-
-        // Then
-        assertThat(response).isNotNull();
-        assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
-        assertThat(response.accompanyingDocuments()).isEmpty();
-    }
-
-    @Test
-    void findByRef_shouldReturn404_whenReferenceNumberDoesNotExist() {
-        // When / Then — no notification exists for NONEXISTENT_REF
-        webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", NONEXISTENT_REF)
-            .exchange()
-            .expectStatus().isNotFound()
-            .expectBody()
-            .jsonPath("$.status").isEqualTo(404)
-            .jsonPath("$.detail").value(
-                Matchers.containsString(NONEXISTENT_REF));
-    }
-
-    @Test
     void delete_shouldCascadeDeleteAccompanyingDocuments_whenNotificationDeleted() {
         // Given — create a notification
         String referenceNumber = webClient("NoAuth")
@@ -1592,7 +1517,7 @@ class NotificationIT extends IntegrationBase {
             .returnResult().getResponseBody();
     }
 
-    private List<NotificationDto> findAllNotifications() {
+    private List<NotificationView> findAllNotifications() {
         return findAllNotificationsPage().content();
     }
 
@@ -1953,10 +1878,10 @@ class NotificationIT extends IntegrationBase {
             .build();
     }
 
-    private LocalDate extractArrivalDate(NotificationDto notification) {
-        if (notification.getTransport() == null) {
+    private LocalDate extractArrivalDate(NotificationView notification) {
+        if (notification.transport() == null) {
             return null;
         }
-        return notification.getTransport().getArrivalDate();
+        return notification.transport().getArrivalDate();
     }
 }
