@@ -126,6 +126,61 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         assertThat(secondPayload.has("publishedAt")).isFalse();
     }
 
+    @Test
+    void publishUnpublishedEvents_shouldDeliverNotificationEditedToSns() throws Exception {
+        String referenceNumber = createAndSaveNotification(TRACE_PREFIX + "edited-001");
+
+        int published = outboxPublishService.publishUnpublishedEvents();
+        assertThat(published).isEqualTo(1);
+
+        OutboxEvent event = outboxEventRepository.findAll().getFirst();
+        assertThat(event.getPublishedAt()).isNotNull();
+
+        Message sqsMessage = awaitSqsMessage();
+        JsonNode snsEnvelope = objectMapper.readTree(sqsMessage.body());
+        JsonNode publishedMessage = objectMapper.readTree(snsEnvelope.get("Message").asText());
+        assertThat(publishedMessage.get("aggregateVersion").asLong()).isEqualTo(1L);
+        assertThat(publishedMessage.get("eventType").asText())
+            .isEqualTo("uk.gov.defra.trade.imports.animals.NotificationEdited");
+        assertThat(publishedMessage.get("metadata").get("correlationId").asText())
+            .isEqualTo(TRACE_PREFIX + "edited-001");
+        assertThat(publishedMessage.get("data").get("exchangedDocument").get("identifier").asText())
+            .isEqualTo(referenceNumber);
+        assertThat(publishedMessage.has("publishedAt")).isFalse();
+
+        JsonNode attributes = snsEnvelope.get("MessageAttributes");
+        assertThat(attributes.get("eventType").get("Value").asText())
+            .isEqualTo("uk.gov.defra.trade.imports.animals.NotificationEdited");
+        assertThat(attributes.get("correlationId").get("Value").asText())
+            .isEqualTo(TRACE_PREFIX + "edited-001");
+    }
+
+    @Test
+    void publishUnpublishedEvents_shouldIncrementAggregateVersion_acrossPageSaveAndSubmit() throws Exception {
+        // Page save emits NotificationEdited (v1), submit emits NotificationSubmitted (v2)
+        String referenceNumber = createAndSaveNotification("trace-page-save");
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .header(HEADER_TRACE_ID, "trace-submit")
+            .exchange()
+            .expectStatus().isOk();
+
+        assertThat(outboxPublishService.publishUnpublishedEvents()).isEqualTo(2);
+
+        List<OutboxEvent> events = outboxEventRepository.findAll().stream()
+            .sorted(Comparator.comparingLong(OutboxEvent::getAggregateVersion))
+            .toList();
+        assertThat(events).hasSize(2);
+        assertThat(events.get(0).getEventType())
+            .isEqualTo("uk.gov.defra.trade.imports.animals.NotificationEdited");
+        assertThat(events.get(0).getAggregateVersion()).isEqualTo(1L);
+        assertThat(events.get(1).getEventType())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
+        assertThat(events.get(1).getAggregateVersion()).isEqualTo(2L);
+        assertThat(events).allMatch(e -> e.getPublishedAt() != null);
+    }
+
     private JsonNode snsEnvelopeByAggregateVersion(List<Message> messages, long aggregateVersion)
         throws Exception {
         for (Message message : messages) {
