@@ -682,6 +682,49 @@ class NotificationControllerTest {
     }
 
     @Nested
+    class FindFulfilments {
+
+        @Test
+        void findFulfilments_shouldReturn200WithProjection() throws Exception {
+            // Given — a hand-rolled fulfilment view (Mockito mocks trip up Jackson via their
+            // bytecode fields; the real Spring Data proxy serializes cleanly in production and E2E).
+            NotificationFulfilmentsView view = new NotificationFulfilmentsView() {
+                @Override public String getId() { return REF_1; }
+                @Override public NotificationStatus getStatus() { return NotificationStatus.SUBMITTED; }
+                @Override public java.time.LocalDateTime getCreatedAt() { return null; }
+                @Override public java.time.LocalDateTime getSubmittedAt() { return null; }
+                @Override public java.util.List<org.bson.Document> getFulfilments() {
+                    return java.util.List.of(new org.bson.Document("obligationId", "abc"));
+                }
+            };
+            when(notificationService.findFulfilmentsView(REF_1)).thenReturn(view);
+
+            // When / Then
+            mockMvc.perform(get("/notifications/{referenceNumber}/fulfilments", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(REF_1))
+                .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"));
+        }
+
+        @Test
+        void findFulfilments_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
+            // Given
+            when(notificationService.findFulfilmentsView(NONEXISTENT_REF))
+                .thenThrow(new NotFoundException(
+                    "Cannot find notification with reference number: " + NONEXISTENT_REF));
+
+            // When / Then
+            mockMvc.perform(get("/notifications/{referenceNumber}/fulfilments", NONEXISTENT_REF)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value(
+                    "Cannot find notification with reference number: " + NONEXISTENT_REF));
+        }
+    }
+
+    @Nested
     class FindAllReferenceNumbers {
 
         @Test

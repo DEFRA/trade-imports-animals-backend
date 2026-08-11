@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
+import org.bson.Document;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
@@ -1805,6 +1806,43 @@ class NotificationIT extends IntegrationBase {
         // When / Then
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", NONEXISTENT_REF)
+            .exchange()
+            .expectStatus().isNotFound()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(404)
+            .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
+    }
+
+    @Test
+    void findFulfilments_shouldReturnFulfilmentView_forExistingNotification() {
+        // Given — create a notification carrying a fulfilments payload
+        Document fulfilment = new Document("obligationId", "abc").append("value", "42");
+        NotificationDto dto = createNotificationDto("GB", "Live cattle");
+        dto.setFulfilments(List.of(fulfilment));
+
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(dto)
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When / Then
+        webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.id").isEqualTo(referenceNumber)
+            .jsonPath("$.status").isEqualTo("DRAFT")
+            .jsonPath("$.fulfilments[0].obligationId").isEqualTo("abc")
+            .jsonPath("$.fulfilments[0].value").isEqualTo("42");
+    }
+
+    @Test
+    void findFulfilments_shouldReturn404_whenReferenceNumberUnknown() {
+        webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", NONEXISTENT_REF)
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()

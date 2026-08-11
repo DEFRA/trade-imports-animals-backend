@@ -150,6 +150,19 @@ public class NotificationController {
         return notificationService.findAll(page, sort, referenceNumber);
     }
 
+    @GetMapping("/{referenceNumber}/fulfilments")
+    @Operation(summary = "Get fulfilment view by reference number",
+        description = "Returns the fulfilment-view projection (id, status, dates, opaque fulfilments payload) of the merged notification at the given reference. Backs the frontend engine's rehydrate path.")
+    @ApiResponse(responseCode = "200", description = "Fulfilment view returned",
+        content = @Content(schema = @Schema(implementation = NotificationFulfilmentsView.class)))
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
+    @Timed("controller.getFulfilments.time")
+    public ResponseEntity<NotificationFulfilmentsView> findFulfilments(
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        log.debug("GET /notifications/{}/fulfilments - Fetching fulfilment view", referenceNumber);
+        return ResponseEntity.ok(notificationService.findFulfilmentsView(referenceNumber));
+    }
+
     @GetMapping("/reference-numbers")
     @Operation(summary = "List notification reference numbers",
         description = "Returns a paginated list of notification reference numbers without loading full documents")

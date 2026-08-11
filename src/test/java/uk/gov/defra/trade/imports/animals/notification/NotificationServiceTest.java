@@ -473,6 +473,38 @@ class NotificationServiceTest {
     }
 
     @Nested
+    class FindFulfilmentsView {
+
+        @Test
+        void findFulfilmentsView_shouldReturnProjection_whenNotificationExists() {
+            // Given
+            String ref = "GBN-AG-26-FUL001";
+            NotificationFulfilmentsView view = mock(NotificationFulfilmentsView.class);
+            when(notificationRepository.findFulfilmentsViewByReferenceNumber(ref))
+                .thenReturn(Optional.of(view));
+
+            // When
+            NotificationFulfilmentsView result = notificationService.findFulfilmentsView(ref);
+
+            // Then
+            assertThat(result).isSameAs(view);
+        }
+
+        @Test
+        void findFulfilmentsView_shouldThrowNotFound_whenReferenceNumberUnknown() {
+            // Given
+            String ref = "GBN-AG-26-ABSENT";
+            when(notificationRepository.findFulfilmentsViewByReferenceNumber(ref))
+                .thenReturn(Optional.empty());
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.findFulfilmentsView(ref))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining(ref);
+        }
+    }
+
+    @Nested
     class FindAllReferenceNumbers {
 
         @Test

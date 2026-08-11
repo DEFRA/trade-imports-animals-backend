@@ -127,6 +127,17 @@ public class NotificationService {
     }
 
     /**
+     * Serves {@code GET /notifications/{ref}/fulfilments} via the fulfilment-shape projection over
+     * the merged aggregate. Returns the opaque fulfilments payload wrapped with the reference and
+     * lifecycle context (id, status, createdAt) the frontend engine consumes on rehydrate.
+     */
+    public NotificationFulfilmentsView findFulfilmentsView(String referenceNumber) {
+        return notificationRepository.findFulfilmentsViewByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+    }
+
+    /**
      * Serves {@code GET /notifications?…} via the notification-shape projection. The opaque
      * {@code fulfilments} payload is never loaded from Mongo for this read.
      */
