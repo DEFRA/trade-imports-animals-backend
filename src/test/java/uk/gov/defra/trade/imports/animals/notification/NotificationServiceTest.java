@@ -1777,6 +1777,40 @@ class NotificationServiceTest {
         }
 
         @Test
+        void deepCopyFulfilments_shouldProduceIndependentCopy_underNestedMutation() {
+            // Given — a fulfilments payload representative of what the frontend PUTs: an outer
+            // entry with an obligationId scalar plus a nested list of record Documents that carry
+            // their own fields. This is the shape a shallow copy would previously leave aliased
+            // at the inner-Document level, so mutating the original could surface on the baseline.
+            Document nestedRecord = new Document("fulfilmentId", "line0").append("value", "5");
+            Document outer = new Document("obligationId", "packages")
+                .append("records", new ArrayList<>(List.of(nestedRecord)));
+            List<Document> source = new ArrayList<>(List.of(outer));
+
+            // When
+            List<Document> copy = NotificationService.deepCopyFulfilments(source);
+
+            // And — mutate the original at every nesting level after the copy is taken
+            source.get(0).put("obligationId", "mutated");
+            source.get(0).getList("records", Document.class).add(new Document("fulfilmentId", "line1"));
+            source.get(0).getList("records", Document.class).get(0).put("value", "999");
+
+            // Then — the copy is a different list containing different Documents, and none of the
+            // post-copy mutations on the original bleed through at any nesting depth.
+            assertThat(copy).isNotSameAs(source);
+            Document copiedOuter = copy.get(0);
+            assertThat(copiedOuter).isNotSameAs(outer);
+            assertThat(copiedOuter.getString("obligationId")).isEqualTo("packages");
+            assertThat(copiedOuter.getList("records", Document.class)).hasSize(1);
+            assertThat(copiedOuter.getList("records", Document.class).get(0).getString("value")).isEqualTo("5");
+        }
+
+        @Test
+        void deepCopyFulfilments_shouldReturnNull_whenSourceIsNull() {
+            assertThat(NotificationService.deepCopyFulfilments(null)).isNull();
+        }
+
+        @Test
         void submittedAt_shouldReflectLatestSubmission_acrossFullAmendCycle() {
             // Given — a fresh DRAFT that is submitted, amended, then re-submitted. This pins the
             // agreed semantics for submittedAt: it tracks the LATEST submission event (see the

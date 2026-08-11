@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.apache.commons.lang3.StringUtils;
+import org.bson.Document;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
@@ -211,12 +212,7 @@ public class NotificationService {
         }
 
         notification.setSubmittedBaseline(NotificationContentSnapshot.from(notification));
-        // Shallow copy — see the matching restore in cancelAmendNotification. Documents in the
-        // fulfilments list are written whole by the frontend and never mutated in place after
-        // read, so sharing the inner Document references between the baseline and the live list
-        // is safe.
-        notification.setSubmittedFulfilmentsBaseline(
-            notification.getFulfilments() == null ? null : new ArrayList<>(notification.getFulfilments()));
+        notification.setSubmittedFulfilmentsBaseline(deepCopyFulfilments(notification.getFulfilments()));
 
         return writeWithOutbox(
             notification,
@@ -245,14 +241,7 @@ public class NotificationService {
 
         notification.getSubmittedBaseline().applyTo(notification);
         notification.setSubmittedBaseline(null);
-        // Shallow copy of the pre-amend fulfilments baseline. Safe because Documents in the
-        // fulfilments list are written whole by the frontend and never mutated in place after
-        // read (invariant enforced by the JS lifecycle module); see the symmetric snapshot in
-        // amendNotification.
-        notification.setFulfilments(
-            notification.getSubmittedFulfilmentsBaseline() == null
-                ? null
-                : new ArrayList<>(notification.getSubmittedFulfilmentsBaseline()));
+        notification.setFulfilments(deepCopyFulfilments(notification.getSubmittedFulfilmentsBaseline()));
         notification.setSubmittedFulfilmentsBaseline(null);
         notification.setStatus(NotificationStatus.SUBMITTED);
         notification.setUpdated(LocalDateTime.now());
@@ -474,5 +463,20 @@ public class NotificationService {
             .build();
 
         auditRepository.save(auditRecord);
+    }
+
+    /**
+     * BSON round-trip deep clone of a fulfilments list. Callers need independence from the source
+     * because amend snapshots the pre-amend fulfilments into {@code submittedFulfilmentsBaseline}
+     * and cancel-amend restores from it; a shared reference at any nesting depth would let a
+     * later in-memory mutation on one list surface on the other before the aggregate is persisted.
+     */
+    static List<Document> deepCopyFulfilments(List<Document> source) {
+        if (source == null) {
+            return null;
+        }
+        return source.stream()
+            .map(d -> Document.parse(d.toJson()))
+            .collect(Collectors.toCollection(ArrayList::new));
     }
 }
