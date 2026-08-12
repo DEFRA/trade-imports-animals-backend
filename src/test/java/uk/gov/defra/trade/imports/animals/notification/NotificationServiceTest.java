@@ -1641,7 +1641,7 @@ class NotificationServiceTest {
     // Fulfilments handling. Covers the PUT/replace path, the amend/cancelAmend/submit snapshot
     // semantics, and copy carrying fulfilments.
     @Nested
-    class FulfilmentsMerge {
+    class Fulfilments {
 
         @BeforeEach
         void setUp() {
@@ -2062,7 +2062,7 @@ class NotificationServiceTest {
         }
 
         // NB: soft-delete on an already-DELETED notification is idempotent — returns the existing
-        // notification unchanged. See FulfilmentsMerge.softDelete_shouldBeIdempotent_onAlreadyDeleted.
+        // notification unchanged. See Fulfilments.softDelete_shouldBeIdempotent_onAlreadyDeleted.
 
         @Test
         void softDeleteNotification_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
