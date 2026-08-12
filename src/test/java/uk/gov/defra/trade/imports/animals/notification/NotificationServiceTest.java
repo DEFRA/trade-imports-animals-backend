@@ -1676,14 +1676,16 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            Notification result = notificationService.replace(ref, dto);
+            Notification result = notificationService.replace(ref, dto, "trace", null);
 
             // Then
             assertThat(result.getOrigin().getCountryCode()).isEqualTo("GB");
             assertThat(result.getFulfilments()).isEqualTo(newFulfilments);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(existing);
-            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
+            // Emits NOTIFICATION_EDITED on every save (EUDPA-304) — see replace() Javadoc.
+            verify(outboxService).appendEvent(
+                any(Notification.class), eq(OutboxEventType.NOTIFICATION_EDITED), eq("trace"), any());
         }
 
         @Test
@@ -1706,7 +1708,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            Notification result = notificationService.replace(ref, dto);
+            Notification result = notificationService.replace(ref, dto, "trace", null);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(AMEND);
@@ -1728,7 +1730,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(existing));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.replace(ref, dto))
+            assertThatThrownBy(() -> notificationService.replace(ref, dto, "trace", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("SUBMITTED");
             verify(notificationRepository, never()).save(any());
@@ -1748,7 +1750,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(existing));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.replace(ref, dto))
+            assertThatThrownBy(() -> notificationService.replace(ref, dto, "trace", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DELETED");
             verify(notificationRepository, never()).save(any());
@@ -1761,7 +1763,7 @@ class NotificationServiceTest {
 
             assertThatThrownBy(
                 () -> notificationService.replace("GBN-AG-26-ABSENT",
-                    NotificationDto.builder().build()))
+                    NotificationDto.builder().build(), "trace", null))
                 .isInstanceOf(NotFoundException.class);
             verify(notificationRepository, never()).save(any());
         }

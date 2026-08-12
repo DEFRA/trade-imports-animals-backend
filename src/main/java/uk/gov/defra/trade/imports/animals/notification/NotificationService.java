@@ -93,9 +93,12 @@ public class NotificationService {
      * payload) at the given reference. Backs {@code PUT /notifications/{ref}}. Requires DRAFT or
      * AMEND status — SUBMITTED or DELETED notifications cannot be replaced via this path
      * (submit / amend / cancelAmend / softDelete are the state-transition entrypoints).
+     * Emits a {@code NOTIFICATION_EDITED} outbox event on every save (EUDPA-304), mirroring the
+     * POST-with-referenceNumber path in {@link #updateNotification}.
      */
     @Transactional
-    public Notification replace(String referenceNumber, NotificationDto dto) {
+    public Notification replace(String referenceNumber, NotificationDto dto,
+        String correlationId, Actor actor) {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
@@ -105,7 +108,8 @@ public class NotificationService {
                 "Cannot replace notification content with status: " + notification.getStatus());
         }
         setNotificationDetails(dto, notification);
-        return notificationRepository.save(notification);
+        return writeWithOutbox(notification, referenceNumber, correlationId,
+            notification.getStatus(), OutboxEventType.NOTIFICATION_EDITED, actor);
     }
 
     @Transactional

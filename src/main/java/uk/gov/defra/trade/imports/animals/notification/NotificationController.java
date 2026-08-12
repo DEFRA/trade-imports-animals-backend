@@ -56,7 +56,7 @@ public class NotificationController {
 
     @PutMapping("/{referenceNumber}")
     @Operation(summary = "Replace notification content",
-        description = "Replaces the merged notification content (notification-shape fields + opaque fulfilments payload) at the given reference. Requires DRAFT or AMEND status.")
+        description = "Replaces the merged notification content (notification-shape fields + opaque fulfilments payload) at the given reference. Requires DRAFT or AMEND status. Emits a NotificationEdited outbox event on every save.")
     @ApiResponse(responseCode = "200", description = "Notification content replaced",
         content = @Content(schema = @Schema(implementation = Notification.class)))
     @ApiResponse(responseCode = "400", description = "Notification not in a replaceable state", content = @Content)
@@ -64,9 +64,10 @@ public class NotificationController {
     @Timed("controller.replaceNotification.time")
     public ResponseEntity<Notification> replace(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @Valid @RequestBody NotificationDto notificationDto) {
+        @Valid @RequestBody NotificationDto notificationDto,
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId) {
         log.info("PUT /notifications/{} - Replacing notification content", referenceNumber);
-        return ResponseEntity.ok(notificationService.replace(referenceNumber, notificationDto));
+        return ResponseEntity.ok(notificationService.replace(referenceNumber, notificationDto, traceId, null));
     }
 
     @PostMapping("/{referenceNumber}/copy")
