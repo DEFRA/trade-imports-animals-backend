@@ -51,10 +51,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Sort.Direction;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
@@ -1760,10 +1757,10 @@ class NotificationServiceTest {
         void replace_shouldThrowNotFound_whenReferenceUnknown() {
             when(notificationRepository.findByReferenceNumber("GBN-AG-26-ABSENT"))
                 .thenReturn(Optional.empty());
+            NotificationDto dto = NotificationDto.builder().build();
 
             assertThatThrownBy(
-                () -> notificationService.replace("GBN-AG-26-ABSENT",
-                    NotificationDto.builder().build(), "trace", null))
+                () -> notificationService.replace("GBN-AG-26-ABSENT", dto, "trace", null))
                 .isInstanceOf(NotFoundException.class);
             verify(notificationRepository, never()).save(any());
         }
@@ -1804,7 +1801,7 @@ class NotificationServiceTest {
             // does not touch it on the SUBMITTED -> AMEND transition), so cancel-amend must
             // return that same timestamp untouched.
             String ref = "GBN-AG-26-CAN001";
-            LocalDateTime originalSubmittedAt = LocalDateTime.of(2026, 4, 15, 10, 0);
+            LocalDateTime originalSubmittedAt = LocalDateTime.of(2026, Month.APRIL, 15, 10, 0);
             List<Document> priorFulfilments = List.of(new Document("obligationId", "prior"));
             NotificationContentSnapshot baseline = NotificationContentSnapshot.builder()
                 .origin(new Origin("GB", "no", "ORIGINAL"))
@@ -1864,11 +1861,6 @@ class NotificationServiceTest {
             assertThat(copiedOuter.getString("obligationId")).isEqualTo("packages");
             assertThat(copiedOuter.getList("records", Document.class)).hasSize(1);
             assertThat(copiedOuter.getList("records", Document.class).get(0).getString("value")).isEqualTo("5");
-        }
-
-        @Test
-        void deepCopyFulfilments_shouldReturnNull_whenSourceIsNull() {
-            assertThat(NotificationService.deepCopyFulfilments(null)).isNull();
         }
 
         @Test

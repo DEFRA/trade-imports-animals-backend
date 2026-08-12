@@ -204,7 +204,9 @@ public class NotificationService {
         }
 
         notification.setSubmittedBaseline(NotificationContentSnapshot.from(notification));
-        notification.setSubmittedFulfilmentsBaseline(deepCopyFulfilments(notification.getFulfilments()));
+        List<Document> currentFulfilments = notification.getFulfilments();
+        notification.setSubmittedFulfilmentsBaseline(
+            currentFulfilments == null ? null : deepCopyFulfilments(currentFulfilments));
 
         return writeWithOutbox(
             notification,
@@ -232,7 +234,9 @@ public class NotificationService {
 
         notification.getSubmittedBaseline().applyTo(notification);
         notification.setSubmittedBaseline(null);
-        notification.setFulfilments(deepCopyFulfilments(notification.getSubmittedFulfilmentsBaseline()));
+        List<Document> priorFulfilments = notification.getSubmittedFulfilmentsBaseline();
+        notification.setFulfilments(
+            priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
         notification.setSubmittedFulfilmentsBaseline(null);
         notification.setStatus(NotificationStatus.SUBMITTED);
         notification.setUpdated(LocalDateTime.now());
@@ -482,11 +486,9 @@ public class NotificationService {
      * because amend snapshots the pre-amend fulfilments into {@code submittedFulfilmentsBaseline}
      * and cancel-amend restores from it; a shared reference at any nesting depth would let a
      * later in-memory mutation on one list surface on the other before the aggregate is persisted.
+     * Callers are responsible for the {@code null} case — the helper always returns a fresh list.
      */
     static List<Document> deepCopyFulfilments(List<Document> source) {
-        if (source == null) {
-            return null;
-        }
         return source.stream()
             .map(d -> Document.parse(d.toJson()))
             .collect(Collectors.toCollection(ArrayList::new));
