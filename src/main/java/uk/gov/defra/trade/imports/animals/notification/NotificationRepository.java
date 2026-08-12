@@ -16,23 +16,11 @@ public interface NotificationRepository extends MongoRepository<Notification, St
 
     List<NotificationReferenceOnly> findAllByReferenceNumberIn(List<String> referenceNumbers);
 
-    /**
-     * Fulfilment-view projection. Backs {@code GET /notifications/{ref}/fulfilments}.
-     */
     Optional<NotificationFulfilmentsView> findFulfilmentsViewByReferenceNumber(String referenceNumber);
 
-    /**
-     * Notification-shape display-view projection restricted to a status set. Backs the
-     * exact-reference-number branch of {@code GET /notifications?…&referenceNumber=…} so the
-     * dashboard search is filtered to the same statuses as the paginated list.
-     */
     Optional<NotificationView> findViewByReferenceNumberAndStatusIn(
         String referenceNumber, List<NotificationStatus> statuses);
 
-    /**
-     * Paginated notification-shape display-view projection. Backs {@code GET /notifications?…} for
-     * the current temporary dashboard.
-     */
     Page<NotificationView> findAllViewByStatusIn(List<NotificationStatus> statuses, Pageable pageable);
 
     /**

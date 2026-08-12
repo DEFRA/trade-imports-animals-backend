@@ -39,11 +39,10 @@ public class Notification extends NotificationBase {
     private LocalDateTime expireAt;
 
     /**
-     * When this notification was last submitted — updated on every DRAFT-or-AMEND -> SUBMITTED
-     * transition (including submit-from-amend), so it reflects the most recent submission event,
-     * not the original one. Preserved unchanged across SUBMITTED -> AMEND and AMEND -> SUBMITTED
-     * (cancel-amend). Set by {@code submitNotification}; carried into the fulfilment-view
-     * projection.
+     * Timestamp of the most recent submission — set the first time the notification is submitted
+     * (from DRAFT) and refreshed whenever it is re-submitted from AMEND. Left unchanged by amend
+     * and cancel-amend, so it always points at the latest submission event rather than the
+     * original one. Set by {@code submitNotification}; carried into the fulfilment-view projection.
      */
     private LocalDateTime submittedAt;
 

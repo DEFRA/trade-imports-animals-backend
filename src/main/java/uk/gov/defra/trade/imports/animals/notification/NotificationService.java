@@ -89,12 +89,10 @@ public class NotificationService {
     }
 
     /**
-     * Replace the notification content (notification-shape fields + opaque fulfilments payload) at
-     * the given reference. Backs {@code PUT /notifications/{ref}}. Requires DRAFT or AMEND status
-     * — SUBMITTED or DELETED notifications cannot be replaced via this path (submit / amend /
-     * cancelAmend / softDelete are the state-transition entrypoints). Emits a
-     * {@code NOTIFICATION_EDITED} outbox event on every save (EUDPA-304), mirroring the
-     * POST-with-referenceNumber path in {@link #updateNotification}.
+     * Replace the notification content at the given reference. Backs {@code PUT /notifications/{ref}}.
+     * Requires DRAFT or AMEND — the state-transition entrypoints (submit / amend / cancelAmend /
+     * softDelete) handle other cases. Emits a {@code NOTIFICATION_EDITED} outbox event on every save
+     * (EUDPA-304), mirroring {@link #updateNotification}.
      */
     @Transactional
     public Notification replace(String referenceNumber, NotificationDto dto,
@@ -130,21 +128,14 @@ public class NotificationService {
         return findAll(page, sort, null);
     }
 
-    /**
-     * Serves {@code GET /notifications/{ref}/fulfilments} via the fulfilment-shape projection.
-     * Returns the opaque fulfilments payload wrapped with the reference and lifecycle context
-     * (referenceNumber, status, created) the frontend engine consumes on rehydrate.
-     */
+    /** Serves {@code GET /notifications/{ref}/fulfilments} — the frontend engine's rehydrate read. */
     public NotificationFulfilmentsView findFulfilmentsView(String referenceNumber) {
         return notificationRepository.findFulfilmentsViewByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
     }
 
-    /**
-     * Serves {@code GET /notifications?…} via the notification-shape projection. The opaque
-     * {@code fulfilments} payload is never loaded from Mongo for this read.
-     */
+    /** Serves {@code GET /notifications?…} for the dashboard list. */
     public NotificationPageResponse findAll(int page, String sort, String referenceNumber) {
         List<NotificationStatus> dashboardStatuses = List.of(
             NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
