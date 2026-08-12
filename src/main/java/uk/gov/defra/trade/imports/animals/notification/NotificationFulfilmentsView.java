@@ -5,8 +5,8 @@ import java.util.List;
 import org.bson.Document;
 
 /**
- * Spring Data interface projection over the merged {@code notification} collection that exposes
- * the fields the fulfilment-view REST endpoint ({@code GET /notifications/{ref}/fulfilments})
+ * Spring Data interface projection over the {@code notification} collection that exposes the
+ * fields the fulfilment-view REST endpoint ({@code GET /notifications/{ref}/fulfilments})
  * returns: referenceNumber, status, dates, and the opaque fulfilments payload. Server-only fields
  * ({@code submittedFulfilmentsBaseline}, {@code submittedBaseline}, {@code expireAt}) are
  * intentionally excluded.

@@ -89,11 +89,11 @@ public class NotificationService {
     }
 
     /**
-     * Replace the merged notification content (notification-shape fields + opaque fulfilments
-     * payload) at the given reference. Backs {@code PUT /notifications/{ref}}. Requires DRAFT or
-     * AMEND status — SUBMITTED or DELETED notifications cannot be replaced via this path
-     * (submit / amend / cancelAmend / softDelete are the state-transition entrypoints).
-     * Emits a {@code NOTIFICATION_EDITED} outbox event on every save (EUDPA-304), mirroring the
+     * Replace the notification content (notification-shape fields + opaque fulfilments payload) at
+     * the given reference. Backs {@code PUT /notifications/{ref}}. Requires DRAFT or AMEND status
+     * — SUBMITTED or DELETED notifications cannot be replaced via this path (submit / amend /
+     * cancelAmend / softDelete are the state-transition entrypoints). Emits a
+     * {@code NOTIFICATION_EDITED} outbox event on every save (EUDPA-304), mirroring the
      * POST-with-referenceNumber path in {@link #updateNotification}.
      */
     @Transactional
@@ -131,9 +131,9 @@ public class NotificationService {
     }
 
     /**
-     * Serves {@code GET /notifications/{ref}/fulfilments} via the fulfilment-shape projection over
-     * the merged aggregate. Returns the opaque fulfilments payload wrapped with the reference and
-     * lifecycle context (id, status, createdAt) the frontend engine consumes on rehydrate.
+     * Serves {@code GET /notifications/{ref}/fulfilments} via the fulfilment-shape projection.
+     * Returns the opaque fulfilments payload wrapped with the reference and lifecycle context
+     * (referenceNumber, status, created) the frontend engine consumes on rehydrate.
      */
     public NotificationFulfilmentsView findFulfilmentsView(String referenceNumber) {
         return notificationRepository.findFulfilmentsViewByReferenceNumber(referenceNumber)
@@ -485,7 +485,7 @@ public class NotificationService {
      * BSON round-trip deep clone of a fulfilments list. Callers need independence from the source
      * because amend snapshots the pre-amend fulfilments into {@code submittedFulfilmentsBaseline}
      * and cancel-amend restores from it; a shared reference at any nesting depth would let a
-     * later in-memory mutation on one list surface on the other before the aggregate is persisted.
+     * later in-memory mutation on one list surface on the other before the notification is persisted.
      * Callers are responsible for the {@code null} case — the helper always returns a fresh list.
      */
     static List<Document> deepCopyFulfilments(List<Document> source) {

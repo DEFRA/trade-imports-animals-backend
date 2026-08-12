@@ -17,9 +17,7 @@ public interface NotificationRepository extends MongoRepository<Notification, St
     List<NotificationReferenceOnly> findAllByReferenceNumberIn(List<String> referenceNumbers);
 
     /**
-     * Fulfilment-view projection over the merged aggregate. Backs {@code GET /notification-fulfilments/{id}}
-     * where {@code {id}} is the caller-passed reference number (see {@link NotificationFulfilmentsView}
-     * for the wire-shape preservation).
+     * Fulfilment-view projection. Backs {@code GET /notifications/{ref}/fulfilments}.
      */
     Optional<NotificationFulfilmentsView> findFulfilmentsViewByReferenceNumber(String referenceNumber);
 

@@ -1638,8 +1638,8 @@ class NotificationServiceTest {
         }
     }
 
-    // EUDPA-323 — merged-aggregate fulfilments handling. Covers the new fields, the PUT/replace
-    // path, the extended amend/cancelAmend/submit snapshot semantics, and copy carrying fulfilments.
+    // Fulfilments handling. Covers the PUT/replace path, the amend/cancelAmend/submit snapshot
+    // semantics, and copy carrying fulfilments.
     @Nested
     class FulfilmentsMerge {
 
@@ -1946,7 +1946,7 @@ class NotificationServiceTest {
             // When
             Notification result = notificationService.softDeleteNotification(ref);
 
-            // Then — returns the existing aggregate unchanged, no save.
+            // Then — returns the existing notification unchanged, no save.
             assertThat(result).isSameAs(alreadyDeleted);
             assertThat(result.getStatus()).isEqualTo(DELETED);
             verify(notificationRepository, never()).save(any());
@@ -1980,7 +1980,7 @@ class NotificationServiceTest {
             Notification saved = captor.getValue();
             assertThat(saved.getReferenceNumber()).isEqualTo(newRef);
             assertThat(saved.getFulfilments()).isEqualTo(sourceFulfilments);
-            // Defensive copy — mutating the source after copy must not affect the new aggregate.
+            // Defensive copy — mutating the source after copy must not affect the new notification.
             sourceFulfilments.add(new Document("obligationId", "post-copy"));
             assertThat(saved.getFulfilments()).hasSize(1);
         }
@@ -2061,8 +2061,8 @@ class NotificationServiceTest {
             verify(notificationRepository).save(notification);
         }
 
-        // NB: soft-delete on an already-DELETED notification is idempotent under EUDPA-323 —
-        // returns the existing aggregate unchanged. See FulfilmentsMerge.softDelete_shouldBeIdempotent_onAlreadyDeleted.
+        // NB: soft-delete on an already-DELETED notification is idempotent — returns the existing
+        // notification unchanged. See FulfilmentsMerge.softDelete_shouldBeIdempotent_onAlreadyDeleted.
 
         @Test
         void softDeleteNotification_shouldThrowNotFoundException_whenReferenceNumberUnknown() {

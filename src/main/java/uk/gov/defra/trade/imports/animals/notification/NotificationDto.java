@@ -15,6 +15,6 @@ import org.bson.Document;
 @ToString(callSuper = true)
 public class NotificationDto extends NotificationBase {
 
-    /** Opaque obligation-fulfilment payload — persisted byte-faithfully on the merged aggregate; nullable during the transition while some callers still POST without it. */
+    /** Opaque obligation-fulfilment payload — persisted byte-faithfully. */
     private List<Document> fulfilments;
 }

@@ -1353,7 +1353,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
             .exchange().expectStatus().isOk();
 
-        // When — a repeat soft-delete returns the already-DELETED aggregate unchanged (REST DELETE idempotency).
+        // When — a repeat soft-delete returns the already-DELETED notification unchanged (REST DELETE idempotency).
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
             .exchange()

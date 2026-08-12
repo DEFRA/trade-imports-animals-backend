@@ -56,7 +56,7 @@ public class NotificationController {
 
     @PutMapping("/{referenceNumber}")
     @Operation(summary = "Replace notification content",
-        description = "Replaces the merged notification content (notification-shape fields + opaque fulfilments payload) at the given reference. Requires DRAFT or AMEND status. Emits a NotificationEdited outbox event on every save.")
+        description = "Replaces the notification content (notification-shape fields + opaque fulfilments payload) at the given reference. Requires DRAFT or AMEND status. Emits a NotificationEdited outbox event on every save.")
     @ApiResponse(responseCode = "200", description = "Notification content replaced",
         content = @Content(schema = @Schema(implementation = Notification.class)))
     @ApiResponse(responseCode = "400", description = "Notification not in a replaceable state", content = @Content)
