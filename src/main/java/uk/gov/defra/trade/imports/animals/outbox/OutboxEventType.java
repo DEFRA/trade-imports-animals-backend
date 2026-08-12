@@ -18,7 +18,12 @@ public enum OutboxEventType {
     NOTIFICATION_SUBMISSION_AMENDED(
         "uk.gov.defra.imports.notification.NotificationSubmissionAmended",
         "https://github.com/DEFRA/trade-imports-schemas/blob/main/"
-            + "schemas/profiles/imports/gb/events/gbn-ag-event-notification-submission-amended-v1.schema.json");
+            + "schemas/profiles/imports/gb/events/gbn-ag-event-notification-submission-amended-v1.schema.json"),
+
+    NOTIFICATION_EDITED(
+        "uk.gov.defra.trade.imports.animals.NotificationEdited",
+        "https://github.com/DEFRA/trade-imports-schemas/blob/main/"
+            + "schemas/profiles/imports/gb/events/gbn-ag-event-notification-edited-v1.schema.json");
 
     private final String value;
     private final String schemaUrl;
