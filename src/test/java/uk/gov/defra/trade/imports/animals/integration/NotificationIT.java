@@ -1833,7 +1833,7 @@ class NotificationIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk()
             .expectBody()
-            .jsonPath("$.id").isEqualTo(referenceNumber)
+            .jsonPath("$.referenceNumber").isEqualTo(referenceNumber)
             .jsonPath("$.status").isEqualTo("DRAFT")
             .jsonPath("$.fulfilments[0].obligationId").isEqualTo("abc")
             .jsonPath("$.fulfilments[0].value").isEqualTo("42");

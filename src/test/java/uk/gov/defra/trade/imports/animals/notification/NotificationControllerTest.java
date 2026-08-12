@@ -707,9 +707,9 @@ class NotificationControllerTest {
             // Given — a hand-rolled fulfilment view (Mockito mocks trip up Jackson via their
             // bytecode fields; the real Spring Data proxy serializes cleanly in production and E2E).
             NotificationFulfilmentsView view = new NotificationFulfilmentsView() {
-                @Override public String getId() { return REF_1; }
+                @Override public String getReferenceNumber() { return REF_1; }
                 @Override public NotificationStatus getStatus() { return NotificationStatus.SUBMITTED; }
-                @Override public java.time.LocalDateTime getCreatedAt() { return null; }
+                @Override public java.time.LocalDateTime getCreated() { return null; }
                 @Override public java.time.LocalDateTime getSubmittedAt() { return null; }
                 @Override public java.util.List<org.bson.Document> getFulfilments() {
                     return java.util.List.of(new org.bson.Document("obligationId", "abc"));
@@ -721,7 +721,7 @@ class NotificationControllerTest {
             mockMvc.perform(get("/notifications/{referenceNumber}/fulfilments", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(REF_1))
+                .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.status").value("SUBMITTED"))
                 .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"));
         }
