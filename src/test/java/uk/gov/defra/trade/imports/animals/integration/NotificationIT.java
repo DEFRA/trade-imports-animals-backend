@@ -33,6 +33,7 @@ import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationContentSnapshot;
 import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
+import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationPageResponse;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationResponse;
@@ -125,7 +126,7 @@ class NotificationIT extends IntegrationBase {
         Notification created = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDto)
+            .bodyValue(SaveNotificationDto.of(notificationDto))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -151,9 +152,9 @@ class NotificationIT extends IntegrationBase {
         NotificationDto notificationDto2 = createNotificationDto("IE", "Live sheep");
         NotificationDto notificationDto3 = createNotificationDto("FR", "Live pigs");
 
-        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notificationDto1).exchange();
-        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notificationDto2).exchange();
-        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(notificationDto3).exchange();
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(notificationDto1)).exchange();
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(notificationDto2)).exchange();
+        webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(notificationDto3)).exchange();
 
         // When — page-size is 2 in integration-test profile, so page 0 has 2 items
         NotificationPageResponse page0 = findAllNotificationsPage(1);
@@ -184,13 +185,13 @@ class NotificationIT extends IntegrationBase {
         NotificationDto notificationDto2 = createNotificationDto("IE", "Live sheep");
 
         String matchingRef = webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDto1).exchange()
+            .bodyValue(SaveNotificationDto.of(notificationDto1)).exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
             .returnResult().getResponseBody().getReferenceNumber();
 
         webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDto2).exchange()
+            .bodyValue(SaveNotificationDto.of(notificationDto2)).exchange()
             .expectStatus().isOk();
 
         NotificationPageResponse page = findAllNotificationsPage(1, null, matchingRef);
@@ -203,7 +204,7 @@ class NotificationIT extends IntegrationBase {
     @Test
     void findAll_shouldReturnEmptyPage_whenReferenceNumberUnknown() {
         webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle")).exchange()
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle"))).exchange()
             .expectStatus().isOk();
 
         NotificationPageResponse page =
@@ -217,7 +218,7 @@ class NotificationIT extends IntegrationBase {
     void findAll_shouldReturnEmptyPage_whenReferenceNumberIsDeleted() {
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -247,19 +248,19 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("GB", LocalDate.of(2026, Month.JANUARY, 10)))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("GB", LocalDate.of(2026, Month.JANUARY, 10))))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15)))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15))))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, Month.MARCH, 1)))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, Month.MARCH, 1))))
             .exchange()
             .expectStatus().isOk();
 
@@ -284,7 +285,7 @@ class NotificationIT extends IntegrationBase {
         String refOlder = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("GB", LocalDate.of(2026, Month.JANUARY, 10)))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("GB", LocalDate.of(2026, Month.JANUARY, 10))))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -295,7 +296,7 @@ class NotificationIT extends IntegrationBase {
         String refNewer = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15)))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15))))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -324,25 +325,25 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15)))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15))))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, Month.JANUARY, 10)))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, Month.JANUARY, 10))))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithTransportButNoArrivalDate("DE"))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithTransportButNoArrivalDate("DE")))
             .exchange()
             .expectStatus().isOk();
 
@@ -368,25 +369,25 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15)))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15))))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, Month.JANUARY, 10)))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, Month.JANUARY, 10))))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithTransportButNoArrivalDate("DE"))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithTransportButNoArrivalDate("DE")))
             .exchange()
             .expectStatus().isOk();
 
@@ -412,14 +413,14 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange()
             .expectStatus().isOk();
 
         String submittedRef = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15)))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15))))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -430,7 +431,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, Month.MARCH, 1)))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("FR", LocalDate.of(2026, Month.MARCH, 1))))
             .exchange()
             .expectStatus().isOk();
 
@@ -470,21 +471,21 @@ class NotificationIT extends IntegrationBase {
         // Given — create three notifications, submit one, soft-delete one
         String draftRef = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         String submittedRef = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("IE", "Live sheep"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("IE", "Live sheep")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         String deletedRef = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("FR", "Live pigs"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("FR", "Live pigs")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -521,21 +522,21 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDto1)
+            .bodyValue(SaveNotificationDto.of(notificationDto1))
             .exchange()
             .expectStatus().isOk();
 
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDto2)
+            .bodyValue(SaveNotificationDto.of(notificationDto2))
             .exchange()
             .expectStatus().isOk();
 
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(notificationDto3)
+            .bodyValue(SaveNotificationDto.of(notificationDto3))
             .exchange()
             .expectStatus().isOk();
 
@@ -571,7 +572,7 @@ class NotificationIT extends IntegrationBase {
             .build();
 
         String referenceNumber = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(initial)
+            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(initial))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -600,7 +601,7 @@ class NotificationIT extends IntegrationBase {
             .build();
 
         Notification updated = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(updateDto)
+            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(updateDto))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody();
@@ -634,7 +635,7 @@ class NotificationIT extends IntegrationBase {
             .build();
 
         String referenceNumber = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(initial)
+            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(initial))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -654,7 +655,7 @@ class NotificationIT extends IntegrationBase {
             .build();
 
         Notification updated = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(updateDto)
+            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(updateDto))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody();
@@ -673,14 +674,14 @@ class NotificationIT extends IntegrationBase {
         // Given — create two notifications
         String ref1 = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         String ref2 = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("IE", "Live sheep"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("IE", "Live sheep")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -704,7 +705,7 @@ class NotificationIT extends IntegrationBase {
         // Given
         String ref = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -775,7 +776,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create one notification
         String existingRef = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("FR", "Live pigs"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("FR", "Live pigs")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -838,7 +839,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create a notification (starts as DRAFT)
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -951,7 +952,7 @@ class NotificationIT extends IntegrationBase {
         // Given — draft notification
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1104,7 +1105,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create a notification
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1146,7 +1147,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create a notification
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1189,7 +1190,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create and submit
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1239,7 +1240,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create and submit a notification (version 1)
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1286,7 +1287,7 @@ class NotificationIT extends IntegrationBase {
         // When — create a draft notification
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk();
 
         // Then — no outbox events written
@@ -1298,7 +1299,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create a notification (starts as DRAFT)
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1323,7 +1324,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create and submit a notification
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1365,7 +1366,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create and soft-delete a notification
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1398,21 +1399,21 @@ class NotificationIT extends IntegrationBase {
         // Given — create three notifications; page-size is 2 in integration profile
         String ref1 = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         String ref2 = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("IE", "Live sheep"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("IE", "Live sheep")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         String ref3 = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("FR", "Live pigs"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("FR", "Live pigs")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1444,7 +1445,7 @@ class NotificationIT extends IntegrationBase {
         // Given — one notification (page-size 2 ⇒ totalPages 1)
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk();
 
         // When — request a page beyond the last
@@ -1461,7 +1462,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create a notification
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live bovine animals"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live bovine animals")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1500,7 +1501,7 @@ class NotificationIT extends IntegrationBase {
         // Given — notification with no documents
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("IE", "Live sheep"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("IE", "Live sheep")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1607,7 +1608,7 @@ class NotificationIT extends IntegrationBase {
         sourceDto.setConsignor(ConsignmentParty.reference(ADDRESS_ID));
 
         Notification source = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(sourceDto)
+            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(sourceDto))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult().getResponseBody();
 
@@ -1629,7 +1630,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create a notification
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("FR", "Live pigs"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("FR", "Live pigs")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1802,7 +1803,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create and submit a notification (version 1)
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1841,7 +1842,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create a notification but do not submit it
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1865,7 +1866,7 @@ class NotificationIT extends IntegrationBase {
         Notification source = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(sourceDto)
+            .bodyValue(SaveNotificationDto.of(sourceDto))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -1920,7 +1921,7 @@ class NotificationIT extends IntegrationBase {
         NotificationDto sourceDto = sourceNotificationWithAllOperators();
 
         Notification source = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(sourceDto)
+            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(sourceDto))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult().getResponseBody();
 
@@ -1944,7 +1945,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create and soft-delete a source notification
         String sourceRef = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("DE", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("DE", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -1965,7 +1966,7 @@ class NotificationIT extends IntegrationBase {
         // Given — create a notification and submit it
         String sourceRef = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("IE", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("IE", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -2004,7 +2005,7 @@ class NotificationIT extends IntegrationBase {
     private String createAndSubmitNotificationWithFullContent() {
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(sourceNotificationWithAllOperators())
+            .bodyValue(SaveNotificationDto.of(sourceNotificationWithAllOperators()))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -2031,7 +2032,7 @@ class NotificationIT extends IntegrationBase {
         dto.setConsignor(ConsignmentParty.reference(ADDRESS_ID));
         return webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(dto)
+            .bodyValue(SaveNotificationDto.of(dto))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();

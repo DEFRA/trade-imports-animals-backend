@@ -113,7 +113,8 @@ class NotificationControllerTest {
             // When & Then
             mockMvc.perform(post("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(notificationDto)))
+                    .content(objectMapper.writeValueAsString(
+                        SaveNotificationDto.builder().notification(notificationDto).build())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("507f1f77bcf86cd799439011"))
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
@@ -162,7 +163,8 @@ class NotificationControllerTest {
             // When & Then
             mockMvc.perform(post("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(notificationDto)))
+                    .content(objectMapper.writeValueAsString(
+                        SaveNotificationDto.builder().notification(notificationDto).build())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("507f1f77bcf86cd799439012"))
                 .andExpect(jsonPath("$.referenceNumber").value(REF_2))
@@ -191,7 +193,8 @@ class NotificationControllerTest {
             // When & Then
             mockMvc.perform(post("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(notificationDto)))
+                    .content(objectMapper.writeValueAsString(
+                        SaveNotificationDto.builder().notification(notificationDto).build())))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(existingId))
                 .andExpect(jsonPath("$.referenceNumber").value(REF_3))
@@ -214,10 +217,50 @@ class NotificationControllerTest {
             mockMvc.perform(post("/notifications")
                     .header(HEADER_TRACE_ID, "my-trace-id")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(objectMapper.writeValueAsString(notificationDto)))
+                    .content(objectMapper.writeValueAsString(
+                        SaveNotificationDto.builder().notification(notificationDto).build())))
                 .andExpect(status().isOk());
 
             verify(notificationService).saveNotification(any(NotificationDto.class), eq("my-trace-id"), eq(null));
+        }
+
+        @Test
+        void post_shouldPassActorToService_whenActorProvided() throws Exception {
+            NotificationDto notificationDto = NotificationDto.builder()
+                .referenceNumber(REF_1)
+                .origin(new Origin("GB", "true", "REF"))
+                .build();
+            Notification saved = new Notification();
+            saved.setReferenceNumber(REF_1);
+            when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
+                .thenReturn(saved);
+
+            ActorRequest actorRequest = ActorRequest.builder()
+                .id("contact-guid-001")
+                .source("dynamics-contact")
+                .userType("B2C")
+                .displayName("Jane Farmer")
+                .organisationId("org-001")
+                .build();
+
+            mockMvc.perform(post("/notifications")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(
+                        SaveNotificationDto.builder()
+                            .notification(notificationDto)
+                            .actor(actorRequest)
+                            .build())))
+                .andExpect(status().isOk());
+
+            verify(notificationService).saveNotification(
+                any(NotificationDto.class),
+                anyString(),
+                argThat(a -> a != null
+                    && "contact-guid-001".equals(a.getId())
+                    && "dynamics-contact".equals(a.getSource())
+                    && "B2C".equals(a.getUserType())
+                    && "Jane Farmer".equals(a.getDisplayName())
+                    && "org-001".equals(a.getOrganisationId())));
         }
 
     }

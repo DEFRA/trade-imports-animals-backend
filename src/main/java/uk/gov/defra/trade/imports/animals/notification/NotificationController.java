@@ -56,10 +56,13 @@ public class NotificationController {
     @Operation(summary = "Save notification", description = "Creates or updates a notification")
     @Timed("controller.postNotification.time")
     public ResponseEntity<Notification> post(
-        @Valid @RequestBody NotificationDto notificationDto,
+        @Valid @RequestBody SaveNotificationDto saveNotificationDto,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId) {
+        NotificationDto notificationDto = saveNotificationDto.getNotification();
         log.info("POST /notifications - referenceNumber={}", notificationDto.getReferenceNumber());
-        return ResponseEntity.ok(notificationService.saveNotification(notificationDto, traceId, null));
+        ActorRequest actorRequest = saveNotificationDto.getActor();
+        Actor actor = actorRequest != null ? actorRequest.toActor() : null;
+        return ResponseEntity.ok(notificationService.saveNotification(notificationDto, traceId, actor));
     }
 
     @PostMapping("/{referenceNumber}/copy")

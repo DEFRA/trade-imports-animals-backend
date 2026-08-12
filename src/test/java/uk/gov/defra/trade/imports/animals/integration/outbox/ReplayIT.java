@@ -16,6 +16,7 @@ import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.ReplayResponse;
+import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxPublishService;
 
@@ -149,7 +150,7 @@ class ReplayIT extends OutboxIntegrationBase {
         // Given — notification exists but was never submitted (no outbox events)
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(minimalNotificationDto())
+            .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
