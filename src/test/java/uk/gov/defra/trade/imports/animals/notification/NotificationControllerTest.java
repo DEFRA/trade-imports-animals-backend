@@ -680,15 +680,6 @@ class NotificationControllerTest {
         }
 
         @Test
-        void findByRef_shouldReturn400_whenOrganisationHeaderMissing() throws Exception {
-            mockMvc.perform(get("/notifications/{referenceNumber}", REF_1)
-                    .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isBadRequest());
-
-            verify(notificationService, never()).findByRef(any(), any());
-        }
-
-        @Test
         void findAll_shouldReturn400_whenOrganisationHeaderBlank() throws Exception {
             mockMvc.perform(get("/notifications").header(HEADER_ORGANISATION_ID, "  ")
                     .contentType(MediaType.APPLICATION_JSON))
@@ -801,36 +792,27 @@ class NotificationControllerTest {
                 /* dateOfIssue */ null, ScanStatus.COMPLETE,
                 /* files */ Collections.emptyList(), /* created */ null, /* updated */ null);
 
-            ConsignmentParty resolvedConsignor = ConsignmentParty.builder()
-                .addressId("665f1c2ab3e4d51a2c9d0e77")
-                .name(consignors().getFirst().getName())
-                .email(consignors().getFirst().getEmail())
-                .phone(consignors().getFirst().getPhone())
-                .address(consignors().getFirst().getAddress())
-                .build();
-
             NotificationResponse response = NotificationResponse.builder()
                 .id("notif-id-001")
                 .referenceNumber(REF_1)
                 .origin(origin)
                 .commodity(Commodity.builder().name("Live bovine animals").build())
                 .reasonForImport("PERMANENT")
-                .consignor(resolvedConsignor)
+                .consignor(consignors().getFirst())
                 .destination(destinations().getFirst())
                 .consignment(consignments().getFirst())
                 .accompanyingDocuments(List.of(document))
                 .build();
 
-            when(notificationService.findByRef(REF_1, ORG_ID)).thenReturn(response);
+            when(notificationService.findByRef(REF_1)).thenReturn(response);
 
             // When / Then
-            mockMvc.perform(get("/notifications/{referenceNumber}", REF_1).header(HEADER_ORGANISATION_ID, ORG_ID)
+            mockMvc.perform(get("/notifications/{referenceNumber}", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
-                .andExpect(jsonPath("$.consignor.addressId").value("665f1c2ab3e4d51a2c9d0e77"))
                 .andExpect(jsonPath("$.consignor.name").value(consignors().getFirst().getName()))
                 .andExpect(jsonPath("$.destination.name").value(destinations().getFirst().getName()))
                 .andExpect(jsonPath("$.consignment.name")
@@ -859,10 +841,10 @@ class NotificationControllerTest {
                 .accompanyingDocuments(Collections.emptyList())
                 .build();
 
-            when(notificationService.findByRef(REF_2, ORG_ID)).thenReturn(response);
+            when(notificationService.findByRef(REF_2)).thenReturn(response);
 
             // When / Then
-            mockMvc.perform(get("/notifications/{referenceNumber}", REF_2).header(HEADER_ORGANISATION_ID, ORG_ID)
+            mockMvc.perform(get("/notifications/{referenceNumber}", REF_2)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_2))
@@ -873,12 +855,12 @@ class NotificationControllerTest {
         @Test
         void findByRef_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            when(notificationService.findByRef(NONEXISTENT_REF, ORG_ID))
+            when(notificationService.findByRef(NONEXISTENT_REF))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
             // When / Then
-            mockMvc.perform(get("/notifications/{referenceNumber}", NONEXISTENT_REF).header(HEADER_ORGANISATION_ID, ORG_ID)
+            mockMvc.perform(get("/notifications/{referenceNumber}", NONEXISTENT_REF)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value(

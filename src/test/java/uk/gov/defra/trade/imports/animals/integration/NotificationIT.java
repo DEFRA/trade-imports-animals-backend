@@ -1,8 +1,6 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockserver.model.HttpRequest.request;
-import static org.mockserver.model.HttpResponse.response;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -14,7 +12,6 @@ import java.util.stream.Stream;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockserver.model.MediaType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
@@ -60,21 +57,6 @@ class NotificationIT extends IntegrationBase {
     /** The reader's organisation, as the BFF forwards it from their session. */
     private static final String ORG_ID = "5900002";
     private static final String ADDRESS_ID = "665f1c2ab3e4d51a2c9d0e77";
-    private static final String ADDRESS_BOOK_JSON = """
-        {
-          "id": "665f1c2ab3e4d51a2c9d0e77",
-          "name": "Astra Rosales",
-          "addressLine1": "43 East Hague Extension",
-          "addressLine2": null,
-          "townOrCity": "Vernier",
-          "county": "Soleure",
-          "postcode": "30055",
-          "countryCode": "CH",
-          "phone": "+41 22 000 0000",
-          "email": "astra@example.com",
-          "deleted": false
-        }
-        """;
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -1480,7 +1462,6 @@ class NotificationIT extends IntegrationBase {
         // When
         NotificationResponse response = webClient("NoAuth")
             .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
-            .header(NotificationController.HEADER_ORGANISATION_ID, ORG_ID)
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationResponse.class)
@@ -1509,7 +1490,6 @@ class NotificationIT extends IntegrationBase {
         // When
         NotificationResponse response = webClient("NoAuth")
             .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
-            .header(NotificationController.HEADER_ORGANISATION_ID, ORG_ID)
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationResponse.class)
@@ -1526,7 +1506,6 @@ class NotificationIT extends IntegrationBase {
         // When / Then — no notification exists for NONEXISTENT_REF
         webClient("NoAuth")
             .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", NONEXISTENT_REF)
-            .header(NotificationController.HEADER_ORGANISATION_ID, ORG_ID)
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
@@ -1536,70 +1515,11 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void findByRef_shouldReturn400_whenOrganisationHeaderMissing() {
-        // The header is the authorisation for the address-book lookups the read triggers, so a
-        // read without one is rejected rather than served against a guessed organisation.
-        webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", NONEXISTENT_REF)
-            .exchange()
-            .expectStatus().isBadRequest();
-    }
-
-    @Test
     void findAll_shouldReturn400_whenOrganisationHeaderMissing() {
         webClient("NoAuth")
             .get().uri(NOTIFICATION_ENDPOINT + "?page=1")
             .exchange()
             .expectStatus().isBadRequest();
-    }
-
-    @Test
-    void findByRef_shouldResolveReferencedParty_fromAddressBook() {
-        stubAddressBook(ADDRESS_BOOK_JSON, 200);
-        String referenceNumber = createNotificationWithReferencedConsignor();
-
-        NotificationResponse response = webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
-            .header(NotificationController.HEADER_ORGANISATION_ID, ORG_ID)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(NotificationResponse.class)
-            .returnResult().getResponseBody();
-
-        assertThat(response).isNotNull();
-        assertThat(response.consignor().getAddressId()).isEqualTo(ADDRESS_ID);
-        assertThat(response.consignor().getName()).isEqualTo("Astra Rosales");
-        assertThat(response.consignor().getAddress().getPostcode()).isEqualTo("30055");
-        assertThat(response.consignor().getAddress().getCountryCode()).isEqualTo("CH");
-    }
-
-    @Test
-    void findByRef_shouldTreatSoftDeletedAddressAsNeverEntered() {
-        stubAddressBook(ADDRESS_BOOK_JSON.replace("\"deleted\": false", "\"deleted\": true"), 200);
-        String referenceNumber = createNotificationWithReferencedConsignor();
-
-        NotificationResponse response = webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
-            .header(NotificationController.HEADER_ORGANISATION_ID, ORG_ID)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(NotificationResponse.class)
-            .returnResult().getResponseBody();
-
-        assertThat(response).isNotNull();
-        assertThat(response.consignor()).isNull();
-    }
-
-    @Test
-    void findByRef_shouldPropagateAddressBookOutage() {
-        stubAddressBook("{\"message\":\"unavailable\"}", 500);
-        String referenceNumber = createNotificationWithReferencedConsignor();
-
-        webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
-            .header(NotificationController.HEADER_ORGANISATION_ID, ORG_ID)
-            .exchange()
-            .expectStatus().is5xxServerError();
     }
 
     @Test
@@ -2025,29 +1945,6 @@ class NotificationIT extends IntegrationBase {
             .origin(origin)
             .commodity(Commodity.builder().name(commodity).build())
             .build();
-    }
-
-    private String createNotificationWithReferencedConsignor() {
-        NotificationDto dto = createNotificationDto("CH", "Live cattle");
-        dto.setConsignor(ConsignmentParty.reference(ADDRESS_ID));
-        return webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(dto))
-            .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
-            .getResponseBody().getReferenceNumber();
-    }
-
-    private void stubAddressBook(String body, int statusCode) {
-        usingStub()
-            .when(request()
-                .withMethod("GET")
-                .withPath("/organisation/" + ORG_ID + "/addresses/" + ADDRESS_ID)
-                .withHeader("Trade-Imports-Organisation-Id", ORG_ID))
-            .respond(response()
-                .withStatusCode(statusCode)
-                .withContentType(MediaType.APPLICATION_JSON)
-                .withBody(body));
     }
 
     private NotificationDto notificationDtoWithArrivalDate(String countryCode, LocalDate arrivalDate) {

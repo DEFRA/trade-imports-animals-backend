@@ -109,23 +109,16 @@ public class NotificationService {
         return createNotification(notificationCopyMapper.toCopyDto(source));
     }
 
-    /**
-     * Reads one notification, with any party held as an address-book reference filled in from the
-     * address book.
-     *
-     * @param organisationId the reader's organisation, forwarded from their authenticated session
-     */
-    public NotificationResponse findByRef(String referenceNumber, String organisationId) {
+    public NotificationResponse findByRef(String referenceNumber) {
         log.debug("Fetching notification for reference {}", referenceNumber);
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
         List<AccompanyingDocument> documents = documentService.findByNotificationRef(
             referenceNumber);
-        NotificationResponse response = notificationMapper.toResponse(notification).toBuilder()
+        return notificationMapper.toResponse(notification).toBuilder()
             .accompanyingDocuments(documents.stream().map(AccompanyingDocumentDto::from).toList())
             .build();
-        return partyResolver.resolveAll(response, partyResolver.forOrganisation(organisationId));
     }
 
     /**

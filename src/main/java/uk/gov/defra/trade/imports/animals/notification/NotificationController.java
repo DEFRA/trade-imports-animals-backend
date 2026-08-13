@@ -42,9 +42,10 @@ public class NotificationController {
 
     /**
      * The organisation whose address book the read resolves against, forwarded by the BFF from the
-     * signed-in user's session. Required on the read endpoints and never defaulted: the address
-     * book has no authentication of its own and treats this value as the authenticated
-     * organisation, so guessing one here would be asserting an identity rather than passing one on.
+     * signed-in user's session. Required on {@link #findAll} — the one read that resolves — and
+     * never defaulted: the address book has no authentication of its own and treats this value as
+     * the authenticated organisation, so guessing one here would be asserting an identity rather
+     * than passing one on.
      */
     public static final String HEADER_ORGANISATION_ID = "Trade-Imports-Organisation-Id";
 
@@ -136,18 +137,13 @@ public class NotificationController {
         description = "Returns a single notification with its accompanying documents")
     @ApiResponse(responseCode = "200", description = "Notification returned",
         content = @Content(schema = @Schema(implementation = NotificationResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Organisation header missing or malformed", content = @Content)
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.getNotificationByRef.time")
     public ResponseEntity<NotificationResponse> findByRef(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @RequestHeader(HEADER_ORGANISATION_ID)
-        @NotBlank
-        @Pattern(regexp = "^[A-Za-z0-9_-]{1,64}$")
-        String organisationId) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
         log.debug("Fetching notification {}", referenceNumber);
-        return ResponseEntity.ok(notificationService.findByRef(referenceNumber, organisationId));
+        return ResponseEntity.ok(notificationService.findByRef(referenceNumber));
     }
 
     @GetMapping

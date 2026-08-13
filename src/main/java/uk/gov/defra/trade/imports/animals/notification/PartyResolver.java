@@ -55,23 +55,6 @@ public class PartyResolver {
     }
 
     /**
-     * Applies a resolver across every party on a notification, returning a copy. The stored record
-     * is left alone — resolved details belong to the response only and must never be persisted back
-     * onto the notification, or the reference would grow a stale copy beside it.
-     */
-    public NotificationResponse resolveAll(
-        NotificationResponse response, UnaryOperator<ConsignmentParty> resolver) {
-        return response.toBuilder()
-            .placeOfOrigin(resolver.apply(response.placeOfOrigin()))
-            .consignor(resolver.apply(response.consignor()))
-            .consignee(resolver.apply(response.consignee()))
-            .importer(resolver.apply(response.importer()))
-            .destination(resolver.apply(response.destination()))
-            .consignment(resolver.apply(response.consignment()))
-            .build();
-    }
-
-    /**
      * Resolves address-book references on the notification for GBNAG outbox mapping.
      *
      * <p>Mutates the given instance (already persisted — do not save it again). Inline parties and
