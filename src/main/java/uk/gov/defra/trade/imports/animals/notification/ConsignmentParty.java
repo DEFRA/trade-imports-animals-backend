@@ -13,8 +13,10 @@ import lombok.NoArgsConstructor;
  *
  * <ul>
  *   <li><b>A reference</b> — {@code addressId} points at an address-book record and the remaining
- *       fields are empty on the stored document. They are filled in on read, so an edit made in the
- *       address book shows through without the notification being rewritten (AC4).
+ *       fields are empty on the stored document. Reads hand back the reference as stored; whoever
+ *       needs the details fills them in — the frontend for display, {@link PartyResolver} for GBNAG
+ *       — so an edit made in the address book shows through without the notification being
+ *       rewritten (AC4).
  *   <li><b>Inline</b> — {@code addressId} is null and the details are held on the notification
  *       itself. Notifications predating the address book are all of this kind and keep working
  *       untouched.

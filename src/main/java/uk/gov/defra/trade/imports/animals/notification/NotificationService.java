@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
-import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
@@ -121,19 +120,14 @@ public class NotificationService {
             .build();
     }
 
-    /**
-     * Reads a page of notifications for the dashboard, with referenced parties filled in from the
-     * address book. One resolver serves the whole page, so an address shared by several rows is
-     * fetched once.
-     *
-     * @param organisationId the reader's organisation, forwarded from their authenticated session
-     */
-    public NotificationPageResponse findAll(
-        int page, String sort, String referenceNumber, String organisationId) {
+    public NotificationPageResponse findAll(int page, String sort) {
+        return findAll(page, sort, null);
+    }
+
+    public NotificationPageResponse findAll(int page, String sort, String referenceNumber) {
         List<NotificationStatus> dashboardStatuses = List.of(
             NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
         var pageable = PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort));
-        UnaryOperator<ConsignmentParty> resolver = partyResolver.forOrganisation(organisationId);
 
         String trimmedReference = StringUtils.trimToNull(referenceNumber);
         if (trimmedReference != null) {
@@ -145,7 +139,7 @@ public class NotificationService {
                 .orElseGet(() -> Page.empty(pageable));
             log.debug("Found {} notifications for reference {}", matched.getNumberOfElements(),
                 trimmedReference);
-            return NotificationPageResponse.from(matched, resolver);
+            return NotificationPageResponse.from(matched);
         }
 
         log.debug("Fetching notifications page {} (size {}) with sort {}", page, listPageSize, sort);
@@ -153,7 +147,7 @@ public class NotificationService {
             dashboardStatuses, pageable);
         log.debug("Found {} notifications on page {} of {}",
             result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
-        return NotificationPageResponse.from(result, resolver);
+        return NotificationPageResponse.from(result);
     }
 
     @Transactional
@@ -229,6 +223,12 @@ public class NotificationService {
         NotificationStatus targetStatus,
         OutboxEventType eventType,
         Actor actor) {
+        // Address-book resolution is HTTP, so it happens here rather than inside the lock below:
+        // the outbox critical section is bounded by LOCK_AT_MOST_FOR, and a slow address book that
+        // outlived it would let a second writer in behind us. It resolves into a copy, so the
+        // notification we save keeps the reference alone and only the event carries the details.
+        Notification forOutbox = resolvedForOutbox(notification, eventType, actor);
+
         return executeWithOutboxLock(
             OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
                 if (targetStatus == NotificationStatus.SUBMITTED
@@ -238,12 +238,28 @@ public class NotificationService {
                 notification.setStatus(targetStatus);
                 notification.setUpdated(LocalDateTime.now());
                 Notification saved = notificationRepository.save(notification);
-                // Resolve address-book references for GBNAG (in-memory only — already saved).
-                String organisationId = actor != null ? actor.getOrganisationId() : null;
-                Notification forOutbox = partyResolver.resolveForOutbox(saved, organisationId);
+                forOutbox.setStatus(saved.getStatus());
+                forOutbox.setUpdated(saved.getUpdated());
                 outboxService.appendEvent(forOutbox, eventType, correlationId, actor);
                 return saved;
             });
+    }
+
+    /**
+     * The notification as the outbox event should carry it: address-book references filled in, on a
+     * copy so nothing resolved is ever persisted or returned to the caller.
+     *
+     * <p>A submission must resolve completely — a GBNAG document cannot carry a nameless party. An
+     * edit is best-effort: an address the trader has since deleted leaves that role blank rather
+     * than failing a draft save that has nothing else wrong with it.
+     */
+    private Notification resolvedForOutbox(
+        Notification notification, OutboxEventType eventType, Actor actor) {
+        String organisationId = actor != null ? actor.getOrganisationId() : null;
+        Notification copy = notification.toBuilder().build();
+        return eventType == OutboxEventType.NOTIFICATION_EDITED
+            ? partyResolver.resolveForDraft(copy, organisationId)
+            : partyResolver.resolveForSubmission(copy, organisationId);
     }
 
     private <T> T executeWithOutboxLock(

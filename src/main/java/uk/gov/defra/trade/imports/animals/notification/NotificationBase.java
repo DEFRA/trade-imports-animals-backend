@@ -13,7 +13,7 @@ import org.springframework.data.mongodb.core.index.Indexed;
  * annotations; {@link NotificationDto} carries no additional fields.
  */
 @Data
-@SuperBuilder
+@SuperBuilder(toBuilder = true)
 @NoArgsConstructor
 public abstract class NotificationBase {
 

@@ -72,7 +72,7 @@ class NotificationServiceTest {
 
     private static final String TEST_TRACE_ID = "test-trace-id";
     private static final String TEST_USER_ID = "test-user-id";
-    /** The reader's organisation, as the controller forwards it from their session. */
+    /** The submitting actor's organisation, whose address book the outbox resolve reads. */
     private static final String ORG_ID = "5900002";
 
     @Mock
@@ -111,6 +111,11 @@ class NotificationServiceTest {
         // Default: TTL unconfigured (days null) so create tests keep their original behaviour and
         // stamp no expireAt. Expiry-specific tests rebuild the service with a bespoke config.
         notificationService = buildService(new NotificationTtlConfig(null, "local", sweep(false)));
+    }
+
+    private static AddressBookRecord addressBookRecord(String addressId, boolean deleted) {
+        return new AddressBookRecord(addressId, "Astra Rosales", "43 East Hague Extension", null,
+            "Vernier", "Soleure", "30055", "CH", "+41 22 000 0000", "astra@example.com", deleted);
     }
 
     private NotificationService buildService(NotificationTtlConfig ttlConfig) {
@@ -285,6 +290,45 @@ class NotificationServiceTest {
         }
 
         @Test
+        void saveNotification_shouldStillSave_whenAReferencedAddressHasBeenDeleted() {
+            // Given — a draft whose consignor points at an address the trader has since deleted.
+            // UCD's ruling is that a deleted address behaves as if it were never selected, so this
+            // must not block them from saving the rest of the draft; only a submit has to be
+            // complete.
+            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+            String referenceNumber = "GBN-AG-26-EDIT01";
+            Notification existing = Notification.builder()
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            when(addressBookClient.findById(ORG_ID, addressId))
+                .thenReturn(Optional.of(addressBookRecord(addressId, true)));
+
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(referenceNumber)
+                .consignor(NotificationTestData.reference(addressId))
+                .build();
+
+            // When
+            Notification saved = notificationService.saveNotification(
+                dto, "trace-edit-001", Actor.builder().organisationId(ORG_ID).build());
+
+            // Then — the draft is saved, still holding the reference
+            assertThat(saved.getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
+
+            // And the event carries the role blank rather than failing the write
+            ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+            verify(outboxService).appendEvent(
+                captor.capture(), eq(OutboxEventType.NOTIFICATION_EDITED), eq("trace-edit-001"),
+                any());
+            assertThat(captor.getValue().getConsignor()).isNull();
+        }
+
+        @Test
         void saveNotification_shouldWriteEditedEvent_whenAmend() {
             // Given
             String referenceNumber = "GBN-AG-26-AMEND1";
@@ -445,7 +489,7 @@ class NotificationServiceTest {
                 .thenReturn(emptyPage);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
+            NotificationPageResponse result = notificationService.findAll(1, null);
 
             // Then
             assertThat(result).isNotNull();
@@ -473,7 +517,7 @@ class NotificationServiceTest {
                 .thenReturn(page);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
+            NotificationPageResponse result = notificationService.findAll(1, null);
 
             // Then — only DRAFT and SUBMITTED are returned
             assertThat(result.content()).hasSize(2);
@@ -500,7 +544,7 @@ class NotificationServiceTest {
                 .thenReturn(page);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
+            NotificationPageResponse result = notificationService.findAll(1, null);
 
             // Then
             assertThat(result.content()).hasSize(1);
@@ -526,7 +570,7 @@ class NotificationServiceTest {
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
-            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
+            NotificationPageResponse result = notificationService.findAll(1, null);
 
             assertThat(result.content()).hasSize(1);
             assertThat(result.content()).extracting(NotificationDto::getStatus)
@@ -541,7 +585,7 @@ class NotificationServiceTest {
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
-            notificationService.findAll(1, "createdAt,asc", null, ORG_ID);
+            notificationService.findAll(1, "createdAt,asc");
 
             ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
             verify(notificationRepository).findAllByStatusIn(
@@ -562,7 +606,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(draft));
 
             NotificationPageResponse result =
-                notificationService.findAll(1, null, "GBN-AG-26-ABC123", ORG_ID);
+                notificationService.findAll(1, null, "GBN-AG-26-ABC123");
 
             assertThat(result.content()).hasSize(1);
             assertThat(result.content().getFirst().getReferenceNumber())
@@ -579,7 +623,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             NotificationPageResponse result =
-                notificationService.findAll(1, null, "GBN-AG-26-ZZZZZZ", ORG_ID);
+                notificationService.findAll(1, null, "GBN-AG-26-ZZZZZZ");
 
             assertThat(result.content()).isEmpty();
             assertThat(result.totalElements()).isZero();
@@ -593,7 +637,7 @@ class NotificationServiceTest {
                 "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND)))
                 .thenReturn(Optional.empty());
 
-            notificationService.findAll(1, null, "  GBN-AG-26-ABC123  ", ORG_ID);
+            notificationService.findAll(1, null, "  GBN-AG-26-ABC123  ");
 
             verify(notificationRepository).findByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND));
@@ -948,6 +992,69 @@ class NotificationServiceTest {
                 eq(actor));
             assertThat(captor.getValue().getConsignor().getName()).isEqualTo("Astra Rosales");
             assertThat(captor.getValue().getConsignor().getAddress().getPostcode()).isEqualTo("30055");
+        }
+
+        @Test
+        void submitNotification_shouldResolveOntoACopy_leavingTheStoredNotificationReferencedOnly() {
+            // Given — resolution feeds the event only. The notification that is saved, and the one
+            // handed back to the caller, must still carry the reference and nothing else.
+            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+            String referenceNumber = "GBN-AG-26-REF012";
+            Notification notification = Notification.builder()
+                .id("notif-id-copy")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .consignor(NotificationTestData.reference(addressId))
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            when(addressBookClient.findById(ORG_ID, addressId))
+                .thenReturn(Optional.of(addressBookRecord(addressId, false)));
+
+            // When
+            Notification returned = notificationService.submitNotification(
+                referenceNumber, "trace-copy-001", Actor.builder().organisationId(ORG_ID).build());
+
+            // Then
+            assertThat(returned.getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
+            ArgumentCaptor<Notification> saved = ArgumentCaptor.forClass(Notification.class);
+            verify(notificationRepository).save(saved.capture());
+            assertThat(saved.getValue().getConsignor())
+                .isEqualTo(ConsignmentParty.reference(addressId));
+        }
+
+        @Test
+        void submitNotification_shouldFetchASharedAddressOnce_whenTwoRolesReferenceIt() {
+            // Given — the same saved address used as both consignor and consignee. Every lookup
+            // runs against a 2s timeout budget, so the roles share one call rather than each
+            // paying for their own.
+            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+            String referenceNumber = "GBN-AG-26-REF013";
+            Notification notification = Notification.builder()
+                .id("notif-id-shared")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .consignor(NotificationTestData.reference(addressId))
+                .consignee(NotificationTestData.reference(addressId))
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            when(addressBookClient.findById(ORG_ID, addressId))
+                .thenReturn(Optional.of(addressBookRecord(addressId, false)));
+
+            // When
+            notificationService.submitNotification(
+                referenceNumber, "trace-shared-001", Actor.builder().organisationId(ORG_ID).build());
+
+            // Then
+            ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+            verify(outboxService).appendEvent(captor.capture(), any(), any(), any());
+            assertThat(captor.getValue().getConsignee().getName()).isEqualTo("Astra Rosales");
+            verify(addressBookClient, times(1)).findById(ORG_ID, addressId);
         }
 
         @Test
@@ -1506,66 +1613,6 @@ class NotificationServiceTest {
                 .hasMessageContaining(referenceNumber);
 
             verify(documentService, never()).findByNotificationRef(any());
-        }
-    }
-
-    /**
-     * A party stored as an address-book reference is filled in when the notification is read
-     * (EUDPA-294), so an address edited in the address book shows through without the notification
-     * being rewritten. What is stored is only ever the reference.
-     */
-    @Nested
-    class ResolveReferencedParties {
-
-        private static final String ADDRESS_ID = "665f1c2ab3e4d51a2c9d0e77";
-
-        private Notification notificationWithReferencedConsignor(String referenceNumber) {
-            return Notification.builder()
-                .referenceNumber(referenceNumber)
-                .status(DRAFT)
-                .consignor(NotificationTestData.reference(ADDRESS_ID))
-                .build();
-        }
-
-        private AddressBookRecord addressBookRecord(boolean deleted) {
-            return new AddressBookRecord(ADDRESS_ID, "Astra Rosales", "43 East Hague Extension",
-                null, "Vernier", "Soleure", "30055", "CH", "+41 22 000 0000",
-                "astra@example.com", deleted);
-        }
-
-        @Test
-        void findAll_shouldFillInReferencedParties_fetchingASharedAddressOnlyOnce() {
-            Notification first = notificationWithReferencedConsignor("GBN-AG-26-REF007");
-            Notification second = notificationWithReferencedConsignor("GBN-AG-26-REF008");
-            when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(first, second), PageRequest.of(0, 54), 2));
-            when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
-                .thenReturn(Optional.of(addressBookRecord(false)));
-
-            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
-
-            assertThat(result.content()).extracting(dto -> dto.getConsignor().getName())
-                .containsExactly("Astra Rosales", "Astra Rosales");
-            verify(addressBookClient, times(1)).findById(ORG_ID, ADDRESS_ID);
-        }
-
-        @Test
-        void findAll_shouldNotWriteResolvedDetailsBackOntoTheStoredNotification() {
-            // The reference is the stored truth. Persisting resolved details would grow a stale
-            // copy beside it, which is exactly what storing a reference is meant to avoid.
-            Notification stored = notificationWithReferencedConsignor("GBN-AG-26-REF009");
-            when(notificationRepository.findAllByStatusIn(
-                eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
-                .thenReturn(new PageImpl<>(List.of(stored), PageRequest.of(0, 54), 1));
-            when(addressBookClient.findById(ORG_ID, ADDRESS_ID))
-                .thenReturn(Optional.of(addressBookRecord(false)));
-
-            notificationService.findAll(1, null, null, ORG_ID);
-
-            assertThat(stored.getConsignor().getName()).isNull();
-            assertThat(stored.getConsignor().getAddress()).isNull();
-            verify(notificationRepository, never()).save(any(Notification.class));
         }
     }
 

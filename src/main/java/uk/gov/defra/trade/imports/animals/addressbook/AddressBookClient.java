@@ -8,13 +8,15 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClient;
 
 /**
- * Reads single addresses from the address book so referenced parties can be resolved on read.
+ * Reads single addresses from the address book so referenced parties can be filled in before GBNAG
+ * transmission (see {@code PartyResolver}). Reads do not resolve, so this is the service's only
+ * address-book caller.
  *
  * <p>The address book runs no authentication of its own — it trusts
  * {@code Trade-Imports-Organisation-Id} and requires it to match the organisation in the path
  * (cv-010, see its {@code IdentityHeaderFilter}). The value must therefore always originate from
- * the reader's authenticated session and be passed straight through; this client never chooses or
- * defaults one.
+ * the submitting actor's authenticated session and be passed straight through; this client never
+ * chooses or defaults one.
  */
 @Component
 @RequiredArgsConstructor
@@ -39,7 +41,7 @@ public class AddressBookClient {
      * <p>Anything else — a 5xx, a timeout, a connection failure — propagates. An unavailable
      * address book must never be indistinguishable from an address that was deleted.
      *
-     * @param organisationId the reader's organisation, taken from their authenticated session
+     * @param organisationId the submitter's organisation, taken from their authenticated session
      * @param addressId      the address-book record to read
      * @return the record, or empty when there is none to read
      */

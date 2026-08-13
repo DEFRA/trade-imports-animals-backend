@@ -1,6 +1,8 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockserver.model.HttpRequest.request;
+import static org.mockserver.model.HttpResponse.response;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -12,6 +14,7 @@ import java.util.stream.Stream;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockserver.model.MediaType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
@@ -54,9 +57,24 @@ class NotificationIT extends IntegrationBase {
     private static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
     private static final String REF_FORMAT_REGEX = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN;
     private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
-    /** The reader's organisation, as the BFF forwards it from their session. */
+    /** The submitting actor's organisation, whose address book the outbox resolve reads. */
     private static final String ORG_ID = "5900002";
     private static final String ADDRESS_ID = "665f1c2ab3e4d51a2c9d0e77";
+    private static final String ADDRESS_BOOK_JSON = """
+        {
+          "id": "665f1c2ab3e4d51a2c9d0e77",
+          "name": "Astra Rosales",
+          "addressLine1": "43 East Hague Extension",
+          "addressLine2": null,
+          "townOrCity": "Vernier",
+          "county": "Soleure",
+          "postcode": "30055",
+          "countryCode": "CH",
+          "phone": "+41 22 000 0000",
+          "email": "astra@example.com",
+          "deleted": false
+        }
+        """;
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -918,6 +936,56 @@ class NotificationIT extends IntegrationBase {
         assertThat(gbnAgIdentifier(amendEvent)).isEqualTo(referenceNumber);
     }
 
+    /*
+     * Submission is the only path that still reads the address book — the dashboard resolves its own
+     * names. These two cover it end to end, against a stubbed book, because the unit tests mock the
+     * client and so cannot show the wiring (base URL, org header, deserialisation) actually working.
+     */
+
+    @Test
+    void submit_shouldResolveReferencedParty_intoTheOutboxEvent_withoutRewritingWhatIsStored() {
+        // Given — a notification whose consignor is held as an address-book reference
+        stubAddressBook(ADDRESS_BOOK_JSON, 200);
+        String referenceNumber = createNotificationWithReferencedConsignor();
+
+        // When
+        submitAs(referenceNumber, ORG_ID);
+
+        // Then — GBNAG carries the resolved details
+        Map<String, Object> consignor = outboxConsignorParty(onlyOutboxEvent());
+        assertThat(consignor.get("name")).isEqualTo("Astra Rosales");
+        assertThat((Map<String, Object>) consignor.get("postalAddress"))
+            .containsEntry("postcodeCode", "30055")
+            .containsEntry("cityName", "Vernier");
+
+        // And — storage still holds only the reference. Resolving for transmission must not grow a
+        // stale copy of the address beside the reference that exists to avoid exactly that.
+        Notification stored = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow();
+        assertThat(stored.getConsignor()).isEqualTo(ConsignmentParty.reference(ADDRESS_ID));
+    }
+
+    @Test
+    void submit_shouldReturn400_andEmitNothing_whenAReferencedPartyCannotBeResolved() {
+        // Given — the referenced address has since been deleted. Unlike a read, which would render
+        // the role blank, a submit must fail rather than send GBNAG a party with no name.
+        stubAddressBook(ADDRESS_BOOK_JSON.replace("\"deleted\": false", "\"deleted\": true"), 200);
+        String referenceNumber = createNotificationWithReferencedConsignor();
+
+        // When & Then
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .bodyValue(Map.of("organisationId", ORG_ID))
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail").value(Matchers.containsString(ADDRESS_ID));
+
+        assertThat(outboxEventRepository.findAll()).isEmpty();
+        assertThat(notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow()
+            .getStatus()).isEqualTo(NotificationStatus.DRAFT);
+    }
+
     @Test
     void amend_shouldReturn404_whenReferenceNumberDoesNotExist() {
         webClient("NoAuth")
@@ -1515,14 +1583,6 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void findAll_shouldReturn400_whenOrganisationHeaderMissing() {
-        webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "?page=1")
-            .exchange()
-            .expectStatus().isBadRequest();
-    }
-
-    @Test
     void copy_shouldRetainReferencedConsignorAddressIdAlone() {
         NotificationDto sourceDto = createNotificationDto("DE", "Live cattle");
         sourceDto.setConsignor(ConsignmentParty.reference(ADDRESS_ID));
@@ -1620,7 +1680,6 @@ class NotificationIT extends IntegrationBase {
         return webClient("NoAuth")
             .get()
             .uri(uri)
-            .header(NotificationController.HEADER_ORGANISATION_ID, ORG_ID)
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationPageResponse.class)
@@ -1945,6 +2004,52 @@ class NotificationIT extends IntegrationBase {
             .origin(origin)
             .commodity(Commodity.builder().name(commodity).build())
             .build();
+    }
+
+    private String createNotificationWithReferencedConsignor() {
+        NotificationDto dto = createNotificationDto("CH", "Live cattle");
+        dto.setConsignor(ConsignmentParty.reference(ADDRESS_ID));
+        return webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(dto))
+            .exchange().expectStatus().isOk()
+            .expectBody(Notification.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+    }
+
+    private void submitAs(String referenceNumber, String organisationId) {
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .bodyValue(Map.of("organisationId", organisationId))
+            .exchange().expectStatus().isOk();
+    }
+
+    /** The address book is scoped by organisation in both the path and the header, and the stub
+     * matches on both — a resolve that sent the wrong organisation would miss this stub rather than
+     * quietly return someone else's address. */
+    private void stubAddressBook(String body, int statusCode) {
+        usingStub()
+            .when(request()
+                .withMethod("GET")
+                .withPath("/organisation/" + ORG_ID + "/addresses/" + ADDRESS_ID)
+                .withHeader("Trade-Imports-Organisation-Id", ORG_ID))
+            .respond(response()
+                .withStatusCode(statusCode)
+                .withContentType(MediaType.APPLICATION_JSON)
+                .withBody(body));
+    }
+
+    private OutboxEvent onlyOutboxEvent() {
+        List<OutboxEvent> events = outboxEventRepository.findAll();
+        assertThat(events).hasSize(1);
+        return events.getFirst();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> outboxConsignorParty(OutboxEvent event) {
+        Map<String, Object> consignment =
+            (Map<String, Object>) event.getData().get("specifiedConsignment");
+        return (Map<String, Object>) consignment.get("consignorParty");
     }
 
     private NotificationDto notificationDtoWithArrivalDate(String countryCode, LocalDate arrivalDate) {

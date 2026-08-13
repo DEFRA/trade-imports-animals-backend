@@ -10,8 +10,8 @@ import org.springframework.validation.annotation.Validated;
  * Configuration for the address-book service, the system of record for saved addresses.
  *
  * @param baseUrl the base URL of the address-book API
- * @param connectTimeout connect timeout for address-book HTTP calls (short — on the notification read path)
- * @param readTimeout read timeout for address-book HTTP calls (short — on the notification read path)
+ * @param connectTimeout connect timeout for address-book HTTP calls (short — inside the outbox lock)
+ * @param readTimeout read timeout for address-book HTTP calls (short — inside the outbox lock)
  * @param addressByIdPath path template for a single-address GET (org- and id-scoped)
  */
 @Validated

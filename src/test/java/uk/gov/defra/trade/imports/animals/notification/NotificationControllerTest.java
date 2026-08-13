@@ -1,7 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -15,7 +14,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
-import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_ORGANISATION_ID;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_TRACE_ID;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_USER_ID;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
@@ -55,8 +53,6 @@ class NotificationControllerTest {
     private static final String REF_2 = "GBN-AG-26-ABC002";
     private static final String REF_3 = "GBN-AG-26-ABC003";
     private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
-    /** The reader's organisation, as the BFF forwards it from their session. */
-    private static final String ORG_ID = "5900002";
 
     @Autowired
     private MockMvc mockMvc;
@@ -544,11 +540,11 @@ class NotificationControllerTest {
         @Test
         void findAll_shouldReturnEmptyPage() throws Exception {
             // Given
-            when(notificationService.findAll(1, null, null, ORG_ID)).thenReturn(
+            when(notificationService.findAll(1, null, null)).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
             // When & Then
-            mockMvc.perform(get("/notifications").header(HEADER_ORGANISATION_ID, ORG_ID)
+            mockMvc.perform(get("/notifications")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").isArray())
@@ -583,12 +579,12 @@ class NotificationControllerTest {
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
-            when(notificationService.findAll(1, null, null, ORG_ID)).thenReturn(
+            when(notificationService.findAll(1, null, null)).thenReturn(
                 new NotificationPageResponse(List.of(notification1, notification2), 1, 25, 2, 2,
                     1));
 
             // When & Then
-            mockMvc.perform(get("/notifications").header(HEADER_ORGANISATION_ID, ORG_ID)
+            mockMvc.perform(get("/notifications")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(2))
@@ -609,11 +605,11 @@ class NotificationControllerTest {
         @Test
         void findAll_shouldPassPageParam() throws Exception {
             // Given
-            when(notificationService.findAll(2, null, null, ORG_ID)).thenReturn(
+            when(notificationService.findAll(2, null, null)).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 2, 25, 0, 120, 3));
 
             // When & Then
-            mockMvc.perform(get("/notifications").header(HEADER_ORGANISATION_ID, ORG_ID)
+            mockMvc.perform(get("/notifications")
                     .param("page", "2")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -625,67 +621,41 @@ class NotificationControllerTest {
 
         @Test
         void findAll_shouldPassSortParam() throws Exception {
-            when(notificationService.findAll(1, "createdAt,desc", null, ORG_ID)).thenReturn(
+            when(notificationService.findAll(1, "createdAt,desc", null)).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
-            mockMvc.perform(get("/notifications").header(HEADER_ORGANISATION_ID, ORG_ID)
+            mockMvc.perform(get("/notifications")
                     .param("sort", "createdAt,desc")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
-            verify(notificationService).findAll(1, "createdAt,desc", null, ORG_ID);
+            verify(notificationService).findAll(1, "createdAt,desc", null);
         }
 
         @Test
         void findAll_shouldPassReferenceNumberParam() throws Exception {
-            when(notificationService.findAll(1, null, REF_1, ORG_ID)).thenReturn(
+            when(notificationService.findAll(1, null, REF_1)).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
-            mockMvc.perform(get("/notifications").header(HEADER_ORGANISATION_ID, ORG_ID)
+            mockMvc.perform(get("/notifications")
                     .param("referenceNumber", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
-            verify(notificationService).findAll(1, null, REF_1, ORG_ID);
+            verify(notificationService).findAll(1, null, REF_1);
         }
 
         @Test
         void findAll_shouldPassInvalidReferenceNumberToService() throws Exception {
-            when(notificationService.findAll(1, null, "invalid-ref", ORG_ID)).thenReturn(
+            when(notificationService.findAll(1, null, "invalid-ref")).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
-            mockMvc.perform(get("/notifications").header(HEADER_ORGANISATION_ID, ORG_ID)
+            mockMvc.perform(get("/notifications")
                     .param("referenceNumber", "invalid-ref")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
-            verify(notificationService).findAll(1, null, "invalid-ref", ORG_ID);
-        }
-    }
-
-    /**
-     * The organisation header is the authorisation for the address-book lookups a read triggers, so
-     * a read without one is rejected rather than served with a guessed organisation.
-     */
-    @Nested
-    class OrganisationHeader {
-
-        @Test
-        void findAll_shouldReturn400_whenOrganisationHeaderMissing() throws Exception {
-            mockMvc.perform(get("/notifications")
-                    .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isBadRequest());
-
-            verify(notificationService, never()).findAll(anyInt(), any(), any(), any());
-        }
-
-        @Test
-        void findAll_shouldReturn400_whenOrganisationHeaderBlank() throws Exception {
-            mockMvc.perform(get("/notifications").header(HEADER_ORGANISATION_ID, "  ")
-                    .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isBadRequest());
-
-            verify(notificationService, never()).findAll(anyInt(), any(), any(), any());
+            verify(notificationService).findAll(1, null, "invalid-ref");
         }
     }
 
