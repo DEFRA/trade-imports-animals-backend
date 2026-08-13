@@ -50,7 +50,7 @@ public class NotificationService {
     private final LockingTaskExecutor lockingTaskExecutor;
     private final NotificationMapper notificationMapper;
     private final NotificationCopyMapper notificationCopyMapper;
-    private final PartyResolver partyResolver;
+    private final ConsignmentPartyResolver consignmentPartyResolver;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final NotificationTtlConfig ttlConfig;
     private final Duration lockAtLeastFor;
@@ -65,7 +65,7 @@ public class NotificationService {
         LockingTaskExecutor lockingTaskExecutor,
         NotificationMapper notificationMapper,
         NotificationCopyMapper notificationCopyMapper,
-        PartyResolver partyResolver,
+        ConsignmentPartyResolver consignmentPartyResolver,
         ReferenceNumberGenerator referenceNumberGenerator,
         NotificationTtlConfig ttlConfig,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
@@ -78,7 +78,7 @@ public class NotificationService {
         this.lockingTaskExecutor = lockingTaskExecutor;
         this.notificationMapper = notificationMapper;
         this.notificationCopyMapper = notificationCopyMapper;
-        this.partyResolver = partyResolver;
+        this.consignmentPartyResolver = consignmentPartyResolver;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.ttlConfig = ttlConfig;
         this.lockAtLeastFor = lockAtLeastFor;
@@ -258,8 +258,8 @@ public class NotificationService {
         String organisationId = actor != null ? actor.getOrganisationId() : null;
         Notification copy = notification.toBuilder().build();
         return eventType == OutboxEventType.NOTIFICATION_EDITED
-            ? partyResolver.resolveForDraft(copy, organisationId)
-            : partyResolver.resolveForSubmission(copy, organisationId);
+            ? consignmentPartyResolver.resolveForDraft(copy, organisationId)
+            : consignmentPartyResolver.resolveForSubmission(copy, organisationId);
     }
 
     private <T> T executeWithOutboxLock(

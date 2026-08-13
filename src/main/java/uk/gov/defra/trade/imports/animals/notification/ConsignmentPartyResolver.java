@@ -32,7 +32,7 @@ import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class PartyResolver {
+public class ConsignmentPartyResolver {
 
     private final AddressBookClient addressBookClient;
 
@@ -74,9 +74,9 @@ public class PartyResolver {
         }
         // One lookup per distinct address: a trader who is both consignor and consignee should not
         // be fetched twice, and this runs against a bounded timeout budget.
-        Map<String, ConsignmentParty> resolved = new HashMap<>();
+        Map<String, Optional<ConsignmentParty>> lookups = new HashMap<>();
         UnaryOperator<ConsignmentParty> resolver =
-            party -> resolveOnce(party, organisationId, failOnMiss, resolved);
+            party -> resolveParty(party, organisationId, failOnMiss, lookups);
         notification.setConsignor(resolver.apply(notification.getConsignor()));
         notification.setConsignee(resolver.apply(notification.getConsignee()));
         notification.setImporter(resolver.apply(notification.getImporter()));
@@ -85,22 +85,30 @@ public class PartyResolver {
         return notification;
     }
 
-    private ConsignmentParty resolveOnce(
+    /**
+     * The one place a role is inspected before it becomes an address id. A party with no
+     * {@code addressId} is held inline and passes through untouched (AC5) — there is nothing to
+     * look up — so everything below this deals in address ids alone.
+     */
+    private ConsignmentParty resolveParty(
         ConsignmentParty party,
         String organisationId,
         boolean failOnMiss,
-        Map<String, ConsignmentParty> alreadyResolved) {
+        Map<String, Optional<ConsignmentParty>> lookups) {
         if (party == null || party.getAddressId() == null) {
             return party;
         }
-        if (alreadyResolved.containsKey(party.getAddressId())) {
-            return alreadyResolved.get(party.getAddressId());
+        String addressId = party.getAddressId();
+        Optional<ConsignmentParty> resolved =
+            lookups.computeIfAbsent(addressId, id -> resolve(id, organisationId));
+        if (resolved.isEmpty() && failOnMiss) {
+            log.error(
+                "Address-book party could not be resolved for outbox (addressId={})", addressId);
+            throw new BadRequestException(
+                "Cannot submit notification: address-book party could not be resolved (addressId="
+                    + addressId + ")");
         }
-        ConsignmentParty result = failOnMiss
-            ? requireResolved(party, organisationId)
-            : resolve(party, organisationId);
-        alreadyResolved.put(party.getAddressId(), result);
-        return result;
+        return resolved.orElse(null);
     }
 
     private static boolean hasGbnAgAddressBookReference(Notification notification) {
@@ -113,53 +121,36 @@ public class PartyResolver {
             .anyMatch(party -> party != null && party.getAddressId() != null);
     }
 
-    private ConsignmentParty requireResolved(ConsignmentParty party, String organisationId) {
-        if (party == null || party.getAddressId() == null) {
-            return party;
-        }
-        ConsignmentParty resolved = resolve(party, organisationId);
-        if (resolved == null) {
-            log.error(
-                "Address-book party could not be resolved for outbox (addressId={})",
-                party.getAddressId());
-            throw new BadRequestException(
-                "Cannot submit notification: address-book party could not be resolved (addressId="
-                    + party.getAddressId() + ")");
-        }
-        return resolved;
-    }
-
     /**
-     * A referenced party becomes the record's current details. A record that has been deleted — or
-     * that the submitter's organisation cannot see — resolves to nothing, which
-     * {@link #requireResolved} turns into a rejected submit.
+     * One address, as the party it stands for. Empty when the record has been deleted, or when the
+     * submitter's organisation cannot see it — the address book scopes its lookups on the
+     * organisation, so a reference belonging to another one finds nothing. Both read as "no such
+     * address", which {@link #resolveParty} turns into a rejected submit or a blank role depending
+     * on the event.
      *
      * <p>An address book that is down does not take that path: the client throws and the throw
      * propagates, because an outage must not look identical to a deletion.
      */
-    private ConsignmentParty resolve(ConsignmentParty party, String organisationId) {
-        if (party == null || party.getAddressId() == null) {
-            return party;
-        }
-        Optional<AddressBookRecord> found =
-            addressBookClient.findById(organisationId, party.getAddressId());
+    private Optional<ConsignmentParty> resolve(String addressId, String organisationId) {
+        Optional<AddressBookRecord> found = addressBookClient.findById(organisationId, addressId);
         if (found.isEmpty()) {
             log.info(
                 "Address-book party not found (organisationId={}, addressId={})",
-                organisationId, party.getAddressId());
-            return null;
+                organisationId, addressId);
+            return Optional.empty();
         }
         AddressBookRecord addressBookRecord = found.get();
         if (addressBookRecord.deleted()) {
             log.info(
                 "Address-book party is soft-deleted (organisationId={}, addressId={})",
-                organisationId, party.getAddressId());
-            return null;
+                organisationId, addressId);
+            return Optional.empty();
         }
-        return toParty(party.getAddressId(), addressBookRecord);
+        return Optional.of(toConsignmentParty(addressId, addressBookRecord));
     }
 
-    private ConsignmentParty toParty(String addressId, AddressBookRecord addressBookRecord) {
+    private ConsignmentParty toConsignmentParty(
+        String addressId, AddressBookRecord addressBookRecord) {
         return ConsignmentParty.builder()
             .addressId(addressId)
             .name(addressBookRecord.name())

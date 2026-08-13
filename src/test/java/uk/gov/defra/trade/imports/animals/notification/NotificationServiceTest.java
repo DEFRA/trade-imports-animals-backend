@@ -121,7 +121,8 @@ class NotificationServiceTest {
     private NotificationService buildService(NotificationTtlConfig ttlConfig) {
         return new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            notificationMapper, new NotificationCopyMapper(), new PartyResolver(addressBookClient),
+            notificationMapper, new NotificationCopyMapper(),
+            new ConsignmentPartyResolver(addressBookClient),
             referenceNumberGenerator, ttlConfig,
             Duration.ZERO, 54, 50);
     }

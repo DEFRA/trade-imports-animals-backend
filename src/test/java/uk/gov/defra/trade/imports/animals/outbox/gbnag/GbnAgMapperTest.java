@@ -382,7 +382,7 @@ class GbnAgMapperTest {
     @Test
     void shouldEmitNullNameAndPostalAddress_whenConsignorIsUnresolvedReference() {
         // TradeParty.from does not resolve address-book references; NotificationService must call
-        // PartyResolver.resolveForOutbox before appendEvent, or GBNAG receives nulls.
+        // ConsignmentPartyResolver.resolveForSubmission before appendEvent, or GBNAG receives nulls.
         Notification notification = Notification.builder()
             .referenceNumber("GBN-AG-26-REFMAP")
             .consignor(NotificationTestData.reference("665f1c2ab3e4d51a2c9d0e77"))
@@ -397,7 +397,7 @@ class GbnAgMapperTest {
 
     @Test
     void shouldMapResolvedReferencedParty_toConsignorNameAndPostalAddress() {
-        // Shape after PartyResolver.resolveForOutbox: addressId retained with filled details.
+        // Shape after ConsignmentPartyResolver resolution: addressId retained with filled details.
         Notification notification = Notification.builder()
             .referenceNumber("GBN-AG-26-REFRES")
             .consignor(ConsignmentParty.builder()

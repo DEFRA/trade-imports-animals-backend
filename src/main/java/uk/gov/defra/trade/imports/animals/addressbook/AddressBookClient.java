@@ -9,8 +9,8 @@ import org.springframework.web.client.RestClient;
 
 /**
  * Reads single addresses from the address book so referenced parties can be filled in before GBNAG
- * transmission (see {@code PartyResolver}). Reads do not resolve, so this is the service's only
- * address-book caller.
+ * transmission (see {@code ConsignmentPartyResolver}). Reads do not resolve, so this is the
+ * service's only address-book caller.
  *
  * <p>The address book runs no authentication of its own — it trusts
  * {@code Trade-Imports-Organisation-Id} and requires it to match the organisation in the path
