@@ -33,9 +33,6 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
@@ -516,25 +513,17 @@ class NotificationControllerTest {
         @Test
         void findAll_shouldReturnPageOfNotifications() throws Exception {
             // Given
-            NotificationDto notification1 = NotificationDto.builder()
-                .referenceNumber(REF_1)
-                .origin(new Origin("GB", "true", "REF-GB-001"))
-                .commodity(Commodity.builder().name("Live cattle").build())
-                .consignor(consignors().getFirst())
-                .destination(destinations().getFirst())
-                .transport(Transport.builder().transporter(transporters().getFirst()).build())
-                .status(NotificationStatus.DRAFT)
-                .build();
+            NotificationView notification1 = testView(REF_1, NotificationStatus.DRAFT,
+                new Origin("GB", "true", "REF-GB-001"),
+                Commodity.builder().name("Live cattle").build(),
+                consignors().getFirst(),
+                Transport.builder().transporter(transporters().getFirst()).build());
 
-            NotificationDto notification2 = NotificationDto.builder()
-                .referenceNumber(REF_2)
-                .origin(new Origin("FR", "false", "REF-FR-002"))
-                .commodity(Commodity.builder().name("Live sheep").build())
-                .consignor(consignors().getLast())
-                .destination(destinations().getLast())
-                .transport(Transport.builder().transporter(transporters().getLast()).build())
-                .status(NotificationStatus.SUBMITTED)
-                .build();
+            NotificationView notification2 = testView(REF_2, NotificationStatus.SUBMITTED,
+                new Origin("FR", "false", "REF-FR-002"),
+                Commodity.builder().name("Live sheep").build(),
+                consignors().getLast(),
+                Transport.builder().transporter(transporters().getLast()).build());
 
             when(notificationService.findAll(1, null, null)).thenReturn(
                 new NotificationPageResponse(List.of(notification1, notification2), 1, 25, 2, 2,
@@ -557,6 +546,11 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.size").value(25))
                 .andExpect(jsonPath("$.totalElements").value(2))
                 .andExpect(jsonPath("$.totalPages").value(1));
+        }
+
+        private NotificationView testView(String ref, NotificationStatus status, Origin origin,
+                Commodity commodity, Operator consignor, Transport transport) {
+            return new NotificationView(ref, status, null, origin, commodity, consignor, null, transport);
         }
 
         @Test
@@ -706,88 +700,41 @@ class NotificationControllerTest {
     }
 
     @Nested
-    class FindByRef {
+    class FindFulfilments {
 
         @Test
-        void findByRef_shouldReturn200WithHydratedNotification() throws Exception {
-            // Given
-            Origin origin = new Origin("GB", "true", "REF-001");
-
-            AccompanyingDocumentDto document = new AccompanyingDocumentDto(
-                "doc-id-001", REF_1, "upload-abc-123",
-                DocumentType.ITAHC, "UKGB2026001",
-                /* dateOfIssue */ null, ScanStatus.COMPLETE,
-                /* files */ Collections.emptyList(), /* created */ null, /* updated */ null);
-
-            NotificationResponse response = NotificationResponse.builder()
-                .id("notif-id-001")
-                .referenceNumber(REF_1)
-                .origin(origin)
-                .commodity(Commodity.builder().name("Live bovine animals").build())
-                .reasonForImport("PERMANENT")
-                .consignor(consignors().getFirst())
-                .destination(destinations().getFirst())
-                .consignment(consignments().getFirst())
-                .accompanyingDocuments(List.of(document))
-                .build();
-
-            when(notificationService.findByRef(REF_1)).thenReturn(response);
+        void findFulfilments_shouldReturn200WithProjection() throws Exception {
+            // Given — a hand-rolled fulfilment view (Mockito mocks trip up Jackson via their
+            // bytecode fields; the real Spring Data proxy serializes cleanly in production and E2E).
+            NotificationFulfilmentsView view = new NotificationFulfilmentsView() {
+                @Override public String getReferenceNumber() { return REF_1; }
+                @Override public NotificationStatus getStatus() { return NotificationStatus.SUBMITTED; }
+                @Override public java.time.LocalDateTime getCreated() { return null; }
+                @Override public java.time.LocalDateTime getSubmittedAt() { return null; }
+                @Override public java.util.List<org.bson.Document> getFulfilments() {
+                    return java.util.List.of(new org.bson.Document("obligationId", "abc"));
+                }
+            };
+            when(notificationService.findFulfilmentsView(REF_1)).thenReturn(view);
 
             // When / Then
-            mockMvc.perform(get("/notifications/{referenceNumber}", REF_1)
+            mockMvc.perform(get("/notifications/{referenceNumber}/fulfilments", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
-                .andExpect(jsonPath("$.origin.countryCode").value("GB"))
-                .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
-                .andExpect(jsonPath("$.consignor.name").value(consignors().getFirst().getName()))
-                .andExpect(jsonPath("$.destination.name").value(destinations().getFirst().getName()))
-                .andExpect(jsonPath("$.consignment.name")
-                    .value(consignments().getFirst().getName()))
-                .andExpect(jsonPath("$.consignment.address.addressLine1")
-                    .value(consignments().getFirst().getAddress().getAddressLine1()))
-                .andExpect(jsonPath("$.consignment.address.country")
-                    .value(consignments().getFirst().getAddress().getCountry()))
-                .andExpect(jsonPath("$.accompanyingDocuments").isArray())
-                .andExpect(jsonPath("$.accompanyingDocuments.length()").value(1))
-                .andExpect(jsonPath("$.accompanyingDocuments[0].uploadId").value("upload-abc-123"))
-                .andExpect(jsonPath("$.accompanyingDocuments[0].scanStatus").value("COMPLETE"));
+                .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"));
         }
 
         @Test
-        void findByRef_shouldReturn200WithEmptyDocumentsList() throws Exception {
+        void findFulfilments_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            Origin origin = new Origin("GB", "true", "REF-002");
-
-            NotificationResponse response = NotificationResponse.builder()
-                .id("notif-id-002")
-                .referenceNumber(REF_2)
-                .origin(origin)
-                .commodity(Commodity.builder().name("Live sheep").build())
-                .reasonForImport("PERMANENT")
-                .accompanyingDocuments(Collections.emptyList())
-                .build();
-
-            when(notificationService.findByRef(REF_2)).thenReturn(response);
-
-            // When / Then
-            mockMvc.perform(get("/notifications/{referenceNumber}", REF_2)
-                    .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.referenceNumber").value(REF_2))
-                .andExpect(jsonPath("$.accompanyingDocuments").isArray())
-                .andExpect(jsonPath("$.accompanyingDocuments").isEmpty());
-        }
-
-        @Test
-        void findByRef_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
-            // Given
-            when(notificationService.findByRef(NONEXISTENT_REF))
+            when(notificationService.findFulfilmentsView(NONEXISTENT_REF))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
             // When / Then
-            mockMvc.perform(get("/notifications/{referenceNumber}", NONEXISTENT_REF)
+            mockMvc.perform(get("/notifications/{referenceNumber}/fulfilments", NONEXISTENT_REF)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value(

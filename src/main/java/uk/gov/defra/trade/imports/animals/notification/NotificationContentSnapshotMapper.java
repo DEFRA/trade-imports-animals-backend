@@ -19,7 +19,8 @@ import org.mapstruct.control.DeepClone;
 public interface NotificationContentSnapshotMapper {
 
     @BeanMapping(ignoreUnmappedSourceProperties = {
-        "id", "referenceNumber", "status", "created", "updated", "submittedBaseline", "expireAt"
+        "id", "referenceNumber", "status", "created", "updated", "submittedBaseline", "expireAt",
+        "submittedAt", "fulfilments", "submittedFulfilmentsBaseline"
     })
     @Mapping(target = "commodity", source = "commodity", qualifiedByName = "copyCommodity")
     NotificationContentSnapshot capture(Notification source);
@@ -31,6 +32,9 @@ public interface NotificationContentSnapshotMapper {
     @Mapping(target = "updated", ignore = true)
     @Mapping(target = "submittedBaseline", ignore = true)
     @Mapping(target = "expireAt", ignore = true)
+    @Mapping(target = "submittedAt", ignore = true)
+    @Mapping(target = "fulfilments", ignore = true)
+    @Mapping(target = "submittedFulfilmentsBaseline", ignore = true)
     @Mapping(target = "commodity", source = "commodity", qualifiedByName = "copyCommodity")
     void restore(NotificationContentSnapshot snapshot, @MappingTarget Notification target);
 

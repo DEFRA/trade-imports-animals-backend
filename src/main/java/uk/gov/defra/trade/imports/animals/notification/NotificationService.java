@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -10,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.apache.commons.lang3.StringUtils;
+import org.bson.Document;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
@@ -19,8 +21,6 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
@@ -48,7 +48,6 @@ public class NotificationService {
     private final DocumentService documentService;
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
-    private final NotificationMapper notificationMapper;
     private final NotificationCopyMapper notificationCopyMapper;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final NotificationTtlConfig ttlConfig;
@@ -62,7 +61,6 @@ public class NotificationService {
         DocumentService documentService,
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
-        NotificationMapper notificationMapper,
         NotificationCopyMapper notificationCopyMapper,
         ReferenceNumberGenerator referenceNumberGenerator,
         NotificationTtlConfig ttlConfig,
@@ -74,7 +72,6 @@ public class NotificationService {
         this.documentService = documentService;
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
-        this.notificationMapper = notificationMapper;
         this.notificationCopyMapper = notificationCopyMapper;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.ttlConfig = ttlConfig;
@@ -91,6 +88,28 @@ public class NotificationService {
         }
     }
 
+    /**
+     * Replace the notification content at the given reference. Backs {@code PUT /notifications/{ref}}.
+     * Requires DRAFT or AMEND — the state-transition entrypoints (submit / amend / cancelAmend /
+     * softDelete) handle other cases. Emits a {@code NOTIFICATION_EDITED} outbox event on every save
+     * (EUDPA-304), mirroring {@link #updateNotification}.
+     */
+    @Transactional
+    public Notification replace(String referenceNumber, NotificationDto dto,
+        String correlationId, Actor actor) {
+        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+        if (notification.getStatus() != NotificationStatus.DRAFT
+            && notification.getStatus() != NotificationStatus.AMEND) {
+            throw new BadRequestException(
+                "Cannot replace notification content with status: " + notification.getStatus());
+        }
+        setNotificationDetails(dto, notification);
+        return writeWithOutbox(notification, referenceNumber, correlationId,
+            notification.getStatus(), OutboxEventType.NOTIFICATION_EDITED, actor);
+    }
+
     @Transactional
     public Notification copyNotification(String referenceNumber) {
         Notification source = notificationRepository.findByReferenceNumber(referenceNumber)
@@ -105,22 +124,18 @@ public class NotificationService {
         return createNotification(notificationCopyMapper.toCopyDto(source));
     }
 
-    public NotificationResponse findByRef(String referenceNumber) {
-        log.debug("Fetching notification for reference {}", referenceNumber);
-        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
-            .orElseThrow(() -> new NotFoundException(
-                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        List<AccompanyingDocument> documents = documentService.findByNotificationRef(
-            referenceNumber);
-        return notificationMapper.toResponse(notification).toBuilder()
-            .accompanyingDocuments(documents.stream().map(AccompanyingDocumentDto::from).toList())
-            .build();
-    }
-
     public NotificationPageResponse findAll(int page, String sort) {
         return findAll(page, sort, null);
     }
 
+    /** Serves {@code GET /notifications/{ref}/fulfilments} — the frontend engine's rehydrate read. */
+    public NotificationFulfilmentsView findFulfilmentsView(String referenceNumber) {
+        return notificationRepository.findFulfilmentsViewByReferenceNumber(referenceNumber)
+            .orElseThrow(() -> new NotFoundException(
+                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+    }
+
+    /** Serves {@code GET /notifications?…} for the dashboard list. */
     public NotificationPageResponse findAll(int page, String sort, String referenceNumber) {
         List<NotificationStatus> dashboardStatuses = List.of(
             NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
@@ -129,9 +144,9 @@ public class NotificationService {
         String trimmedReference = StringUtils.trimToNull(referenceNumber);
         if (trimmedReference != null) {
             log.debug("Fetching notification by reference {} for dashboard", trimmedReference);
-            Page<Notification> matched = notificationRepository
-                .findByReferenceNumberAndStatusIn(trimmedReference, dashboardStatuses)
-                .<Page<Notification>>map(notification ->
+            Page<NotificationView> matched = notificationRepository
+                .findViewByReferenceNumberAndStatusIn(trimmedReference, dashboardStatuses)
+                .<Page<NotificationView>>map(notification ->
                     new PageImpl<>(List.of(notification), pageable, 1))
                 .orElseGet(() -> Page.empty(pageable));
             log.debug("Found {} notifications for reference {}", matched.getNumberOfElements(),
@@ -140,7 +155,7 @@ public class NotificationService {
         }
 
         log.debug("Fetching notifications page {} (size {}) with sort {}", page, listPageSize, sort);
-        Page<Notification> result = notificationRepository.findAllByStatusIn(
+        Page<NotificationView> result = notificationRepository.findAllViewByStatusIn(
             dashboardStatuses, pageable);
         log.debug("Found {} notifications on page {} of {}",
             result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
@@ -180,6 +195,9 @@ public class NotificationService {
         }
 
         notification.setSubmittedBaseline(NotificationContentSnapshot.from(notification));
+        List<Document> currentFulfilments = notification.getFulfilments();
+        notification.setSubmittedFulfilmentsBaseline(
+            currentFulfilments == null ? null : deepCopyFulfilments(currentFulfilments));
 
         return writeWithOutbox(
             notification,
@@ -207,8 +225,16 @@ public class NotificationService {
 
         notification.getSubmittedBaseline().applyTo(notification);
         notification.setSubmittedBaseline(null);
+        List<Document> priorFulfilments = notification.getSubmittedFulfilmentsBaseline();
+        notification.setFulfilments(
+            priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
+        notification.setSubmittedFulfilmentsBaseline(null);
         notification.setStatus(NotificationStatus.SUBMITTED);
         notification.setUpdated(LocalDateTime.now());
+        // submittedAt is deliberately NOT reset — the amendment is being cancelled to revert to the
+        // previously-submitted state, so the original submission timestamp must be preserved.
+        // (submittedAt is never touched during the SUBMITTED -> AMEND transition, so it still
+        // holds the last-submit value when we get here.)
         log.info("Cancelled amendment for notification {}", referenceNumber);
         return notificationRepository.save(notification);
     }
@@ -225,9 +251,13 @@ public class NotificationService {
                 if (targetStatus == NotificationStatus.SUBMITTED
                     && notification.getStatus() == NotificationStatus.AMEND) {
                     notification.setSubmittedBaseline(null);
+                    notification.setSubmittedFulfilmentsBaseline(null);
                 }
                 notification.setStatus(targetStatus);
                 notification.setUpdated(LocalDateTime.now());
+                if (targetStatus == NotificationStatus.SUBMITTED) {
+                    notification.setSubmittedAt(LocalDateTime.now());
+                }
                 Notification saved = notificationRepository.save(notification);
                 outboxService.appendEvent(saved, eventType, correlationId, actor);
                 return saved;
@@ -277,6 +307,10 @@ public class NotificationService {
         Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+        // Idempotent per REST DELETE convention — a repeat call after a lost response is a no-op.
+        if (notification.getStatus() == NotificationStatus.DELETED) {
+            return notification;
+        }
         if (notification.getStatus() != NotificationStatus.DRAFT
             && notification.getStatus() != NotificationStatus.SUBMITTED
             && notification.getStatus() != NotificationStatus.AMEND) {
@@ -419,6 +453,7 @@ public class NotificationService {
         notification.setCphNumber(dto.getCphNumber());
         notification.setTransport(dto.getTransport());
         notification.setConsignment(dto.getConsignment());
+        notification.setFulfilments(dto.getFulfilments());
         notification.setUpdated(LocalDateTime.now());
     }
 
@@ -435,5 +470,18 @@ public class NotificationService {
             .build();
 
         auditRepository.save(auditRecord);
+    }
+
+    /**
+     * BSON round-trip deep clone of a fulfilments list. Callers need independence from the source
+     * because amend snapshots the pre-amend fulfilments into {@code submittedFulfilmentsBaseline}
+     * and cancel-amend restores from it; a shared reference at any nesting depth would let a
+     * later in-memory mutation on one list surface on the other before the notification is persisted.
+     * Callers are responsible for the {@code null} case — the helper always returns a fresh list.
+     */
+    static List<Document> deepCopyFulfilments(List<Document> source) {
+        return source.stream()
+            .map(d -> Document.parse(d.toJson()))
+            .collect(Collectors.toCollection(ArrayList::new));
     }
 }
