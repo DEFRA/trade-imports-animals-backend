@@ -141,7 +141,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         JsonNode publishedMessage = objectMapper.readTree(snsEnvelope.get("Message").asText());
         assertThat(publishedMessage.get("aggregateVersion").asLong()).isEqualTo(1L);
         assertThat(publishedMessage.get("eventType").asText())
-            .isEqualTo("uk.gov.defra.trade.imports.animals.NotificationEdited");
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationEdited");
         assertThat(publishedMessage.get("metadata").get("correlationId").asText())
             .isEqualTo(TRACE_PREFIX + "edited-001");
         assertThat(publishedMessage.get("data").get("exchangedDocument").get("identifier").asText())
@@ -150,7 +150,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
 
         JsonNode attributes = snsEnvelope.get("MessageAttributes");
         assertThat(attributes.get("eventType").get("Value").asText())
-            .isEqualTo("uk.gov.defra.trade.imports.animals.NotificationEdited");
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationEdited");
         assertThat(attributes.get("correlationId").get("Value").asText())
             .isEqualTo(TRACE_PREFIX + "edited-001");
     }
@@ -173,7 +173,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
             .toList();
         assertThat(events).hasSize(2);
         assertThat(events.get(0).getEventType())
-            .isEqualTo("uk.gov.defra.trade.imports.animals.NotificationEdited");
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationEdited");
         assertThat(events.get(0).getAggregateVersion()).isEqualTo(1L);
         assertThat(events.get(1).getEventType())
             .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
