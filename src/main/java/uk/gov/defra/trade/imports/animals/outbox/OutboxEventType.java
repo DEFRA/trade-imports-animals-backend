@@ -10,27 +10,24 @@ package uk.gov.defra.trade.imports.animals.outbox;
  * downstream consumers can discover and validate against the schema.
  */
 public enum OutboxEventType {
-
+    
     NOTIFICATION_SUBMITTED(
-        "uk.gov.defra.imports.notification.NotificationSubmitted",
-        "https://github.com/DEFRA/trade-imports-schemas/blob/main/"
-            + "schemas/profiles/imports/gb/events/gbn-ag-event-notification-submitted-v1.schema.json"),
+        "NotificationSubmitted",
+        "gbn-ag-event-notification-submitted-v1.schema.json"),
     NOTIFICATION_SUBMISSION_AMENDED(
-        "uk.gov.defra.imports.notification.NotificationSubmissionAmended",
-        "https://github.com/DEFRA/trade-imports-schemas/blob/main/"
-            + "schemas/profiles/imports/gb/events/gbn-ag-event-notification-submission-amended-v1.schema.json"),
-
+        "NotificationSubmissionAmended",
+        "gbn-ag-event-notification-submission-amended-v1.schema.json"),
     NOTIFICATION_EDITED(
-        "uk.gov.defra.trade.imports.animals.NotificationEdited",
-        "https://github.com/DEFRA/trade-imports-schemas/blob/main/"
-            + "schemas/profiles/imports/gb/events/gbn-ag-event-notification-edited-v1.schema.json");
+        "NotificationEdited",
+        "gbn-ag-event-notification-edited-v1.schema.json");
 
     private final String value;
     private final String schemaUrl;
 
     OutboxEventType(String value, String schemaUrl) {
-        this.value = value;
-        this.schemaUrl = schemaUrl;
+        this.value = "uk.gov.defra.imports.notification." + value;
+        this.schemaUrl = "https://github.com/DEFRA/trade-imports-schemas/blob/main/"
+            + "schemas/profiles/imports/gb/events/" + schemaUrl;
     }
 
     public String value() {
