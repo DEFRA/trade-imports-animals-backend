@@ -24,23 +24,18 @@ public class NotificationCopyMapper {
             .commodity(mapCommodity(source.getCommodity()))
             .reasonForImport(source.getReasonForImport())
             .additionalDetails(mapAdditionalDetails(source.getAdditionalDetails()))
-            .placeOfOrigin(mapParty(source.getPlaceOfOrigin()))
-            .consignor(mapParty(source.getConsignor()))
-            .consignee(mapParty(source.getConsignee()))
-            .importer(mapParty(source.getImporter()))
-            .destination(mapParty(source.getDestination()))
+            .placeOfOrigin(mapConsignmentParty(source.getPlaceOfOrigin()))
+            .consignor(mapConsignmentParty(source.getConsignor()))
+            .consignee(mapConsignmentParty(source.getConsignee()))
+            .importer(mapConsignmentParty(source.getImporter()))
+            .destination(mapConsignmentParty(source.getDestination()))
             .cphNumber(source.getCphNumber())
             // transport intentionally omitted — logistical fields (portOfEntry, arrivalDate, transporter) are reset on copy
             // consignment intentionally omitted — contact address is reset on copy
             .build();
     }
 
-    /**
-     * Carries a party onto the copy. A referenced party copies as the reference alone — the copy
-     * resolves it on read like any other, so it tracks later edits rather than freezing whatever the
-     * source happened to show. An inline party copies its details across.
-     */
-    private ConsignmentParty mapParty(ConsignmentParty source) {
+    private ConsignmentParty mapConsignmentParty(ConsignmentParty source) {
         if (source == null) {
             return null;
         }

@@ -7,23 +7,17 @@ import lombok.NoArgsConstructor;
 
 /**
  * A party on a notification — consignor, consignee, importer, place of origin, destination or the
- * consignment contact. Replaced {@code Operator}, a name retired by D13.
+ * consignment contact.
  *
- * <p>A party is held one of two ways, and both are valid (AC5):
+ * <p>A party is held one of two ways:
  *
  * <ul>
  *   <li><b>A reference</b> — {@code addressId} points at an address-book record and the remaining
- *       fields are empty on the stored document. Reads hand back the reference as stored; whoever
- *       needs the details fills them in — the frontend for display,
- *       {@link ConsignmentPartyResolver} for GBNAG — so an edit made in the address book shows
- *       through without the notification being rewritten (AC4).
- *   <li><b>Inline</b> — {@code addressId} is null and the details are held on the notification
- *       itself. Notifications predating the address book are all of this kind and keep working
- *       untouched.
+ *       fields are empty. Whoever needs the details fills them in: the frontend for display,
+ *       {@link ConsignmentPartyResolver} for GBNAG. An edit in the address book therefore shows
+ *       through without the notification being rewritten.
+ *   <li><b>Inline</b> — {@code addressId} is null and the details are held on the notification.
  * </ul>
- *
- * <p>The two are deliberately <em>not</em> mutually exclusive: EUDPA-295 freezes a copy of the
- * address at submit, which will sit beside a still-populated {@code addressId}.
  */
 @Data
 @Builder
@@ -40,7 +34,8 @@ public class ConsignmentParty {
     private Address address;
 
     /**
-     * A party held as an address-book reference — details are empty until resolved on read.
+     * A party held as an address-book reference — details are empty until resolved for
+     * transmission.
      */
     public static ConsignmentParty reference(String addressId) {
         return ConsignmentParty.builder().addressId(addressId).build();

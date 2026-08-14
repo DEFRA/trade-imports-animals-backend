@@ -246,12 +246,11 @@ public class NotificationService {
     }
 
     /**
-     * The notification as the outbox event should carry it: address-book references filled in, on a
-     * copy so nothing resolved is ever persisted or returned to the caller.
+     * The notification as every outbox event should carry it: references filled in, on a copy, so
+     * the stored notification keeps the reference alone.
      *
-     * <p>A submission must resolve completely — a GBNAG document cannot carry a nameless party. An
-     * edit is best-effort: an address the trader has since deleted leaves that role blank rather
-     * than failing a draft save that has nothing else wrong with it.
+     * <p>Submit and amend resolve strictly — a GBNAG document cannot carry a nameless party. A
+     * draft edit is best-effort, so an address deleted since does not block the save.
      */
     private Notification resolvedForOutbox(
         Notification notification, OutboxEventType eventType, Actor actor) {

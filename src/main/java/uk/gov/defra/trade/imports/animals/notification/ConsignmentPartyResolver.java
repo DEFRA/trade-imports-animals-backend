@@ -12,21 +12,18 @@ import uk.gov.defra.trade.imports.animals.addressbook.AddressBookRecord;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 
 /**
- * Fills in the details of parties held as address-book references, on the one path that has to have
- * them: GBNAG transmission. Nothing is written back to storage — the reference is the stored truth,
- * so an address edited in the address book shows through on the next send without the notification
- * being touched (AC4).
+ * Fills in the details of parties held as address-book references, on the one path that has to
+ * have them: GBNAG transmission. Nothing is written back to storage, so an address edited in the
+ * address book shows through on the next send without the notification being touched.
  *
- * <p>A party held inline passes through unchanged (AC5), and so does a notification created before
- * the address book existed — those carry no {@code addressId}, so there is nothing to resolve.
+ * <p>A party held inline carries no {@code addressId} and passes through unchanged.
  *
- * <p>Reads do not resolve. The dashboard is the only reader that renders party names and it fills
- * them in itself, alongside the country and commodity codes it already resolves, so the backend
- * hands out what it stores and keeps one address-book caller rather than three.
+ * <p>Reads do not resolve — the frontend fills in party names for display, so the backend hands
+ * out what it stores.
  *
- * <p>How hard a miss is depends on the event: {@link #resolveForSubmission} fails, because a GBNAG
- * document must not carry a nameless party, while {@link #resolveForDraft} leaves the role blank,
- * because a deleted address must not block a trader from saving the rest of their draft.
+ * <p>A miss depends on the event: {@link #resolveForSubmission} fails, because a GBNAG document
+ * must not carry a nameless party; {@link #resolveForDraft} leaves the role blank, so a deleted
+ * address does not block a draft save.
  */
 @Component
 @RequiredArgsConstructor
@@ -75,24 +72,19 @@ public class ConsignmentPartyResolver {
         // be fetched twice, and this runs against a bounded timeout budget.
         Map<String, Optional<ConsignmentParty>> lookups = new HashMap<>();
         notification.setConsignor(
-            resolveParty(notification.getConsignor(), organisationId, failOnMiss, lookups));
+            resolveIfReference(notification.getConsignor(), organisationId, failOnMiss, lookups));
         notification.setConsignee(
-            resolveParty(notification.getConsignee(), organisationId, failOnMiss, lookups));
+            resolveIfReference(notification.getConsignee(), organisationId, failOnMiss, lookups));
         notification.setImporter(
-            resolveParty(notification.getImporter(), organisationId, failOnMiss, lookups));
+            resolveIfReference(notification.getImporter(), organisationId, failOnMiss, lookups));
         notification.setDestination(
-            resolveParty(notification.getDestination(), organisationId, failOnMiss, lookups));
+            resolveIfReference(notification.getDestination(), organisationId, failOnMiss, lookups));
         notification.setPlaceOfOrigin(
-            resolveParty(notification.getPlaceOfOrigin(), organisationId, failOnMiss, lookups));
+            resolveIfReference(notification.getPlaceOfOrigin(), organisationId, failOnMiss, lookups));
         return notification;
     }
 
-    /**
-     * The one place a role is inspected before it becomes an address id. A party with no
-     * {@code addressId} is held inline and passes through untouched (AC5) — there is nothing to
-     * look up — so everything below this deals in address ids alone.
-     */
-    private ConsignmentParty resolveParty(
+    private ConsignmentParty resolveIfReference(
         ConsignmentParty party,
         String organisationId,
         boolean failOnMiss,
@@ -127,8 +119,8 @@ public class ConsignmentPartyResolver {
      * One address, as the party it stands for. Empty when the record has been deleted, or when the
      * submitter's organisation cannot see it — the address book scopes its lookups on the
      * organisation, so a reference belonging to another one finds nothing. Both read as "no such
-     * address", which {@link #resolveParty} turns into a rejected submit or a blank role depending
-     * on the event.
+     * address", which {@link #resolveIfReference} turns into a rejected submit or a blank role
+     * depending on the event.
      *
      * <p>An address book that is down does not take that path: the client throws and the throw
      * propagates, because an outage must not look identical to a deletion.
