@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_TRACE_ID;
@@ -65,6 +66,57 @@ class NotificationControllerTest {
 
     @MockitoBean
     private OutboxReplayService outboxReplayService;
+
+    @Nested
+    class ReplaceNotification {
+
+        @Test
+        void replace_shouldPassTheActorThrough_soReferencedPartiesResolveOnTheEditEvent()
+            throws Exception {
+            NotificationDto notificationDto = NotificationDto.builder()
+                .referenceNumber(REF_1)
+                .consignor(ConsignmentParty.reference("665f1c2ab3e4d51a2c9d0e77"))
+                .build();
+            SaveNotificationDto body = SaveNotificationDto.builder()
+                .notification(notificationDto)
+                .actor(ActorRequest.builder().organisationId("5900002").build())
+                .build();
+
+            Notification replaced = new Notification();
+            replaced.setReferenceNumber(REF_1);
+            when(notificationService.replace(eq(REF_1), any(NotificationDto.class), any(), any()))
+                .thenReturn(replaced);
+
+            mockMvc.perform(put("/notifications/{referenceNumber}", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.referenceNumber").value(REF_1));
+
+            verify(notificationService).replace(
+                eq(REF_1), any(NotificationDto.class), any(),
+                argThat(actor -> actor != null && "5900002".equals(actor.getOrganisationId())));
+        }
+
+        @Test
+        void replace_shouldPassANullActor_whenTheBodyCarriesNone() throws Exception {
+            SaveNotificationDto body = SaveNotificationDto.of(
+                NotificationDto.builder().referenceNumber(REF_1).build());
+
+            Notification replaced = new Notification();
+            replaced.setReferenceNumber(REF_1);
+            when(notificationService.replace(eq(REF_1), any(NotificationDto.class), any(), any()))
+                .thenReturn(replaced);
+
+            mockMvc.perform(put("/notifications/{referenceNumber}", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(body)))
+                .andExpect(status().isOk());
+
+            verify(notificationService).replace(
+                eq(REF_1), any(NotificationDto.class), any(), eq(null));
+        }
+    }
 
     @Nested
     class PostNotification {

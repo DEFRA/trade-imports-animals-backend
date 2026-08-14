@@ -67,10 +67,13 @@ public class NotificationController {
     @Timed("controller.replaceNotification.time")
     public ResponseEntity<Notification> replace(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @Valid @RequestBody NotificationDto notificationDto,
+        @Valid @RequestBody SaveNotificationDto saveNotificationDto,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId) {
         log.info("PUT /notifications/{} - Replacing notification content", referenceNumber);
-        return ResponseEntity.ok(notificationService.replace(referenceNumber, notificationDto, traceId, null));
+        ActorRequest actorRequest = saveNotificationDto.getActor();
+        Actor actor = actorRequest != null ? actorRequest.toActor() : null;
+        return ResponseEntity.ok(notificationService.replace(
+            referenceNumber, saveNotificationDto.getNotification(), traceId, actor));
     }
 
     @PostMapping("/{referenceNumber}/copy")
