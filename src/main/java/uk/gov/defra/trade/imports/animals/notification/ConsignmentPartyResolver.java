@@ -3,7 +3,6 @@ package uk.gov.defra.trade.imports.animals.notification;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -75,13 +74,16 @@ public class ConsignmentPartyResolver {
         // One lookup per distinct address: a trader who is both consignor and consignee should not
         // be fetched twice, and this runs against a bounded timeout budget.
         Map<String, Optional<ConsignmentParty>> lookups = new HashMap<>();
-        UnaryOperator<ConsignmentParty> resolver =
-            party -> resolveParty(party, organisationId, failOnMiss, lookups);
-        notification.setConsignor(resolver.apply(notification.getConsignor()));
-        notification.setConsignee(resolver.apply(notification.getConsignee()));
-        notification.setImporter(resolver.apply(notification.getImporter()));
-        notification.setDestination(resolver.apply(notification.getDestination()));
-        notification.setPlaceOfOrigin(resolver.apply(notification.getPlaceOfOrigin()));
+        notification.setConsignor(
+            resolveParty(notification.getConsignor(), organisationId, failOnMiss, lookups));
+        notification.setConsignee(
+            resolveParty(notification.getConsignee(), organisationId, failOnMiss, lookups));
+        notification.setImporter(
+            resolveParty(notification.getImporter(), organisationId, failOnMiss, lookups));
+        notification.setDestination(
+            resolveParty(notification.getDestination(), organisationId, failOnMiss, lookups));
+        notification.setPlaceOfOrigin(
+            resolveParty(notification.getPlaceOfOrigin(), organisationId, failOnMiss, lookups));
         return notification;
     }
 
