@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
@@ -30,6 +31,7 @@ public class NotificationCopyMapper {
             .importer(mapConsignmentParty(source.getImporter()))
             .destination(mapConsignmentParty(source.getDestination()))
             .cphNumber(source.getCphNumber())
+            .fulfilments(source.getFulfilments() == null ? null : new ArrayList<>(source.getFulfilments()))
             // transport intentionally omitted — logistical fields (portOfEntry, arrivalDate, transporter) are reset on copy
             // consignment intentionally omitted — contact address is reset on copy
             .build();

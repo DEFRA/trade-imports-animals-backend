@@ -14,6 +14,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.AMEND;
+import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DELETED;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DRAFT;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.SUBMITTED;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
@@ -26,9 +27,11 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Month;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import org.bson.Document;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -38,7 +41,6 @@ import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
 import org.junit.jupiter.api.BeforeEach;
-import org.mapstruct.factory.Mappers;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,12 +51,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Sort.Direction;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.addressbook.AddressBookClient;
 import uk.gov.defra.trade.imports.animals.addressbook.AddressBookRecord;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
@@ -103,9 +102,6 @@ class NotificationServiceTest {
     @InjectMocks
     private DefaultLockingTaskExecutor lockingTaskExecutor;
 
-    private final NotificationMapper notificationMapper = Mappers.getMapper(
-        NotificationMapper.class);
-
     @BeforeEach
     void setUp() {
         // Default: TTL unconfigured (days null) so create tests keep their original behaviour and
@@ -121,7 +117,7 @@ class NotificationServiceTest {
     private NotificationService buildService(NotificationTtlConfig ttlConfig) {
         return new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            notificationMapper, new NotificationCopyMapper(),
+            new NotificationCopyMapper(),
             new ConsignmentPartyResolver(addressBookClient),
             referenceNumberGenerator, ttlConfig,
             Duration.ZERO, 54, 50);
@@ -483,9 +479,9 @@ class NotificationServiceTest {
         @Test
         void findAll_shouldReturnEmptyPage() {
             // Given
-            Page<Notification> emptyPage = new PageImpl<>(
+            Page<NotificationView> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
-            when(notificationRepository.findAllByStatusIn(
+            when(notificationRepository.findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
@@ -495,25 +491,25 @@ class NotificationServiceTest {
             // Then
             assertThat(result).isNotNull();
             verify(notificationRepository, times(1))
-                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
+                .findAllViewByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
         }
 
         @Test
         void findAll_shouldExcludeDeletedNotifications() {
             // Given — only DRAFT and SUBMITTED are passed as the allowlist; DELETED is excluded
-            Notification draft = Notification.builder()
+            NotificationView draft = notificationView()
                 .referenceNumber("GBN-AG-26-000DFT")
                 .status(DRAFT)
                 .build();
-            Notification submitted = Notification.builder()
+            NotificationView submitted = notificationView()
                 .referenceNumber("GBN-AG-26-000SUB")
                 .status(SUBMITTED)
                 .build();
 
-            Page<Notification> page = new PageImpl<>(
+            Page<NotificationView> page = new PageImpl<>(
                 List.of(draft, submitted), PageRequest.of(0, 54), 0);
 
-            when(notificationRepository.findAllByStatusIn(
+            when(notificationRepository.findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
@@ -522,25 +518,25 @@ class NotificationServiceTest {
 
             // Then — only DRAFT and SUBMITTED are returned
             assertThat(result.content()).hasSize(2);
-            assertThat(result.content()).extracting(NotificationDto::getStatus)
+            assertThat(result.content()).extracting(NotificationView::status)
                 .containsExactlyInAnyOrder(DRAFT, SUBMITTED);
             assertThat(result.page()).isEqualTo(1);
             assertThat(result.size()).isEqualTo(54);
             verify(notificationRepository, times(1))
-                .findAllByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
+                .findAllViewByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
         }
 
         @Test
         void findAll_shouldMapStatusToNotificationDto() {
             // Given
-            Notification notification = Notification.builder()
+            NotificationView view = notificationView()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .origin(new Origin("GB", "true", "REF-1"))
                 .status(SUBMITTED)
                 .build();
-            Page<Notification> page = new PageImpl<>(List.of(notification), PageRequest.of(0, 54),
-                1);
-            when(notificationRepository.findAllByStatusIn(
+            Page<NotificationView> page = new PageImpl<>(
+                List.of(view), PageRequest.of(0, 54), 1);
+            when(notificationRepository.findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
@@ -549,9 +545,9 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result.content()).hasSize(1);
-            assertThat(result.content().getFirst().getReferenceNumber()).isEqualTo(
+            assertThat(result.content().getFirst().referenceNumber()).isEqualTo(
                 "GBN-AG-26-ABC123");
-            assertThat(result.content().getFirst().getStatus()).isEqualTo(
+            assertThat(result.content().getFirst().status()).isEqualTo(
                 SUBMITTED);
         }
 
@@ -559,37 +555,37 @@ class NotificationServiceTest {
         void findAll_shouldIncludeAmendNotifications() {
             // Regression: notifications in AMEND were silently excluded from the
             // dashboard before AMEND was added to the allow-list (EUDPA-171).
-            Notification amend = Notification.builder()
+            NotificationView amend = notificationView()
                 .referenceNumber("GBN-AG-26-000AMD")
                 .status(AMEND)
                 .build();
 
-            Page<Notification> page = new PageImpl<>(
+            Page<NotificationView> page = new PageImpl<>(
                 List.of(amend), PageRequest.of(0, 54), 0);
 
-            when(notificationRepository.findAllByStatusIn(
+            when(notificationRepository.findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
             NotificationPageResponse result = notificationService.findAll(1, null);
 
             assertThat(result.content()).hasSize(1);
-            assertThat(result.content()).extracting(NotificationDto::getStatus)
+            assertThat(result.content()).extracting(NotificationView::status)
                 .containsExactly(AMEND);
         }
 
         @Test
         void findAll_shouldUseCreatedAtSort_whenRequested() {
-            Page<Notification> emptyPage = new PageImpl<>(
+            Page<NotificationView> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
-            when(notificationRepository.findAllByStatusIn(
+            when(notificationRepository.findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
             notificationService.findAll(1, "createdAt,asc");
 
             ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-            verify(notificationRepository).findAllByStatusIn(
+            verify(notificationRepository).findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), pageableCaptor.capture());
             assertThat(pageableCaptor.getValue().getSort().getOrderFor("created").getDirection())
                 .isEqualTo(Sort.Direction.ASC);
@@ -597,12 +593,12 @@ class NotificationServiceTest {
 
         @Test
         void findAll_shouldReturnMatchingNotification_whenReferenceNumberProvided() {
-            Notification draft = Notification.builder()
+            NotificationView draft = notificationView()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .status(DRAFT)
                 .build();
 
-            when(notificationRepository.findByReferenceNumberAndStatusIn(
+            when(notificationRepository.findViewByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND)))
                 .thenReturn(Optional.of(draft));
 
@@ -610,16 +606,16 @@ class NotificationServiceTest {
                 notificationService.findAll(1, null, "GBN-AG-26-ABC123");
 
             assertThat(result.content()).hasSize(1);
-            assertThat(result.content().getFirst().getReferenceNumber())
+            assertThat(result.content().getFirst().referenceNumber())
                 .isEqualTo("GBN-AG-26-ABC123");
             assertThat(result.totalElements()).isEqualTo(1);
             verify(notificationRepository, never())
-                .findAllByStatusIn(any(), any(Pageable.class));
+                .findAllViewByStatusIn(any(), any(Pageable.class));
         }
 
         @Test
         void findAll_shouldReturnEmptyPage_whenReferenceNumberNotFound() {
-            when(notificationRepository.findByReferenceNumberAndStatusIn(
+            when(notificationRepository.findViewByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ZZZZZZ", List.of(DRAFT, SUBMITTED, AMEND)))
                 .thenReturn(Optional.empty());
 
@@ -629,19 +625,51 @@ class NotificationServiceTest {
             assertThat(result.content()).isEmpty();
             assertThat(result.totalElements()).isZero();
             verify(notificationRepository, never())
-                .findAllByStatusIn(any(), any(Pageable.class));
+                .findAllViewByStatusIn(any(), any(Pageable.class));
         }
 
         @Test
         void findAll_shouldTrimReferenceNumber_beforeLookup() {
-            when(notificationRepository.findByReferenceNumberAndStatusIn(
+            when(notificationRepository.findViewByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND)))
                 .thenReturn(Optional.empty());
 
             notificationService.findAll(1, null, "  GBN-AG-26-ABC123  ");
 
-            verify(notificationRepository).findByReferenceNumberAndStatusIn(
+            verify(notificationRepository).findViewByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND));
+        }
+    }
+
+    @Nested
+    class FindFulfilmentsView {
+
+        @Test
+        void findFulfilmentsView_shouldReturnProjection_whenNotificationExists() {
+            // Given
+            String ref = "GBN-AG-26-FUL001";
+            NotificationFulfilmentsView view = mock(NotificationFulfilmentsView.class);
+            when(notificationRepository.findFulfilmentsViewByReferenceNumber(ref))
+                .thenReturn(Optional.of(view));
+
+            // When
+            NotificationFulfilmentsView result = notificationService.findFulfilmentsView(ref);
+
+            // Then
+            assertThat(result).isSameAs(view);
+        }
+
+        @Test
+        void findFulfilmentsView_shouldThrowNotFound_whenReferenceNumberUnknown() {
+            // Given
+            String ref = "GBN-AG-26-ABSENT";
+            when(notificationRepository.findFulfilmentsViewByReferenceNumber(ref))
+                .thenReturn(Optional.empty());
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.findFulfilmentsView(ref))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining(ref);
         }
     }
 
@@ -1527,97 +1555,6 @@ class NotificationServiceTest {
     }
 
     @Nested
-    class FindByRef {
-
-        @Test
-        void findByRef_shouldReturnHydratedNotification_withDocuments() {
-            // Given
-            String referenceNumber = "GBN-AG-26-ABC123";
-            Origin origin = new Origin("GB", "true", "REF-001");
-            Notification notification = Notification.builder()
-                .id("notif-id-001")
-                .referenceNumber(referenceNumber)
-                .origin(origin)
-                .commodity(Commodity.builder().name("Live bovine animals").build())
-                .consignor(consignors().getFirst())
-                .destination(destinations().getFirst())
-                .consignment(consignments().getFirst())
-                .build();
-
-            AccompanyingDocument document = AccompanyingDocument.builder()
-                .id("doc-id-001")
-                .notificationReferenceNumber(referenceNumber)
-                .uploadId("upload-abc-123")
-                .documentType(DocumentType.ITAHC)
-                .documentReference("UKGB2026001")
-                .scanStatus(ScanStatus.COMPLETE)
-                .files(Collections.emptyList())
-                .build();
-
-            when(notificationRepository.findByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.of(notification));
-            when(documentService.findByNotificationRef(referenceNumber))
-                .thenReturn(List.of(document));
-
-            // When
-            NotificationResponse response = notificationService.findByRef(referenceNumber);
-
-            // Then
-            assertThat(response).isNotNull();
-            assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
-            assertThat(response.origin().getCountryCode()).isEqualTo("GB");
-            assertThat(response.commodity().getName()).isEqualTo("Live bovine animals");
-            assertThat(response.consignor().getName()).isEqualTo(consignors().getFirst().getName());
-            assertThat(response.destination().getName()).isEqualTo(
-                destinations().getFirst().getName());
-            assertThat(response.consignment()).isEqualTo(consignments().getFirst());
-            assertThat(response.accompanyingDocuments()).hasSize(1);
-            assertThat(response.accompanyingDocuments().getFirst().uploadId()).isEqualTo(
-                "upload-abc-123");
-            assertThat(response.accompanyingDocuments().getFirst().scanStatus()).isEqualTo(
-                ScanStatus.COMPLETE);
-        }
-
-        @Test
-        void findByRef_shouldReturnNotificationWithEmptyDocuments_whenNoneUploaded() {
-            // Given
-            String referenceNumber = "GBN-AG-26-XYZ456";
-            Notification notification = Notification.builder()
-                .id("notif-id-002")
-                .referenceNumber(referenceNumber)
-                .origin(new Origin("IE", "false", null))
-                .build();
-
-            when(notificationRepository.findByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.of(notification));
-            when(documentService.findByNotificationRef(referenceNumber))
-                .thenReturn(Collections.emptyList());
-
-            // When
-            NotificationResponse response = notificationService.findByRef(referenceNumber);
-
-            // Then
-            assertThat(response.referenceNumber()).isEqualTo(referenceNumber);
-            assertThat(response.accompanyingDocuments()).isEmpty();
-        }
-
-        @Test
-        void findByRef_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
-            // Given
-            String referenceNumber = "GBN-AG-26-ABSENT";
-            when(notificationRepository.findByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.empty());
-
-            // When / Then
-            assertThatThrownBy(() -> notificationService.findByRef(referenceNumber))
-                .isInstanceOf(NotFoundException.class)
-                .hasMessageContaining(referenceNumber);
-
-            verify(documentService, never()).findByNotificationRef(any());
-        }
-    }
-
-    @Nested
     class CopyNotification {
 
         @Test
@@ -1846,6 +1783,354 @@ class NotificationServiceTest {
         }
     }
 
+    // Fulfilments handling. Covers the PUT/replace path, the amend/cancelAmend/submit snapshot
+    // semantics, and copy carrying fulfilments.
+    @Nested
+    class Fulfilments {
+
+        @BeforeEach
+        void setUp() {
+            // For tests that go through writeWithOutbox (submit path).
+            lenient().when(lockProvider.lock(any()))
+                .thenReturn(Optional.of(mock(SimpleLock.class)));
+        }
+
+        @Test
+        void replace_shouldReplaceContentIncludingFulfilments_whenDraft() {
+            // Given
+            String ref = "GBN-AG-26-REP001";
+            Notification existing = Notification.builder()
+                .id("db-id-1")
+                .referenceNumber(ref)
+                .status(DRAFT)
+                .origin(new Origin("FR", "no", "OLD"))
+                .build();
+            List<Document> newFulfilments = List.of(new Document("obligationId", "abc"));
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(ref)
+                .origin(new Origin("GB", "no", "NEW"))
+                .fulfilments(newFulfilments)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.replace(ref, dto, "trace", null);
+
+            // Then
+            assertThat(result.getOrigin().getCountryCode()).isEqualTo("GB");
+            assertThat(result.getFulfilments()).isEqualTo(newFulfilments);
+            assertThat(result.getUpdated()).isNotNull();
+            verify(notificationRepository).save(existing);
+            // Emits NOTIFICATION_EDITED on every save (EUDPA-304) — see replace() Javadoc.
+            verify(outboxService).appendEvent(
+                any(Notification.class), eq(OutboxEventType.NOTIFICATION_EDITED), eq("trace"), any());
+        }
+
+        @Test
+        void replace_shouldReplaceContentIncludingFulfilments_whenAmend() {
+            // Given
+            String ref = "GBN-AG-26-REP002";
+            Notification existing = Notification.builder()
+                .referenceNumber(ref)
+                .status(AMEND)
+                .build();
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(ref)
+                .origin(new Origin("GB", "no", "AMEND-EDIT"))
+                .fulfilments(List.of(new Document("obligationId", "xyz")))
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.replace(ref, dto, "trace", null);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(AMEND);
+            assertThat(result.getOrigin().getInternalReference()).isEqualTo("AMEND-EDIT");
+            assertThat(result.getFulfilments()).hasSize(1);
+        }
+
+        @Test
+        void replace_shouldThrowBadRequest_whenSubmitted() {
+            // Given
+            String ref = "GBN-AG-26-REP003";
+            Notification existing = Notification.builder()
+                .referenceNumber(ref)
+                .status(SUBMITTED)
+                .build();
+            NotificationDto dto = NotificationDto.builder().referenceNumber(ref).build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(existing));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.replace(ref, dto, "trace", null))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("SUBMITTED");
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void replace_shouldThrowBadRequest_whenDeleted() {
+            // Given
+            String ref = "GBN-AG-26-REP004";
+            Notification existing = Notification.builder()
+                .referenceNumber(ref)
+                .status(DELETED)
+                .build();
+            NotificationDto dto = NotificationDto.builder().referenceNumber(ref).build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(existing));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.replace(ref, dto, "trace", null))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("DELETED");
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void replace_shouldThrowNotFound_whenReferenceUnknown() {
+            when(notificationRepository.findByReferenceNumber("GBN-AG-26-ABSENT"))
+                .thenReturn(Optional.empty());
+            NotificationDto dto = NotificationDto.builder().build();
+
+            assertThatThrownBy(
+                () -> notificationService.replace("GBN-AG-26-ABSENT", dto, "trace", null))
+                .isInstanceOf(NotFoundException.class);
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void amend_shouldSnapshotFulfilmentsIntoBaseline() {
+            // Given
+            String ref = "GBN-AG-26-AMD001";
+            List<Document> fulfilments = new ArrayList<>(
+                List.of(new Document("obligationId", "abc")));
+            Notification notification = Notification.builder()
+                .id("db-id-a")
+                .referenceNumber(ref)
+                .status(SUBMITTED)
+                .origin(new Origin("GB", "no", "REF"))
+                .fulfilments(fulfilments)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.amendNotification(ref, "trace", null);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(AMEND);
+            assertThat(result.getSubmittedFulfilmentsBaseline()).isEqualTo(fulfilments);
+            // Defensive copy — mutating source after snapshot must not affect baseline.
+            fulfilments.add(new Document("obligationId", "post-snapshot"));
+            assertThat(result.getSubmittedFulfilmentsBaseline()).hasSize(1);
+        }
+
+        @Test
+        void cancelAmend_shouldRestoreFulfilmentsAndPreserveOriginalSubmittedAt() {
+            // Given — an in-flight amendment carries the original submittedAt (writeWithOutbox
+            // does not touch it on the SUBMITTED -> AMEND transition), so cancel-amend must
+            // return that same timestamp untouched.
+            String ref = "GBN-AG-26-CAN001";
+            LocalDateTime originalSubmittedAt = LocalDateTime.of(2026, Month.APRIL, 15, 10, 0);
+            List<Document> priorFulfilments = List.of(new Document("obligationId", "prior"));
+            NotificationContentSnapshot baseline = NotificationContentSnapshot.builder()
+                .origin(new Origin("GB", "no", "ORIGINAL"))
+                .build();
+            Notification notification = Notification.builder()
+                .id("db-id-c")
+                .referenceNumber(ref)
+                .status(AMEND)
+                .origin(new Origin("FR", "yes", "EDITED"))
+                .submittedBaseline(baseline)
+                .submittedFulfilmentsBaseline(new ArrayList<>(priorFulfilments))
+                .fulfilments(List.of(new Document("obligationId", "in-flight-edit")))
+                .submittedAt(originalSubmittedAt)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.cancelAmendNotification(ref);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
+            assertThat(result.getSubmittedBaseline()).isNull();
+            assertThat(result.getSubmittedFulfilmentsBaseline()).isNull();
+            assertThat(result.getFulfilments()).isEqualTo(priorFulfilments);
+            assertThat(result.getSubmittedAt()).isEqualTo(originalSubmittedAt);
+            assertThat(result.getOrigin().getInternalReference()).isEqualTo("ORIGINAL");
+        }
+
+        @Test
+        void deepCopyFulfilments_shouldProduceIndependentCopy_underNestedMutation() {
+            // Given — a fulfilments payload representative of what the frontend PUTs: an outer
+            // entry with an obligationId scalar plus a nested list of record Documents that carry
+            // their own fields. This is the shape a shallow copy would previously leave aliased
+            // at the inner-Document level, so mutating the original could surface on the baseline.
+            Document nestedRecord = new Document("fulfilmentId", "line0").append("value", "5");
+            Document outer = new Document("obligationId", "packages")
+                .append("records", new ArrayList<>(List.of(nestedRecord)));
+            List<Document> source = new ArrayList<>(List.of(outer));
+
+            // When
+            List<Document> copy = NotificationService.deepCopyFulfilments(source);
+
+            // And — mutate the original at every nesting level after the copy is taken
+            source.get(0).put("obligationId", "mutated");
+            source.get(0).getList("records", Document.class).add(new Document("fulfilmentId", "line1"));
+            source.get(0).getList("records", Document.class).get(0).put("value", "999");
+
+            // Then — the copy is a different list containing different Documents, and none of the
+            // post-copy mutations on the original bleed through at any nesting depth.
+            assertThat(copy).isNotSameAs(source);
+            Document copiedOuter = copy.get(0);
+            assertThat(copiedOuter).isNotSameAs(outer);
+            assertThat(copiedOuter.getString("obligationId")).isEqualTo("packages");
+            assertThat(copiedOuter.getList("records", Document.class)).hasSize(1);
+            assertThat(copiedOuter.getList("records", Document.class).get(0).getString("value")).isEqualTo("5");
+        }
+
+        @Test
+        void submittedAt_shouldReflectLatestSubmission_acrossFullAmendCycle() {
+            // Given — a fresh DRAFT that is submitted, amended, then re-submitted. This pins the
+            // agreed semantics for submittedAt: it tracks the LATEST submission event (see the
+            // Javadoc on Notification#submittedAt), not the original submit time. That is what
+            // downstream consumers of the outbox event's submittedAt field see for a
+            // resubmitted notification. Cancel-amend, by contrast, preserves the original —
+            // covered by cancelAmend_shouldRestoreFulfilmentsAndPreserveOriginalSubmittedAt.
+            String ref = "GBN-AG-26-SBMT02";
+            Notification notification = Notification.builder()
+                .id("db-id-cycle")
+                .referenceNumber(ref)
+                .status(DRAFT)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When — DRAFT -> SUBMITTED (first submit)
+            Notification afterFirstSubmit = notificationService.submitNotification(ref, "t1", null);
+            LocalDateTime firstSubmittedAt = afterFirstSubmit.getSubmittedAt();
+            assertThat(firstSubmittedAt).isNotNull();
+
+            // And — SUBMITTED -> AMEND (submittedAt preserved through the transition)
+            Notification afterAmend = notificationService.amendNotification(ref, "t2", null);
+            assertThat(afterAmend.getSubmittedAt()).isEqualTo(firstSubmittedAt);
+
+            // And — AMEND -> SUBMITTED (resubmit updates submittedAt to the new submission moment)
+            Notification afterResubmit = notificationService.submitNotification(ref, "t3", null);
+
+            // Then — submittedAt reflects the RESUBMISSION, not the original submit.
+            assertThat(afterResubmit.getSubmittedAt()).isNotNull();
+            assertThat(afterResubmit.getSubmittedAt()).isAfterOrEqualTo(firstSubmittedAt);
+        }
+
+        @Test
+        void submit_shouldSetSubmittedAt_andClearBothBaselines_whenSubmittingFromAmend() {
+            // Given
+            String ref = "GBN-AG-26-SBM001";
+            Notification notification = Notification.builder()
+                .id("db-id-s")
+                .referenceNumber(ref)
+                .status(AMEND)
+                .submittedBaseline(NotificationContentSnapshot.builder().build())
+                .submittedFulfilmentsBaseline(new ArrayList<>(
+                    List.of(new Document("obligationId", "prior"))))
+                .fulfilments(List.of(new Document("obligationId", "current")))
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            Notification result = notificationService.submitNotification(ref, "trace", null);
+
+            // Then
+            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
+            assertThat(result.getSubmittedAt()).isNotNull();
+            assertThat(result.getSubmittedBaseline()).isNull();
+            assertThat(result.getSubmittedFulfilmentsBaseline()).isNull();
+            // Fulfilments are the in-flight edit, NOT the baseline (submit-from-amend accepts the edit).
+            assertThat(result.getFulfilments()).extracting("obligationId").containsExactly("current");
+        }
+
+        @Test
+        void softDelete_shouldBeIdempotent_onAlreadyDeleted() {
+            // Given
+            String ref = "GBN-AG-26-DEL001";
+            Notification alreadyDeleted = Notification.builder()
+                .referenceNumber(ref)
+                .status(DELETED)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(alreadyDeleted));
+
+            // When
+            Notification result = notificationService.softDeleteNotification(ref);
+
+            // Then — returns the existing notification unchanged, no save.
+            assertThat(result).isSameAs(alreadyDeleted);
+            assertThat(result.getStatus()).isEqualTo(DELETED);
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void copy_shouldCarryFulfilmentsAcross() {
+            // Given
+            String sourceRef = "GBN-AG-26-CPY001";
+            String newRef = "GBN-AG-26-CPY002";
+            List<Document> sourceFulfilments = new ArrayList<>(
+                List.of(new Document("obligationId", "source")));
+            Notification source = Notification.builder()
+                .referenceNumber(sourceRef)
+                .status(SUBMITTED)
+                .origin(new Origin("GB", "no", "SOURCE-REF"))
+                .fulfilments(sourceFulfilments)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+            when(referenceNumberGenerator.generate()).thenReturn(newRef);
+            ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+            when(notificationRepository.save(captor.capture()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.copyNotification(sourceRef);
+
+            // Then — the saved (new) notification carries the source fulfilments.
+            Notification saved = captor.getValue();
+            assertThat(saved.getReferenceNumber()).isEqualTo(newRef);
+            assertThat(saved.getFulfilments()).isEqualTo(sourceFulfilments);
+            // Defensive copy — mutating the source after copy must not affect the new notification.
+            sourceFulfilments.add(new Document("obligationId", "post-copy"));
+            assertThat(saved.getFulfilments()).hasSize(1);
+        }
+    }
+
     @Nested
     class SoftDeleteNotification {
 
@@ -1921,26 +2206,8 @@ class NotificationServiceTest {
             verify(notificationRepository).save(notification);
         }
 
-        @Test
-        void softDeleteNotification_shouldThrowBadRequestException_whenAlreadyDeleted() {
-            // Given
-            String referenceNumber = "GBN-AG-26-ABC789";
-            Notification notification = Notification.builder()
-                .id("notif-id-003")
-                .referenceNumber(referenceNumber)
-                .status(NotificationStatus.DELETED)
-                .build();
-
-            when(notificationRepository.findByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.of(notification));
-
-            // When / Then
-            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber))
-                .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("DELETED");
-
-            verify(notificationRepository, never()).save(any());
-        }
+        // NB: soft-delete on an already-DELETED notification is idempotent — returns the existing
+        // notification unchanged. See Fulfilments.softDelete_shouldBeIdempotent_onAlreadyDeleted.
 
         @Test
         void softDeleteNotification_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
@@ -1955,6 +2222,37 @@ class NotificationServiceTest {
                 .hasMessageContaining(referenceNumber);
 
             verify(notificationRepository, never()).save(any());
+        }
+    }
+
+    // Small fluent builder over the {@link NotificationView} record so tests can construct
+    // view instances by naming only the fields they care about (nulls elsewhere).
+    private static NotificationViewBuilder notificationView() {
+        return new NotificationViewBuilder();
+    }
+
+    private static final class NotificationViewBuilder {
+        private String referenceNumber;
+        private NotificationStatus status;
+        private LocalDateTime created;
+        private Origin origin;
+        private Commodity commodity;
+        private ConsignmentParty consignor;
+        private ConsignmentParty consignee;
+        private Transport transport;
+
+        NotificationViewBuilder referenceNumber(String v) { this.referenceNumber = v; return this; }
+        NotificationViewBuilder status(NotificationStatus v) { this.status = v; return this; }
+        NotificationViewBuilder created(LocalDateTime v) { this.created = v; return this; }
+        NotificationViewBuilder origin(Origin v) { this.origin = v; return this; }
+        NotificationViewBuilder commodity(Commodity v) { this.commodity = v; return this; }
+        NotificationViewBuilder consignor(ConsignmentParty v) { this.consignor = v; return this; }
+        NotificationViewBuilder consignee(ConsignmentParty v) { this.consignee = v; return this; }
+        NotificationViewBuilder transport(Transport v) { this.transport = v; return this; }
+
+        NotificationView build() {
+            return new NotificationView(
+                referenceNumber, status, created, origin, commodity, consignor, consignee, transport);
         }
     }
 }

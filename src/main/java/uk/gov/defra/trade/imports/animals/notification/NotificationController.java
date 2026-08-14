@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -54,6 +55,22 @@ public class NotificationController {
         ActorRequest actorRequest = saveNotificationDto.getActor();
         Actor actor = actorRequest != null ? actorRequest.toActor() : null;
         return ResponseEntity.ok(notificationService.saveNotification(notificationDto, traceId, actor));
+    }
+
+    @PutMapping("/{referenceNumber}")
+    @Operation(summary = "Replace notification content",
+        description = "Replaces the notification content (notification-shape fields + opaque fulfilments payload) at the given reference. Requires DRAFT or AMEND status. Emits a NotificationEdited outbox event on every save.")
+    @ApiResponse(responseCode = "200", description = "Notification content replaced",
+        content = @Content(schema = @Schema(implementation = Notification.class)))
+    @ApiResponse(responseCode = "400", description = "Notification not in a replaceable state", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
+    @Timed("controller.replaceNotification.time")
+    public ResponseEntity<Notification> replace(
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
+        @Valid @RequestBody NotificationDto notificationDto,
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId) {
+        log.info("PUT /notifications/{} - Replacing notification content", referenceNumber);
+        return ResponseEntity.ok(notificationService.replace(referenceNumber, notificationDto, traceId, null));
     }
 
     @PostMapping("/{referenceNumber}/copy")
@@ -122,20 +139,6 @@ public class NotificationController {
         return ResponseEntity.ok(notificationService.cancelAmendNotification(referenceNumber));
     }
 
-    @GetMapping("/{referenceNumber}")
-    @Operation(summary = "Get notification by reference number",
-        description = "Returns a single notification with its accompanying documents")
-    @ApiResponse(responseCode = "200", description = "Notification returned",
-        content = @Content(schema = @Schema(implementation = NotificationResponse.class)))
-    @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
-    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
-    @Timed("controller.getNotificationByRef.time")
-    public ResponseEntity<NotificationResponse> findByRef(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
-        log.debug("Fetching notification {}", referenceNumber);
-        return ResponseEntity.ok(notificationService.findByRef(referenceNumber));
-    }
-
     @GetMapping
     @Operation(summary = "List notifications",
         description = "Returns a paginated list of import notifications. "
@@ -150,6 +153,19 @@ public class NotificationController {
         @RequestParam(required = false) String referenceNumber) {
         log.debug("GET /notifications?page={}&sort={}&referenceNumber={}", page, sort, referenceNumber);
         return notificationService.findAll(page, sort, referenceNumber);
+    }
+
+    @GetMapping("/{referenceNumber}/fulfilments")
+    @Operation(summary = "Get fulfilment view by reference number",
+        description = "Returns the fulfilment-view projection (referenceNumber, status, dates, opaque fulfilments payload) of the notification at the given reference. Backs the frontend engine's rehydrate path.")
+    @ApiResponse(responseCode = "200", description = "Fulfilment view returned",
+        content = @Content(schema = @Schema(implementation = NotificationFulfilmentsView.class)))
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
+    @Timed("controller.getFulfilments.time")
+    public ResponseEntity<NotificationFulfilmentsView> findFulfilments(
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        log.debug("GET /notifications/{}/fulfilments - Fetching fulfilment view", referenceNumber);
+        return ResponseEntity.ok(notificationService.findFulfilmentsView(referenceNumber));
     }
 
     @GetMapping("/reference-numbers")
