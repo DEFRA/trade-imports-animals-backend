@@ -1689,7 +1689,10 @@ class NotificationIT extends IntegrationBase {
         // When — copy via the dedicated copy endpoint
         Notification copy = webClient("NoAuth")
             .post()
-            .uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("expectedVersion", source.getVersion())
+                .build(sourceRef))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -1739,7 +1742,11 @@ class NotificationIT extends IntegrationBase {
         assertThat(source).isNotNull();
 
         Notification copy = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", source.getReferenceNumber())
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("expectedVersion", source.getVersion())
+                .build(source.getReferenceNumber()))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult().getResponseBody();
 
@@ -1765,9 +1772,15 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", sourceRef)
             .exchange().expectStatus().isOk();
 
-        // When — attempt to copy via the dedicated copy endpoint
+        // When — attempt to copy via the dedicated copy endpoint. expectedVersion is required
+        // by the endpoint, but the deleted-status guard fires before the version check so
+        // whatever value we pass here is immaterial.
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("expectedVersion", 0L)
+                .build(sourceRef))
             .exchange()
             .expectStatus().isBadRequest();
     }
@@ -1786,9 +1799,18 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", sourceRef)
             .exchange().expectStatus().isOk();
 
+        // The submit advanced the source's version. Read it back so the copy request uses
+        // the current one.
+        Long submittedVersion = notificationRepository.findByReferenceNumber(sourceRef)
+            .orElseThrow().getVersion();
+
         // When — copy the submitted notification
         Notification copy = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("expectedVersion", submittedVersion)
+                .build(sourceRef))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -1801,11 +1823,60 @@ class NotificationIT extends IntegrationBase {
         assertThat(copy.getStatus()).isEqualTo(NotificationStatus.DRAFT);
     }
 
+    /**
+     * The copy endpoint carries the source's version at the moment the user clicked "Copy as
+     * new" (WYSIWYG guarantee — you copy the thing you were looking at). If the source has
+     * advanced since, the request is rejected with 409 STALE_VERSION and the dashboard can
+     * re-fetch and re-prompt.
+     */
+    @Test
+    void copy_shouldReturn409StaleVersion_whenExpectedVersionDoesNotMatchSource() {
+        // Given — source starts at version 0 after POST.
+        Notification source = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class).returnResult().getResponseBody();
+
+        // A PUT edit advances the source to version 1.
+        NotificationDto edit = NotificationDto.builder()
+            .referenceNumber(source.getReferenceNumber())
+            .origin(new Origin("GB", "no", "EDITED"))
+            .commodity(Commodity.builder().name("Live cattle").build())
+            .version(source.getVersion())
+            .build();
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", source.getReferenceNumber())
+            .bodyValue(edit)
+            .exchange()
+            .expectStatus().isOk();
+
+        // When — copy with the pre-edit version (simulating a dashboard whose card was rendered
+        // before the concurrent PUT).
+        webClient("NoAuth")
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("expectedVersion", source.getVersion())
+                .build(source.getReferenceNumber()))
+            .exchange()
+            .expectStatus().isEqualTo(org.springframework.http.HttpStatus.CONFLICT)
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(409)
+            .jsonPath("$.code").isEqualTo("STALE_VERSION")
+            .jsonPath("$.title").isEqualTo("Stale Version");
+    }
+
     @Test
     void copy_shouldReturn404_whenSourceNotificationDoesNotExist() {
         // When / Then
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", NONEXISTENT_REF)
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("expectedVersion", 0L)
+                .build(NONEXISTENT_REF))
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()

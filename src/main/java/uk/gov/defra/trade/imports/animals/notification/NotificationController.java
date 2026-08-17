@@ -71,16 +71,20 @@ public class NotificationController {
     }
 
     @PostMapping("/{referenceNumber}/copy")
-    @Operation(summary = "Copy notification", description = "Creates a new DRAFT notification copied from an existing one")
+    @Operation(summary = "Copy notification",
+        description = "Creates a new DRAFT notification copied from an existing one. The caller must supply the version of the source notification as displayed to the user at the moment they clicked \"Copy as new\" — if the source has since advanced, the copy is rejected with 409 STALE_VERSION so the dashboard can re-fetch and re-prompt.")
     @ApiResponse(responseCode = "200", description = "New DRAFT notification created",
         content = @Content(schema = @Schema(implementation = Notification.class)))
     @ApiResponse(responseCode = "400", description = "Source notification is not in a copyable status", content = @Content)
     @ApiResponse(responseCode = "404", description = "Source notification not found", content = @Content)
+    @ApiResponse(responseCode = "409", description = "expectedVersion does not match the source's current version", content = @Content)
     @Timed("controller.copyNotification.time")
     public ResponseEntity<Notification> copy(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
-        log.info("POST /notifications/{}/copy - Copying notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.copyNotification(referenceNumber));
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
+        @RequestParam Long expectedVersion) {
+        log.info("POST /notifications/{}/copy - Copying notification at expectedVersion={}",
+            referenceNumber, expectedVersion);
+        return ResponseEntity.ok(notificationService.copyNotification(referenceNumber, expectedVersion));
     }
 
     @PostMapping("/{referenceNumber}/submit")

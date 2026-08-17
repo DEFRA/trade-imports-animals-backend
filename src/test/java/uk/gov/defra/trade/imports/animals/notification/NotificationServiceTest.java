@@ -1434,7 +1434,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class))).thenReturn(created);
 
             // When
-            Notification result = notificationService.copyNotification(sourceRef);
+            Notification result = notificationService.copyNotification(sourceRef, null);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
@@ -1463,7 +1463,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class))).thenReturn(created);
 
             // When
-            Notification result = notificationService.copyNotification(sourceRef);
+            Notification result = notificationService.copyNotification(sourceRef, null);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
@@ -1508,7 +1508,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef);
+            notificationService.copyNotification(sourceRef, null);
 
             // Then — capture what was saved and assert retained fields
             ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
@@ -1556,7 +1556,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef);
+            notificationService.copyNotification(sourceRef, null);
 
             // Then — excluded fields must be null on the saved copy
             ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
@@ -1597,7 +1597,7 @@ class NotificationServiceTest {
             when(referenceNumberGenerator.generate()).thenReturn(newRef);
             when(notificationRepository.save(any(Notification.class))).thenReturn(created);
 
-            Notification result = notificationService.copyNotification(sourceRef);
+            Notification result = notificationService.copyNotification(sourceRef, null);
 
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
             assertThat(result.getStatus()).isEqualTo(DRAFT);
@@ -1611,7 +1611,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef))
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, null))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(sourceRef);
 
@@ -1630,7 +1630,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(deleted));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef))
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DELETED");
 
@@ -1974,7 +1974,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef);
+            notificationService.copyNotification(sourceRef, null);
 
             // Then — the saved (new) notification carries the source fulfilments.
             Notification saved = captor.getValue();

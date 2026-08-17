@@ -111,7 +111,7 @@ public class NotificationService {
     }
 
     @Transactional
-    public Notification copyNotification(String referenceNumber) {
+    public Notification copyNotification(String referenceNumber, Long expectedVersion) {
         Notification source = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
@@ -119,6 +119,14 @@ public class NotificationService {
             && source.getStatus() != NotificationStatus.SUBMITTED
             && source.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException("Cannot copy notification with status: " + source.getStatus());
+        }
+        // WYSIWYG guard — copy the source as the user saw it at click time. Reuses Spring's
+        // optimistic-locking exception so the frontend gets the same 409 STALE_VERSION shape
+        // it already handles for stale PUT writes.
+        if (!java.util.Objects.equals(source.getVersion(), expectedVersion)) {
+            throw new org.springframework.dao.OptimisticLockingFailureException(
+                "Copy source " + referenceNumber + " has advanced from expected version "
+                    + expectedVersion + " to " + source.getVersion());
         }
         log.info("Copying notification {}", referenceNumber);
         return createNotification(notificationCopyMapper.toCopyDto(source));
