@@ -954,7 +954,7 @@ class NotificationIT extends IntegrationBase {
 
         // Then — GBNAG carries the resolved details
         Map<String, Object> consignor = outboxConsignorParty(onlyOutboxEvent());
-        assertThat(consignor.get("name")).isEqualTo("Astra Rosales");
+        assertThat(consignor).containsEntry("name", "Astra Rosales");
         assertThat((Map<String, Object>) consignor.get("postalAddress"))
             .containsEntry("postcodeCode", "30055")
             .containsEntry("cityName", "Vernier");

@@ -179,7 +179,7 @@ class ConsignmentPartyResolverTest {
         ConcurrentLinkedQueue<String> seen = new ConcurrentLinkedQueue<>();
         when(addressBookClient.findById(eq(ORG), any())).thenAnswer(invocation -> {
             seen.add(String.valueOf(MDC.get("trace.id")));
-            return Optional.of(record(invocation.getArgument(1), "Anything Ltd"));
+            return Optional.of(addressRecord(invocation.getArgument(1), "Anything Ltd"));
         });
         Notification notification = Notification.builder()
             .consignor(ConsignmentParty.reference("a"))
@@ -221,10 +221,10 @@ class ConsignmentPartyResolverTest {
 
     private void stub(String addressId, String name) {
         when(addressBookClient.findById(ORG, addressId))
-            .thenReturn(Optional.of(record(addressId, name)));
+            .thenReturn(Optional.of(addressRecord(addressId, name)));
     }
 
-    private static AddressBookRecord record(String addressId, String name) {
+    private static AddressBookRecord addressRecord(String addressId, String name) {
         return new AddressBookRecord(addressId, name, "1 Test Street", null, "London", null,
             "SW1A 1AA", "GB", "01632 960000", "test@example.com", false);
     }
