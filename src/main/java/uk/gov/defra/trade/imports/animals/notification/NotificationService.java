@@ -454,6 +454,13 @@ public class NotificationService {
         notification.setTransport(dto.getTransport());
         notification.setConsignment(dto.getConsignment());
         notification.setFulfilments(dto.getFulfilments());
+        // Only carried on updates. When null (create path, and legacy update callers), the
+        // DB-loaded version rides through unchanged and the save writes LWW; when set, Spring
+        // Data compares against the DB version and throws OptimisticLockingFailureException
+        // on mismatch.
+        if (dto.getVersion() != null) {
+            notification.setVersion(dto.getVersion());
+        }
         notification.setUpdated(LocalDateTime.now());
     }
 

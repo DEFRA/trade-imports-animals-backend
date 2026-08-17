@@ -1850,6 +1850,61 @@ class NotificationIT extends IntegrationBase {
             .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
     }
 
+    /**
+     * PUT with a stale version — one already advanced by an earlier PUT from another tab / pod —
+     * must be rejected with 409 STALE_VERSION rather than silently overwriting the concurrent
+     * write. Guards the frontend's mid-air-collision recovery flow: it keys re-fetch-and-re-render
+     * specifically on the STALE_VERSION code.
+     */
+    @Test
+    void put_shouldReturn409StaleVersion_whenVersionIsStale() {
+        // Given — seed a notification. The response carries version 0.
+        Notification created = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class).returnResult().getResponseBody();
+        String ref = created.getReferenceNumber();
+        Long staleVersion = created.getVersion();
+
+        // A first PUT with the correct version succeeds and advances the stored version.
+        NotificationDto firstEdit = NotificationDto.builder()
+            .referenceNumber(ref)
+            .origin(new Origin("GB", "no", "FIRST"))
+            .commodity(Commodity.builder().name("Live cattle").build())
+            .version(staleVersion)
+            .build();
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", ref)
+            .bodyValue(firstEdit)
+            .exchange()
+            .expectStatus().isOk();
+
+        // When — a second PUT still carries the pre-write version (simulating a stale tab).
+        NotificationDto staleEdit = NotificationDto.builder()
+            .referenceNumber(ref)
+            .origin(new Origin("GB", "no", "STALE"))
+            .commodity(Commodity.builder().name("Live cattle").build())
+            .version(staleVersion)
+            .build();
+
+        // Then — reject with 409 STALE_VERSION so the frontend can drive its recovery flow.
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", ref)
+            .bodyValue(staleEdit)
+            .exchange()
+            .expectStatus().isEqualTo(org.springframework.http.HttpStatus.CONFLICT)
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(409)
+            .jsonPath("$.code").isEqualTo("STALE_VERSION")
+            .jsonPath("$.title").isEqualTo("Stale Version");
+
+        // And the stored notification reflects the first PUT's write, not the stale one.
+        Notification stored = notificationRepository.findByReferenceNumber(ref).orElseThrow();
+        assertThat(stored.getOrigin().getInternalReference()).isEqualTo("FIRST");
+    }
+
     private String createAndSubmitNotificationWithFullContent() {
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
