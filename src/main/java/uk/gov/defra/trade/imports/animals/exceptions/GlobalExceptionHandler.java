@@ -9,6 +9,7 @@ import java.util.Map;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import org.slf4j.MDC;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -187,6 +188,37 @@ public class GlobalExceptionHandler {
 
         problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/conflict"));
         problemDetail.setTitle("Resource Conflict");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
+     * Handle optimistic-locking failures from Spring Data (409 Conflict, code {@code STALE_VERSION}).
+     *
+     * <p>Distinct from {@link ConflictException} — the {@code code} property lets the frontend key
+     * its re-fetch-and-re-render recovery flow specifically on stale-version conflicts, while
+     * duplicate-key and other application conflicts continue to route through
+     * {@link #handleConflictException}.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ProblemDetail> handleOptimisticLockingFailure(
+        OptimisticLockingFailureException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Stale-version conflict (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.CONFLICT,
+            "The record was modified by another request; refresh and try again."
+        );
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/stale-version"));
+        problemDetail.setTitle("Stale Version");
+        problemDetail.setProperty("code", "STALE_VERSION");
 
         if (traceId != null) {
             problemDetail.setProperty("traceId", traceId);

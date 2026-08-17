@@ -220,6 +220,53 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleOptimisticLockingFailure_shouldReturn409_withStaleVersionCode() {
+        // Given
+        String traceId = "test-trace-stale-1";
+        MDC.put("trace.id", traceId);
+        org.springframework.dao.OptimisticLockingFailureException exception =
+            new org.springframework.dao.OptimisticLockingFailureException(
+                "Cannot save entity with id 1; version does not match: expected 3, actual 5");
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleOptimisticLockingFailure(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
+        assertThat(problemDetail.getTitle()).isEqualTo("Stale Version");
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/stale-version"));
+        assertThat(problemDetail.getProperties())
+            .containsEntry("traceId", traceId)
+            .containsEntry("code", "STALE_VERSION");
+    }
+
+    @Test
+    void handleOptimisticLockingFailure_shouldHandleNullTraceId_andStillCarryTheCode() {
+        // Given - no trace ID in MDC. The code discriminator must still be present so the
+        // frontend can key its recovery flow on it regardless of tracing state.
+        org.springframework.dao.OptimisticLockingFailureException exception =
+            new org.springframework.dao.OptimisticLockingFailureException("stale");
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleOptimisticLockingFailure(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
+        assertThat(problemDetail.getProperties())
+            .containsEntry("code", "STALE_VERSION")
+            .doesNotContainKey("traceId");
+    }
+
+    @Test
     void handleBadRequestException_shouldReturnBadRequestWithDetail() {
         // Given
         String traceId = "test-trace-bad-1";
