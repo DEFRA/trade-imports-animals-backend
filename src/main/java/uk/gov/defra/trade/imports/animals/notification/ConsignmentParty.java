@@ -20,7 +20,7 @@ import lombok.NoArgsConstructor;
  * </ul>
  */
 @Data
-@Builder
+@Builder(toBuilder = true)
 @AllArgsConstructor
 @NoArgsConstructor
 public class ConsignmentParty {
@@ -50,5 +50,18 @@ public class ConsignmentParty {
             return party;
         }
         return reference(party.getAddressId());
+    }
+
+    /**
+     * Normalises a party that is never a reference — {@code placeOfOrigin} and
+     * {@code consignment}, the consignment contact. The details are what is kept; any
+     * {@code addressId} is dropped, because for these roles it only ever records which address the
+     * copy was taken from and must not become something the outbox tries to resolve.
+     */
+    public static ConsignmentParty inlineOnly(ConsignmentParty party) {
+        if (party == null || party.getAddressId() == null) {
+            return party;
+        }
+        return party.toBuilder().addressId(null).build();
     }
 }

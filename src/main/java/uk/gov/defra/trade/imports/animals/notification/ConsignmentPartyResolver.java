@@ -1,11 +1,19 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Component;
 import uk.gov.defra.trade.imports.animals.addressbook.AddressBookClient;
 import uk.gov.defra.trade.imports.animals.addressbook.AddressBookRecord;
@@ -16,7 +24,9 @@ import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
  * have them: GBNAG transmission. Nothing is written back to storage, so an address edited in the
  * address book shows through on the next send without the notification being touched.
  *
- * <p>A party held inline carries no {@code addressId} and passes through unchanged.
+ * <p>A party held inline carries no {@code addressId} and passes through unchanged. Two roles are
+ * always inline and so are never resolved here: {@code placeOfOrigin} and {@code consignment},
+ * the consignment contact, which is per-notification and reset on copy.
  *
  * <p>Reads do not resolve — the frontend fills in party names for display, so the backend hands
  * out what it stores.
@@ -61,32 +71,74 @@ public class ConsignmentPartyResolver {
 
     private Notification resolveParties(
         Notification notification, String organisationId, boolean failOnMiss) {
-        if (!hasGbnAgAddressBookReference(notification)) {
+        List<String> addressIds = referencedAddressIds(notification);
+        if (addressIds.isEmpty()) {
             return notification;
         }
         if (failOnMiss && (organisationId == null || organisationId.isBlank())) {
             throw new BadRequestException(
                 "Cannot resolve address-book parties for outbox transmission: organisation id is required");
         }
-        // One lookup per distinct address: a trader who is both consignor and consignee should not
-        // be fetched twice, and this runs against a bounded timeout budget.
-        Map<String, Optional<ConsignmentParty>> lookups = new HashMap<>();
+        Map<String, Optional<ConsignmentParty>> lookups = lookUpAll(addressIds, organisationId);
+        // Assigned in a fixed role order, so the reference a failed submit names is the same one
+        // every time regardless of which lookup finished first.
         notification.setConsignor(
-            resolveIfReference(notification.getConsignor(), organisationId, failOnMiss, lookups));
+            resolveIfReference(notification.getConsignor(), failOnMiss, lookups));
         notification.setConsignee(
-            resolveIfReference(notification.getConsignee(), organisationId, failOnMiss, lookups));
+            resolveIfReference(notification.getConsignee(), failOnMiss, lookups));
         notification.setImporter(
-            resolveIfReference(notification.getImporter(), organisationId, failOnMiss, lookups));
+            resolveIfReference(notification.getImporter(), failOnMiss, lookups));
         notification.setDestination(
-            resolveIfReference(notification.getDestination(), organisationId, failOnMiss, lookups));
-        notification.setPlaceOfOrigin(
-            resolveIfReference(notification.getPlaceOfOrigin(), organisationId, failOnMiss, lookups));
+            resolveIfReference(notification.getDestination(), failOnMiss, lookups));
         return notification;
+    }
+
+    private Map<String, Optional<ConsignmentParty>> lookUpAll(
+        List<String> addressIds, String organisationId) {
+        Map<String, String> callerContext = MDC.getCopyOfContextMap();
+        Map<String, CompletableFuture<Optional<ConsignmentParty>>> inFlight =
+            new LinkedHashMap<>();
+        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (String addressId : addressIds) {
+                inFlight.put(addressId, CompletableFuture.supplyAsync(
+                    withContext(callerContext, () -> resolve(addressId, organisationId)), executor));
+            }
+        }
+        Map<String, Optional<ConsignmentParty>> lookups = new LinkedHashMap<>();
+        inFlight.forEach((addressId, lookup) -> lookups.put(addressId, joined(lookup)));
+        return lookups;
+    }
+
+    private static <T> Supplier<T> withContext(Map<String, String> callerContext, Supplier<T> work) {
+        return () -> {
+            if (callerContext == null) {
+                return work.get();
+            }
+            MDC.setContextMap(callerContext);
+            try {
+                return work.get();
+            } finally {
+                MDC.clear();
+            }
+        };
+    }
+
+    private static <T> T joined(CompletableFuture<T> lookup) {
+        try {
+            return lookup.join();
+        } catch (CompletionException e) {
+            if (e.getCause() instanceof RuntimeException runtime) {
+                throw runtime;
+            }
+            if (e.getCause() instanceof Error error) {
+                throw error;
+            }
+            throw e;
+        }
     }
 
     private ConsignmentParty resolveIfReference(
         ConsignmentParty party,
-        String organisationId,
         boolean failOnMiss,
         Map<String, Optional<ConsignmentParty>> lookups) {
         if (party == null || party.getAddressId() == null) {
@@ -94,7 +146,7 @@ public class ConsignmentPartyResolver {
         }
         String addressId = party.getAddressId();
         Optional<ConsignmentParty> resolved =
-            lookups.computeIfAbsent(addressId, id -> resolve(id, organisationId));
+            lookups.getOrDefault(addressId, Optional.empty());
         if (resolved.isEmpty() && failOnMiss) {
             log.error(
                 "Address-book party could not be resolved for outbox (addressId={})", addressId);
@@ -105,14 +157,24 @@ public class ConsignmentPartyResolver {
         return resolved.orElse(null);
     }
 
-    private static boolean hasGbnAgAddressBookReference(Notification notification) {
+    /**
+     * Each distinct address referenced by a party, in role order. Empty when none is.
+     *
+     * <p>The four roles that can hold a reference. {@code placeOfOrigin} and {@code consignment}
+     * are always inline, so they are not read here even if one arrives carrying an
+     * {@code addressId}.
+     */
+    private static List<String> referencedAddressIds(Notification notification) {
         return Stream.of(
                 notification.getConsignor(),
                 notification.getConsignee(),
                 notification.getImporter(),
-                notification.getDestination(),
-                notification.getPlaceOfOrigin())
-            .anyMatch(party -> party != null && party.getAddressId() != null);
+                notification.getDestination())
+            .filter(Objects::nonNull)
+            .map(ConsignmentParty::getAddressId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
     }
 
     /**

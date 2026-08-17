@@ -473,14 +473,16 @@ public class NotificationService {
         notification.setCommodity(dto.getCommodity());
         notification.setReasonForImport(dto.getReasonForImport());
         notification.setAdditionalDetails(dto.getAdditionalDetails());
-        notification.setPlaceOfOrigin(ConsignmentParty.forStorage(dto.getPlaceOfOrigin()));
+        // Place of origin and the consignment contact are held as copies, so they are
+        // stored as they arrive. The other four keep the reference alone.
+        notification.setPlaceOfOrigin(ConsignmentParty.inlineOnly(dto.getPlaceOfOrigin()));
         notification.setConsignor(ConsignmentParty.forStorage(dto.getConsignor()));
         notification.setConsignee(ConsignmentParty.forStorage(dto.getConsignee()));
         notification.setImporter(ConsignmentParty.forStorage(dto.getImporter()));
         notification.setDestination(ConsignmentParty.forStorage(dto.getDestination()));
         notification.setCphNumber(dto.getCphNumber());
         notification.setTransport(dto.getTransport());
-        notification.setConsignment(ConsignmentParty.forStorage(dto.getConsignment()));
+        notification.setConsignment(ConsignmentParty.inlineOnly(dto.getConsignment()));
         notification.setFulfilments(dto.getFulfilments());
         notification.setUpdated(LocalDateTime.now());
     }

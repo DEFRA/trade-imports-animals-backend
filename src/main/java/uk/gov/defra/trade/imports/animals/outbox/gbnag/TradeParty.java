@@ -18,9 +18,6 @@ public record TradeParty(
         "https://traces-codelists.ec.europa.eu/operator_activity_type";
     private static final String UK_TRANSPORTER_AUTHORISATION =
         "https://refdata.tbc.defra.gov.uk/uk_transporter_authorisation";
-    // TODO(EUDPA-294 gap): the party now carries email and phone, which DefinedContact has slots //NOSONAR
-    // for, but the mapping is left unpopulated until it can be checked against the authoritative
-    // GBNAG schema sample rather than inferred from field names (see EUDPA-274).
     static TradeParty from(ConsignmentParty party) {
         if (party == null) {
             return null;
@@ -28,7 +25,14 @@ public record TradeParty(
         return new TradeParty(
             null, null, party.getName(),
             null,
-            null, TradeAddress.from(party.getAddress()), null);
+            null, TradeAddress.from(party.getAddress()), definedContactFrom(party));
+    }
+
+    private static List<DefinedContact> definedContactFrom(ConsignmentParty party) {
+        if (party.getEmail() == null && party.getPhone() == null) {
+            return null;
+        }
+        return List.of(new DefinedContact(null, party.getEmail(), party.getPhone()));
     }
 
     static TradeParty from(Transporter transporter) {

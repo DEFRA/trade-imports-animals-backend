@@ -84,7 +84,8 @@ class GbnAgMapperTest {
             assertThat(address.postcodeCode()).isEqualTo("2051");
             assertThat(address.countrySubDivisionName()).isEqualTo("Soleure");
             assertThat(address.countryName()).isNull(); // still a gap - the domain holds the code only
-            assertThat(consignor.definedContact()).isNull(); // gap G4
+            // This party carries no email or phone, so there is no contact to emit.
+            assertThat(consignor.definedContact()).isNull();
         }
 
         @Test
@@ -419,6 +420,50 @@ class GbnAgMapperTest {
         assertThat(consignor.postalAddress().lineOne()).isEqualTo("43 East Hague Extension");
         assertThat(consignor.postalAddress().cityName()).isEqualTo("Vernier");
         assertThat(consignor.postalAddress().countryId()).isEqualTo("CH");
+    }
+
+    @Test
+    void shouldMapPartyEmailAndPhoneToDefinedContact() {
+        Notification notification = Notification.builder()
+            .referenceNumber("GBN-AG-26-CONTACT")
+            .consignor(ConsignmentParty.builder()
+                .addressId("665f1c2ab3e4d51a2c9d0e77")
+                .name("Astra Rosales")
+                .email("astra@example.com")
+                .phone("01632 960111")
+                .address(simpleAddress("43 East Hague Extension", "CH"))
+                .build())
+            .build();
+
+        TradeParty consignor = mapper.toGbnAgEventData(notification)
+            .specifiedConsignment().consignorParty();
+
+        assertThat(consignor.definedContact()).singleElement().satisfies(contact -> {
+            assertThat(contact.emailURIUniversalCommunication()).isEqualTo("astra@example.com");
+            assertThat(contact.telephoneUniversalCommunication()).isEqualTo("01632 960111");
+            // The address book has no contact person — the name it holds is the party's own.
+            assertThat(contact.personName()).isNull();
+        });
+    }
+
+    @Test
+    void shouldMapDefinedContact_whenOnlyOneOfEmailOrPhoneIsHeld() {
+        Notification notification = Notification.builder()
+            .referenceNumber("GBN-AG-26-PHONLY")
+            .consignor(ConsignmentParty.builder()
+                .name("Astra Rosales")
+                .phone("01632 960111")
+                .address(simpleAddress("43 East Hague Extension", "CH"))
+                .build())
+            .build();
+
+        TradeParty consignor = mapper.toGbnAgEventData(notification)
+            .specifiedConsignment().consignorParty();
+
+        assertThat(consignor.definedContact()).singleElement().satisfies(contact -> {
+            assertThat(contact.telephoneUniversalCommunication()).isEqualTo("01632 960111");
+            assertThat(contact.emailURIUniversalCommunication()).isNull();
+        });
     }
 
     private static ConsignmentParty party(String name, Address address) {
