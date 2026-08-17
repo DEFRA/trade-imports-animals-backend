@@ -10,6 +10,7 @@ import lombok.experimental.SuperBuilder;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.bson.Document;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.Indexed;
 
 @org.springframework.data.mongodb.core.mapping.Document(collection = "notification")
@@ -22,6 +23,14 @@ public class Notification extends NotificationBase {
 
     @Id
     private String id;
+
+    /**
+     * Optimistic-locking version managed by Spring Data MongoDB. Rejects a save whose in-memory
+     * copy predates a concurrent write, so multi-tab / multi-pod edits surface as a 409 rather
+     * than silently overwriting each other.
+     */
+    @Version
+    private Long version;
 
     /** Submitted notification content captured when an amendment begins. */
     @JsonIgnore
