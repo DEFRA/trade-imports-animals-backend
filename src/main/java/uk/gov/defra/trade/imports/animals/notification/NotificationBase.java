@@ -4,7 +4,6 @@ import java.time.LocalDateTime;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
-import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.Indexed;
 
 /**
@@ -17,9 +16,6 @@ import org.springframework.data.mongodb.core.index.Indexed;
 @SuperBuilder
 @NoArgsConstructor
 public abstract class NotificationBase {
-
-    @Version
-    private Long concurrencyToken;
 
     @Indexed(unique = true, sparse = true)
     private String referenceNumber;

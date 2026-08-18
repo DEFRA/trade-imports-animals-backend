@@ -10,6 +10,7 @@ import lombok.experimental.SuperBuilder;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.bson.Document;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.Indexed;
 
 @org.springframework.data.mongodb.core.mapping.Document(collection = "notification")
@@ -22,6 +23,9 @@ public class Notification extends NotificationBase {
 
     @Id
     private String id;
+
+    @Version
+    private Long concurrencyToken;
 
     /** Submitted notification content captured when an amendment begins. */
     @JsonIgnore

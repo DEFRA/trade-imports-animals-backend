@@ -553,7 +553,7 @@ class NotificationControllerTest {
 
         private NotificationView testView(String ref, NotificationStatus status, Origin origin,
                 Commodity commodity, Operator consignor, Transport transport) {
-            return new NotificationView(ref, status, null, origin, commodity, consignor, null, transport);
+            return new NotificationView(ref, 0L, status, null, origin, commodity, consignor, null, transport);
         }
 
         @Test
@@ -711,6 +711,7 @@ class NotificationControllerTest {
             // bytecode fields; the real Spring Data proxy serializes cleanly in production and E2E).
             NotificationFulfilmentsView view = new NotificationFulfilmentsView() {
                 @Override public String getReferenceNumber() { return REF_1; }
+                @Override public Long getConcurrencyToken() { return 0L; }
                 @Override public NotificationStatus getStatus() { return NotificationStatus.SUBMITTED; }
                 @Override public java.time.LocalDateTime getCreated() { return null; }
                 @Override public java.time.LocalDateTime getSubmittedAt() { return null; }

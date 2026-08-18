@@ -2215,7 +2215,7 @@ class NotificationServiceTest {
 
         NotificationView build() {
             return new NotificationView(
-                referenceNumber, status, created, origin, commodity, consignor, consignee, transport);
+                referenceNumber, 0L, status, created, origin, commodity, consignor, consignee, transport);
         }
     }
 }
