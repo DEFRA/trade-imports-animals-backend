@@ -1,4 +1,4 @@
-package uk.gov.defra.trade.imports.animals.integration.notification;
+package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -8,7 +8,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.OptimisticLockingFailureException;
-import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
@@ -24,7 +23,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
  * <p>Guards the mid-air-collision protection introduced under EUDPA-314. Without {@code @Version}
  * the second save would last-write-wins and the test would fail on the missing exception.
  */
-class NotificationRepositoryIT extends IntegrationBase {
+class OptimisticLockingIT extends IntegrationBase {
 
     @Autowired
     private NotificationRepository notificationRepository;
