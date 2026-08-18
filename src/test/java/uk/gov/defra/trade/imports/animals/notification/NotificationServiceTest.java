@@ -248,7 +248,7 @@ class NotificationServiceTest {
 
             NotificationDto updateDto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
-                .version(0L)
+                .concurrencyToken(0L)
                 .origin(origin)
                 .commodity(commodity)
                 .consignor(consignors().getFirst())
@@ -289,7 +289,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             NotificationDto dto = NotificationDto.builder()
-                .referenceNumber(referenceNumber).version(0L).build();
+                .referenceNumber(referenceNumber).concurrencyToken(0L).build();
 
             // When
             notificationService.saveNotification(dto, "trace-amd-001", null);
@@ -340,14 +340,14 @@ class NotificationServiceTest {
         }
 
         @Test
-        void saveNotification_shouldThrowBadRequest_whenVersionIsNullOnUpdate() {
+        void saveNotification_shouldThrowBadRequest_whenConcurrencyTokenIsNullOnUpdate() {
             // Given — POST-with-referenceNumber routes through updateNotification, which now
-            // requires the client to send the version they last saw. Symmetric with replace().
+            // requires the client to send the concurrencyToken they last saw. Symmetric with replace().
             String referenceNumber = "GBN-AG-26-NULLVU";
             Notification existing = Notification.builder()
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
-                .version(3L)
+                .concurrencyToken(3L)
                 .build();
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.of(existing));
@@ -360,7 +360,7 @@ class NotificationServiceTest {
             // When / Then
             assertThatThrownBy(() -> notificationService.saveNotification(dto, "trace-nvu", null))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("version");
+                .hasMessageContaining("concurrencyToken");
 
             verify(notificationRepository, never()).save(any());
             verify(outboxService, never()).appendEvent(any(), any(), any(), any());
@@ -376,7 +376,7 @@ class NotificationServiceTest {
             when(lockProvider.lock(any())).thenReturn(Optional.empty());
 
             NotificationDto dto = NotificationDto.builder()
-                .referenceNumber(referenceNumber).version(0L).build();
+                .referenceNumber(referenceNumber).concurrencyToken(0L).build();
 
             // When / Then
             assertThatThrownBy(() -> notificationService.saveNotification(dto, "trace-001", null))
@@ -415,7 +415,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(mock(SimpleLock.class)));
 
             NotificationDto dto = NotificationDto.builder()
-                .referenceNumber(referenceNumber).version(0L).build();
+                .referenceNumber(referenceNumber).concurrencyToken(0L).build();
 
             // When
             Notification result = notificationService.saveNotification(dto, "trace-retry", null);
@@ -441,7 +441,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             NotificationDto dto = NotificationDto.builder()
-                .referenceNumber(referenceNumber).version(0L).build();
+                .referenceNumber(referenceNumber).concurrencyToken(0L).build();
 
             // When
             notificationService.saveNotification(dto, "trace-ord-001", null);
@@ -1453,7 +1453,7 @@ class NotificationServiceTest {
                 .referenceNumber(sourceRef)
                 .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                 .status(NotificationStatus.DRAFT)
-                .version(0L)
+                .concurrencyToken(0L)
                 .build();
 
             Notification created = Notification.builder()
@@ -1483,7 +1483,7 @@ class NotificationServiceTest {
                 .referenceNumber(sourceRef)
                 .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                 .status(NotificationStatus.SUBMITTED)
-                .version(0L)
+                .concurrencyToken(0L)
                 .build();
 
             Notification created = Notification.builder()
@@ -1520,7 +1520,7 @@ class NotificationServiceTest {
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
-                .version(0L)
+                .concurrencyToken(0L)
                 .origin(origin)
                 .commodity(commodity)
                 .reasonForImport("internalMarket")
@@ -1571,7 +1571,7 @@ class NotificationServiceTest {
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
-                .version(0L)
+                .concurrencyToken(0L)
                 .origin(new Origin("FR", "no", "DO-NOT-COPY"))
                 .commodity(Commodity.builder()
                     .name("Cattle")
@@ -1621,7 +1621,7 @@ class NotificationServiceTest {
                 .referenceNumber(sourceRef)
                 .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                 .status(AMEND)
-                .version(0L)
+                .concurrencyToken(0L)
                 .build();
 
             Notification created = Notification.builder()
@@ -1675,13 +1675,13 @@ class NotificationServiceTest {
         }
 
         @Test
-        void copyNotification_shouldThrowIllegalState_whenExpectedVersionIsNull() {
-            // Given — a valid source with a real version.
+        void copyNotification_shouldThrowIllegalState_whenExpectedConcurrencyTokenIsNull() {
+            // Given — a valid source with a real concurrencyToken.
             String sourceRef = "GBN-AG-26-NULLEV";
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
-                .version(5L)
+                .concurrencyToken(5L)
                 .build();
             when(notificationRepository.findByReferenceNumber(sourceRef))
                 .thenReturn(Optional.of(source));
@@ -1696,9 +1696,9 @@ class NotificationServiceTest {
         }
 
         @Test
-        void copyNotification_shouldThrowIllegalState_whenPersistedVersionIsNull() {
-            // Given — a source read back with no version (pre-EUDPA-314 shape). All notifications
-            // written after this ticket carry a version; a null here means data-integrity trouble.
+        void copyNotification_shouldThrowIllegalState_whenPersistedConcurrencyTokenIsNull() {
+            // Given — a source read back with no concurrencyToken (pre-EUDPA-314 shape). All
+            // notifications written after this ticket carry one; a null here means data-integrity trouble.
             String sourceRef = "GBN-AG-26-NULLPV";
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
@@ -1740,7 +1740,7 @@ class NotificationServiceTest {
             List<Document> newFulfilments = List.of(new Document("obligationId", "abc"));
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
-                .version(0L)
+                .concurrencyToken(0L)
                 .origin(new Origin("GB", "no", "NEW"))
                 .fulfilments(newFulfilments)
                 .build();
@@ -1773,7 +1773,7 @@ class NotificationServiceTest {
                 .build();
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
-                .version(0L)
+                .concurrencyToken(0L)
                 .origin(new Origin("GB", "no", "AMEND-EDIT"))
                 .fulfilments(List.of(new Document("obligationId", "xyz")))
                 .build();
@@ -1845,17 +1845,17 @@ class NotificationServiceTest {
         }
 
         @Test
-        void replace_shouldThrowBadRequest_whenVersionIsNull() {
+        void replace_shouldThrowBadRequest_whenConcurrencyTokenIsNull() {
             // Given — a valid, replaceable existing notification, but the client's DTO carries
-            // no version. Distinguishes update-with-missing-version (error) from create
-            // (which legitimately has no prior version) — the shared setNotificationDetails
+            // no concurrencyToken. Distinguishes update-with-missing-token (error) from create
+            // (which legitimately has no prior token) — the shared setNotificationDetails
             // helper no longer needs to guess which path it's on.
             String ref = "GBN-AG-26-NULLVR";
             Notification existing = Notification.builder()
                 .id("db-id-nv")
                 .referenceNumber(ref)
                 .status(DRAFT)
-                .version(3L)
+                .concurrencyToken(3L)
                 .build();
             when(notificationRepository.findByReferenceNumber(ref))
                 .thenReturn(Optional.of(existing));
@@ -1867,7 +1867,7 @@ class NotificationServiceTest {
 
             assertThatThrownBy(() -> notificationService.replace(ref, dto, "trace", null))
                 .isInstanceOf(BadRequestException.class)
-                .hasMessageContaining("version");
+                .hasMessageContaining("concurrencyToken");
 
             verify(notificationRepository, never()).save(any());
         }
@@ -2069,7 +2069,7 @@ class NotificationServiceTest {
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
                 .status(SUBMITTED)
-                .version(0L)
+                .concurrencyToken(0L)
                 .origin(new Origin("GB", "no", "SOURCE-REF"))
                 .fulfilments(sourceFulfilments)
                 .build();

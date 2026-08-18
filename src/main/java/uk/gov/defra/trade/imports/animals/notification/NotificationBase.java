@@ -19,7 +19,7 @@ import org.springframework.data.mongodb.core.index.Indexed;
 public abstract class NotificationBase {
 
     @Version
-    private Long version;
+    private Long concurrencyToken;
 
     @Indexed(unique = true, sparse = true)
     private String referenceNumber;

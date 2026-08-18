@@ -12,17 +12,6 @@ import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 
-/**
- * Integration test for optimistic-locking behaviour on {@link Notification}.
- *
- * <p>Uses a real Testcontainers MongoDB instance (inherited from {@link IntegrationBase}) to
- * verify that Spring Data MongoDB honours the {@code @Version} annotation on the entity: a
- * second save from an in-memory copy holding the pre-write version must fail rather than
- * silently overwrite the concurrent update.
- *
- * <p>Guards the mid-air-collision protection introduced under EUDPA-314. Without {@code @Version}
- * the second save would last-write-wins and the test would fail on the missing exception.
- */
 class OptimisticLockingIT extends IntegrationBase {
 
     @Autowired
@@ -33,32 +22,29 @@ class OptimisticLockingIT extends IntegrationBase {
         notificationRepository.deleteAll();
     }
 
-    /**
-     * Two in-memory copies of the same notification each hold version 0 after the initial save;
-     * the first re-save advances the stored version to 1, so the second re-save (still carrying
-     * version 0) must be rejected with {@link OptimisticLockingFailureException}.
-     */
     @Test
-    void save_shouldThrowOptimisticLockingFailure_whenSavingWithStaleVersion() {
+    void save_shouldThrowOptimisticLockingFailure_whenSavingWithStaleConcurrencyToken() {
         // Arrange — persist a notification and load two in-memory copies of it (simulating
         // two tabs / two pods that each read before either wrote).
+        LocalDateTime now = LocalDateTime.now();
+
         Notification seed = new Notification();
         seed.setReferenceNumber("GBN-AG-26-VER001");
         seed.setStatus(NotificationStatus.DRAFT);
-        seed.setCreated(LocalDateTime.now());
-        seed.setUpdated(LocalDateTime.now());
+        seed.setCreated(now);
+        seed.setUpdated(now);
+
         Notification saved = notificationRepository.save(seed);
+        Notification notificationWithUpdate = notificationRepository.findById(saved.getId()).orElseThrow();
+        Notification staleNotification = notificationRepository.findById(saved.getId()).orElseThrow();
 
-        Notification tabA = notificationRepository.findById(saved.getId()).orElseThrow();
-        Notification tabB = notificationRepository.findById(saved.getId()).orElseThrow();
+        // Act — tab A commits first, advancing the stored concurrencyToken.
+        notificationWithUpdate.setStatus(NotificationStatus.SUBMITTED);
+        notificationRepository.save(notificationWithUpdate);
 
-        // Act — tab A commits first, advancing the stored version.
-        tabA.setStatus(NotificationStatus.SUBMITTED);
-        notificationRepository.save(tabA);
-
-        // Assert — tab B still holds the pre-write version; its save must be rejected.
-        tabB.setStatus(NotificationStatus.AMEND);
-        assertThatThrownBy(() -> notificationRepository.save(tabB))
+        // Assert — tab B still holds the pre-write concurrencyToken; its save must be rejected.
+        staleNotification.setStatus(NotificationStatus.AMEND);
+        assertThatThrownBy(() -> notificationRepository.save(staleNotification))
             .isInstanceOf(OptimisticLockingFailureException.class);
 
         // And the stored notification reflects tab A's write, not tab B's.

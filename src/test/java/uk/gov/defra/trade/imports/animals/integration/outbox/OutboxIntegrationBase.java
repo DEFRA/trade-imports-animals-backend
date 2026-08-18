@@ -185,7 +185,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
             .header(HEADER_TRACE_ID, traceId)
             .bodyValue(NotificationDto.builder()
                 .referenceNumber(created.getReferenceNumber())
-                .version(created.getVersion())
+                .concurrencyToken(created.getConcurrencyToken())
                 .origin(new Origin("GB", "true", "REF123"))
                 .commodity(Commodity.builder().name("Live cattle").build())
                 .build())
