@@ -1776,14 +1776,16 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", sourceRef)
             .exchange().expectStatus().isOk();
 
-        // When — attempt to copy via the dedicated copy endpoint. expectedVersion is required
-        // by the endpoint, but the deleted-status guard fires before the version check so
-        // whatever value we pass here is immaterial.
+        // When — attempt to copy the notification as it stands right now (a real
+        // delete-then-copy race: the user's client just re-read and has the current
+        // post-delete version, and they attempt the copy anyway).
+        Long postDeleteVersion = notificationRepository.findByReferenceNumber(sourceRef)
+            .orElseThrow().getVersion();
         webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
-                .queryParam("version", 0L)
+                .queryParam("version", postDeleteVersion)
                 .build(sourceRef))
             .exchange()
             .expectStatus().isBadRequest();
