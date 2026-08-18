@@ -230,7 +230,7 @@ class NotificationControllerTest {
 
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1)
-                    .queryParam("expectedVersion", "0"))
+                    .queryParam("version", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("507f1f77bcf86cd799439099"))
                 .andExpect(jsonPath("$.referenceNumber").value(REF_2))
@@ -243,7 +243,7 @@ class NotificationControllerTest {
                 .thenThrow(new NotFoundException("not found"));
 
             mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1)
-                    .queryParam("expectedVersion", "0"))
+                    .queryParam("version", "0"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("not found"));
         }
@@ -254,7 +254,7 @@ class NotificationControllerTest {
                 .thenThrow(new BadRequestException("not copyable"));
 
             mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1)
-                    .queryParam("expectedVersion", "0"))
+                    .queryParam("version", "0"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("not copyable"));
         }

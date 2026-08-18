@@ -120,10 +120,13 @@ public class NotificationService {
             && source.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException("Cannot copy notification with status: " + source.getStatus());
         }
-        // WYSIWYG guard — copy the source as the user saw it at click time. Reuses Spring's
-        // optimistic-locking exception so the frontend gets the same 409 STALE_VERSION shape
-        // it already handles for stale PUT writes.
-        if (!java.util.Objects.equals(source.getVersion(), expectedVersion)) {
+        if (expectedVersion == null || source.getVersion() == null) {
+            throw new IllegalStateException(
+                "Cannot check copy source version for " + referenceNumber
+                    + ": expectedVersion=" + expectedVersion
+                    + ", source.version=" + source.getVersion());
+        }
+        if (!source.getVersion().equals(expectedVersion)) {
             throw new org.springframework.dao.OptimisticLockingFailureException(
                 "Copy source " + referenceNumber + " has advanced from expected version "
                     + expectedVersion + " to " + source.getVersion());

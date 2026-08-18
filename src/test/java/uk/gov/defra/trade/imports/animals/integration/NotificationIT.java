@@ -1691,7 +1691,7 @@ class NotificationIT extends IntegrationBase {
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
-                .queryParam("expectedVersion", source.getVersion())
+                .queryParam("version", source.getVersion())
                 .build(sourceRef))
             .exchange()
             .expectStatus().isOk()
@@ -1745,7 +1745,7 @@ class NotificationIT extends IntegrationBase {
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
-                .queryParam("expectedVersion", source.getVersion())
+                .queryParam("version", source.getVersion())
                 .build(source.getReferenceNumber()))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult().getResponseBody();
@@ -1779,7 +1779,7 @@ class NotificationIT extends IntegrationBase {
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
-                .queryParam("expectedVersion", 0L)
+                .queryParam("version", 0L)
                 .build(sourceRef))
             .exchange()
             .expectStatus().isBadRequest();
@@ -1809,7 +1809,7 @@ class NotificationIT extends IntegrationBase {
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
-                .queryParam("expectedVersion", submittedVersion)
+                .queryParam("version", submittedVersion)
                 .build(sourceRef))
             .exchange()
             .expectStatus().isOk()
@@ -1858,7 +1858,7 @@ class NotificationIT extends IntegrationBase {
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
-                .queryParam("expectedVersion", source.getVersion())
+                .queryParam("version", source.getVersion())
                 .build(source.getReferenceNumber()))
             .exchange()
             .expectStatus().isEqualTo(org.springframework.http.HttpStatus.CONFLICT)
@@ -1875,7 +1875,7 @@ class NotificationIT extends IntegrationBase {
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
-                .queryParam("expectedVersion", 0L)
+                .queryParam("version", 0L)
                 .build(NONEXISTENT_REF))
             .exchange()
             .expectStatus().isNotFound()

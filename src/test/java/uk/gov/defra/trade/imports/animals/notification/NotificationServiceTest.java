@@ -1421,6 +1421,7 @@ class NotificationServiceTest {
                 .referenceNumber(sourceRef)
                 .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                 .status(NotificationStatus.DRAFT)
+                .version(0L)
                 .build();
 
             Notification created = Notification.builder()
@@ -1434,7 +1435,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class))).thenReturn(created);
 
             // When
-            Notification result = notificationService.copyNotification(sourceRef, null);
+            Notification result = notificationService.copyNotification(sourceRef, 0L);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
@@ -1450,6 +1451,7 @@ class NotificationServiceTest {
                 .referenceNumber(sourceRef)
                 .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                 .status(NotificationStatus.SUBMITTED)
+                .version(0L)
                 .build();
 
             Notification created = Notification.builder()
@@ -1463,7 +1465,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class))).thenReturn(created);
 
             // When
-            Notification result = notificationService.copyNotification(sourceRef, null);
+            Notification result = notificationService.copyNotification(sourceRef, 0L);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
@@ -1486,6 +1488,7 @@ class NotificationServiceTest {
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
+                .version(0L)
                 .origin(origin)
                 .commodity(commodity)
                 .reasonForImport("internalMarket")
@@ -1508,7 +1511,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef, null);
+            notificationService.copyNotification(sourceRef, 0L);
 
             // Then — capture what was saved and assert retained fields
             ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
@@ -1536,6 +1539,7 @@ class NotificationServiceTest {
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
+                .version(0L)
                 .origin(new Origin("FR", "no", "DO-NOT-COPY"))
                 .commodity(Commodity.builder()
                     .name("Cattle")
@@ -1556,7 +1560,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef, null);
+            notificationService.copyNotification(sourceRef, 0L);
 
             // Then — excluded fields must be null on the saved copy
             ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
@@ -1585,6 +1589,7 @@ class NotificationServiceTest {
                 .referenceNumber(sourceRef)
                 .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                 .status(AMEND)
+                .version(0L)
                 .build();
 
             Notification created = Notification.builder()
@@ -1597,7 +1602,7 @@ class NotificationServiceTest {
             when(referenceNumberGenerator.generate()).thenReturn(newRef);
             when(notificationRepository.save(any(Notification.class))).thenReturn(created);
 
-            Notification result = notificationService.copyNotification(sourceRef, null);
+            Notification result = notificationService.copyNotification(sourceRef, 0L);
 
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
             assertThat(result.getStatus()).isEqualTo(DRAFT);
@@ -1611,7 +1616,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, null))
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, 0L))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(sourceRef);
 
@@ -1630,9 +1635,49 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(deleted));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, null))
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, 0L))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DELETED");
+
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void copyNotification_shouldThrowIllegalState_whenExpectedVersionIsNull() {
+            // Given — a valid source with a real version.
+            String sourceRef = "GBN-AG-26-NULLEV";
+            Notification source = Notification.builder()
+                .referenceNumber(sourceRef)
+                .status(NotificationStatus.DRAFT)
+                .version(5L)
+                .build();
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+
+            // When / Then — a null expectedVersion is a caller-programming error; Spring
+            // rejects it at the HTTP boundary (@RequestParam Long is required), and the
+            // service defends the same invariant.
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, null))
+                .isInstanceOf(IllegalStateException.class);
+
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void copyNotification_shouldThrowIllegalState_whenPersistedVersionIsNull() {
+            // Given — a source read back with no version (pre-EUDPA-314 shape). All notifications
+            // written after this ticket carry a version; a null here means data-integrity trouble.
+            String sourceRef = "GBN-AG-26-NULLPV";
+            Notification source = Notification.builder()
+                .referenceNumber(sourceRef)
+                .status(NotificationStatus.DRAFT)
+                .build();
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, 0L))
+                .isInstanceOf(IllegalStateException.class);
 
             verify(notificationRepository, never()).save(any());
         }
@@ -1962,6 +2007,7 @@ class NotificationServiceTest {
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
                 .status(SUBMITTED)
+                .version(0L)
                 .origin(new Origin("GB", "no", "SOURCE-REF"))
                 .fulfilments(sourceFulfilments)
                 .build();
@@ -1974,7 +2020,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef, null);
+            notificationService.copyNotification(sourceRef, 0L);
 
             // Then — the saved (new) notification carries the source fulfilments.
             Notification saved = captor.getValue();
