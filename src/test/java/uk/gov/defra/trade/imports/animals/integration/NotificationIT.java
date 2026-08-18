@@ -549,17 +549,19 @@ class NotificationIT extends IntegrationBase {
             .transport(Transport.builder().portOfEntry("GBBEL").arrivalDate(LocalDate.of(2026, Month.JANUARY, 1)).build())
             .build();
 
-        String referenceNumber = webClient("NoAuth")
+        Notification created = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT).bodyValue(initial)
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
-            .getResponseBody().getReferenceNumber();
+            .getResponseBody();
+        String referenceNumber = created.getReferenceNumber();
 
         // When — update every field with new values
         Species updatedSpecies = NotificationTestData.species();
         CommodityComplement updatedComplement = new CommodityComplement("LIVE", 10, 5, List.of(updatedSpecies));
         NotificationDto updateDto = NotificationDto.builder()
             .referenceNumber(referenceNumber)
+            .version(created.getVersion())
             .origin(new Origin("GB", "true", "REF-updated"))
             .commodity(Commodity.builder()
                 .name("Live bovine animals")
@@ -612,14 +614,16 @@ class NotificationIT extends IntegrationBase {
                 .build())
             .build();
 
-        String referenceNumber = webClient("NoAuth")
+        Notification created = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT).bodyValue(initial)
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
-            .getResponseBody().getReferenceNumber();
+            .getResponseBody();
+        String referenceNumber = created.getReferenceNumber();
 
         NotificationDto updateDto = NotificationDto.builder()
             .referenceNumber(referenceNumber)
+            .version(created.getVersion())
             .origin(new Origin("GB", "true", "REF-001"))
             .commodity(Commodity.builder().name("Live bovine animals").build())
             .transport(Transport.builder()

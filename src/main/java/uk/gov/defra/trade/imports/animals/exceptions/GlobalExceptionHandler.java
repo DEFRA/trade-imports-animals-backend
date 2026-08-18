@@ -200,11 +200,6 @@ public class GlobalExceptionHandler {
 
     /**
      * Handle optimistic-locking failures from Spring Data (409 Conflict, code {@code STALE_VERSION}).
-     *
-     * <p>Distinct from {@link ConflictException} — the {@code code} property lets the frontend key
-     * its re-fetch-and-re-render recovery flow specifically on stale-version conflicts, while
-     * duplicate-key and other application conflicts continue to route through
-     * {@link #handleConflictException}.
      */
     @ExceptionHandler(OptimisticLockingFailureException.class)
     public ResponseEntity<ProblemDetail> handleOptimisticLockingFailure(

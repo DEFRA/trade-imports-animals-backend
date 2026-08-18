@@ -105,6 +105,10 @@ public class NotificationService {
             throw new BadRequestException(
                 "Cannot replace notification content with status: " + notification.getStatus());
         }
+        if (dto.getVersion() == null) {
+            throw new BadRequestException("version is required to replace a notification");
+        }
+        notification.setVersion(dto.getVersion());
         setNotificationDetails(dto, notification);
         return writeWithOutbox(notification, referenceNumber, correlationId,
             notification.getStatus(), OutboxEventType.NOTIFICATION_EDITED, actor);
@@ -445,6 +449,10 @@ public class NotificationService {
             throw new BadRequestException(
                 "Cannot save notification with status: " + existing.getStatus());
         }
+        if (dto.getVersion() == null) {
+            throw new BadRequestException("version is required to update a notification");
+        }
+        existing.setVersion(dto.getVersion());
         log.info("Updating notification {}", referenceNumber);
         setNotificationDetails(dto, existing);
         return writeWithOutbox(existing, referenceNumber, correlationId, existing.getStatus(),
@@ -465,13 +473,6 @@ public class NotificationService {
         notification.setTransport(dto.getTransport());
         notification.setConsignment(dto.getConsignment());
         notification.setFulfilments(dto.getFulfilments());
-        // Only carried on updates. When null (create path, and legacy update callers), the
-        // DB-loaded version rides through unchanged and the save writes LWW; when set, Spring
-        // Data compares against the DB version and throws OptimisticLockingFailureException
-        // on mismatch.
-        if (dto.getVersion() != null) {
-            notification.setVersion(dto.getVersion());
-        }
         notification.setUpdated(LocalDateTime.now());
     }
 
