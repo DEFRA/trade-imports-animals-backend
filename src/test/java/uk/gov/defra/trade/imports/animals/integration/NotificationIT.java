@@ -1764,29 +1764,26 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void copy_shouldReturn400_whenSourceNotificationIsDeleted() {
-        // Given — create and soft-delete a source notification
-        String sourceRef = webClient("NoAuth")
+        // Given — create a source notification and capture the version the user's browser
+        // would have last seen. Someone else then soft-deletes it.
+        Notification source = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(createNotificationDto("DE", "Live cattle"))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
-            .getResponseBody().getReferenceNumber();
+            .expectBody(Notification.class).returnResult().getResponseBody();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", sourceRef)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", source.getReferenceNumber())
             .exchange().expectStatus().isOk();
 
-        // When — attempt to copy the notification as it stands right now (a real
-        // delete-then-copy race: the user's client just re-read and has the current
-        // post-delete version, and they attempt the copy anyway).
-        Long postDeleteVersion = notificationRepository.findByReferenceNumber(sourceRef)
-            .orElseThrow().getVersion();
+        // When — the user's still-visible dashboard card clicks copy with the version they
+        // last saw (pre-delete). Then — the status guard fires with 400.
         webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
-                .queryParam("version", postDeleteVersion)
-                .build(sourceRef))
+                .queryParam("version", source.getVersion())
+                .build(source.getReferenceNumber()))
             .exchange()
             .expectStatus().isBadRequest();
     }
