@@ -1846,10 +1846,7 @@ class NotificationServiceTest {
 
         @Test
         void replace_shouldThrowBadRequest_whenConcurrencyTokenIsNull() {
-            // Given — a valid, replaceable existing notification, but the client's DTO carries
-            // no concurrencyToken. Distinguishes update-with-missing-token (error) from create
-            // (which legitimately has no prior token) — the shared setNotificationDetails
-            // helper no longer needs to guess which path it's on.
+            // Given — a notification
             String ref = "GBN-AG-26-NULLVR";
             Notification existing = Notification.builder()
                 .id("db-id-nv")
@@ -1860,11 +1857,13 @@ class NotificationServiceTest {
             when(notificationRepository.findByReferenceNumber(ref))
                 .thenReturn(Optional.of(existing));
 
+            //When a concurrency token is not supplied
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
                 .origin(new Origin("GB", "no", "REF"))
                 .build();
 
+            //Then the update should fail 
             assertThatThrownBy(() -> notificationService.replace(ref, dto, "trace", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("concurrencyToken");
