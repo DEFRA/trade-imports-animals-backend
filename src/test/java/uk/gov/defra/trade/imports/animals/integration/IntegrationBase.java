@@ -109,6 +109,9 @@ public abstract class IntegrationBase {
 
         registry.add("spring.data.mongodb.uri", MONGO_CONTAINER::getReplicaSetUrl);
         registry.add("spring.data.mongodb.ssl.enabled", () -> "false");
+
+        // Address-book lookups on notification reads hit MockServer, not localhost:8089.
+        registry.add("address-book.base-url", MOCK_SERVER_CONTAINER::getEndpoint);
     }
 
     /**

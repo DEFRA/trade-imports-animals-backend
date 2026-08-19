@@ -7,6 +7,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.cons
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.importers;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.placesOfOrigin;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.reference;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
 import java.time.LocalDate;
@@ -99,6 +100,21 @@ class NotificationCopyMapperTest {
             NotificationDto result = mapper.toCopyDto(source);
 
             assertThat(result.getConsignor()).isEqualTo(consignors().getFirst());
+        }
+
+        @Test
+        void toCopyDto_shouldCopyReferencedPartyAsReferenceAlone() {
+            Notification source = Notification.builder()
+                .consignor(reference("addr-1"))
+                .build();
+
+            NotificationDto result = mapper.toCopyDto(source);
+
+            assertThat(result.getConsignor()).isEqualTo(ConsignmentParty.reference("addr-1"));
+            assertThat(result.getConsignor().getName()).isNull();
+            assertThat(result.getConsignor().getEmail()).isNull();
+            assertThat(result.getConsignor().getPhone()).isNull();
+            assertThat(result.getConsignor().getAddress()).isNull();
         }
 
         @Test

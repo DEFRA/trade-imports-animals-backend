@@ -25,11 +25,11 @@ public class NotificationCopyMapper {
             .commodity(mapCommodity(source.getCommodity()))
             .reasonForImport(source.getReasonForImport())
             .additionalDetails(mapAdditionalDetails(source.getAdditionalDetails()))
-            .placeOfOrigin(mapOperator(source.getPlaceOfOrigin()))
-            .consignor(mapOperator(source.getConsignor()))
-            .consignee(mapOperator(source.getConsignee()))
-            .importer(mapOperator(source.getImporter()))
-            .destination(mapOperator(source.getDestination()))
+            .placeOfOrigin(mapConsignmentParty(source.getPlaceOfOrigin()))
+            .consignor(mapConsignmentParty(source.getConsignor()))
+            .consignee(mapConsignmentParty(source.getConsignee()))
+            .importer(mapConsignmentParty(source.getImporter()))
+            .destination(mapConsignmentParty(source.getDestination()))
             .cphNumber(source.getCphNumber())
             .fulfilments(source.getFulfilments() == null ? null : new ArrayList<>(source.getFulfilments()))
             // transport intentionally omitted — logistical fields (portOfEntry, arrivalDate, transporter) are reset on copy
@@ -37,12 +37,17 @@ public class NotificationCopyMapper {
             .build();
     }
 
-    private Operator mapOperator(Operator source) {
+    private ConsignmentParty mapConsignmentParty(ConsignmentParty source) {
         if (source == null) {
             return null;
         }
-        return Operator.builder()
+        if (source.getAddressId() != null) {
+            return ConsignmentParty.reference(source.getAddressId());
+        }
+        return ConsignmentParty.builder()
             .name(source.getName())
+            .email(source.getEmail())
+            .phone(source.getPhone())
             .address(source.getAddress())
             .build();
     }

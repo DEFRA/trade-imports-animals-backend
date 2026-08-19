@@ -4,13 +4,16 @@ import java.net.http.HttpClient;
 import java.time.Duration;
 import javax.net.ssl.SSLContext;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.config.ConfigurableBeanFactory;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Scope;
 import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestTemplate;
+import uk.gov.defra.trade.imports.animals.addressbook.AddressBookConfig;
 import uk.gov.defra.trade.imports.animals.interceptor.TraceIdPropagationInterceptor;
 
 /**
@@ -35,30 +38,33 @@ public class RestClientConfig {
 
   private final ClientHttpRequestFactory customRequestFactory;
   private final TraceIdPropagationInterceptor traceIdInterceptor;
+  private final SSLContext customSslContext;
 
   public RestClientConfig(
       TraceIdPropagationInterceptor traceIdInterceptor,
       SSLContext customSslContext) {
     log.info("Configuring HTTP clients with custom SSL context and trace ID propagation");
-
-    // Create Java HttpClient with custom SSL context
-    HttpClient.Builder builder = HttpClient.newBuilder()
-        .sslContext(customSslContext)
-        .connectTimeout(Duration.ofSeconds(10));
-
-    HttpClient httpClient = builder.build();
-
-    // Create request factory using JDK HttpClient
-    JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
-    factory.setReadTimeout(Duration.ofSeconds(30));
-
-    this.customRequestFactory = factory;
+    this.customSslContext = customSslContext;
     this.traceIdInterceptor = traceIdInterceptor;
+    this.customRequestFactory = requestFactory(Duration.ofSeconds(10), Duration.ofSeconds(30));
+  }
+
+  private ClientHttpRequestFactory requestFactory(Duration connect, Duration read) {
+    HttpClient httpClient = HttpClient.newBuilder()
+        .sslContext(customSslContext)
+        .connectTimeout(connect)
+        .build();
+    JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+    factory.setReadTimeout(read);
+    return factory;
   }
 
   /**
    * Creates a RestClient.Builder configured with custom SSL context and trace ID propagation.
    * RestClient is the modern, recommended HTTP client for Spring Boot 3.2+.
+   *
+   * <p>Prototype-scoped so each injection point receives a fresh builder; {@code baseUrl} and other
+   * mutating calls on one consumer do not affect others.
    *
    * <p>Usage:
    *
@@ -76,6 +82,7 @@ public class RestClientConfig {
    * }</pre>
    */
   @Bean
+  @Scope(ConfigurableBeanFactory.SCOPE_PROTOTYPE)
   public RestClient.Builder restClientBuilder() {
     log.debug("Creating RestClient.Builder with custom SSL context and trace ID propagation");
     return RestClient.builder()
@@ -119,13 +126,28 @@ public class RestClientConfig {
   /**
    * RestClient pre-configured with the cdp-uploader base URL.
    *
-   * <p>Uses the shared {@link RestClient.Builder} so it inherits custom SSL context and trace ID
-   * propagation. Spring injects a fresh prototype-scoped builder per injection point, so
-   * calling {@code baseUrl} here does not affect other consumers of the shared builder bean.
+   * <p>Uses a prototype-scoped {@link RestClient.Builder} so calling {@code baseUrl} here does not
+   * affect other consumers of the shared builder bean.
    */
   @Bean
   public RestClient cdpUploaderRestClient(RestClient.Builder builder, CdpConfig cdpConfig) {
     log.debug("Creating cdpUploaderRestClient with base URL: {}", cdpConfig.uploader().baseUrl());
     return builder.baseUrl(cdpConfig.uploader().baseUrl()).build();
+  }
+
+  /**
+   * RestClient pre-configured with the address-book base URL, used to resolve referenced parties on
+   * read. Uses a short connect/read timeout so a slow address book fails fast on the notification
+   * read path instead of holding a servlet thread for the shared 30s client timeout.
+   */
+  @Bean
+  public RestClient addressBookRestClient(
+      RestClient.Builder builder, AddressBookConfig addressBookConfig) {
+    log.debug("Creating addressBookRestClient with base URL: {}", addressBookConfig.baseUrl());
+    return builder
+        .requestFactory(requestFactory(
+            addressBookConfig.connectTimeout(), addressBookConfig.readTimeout()))
+        .baseUrl(addressBookConfig.baseUrl())
+        .build();
   }
 }

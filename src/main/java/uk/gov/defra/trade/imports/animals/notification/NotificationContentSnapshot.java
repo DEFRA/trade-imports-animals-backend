@@ -19,12 +19,12 @@ public class NotificationContentSnapshot {
     Commodity commodity;
     String reasonForImport;
     AdditionalDetails additionalDetails;
-    Operator placeOfOrigin;
-    Operator consignor;
-    Operator consignee;
-    Operator importer;
-    Operator destination;
-    Operator consignment;
+    ConsignmentParty placeOfOrigin;
+    ConsignmentParty consignor;
+    ConsignmentParty consignee;
+    ConsignmentParty importer;
+    ConsignmentParty destination;
+    ConsignmentParty consignment;
     String cphNumber;
     Transport transport;
 

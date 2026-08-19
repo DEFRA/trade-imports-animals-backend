@@ -52,6 +52,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Sort.Direction;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
+import uk.gov.defra.trade.imports.animals.addressbook.AddressBookClient;
+import uk.gov.defra.trade.imports.animals.addressbook.AddressBookRecord;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
@@ -59,14 +61,18 @@ import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
+import uk.gov.defra.trade.imports.animals.outbox.Actor;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
+import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 @ExtendWith(MockitoExtension.class)
 class NotificationServiceTest {
 
     private static final String TEST_TRACE_ID = "test-trace-id";
     private static final String TEST_USER_ID = "test-user-id";
+    /** The submitting actor's organisation, whose address book the outbox resolve reads. */
+    private static final String ORG_ID = "5900002";
 
     @Mock
     private NotificationRepository notificationRepository;
@@ -86,6 +92,9 @@ class NotificationServiceTest {
     @Mock
     private ReferenceNumberGenerator referenceNumberGenerator;
 
+    @Mock
+    private AddressBookClient addressBookClient;
+
     private NotificationService notificationService;
 
     // Real executor (its executeWithLock must actually run the locked task) built from the
@@ -100,10 +109,17 @@ class NotificationServiceTest {
         notificationService = buildService(new NotificationTtlConfig(null, "local", sweep(false)));
     }
 
+    private static AddressBookRecord addressBookRecord(String addressId, boolean deleted) {
+        return new AddressBookRecord(addressId, "Astra Rosales", "43 East Hague Extension", null,
+            "Vernier", "Soleure", "30055", "CH", "+41 22 000 0000", "astra@example.com", deleted);
+    }
+
     private NotificationService buildService(NotificationTtlConfig ttlConfig) {
         return new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            new NotificationCopyMapper(), referenceNumberGenerator, ttlConfig,
+            new NotificationCopyMapper(),
+            new ConsignmentPartyResolver(addressBookClient),
+            referenceNumberGenerator, ttlConfig,
             Duration.ZERO, 54, 50);
     }
 
@@ -263,14 +279,50 @@ class NotificationServiceTest {
             Notification result = notificationService.saveNotification(updateDto, "trace-upd-001", null);
 
             // Then
-            assertThat(result).isNotNull();
-            assertThat(result.getReferenceNumber()).isEqualTo(referenceNumber);
-            assertThat(result.getId()).isEqualTo(existingId);
-            assertThat(result.getCommodity().getName()).isEqualTo("Fish");
-            assertThat(result.getCphNumber()).isEqualTo("123456789");
-            assertThat(result.getTransport()).isEqualTo(transport);
+            assertThat(result)
+                .usingRecursiveComparison()
+                .isEqualTo(updatedNotification);
             verify(notificationRepository, times(1)).save(any(Notification.class));
             verify(outboxService).appendEvent(updatedNotification, OutboxEventType.NOTIFICATION_EDITED, "trace-upd-001", null);
+        }
+
+        @Test
+        void saveNotification_shouldStillSave_whenAReferencedAddressHasBeenDeleted() {
+            // Given — a draft whose consignor points at an address the trader has since deleted.
+            // UCD's ruling is that a deleted address behaves as if it were never selected, so this
+            // must not block them from saving the rest of the draft; only a submit has to be
+            // complete.
+            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+            String referenceNumber = "GBN-AG-26-EDIT01";
+            Notification existing = Notification.builder()
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            when(addressBookClient.findById(ORG_ID, addressId))
+                .thenReturn(Optional.of(addressBookRecord(addressId, true)));
+
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(referenceNumber)
+                .consignor(NotificationTestData.reference(addressId))
+                .build();
+
+            // When
+            Notification saved = notificationService.saveNotification(
+                dto, "trace-edit-001", Actor.builder().organisationId(ORG_ID).build());
+
+            // Then — the draft is saved, still holding the reference
+            assertThat(saved.getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
+
+            // And the event carries the role blank rather than failing the write
+            ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+            verify(outboxService).appendEvent(
+                captor.capture(), eq(OutboxEventType.NOTIFICATION_EDITED), eq("trace-edit-001"),
+                any());
+            assertThat(captor.getValue().getConsignor()).isNull();
         }
 
         @Test
@@ -939,6 +991,99 @@ class NotificationServiceTest {
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
             verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
+        }
+
+        @Test
+        void submitNotification_shouldResolveReferencedParty_beforeAppendingOutboxEvent() {
+            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+            String referenceNumber = "GBN-AG-26-REF011";
+            Notification notification = Notification.builder()
+                .id("notif-id-ref")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .consignor(NotificationTestData.reference(addressId))
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            when(addressBookClient.findById(ORG_ID, addressId))
+                .thenReturn(Optional.of(new AddressBookRecord(
+                    addressId, "Astra Rosales", "43 East Hague Extension", null, "Vernier",
+                    "Soleure", "30055", "CH", "+41 22 000 0000", "astra@example.com", false)));
+            Actor actor = Actor.builder().organisationId(ORG_ID).build();
+
+            notificationService.submitNotification(referenceNumber, "trace-ref-001", actor);
+
+            ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+            verify(outboxService).appendEvent(
+                captor.capture(), eq(OutboxEventType.NOTIFICATION_SUBMITTED), eq("trace-ref-001"),
+                eq(actor));
+            assertThat(captor.getValue().getConsignor().getName()).isEqualTo("Astra Rosales");
+            assertThat(captor.getValue().getConsignor().getAddress().getPostcode()).isEqualTo("30055");
+        }
+
+        @Test
+        void submitNotification_shouldResolveOntoACopy_leavingTheStoredNotificationReferencedOnly() {
+            // Given — resolution feeds the event only. The notification that is saved, and the one
+            // handed back to the caller, must still carry the reference and nothing else.
+            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+            String referenceNumber = "GBN-AG-26-REF012";
+            Notification notification = Notification.builder()
+                .id("notif-id-copy")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .consignor(NotificationTestData.reference(addressId))
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            when(addressBookClient.findById(ORG_ID, addressId))
+                .thenReturn(Optional.of(addressBookRecord(addressId, false)));
+
+            // When
+            Notification returned = notificationService.submitNotification(
+                referenceNumber, "trace-copy-001", Actor.builder().organisationId(ORG_ID).build());
+
+            // Then
+            assertThat(returned.getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
+            ArgumentCaptor<Notification> saved = ArgumentCaptor.forClass(Notification.class);
+            verify(notificationRepository).save(saved.capture());
+            assertThat(saved.getValue().getConsignor())
+                .isEqualTo(ConsignmentParty.reference(addressId));
+        }
+
+        @Test
+        void submitNotification_shouldFetchASharedAddressOnce_whenTwoRolesReferenceIt() {
+            // Given — the same saved address used as both consignor and consignee. Every lookup
+            // runs against a 2s timeout budget, so the roles share one call rather than each
+            // paying for their own.
+            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+            String referenceNumber = "GBN-AG-26-REF013";
+            Notification notification = Notification.builder()
+                .id("notif-id-shared")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .consignor(NotificationTestData.reference(addressId))
+                .consignee(NotificationTestData.reference(addressId))
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notification));
+            when(notificationRepository.save(any(Notification.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            when(addressBookClient.findById(ORG_ID, addressId))
+                .thenReturn(Optional.of(addressBookRecord(addressId, false)));
+
+            // When
+            notificationService.submitNotification(
+                referenceNumber, "trace-shared-001", Actor.builder().organisationId(ORG_ID).build());
+
+            // Then
+            ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+            verify(outboxService).appendEvent(captor.capture(), any(), any(), any());
+            assertThat(captor.getValue().getConsignee().getName()).isEqualTo("Astra Rosales");
+            verify(addressBookClient, times(1)).findById(ORG_ID, addressId);
         }
 
         @Test
@@ -2092,8 +2237,8 @@ class NotificationServiceTest {
         private LocalDateTime created;
         private Origin origin;
         private Commodity commodity;
-        private Operator consignor;
-        private Operator consignee;
+        private ConsignmentParty consignor;
+        private ConsignmentParty consignee;
         private Transport transport;
 
         NotificationViewBuilder referenceNumber(String v) { this.referenceNumber = v; return this; }
@@ -2101,8 +2246,8 @@ class NotificationServiceTest {
         NotificationViewBuilder created(LocalDateTime v) { this.created = v; return this; }
         NotificationViewBuilder origin(Origin v) { this.origin = v; return this; }
         NotificationViewBuilder commodity(Commodity v) { this.commodity = v; return this; }
-        NotificationViewBuilder consignor(Operator v) { this.consignor = v; return this; }
-        NotificationViewBuilder consignee(Operator v) { this.consignee = v; return this; }
+        NotificationViewBuilder consignor(ConsignmentParty v) { this.consignor = v; return this; }
+        NotificationViewBuilder consignee(ConsignmentParty v) { this.consignee = v; return this; }
         NotificationViewBuilder transport(Transport v) { this.transport = v; return this; }
 
         NotificationView build() {

@@ -47,6 +47,11 @@ cdp:
   s3:
     documents-bucket: ${CDP_DOCUMENTS_BUCKET:trade-imports-animals-documents}
 
+address-book:
+  base-url: ${TRADE_IMPORTS_ADDRESS_BOOK_URL}
+  connect-timeout: 2s
+  read-timeout: 2s
+
 # Application-level AWS overrides
 app:
   base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:}
