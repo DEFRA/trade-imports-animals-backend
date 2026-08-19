@@ -39,6 +39,11 @@ springdoc:
   swagger-ui:
     enabled: true
 
+# Address book — localhost default for local profile only (kept out of application.yml so
+# deployed environments fail fast if TRADE_IMPORTS_ADDRESS_BOOK_URL is unset).
+address-book:
+  base-url: ${TRADE_IMPORTS_ADDRESS_BOOK_URL:http://localhost:8089}
+
 # App-level overrides for local development
 # AWS credentials are dummy values accepted by Floci — never use real keys here
 # base-url: cdp-uploader (inside Docker) POSTs scan-result callbacks here, so

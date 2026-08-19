@@ -19,10 +19,10 @@ public record TradeAddress(
         return new TradeAddress(
             address.getAddressLine1(),
             address.getAddressLine2(),
-            address.getCity(),
-            null, // postcodeCode - not yet in domain model
-            address.getCountry(),
-            null, // countryName - not yet in domain model
-            null); // countrySubDivisionName - not yet in domain model
+            address.getTownOrCity(),
+            address.getPostcode(),
+            address.getCountryCode(),
+            null, // countryName - the domain holds the ISO code only; GBNAG derives the name from countryId
+            address.getCounty());
     }
 }

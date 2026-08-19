@@ -30,6 +30,7 @@ import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
+import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
@@ -158,7 +159,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     protected String createAndSubmitNotification(String traceId) {
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(minimalNotificationDto())
+            .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -175,7 +176,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     protected String createAndSaveNotification(String traceId) {
         Notification created = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(minimalNotificationDto())
+            .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
             .getResponseBody();
@@ -183,12 +184,12 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .header(HEADER_TRACE_ID, traceId)
-            .bodyValue(NotificationDto.builder()
+            .bodyValue(SaveNotificationDto.of(NotificationDto.builder()
                 .referenceNumber(created.getReferenceNumber())
                 .concurrencyToken(created.getConcurrencyToken())
                 .origin(new Origin("GB", "true", "REF123"))
                 .commodity(Commodity.builder().name("Live cattle").build())
-                .build())
+                .build()))
             .exchange()
             .expectStatus().isOk();
 

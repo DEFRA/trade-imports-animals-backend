@@ -49,6 +49,7 @@ public class NotificationService {
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
     private final NotificationCopyMapper notificationCopyMapper;
+    private final ConsignmentPartyResolver consignmentPartyResolver;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final NotificationTtlConfig ttlConfig;
     private final Duration lockAtLeastFor;
@@ -62,6 +63,7 @@ public class NotificationService {
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
         NotificationCopyMapper notificationCopyMapper,
+        ConsignmentPartyResolver consignmentPartyResolver,
         ReferenceNumberGenerator referenceNumberGenerator,
         NotificationTtlConfig ttlConfig,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
@@ -73,6 +75,7 @@ public class NotificationService {
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
         this.notificationCopyMapper = notificationCopyMapper;
+        this.consignmentPartyResolver = consignmentPartyResolver;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.ttlConfig = ttlConfig;
         this.lockAtLeastFor = lockAtLeastFor;
@@ -261,6 +264,12 @@ public class NotificationService {
         NotificationStatus targetStatus,
         OutboxEventType eventType,
         Actor actor) {
+        // Address-book resolution is HTTP, so it happens here rather than inside the lock below:
+        // the outbox critical section is bounded by LOCK_AT_MOST_FOR, and a slow address book that
+        // outlived it would let a second writer in behind us. It resolves into a copy, so the
+        // notification we save keeps the reference alone and only the event carries the details.
+        Notification forOutbox = resolvedForOutbox(notification, eventType, actor);
+
         return executeWithOutboxLock(
             OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
                 if (targetStatus == NotificationStatus.SUBMITTED
@@ -274,9 +283,28 @@ public class NotificationService {
                     notification.setSubmittedAt(LocalDateTime.now());
                 }
                 Notification saved = notificationRepository.save(notification);
-                outboxService.appendEvent(saved, eventType, correlationId, actor);
+                forOutbox.setStatus(saved.getStatus());
+                forOutbox.setUpdated(saved.getUpdated());
+                forOutbox.setSubmittedAt(saved.getSubmittedAt());
+                outboxService.appendEvent(forOutbox, eventType, correlationId, actor);
                 return saved;
             });
+    }
+
+    /**
+     * The notification as every outbox event should carry it: references filled in, on a copy, so
+     * the stored notification keeps the reference alone.
+     *
+     * <p>Submit and amend resolve strictly — a GBNAG document cannot carry a nameless party. A
+     * draft edit is best-effort, so an address deleted since does not block the save.
+     */
+    private Notification resolvedForOutbox(
+        Notification notification, OutboxEventType eventType, Actor actor) {
+        String organisationId = actor != null ? actor.getOrganisationId() : null;
+        Notification copy = notification.toBuilder().build();
+        return eventType == OutboxEventType.NOTIFICATION_EDITED
+            ? consignmentPartyResolver.resolveForDraft(copy, organisationId)
+            : consignmentPartyResolver.resolveForSubmission(copy, organisationId);
     }
 
     private <T> T executeWithOutboxLock(
@@ -464,14 +492,16 @@ public class NotificationService {
         notification.setCommodity(dto.getCommodity());
         notification.setReasonForImport(dto.getReasonForImport());
         notification.setAdditionalDetails(dto.getAdditionalDetails());
-        notification.setPlaceOfOrigin(dto.getPlaceOfOrigin());
-        notification.setConsignor(dto.getConsignor());
-        notification.setConsignee(dto.getConsignee());
-        notification.setImporter(dto.getImporter());
-        notification.setDestination(dto.getDestination());
+        // Place of origin and the consignment contact are held as copies, so they are
+        // stored as they arrive. The other four keep the reference alone.
+        notification.setPlaceOfOrigin(ConsignmentParty.inlineOnly(dto.getPlaceOfOrigin()));
+        notification.setConsignor(ConsignmentParty.forStorage(dto.getConsignor()));
+        notification.setConsignee(ConsignmentParty.forStorage(dto.getConsignee()));
+        notification.setImporter(ConsignmentParty.forStorage(dto.getImporter()));
+        notification.setDestination(ConsignmentParty.forStorage(dto.getDestination()));
         notification.setCphNumber(dto.getCphNumber());
         notification.setTransport(dto.getTransport());
-        notification.setConsignment(dto.getConsignment());
+        notification.setConsignment(ConsignmentParty.inlineOnly(dto.getConsignment()));
         notification.setFulfilments(dto.getFulfilments());
         notification.setUpdated(LocalDateTime.now());
     }

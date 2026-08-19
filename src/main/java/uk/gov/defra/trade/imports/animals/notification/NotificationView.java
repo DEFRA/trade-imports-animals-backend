@@ -16,7 +16,7 @@ public record NotificationView(
     LocalDateTime created,
     Origin origin,
     Commodity commodity,
-    Operator consignor,
-    Operator consignee,
+    ConsignmentParty consignor,
+    ConsignmentParty consignee,
     Transport transport) {
 }

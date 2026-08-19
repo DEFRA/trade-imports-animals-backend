@@ -15,7 +15,7 @@ import org.springframework.data.mongodb.core.index.Indexed;
 
 @org.springframework.data.mongodb.core.mapping.Document(collection = "notification")
 @Data
-@SuperBuilder
+@SuperBuilder(toBuilder = true)
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)

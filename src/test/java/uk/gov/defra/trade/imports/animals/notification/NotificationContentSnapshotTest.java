@@ -7,6 +7,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.cons
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.importers;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.placesOfOrigin;
+import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.reference;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
@@ -137,17 +138,30 @@ class NotificationContentSnapshotTest {
         }
 
         @Test
-        void from_shouldHandleOperatorWithNullAddress() {
+        void from_shouldHandlePartyWithNullAddress() {
             // Given
             Notification source = Notification.builder()
-                .consignor(Operator.builder().name("No address operator").address(null).build())
+                .consignor(ConsignmentParty.builder().name("No address party").address(null).build())
                 .build();
 
             // When
             NotificationContentSnapshot snapshot = NotificationContentSnapshot.from(source);
 
             // Then
-            assertThat(snapshot.getConsignor().getName()).isEqualTo("No address operator");
+            assertThat(snapshot.getConsignor().getName()).isEqualTo("No address party");
+            assertThat(snapshot.getConsignor().getAddress()).isNull();
+        }
+
+        @Test
+        void from_shouldRoundTripReferencedPartyAddressId() {
+            Notification source = Notification.builder()
+                .consignor(reference("addr-1"))
+                .build();
+
+            NotificationContentSnapshot snapshot = NotificationContentSnapshot.from(source);
+
+            assertThat(snapshot.getConsignor().getAddressId()).isEqualTo("addr-1");
+            assertThat(snapshot.getConsignor().getName()).isNull();
             assertThat(snapshot.getConsignor().getAddress()).isNull();
         }
     }
@@ -212,6 +226,19 @@ class NotificationContentSnapshotTest {
             assertThat(target.getAdditionalDetails()).isNull();
             assertThat(target.getConsignor()).isNull();
             assertThat(target.getTransport()).isNull();
+        }
+
+        @Test
+        void applyTo_shouldRestoreReferencedPartyAddressId() {
+            NotificationContentSnapshot snapshot = NotificationContentSnapshot.from(
+                Notification.builder().consignor(reference("addr-1")).build());
+            Notification target = Notification.builder().build();
+
+            snapshot.applyTo(target);
+
+            assertThat(target.getConsignor().getAddressId()).isEqualTo("addr-1");
+            assertThat(target.getConsignor().getName()).isNull();
+            assertThat(target.getConsignor().getAddress()).isNull();
         }
     }
 
