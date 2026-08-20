@@ -572,17 +572,19 @@ class NotificationIT extends IntegrationBase {
             .transport(Transport.builder().portOfEntry("GBBEL").arrivalDate(LocalDate.of(2026, Month.JANUARY, 1)).build())
             .build();
 
-        String referenceNumber = webClient("NoAuth")
+        Notification created = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(initial))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
-            .getResponseBody().getReferenceNumber();
+            .getResponseBody();
+        String referenceNumber = created.getReferenceNumber();
 
         // When — update every field with new values
         Species updatedSpecies = NotificationTestData.species();
         CommodityComplement updatedComplement = new CommodityComplement("LIVE", 10, 5, List.of(updatedSpecies));
         NotificationDto updateDto = NotificationDto.builder()
             .referenceNumber(referenceNumber)
+            .concurrencyToken(created.getConcurrencyToken())
             .origin(new Origin("GB", "true", "REF-updated"))
             .commodity(Commodity.builder()
                 .name("Live bovine animals")
@@ -635,14 +637,16 @@ class NotificationIT extends IntegrationBase {
                 .build())
             .build();
 
-        String referenceNumber = webClient("NoAuth")
+        Notification created = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(initial))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
-            .getResponseBody().getReferenceNumber();
+            .getResponseBody();
+        String referenceNumber = created.getReferenceNumber();
 
         NotificationDto updateDto = NotificationDto.builder()
             .referenceNumber(referenceNumber)
+            .concurrencyToken(created.getConcurrencyToken())
             .origin(new Origin("GB", "true", "REF-001"))
             .commodity(Commodity.builder().name("Live bovine animals").build())
             .transport(Transport.builder()
@@ -1525,7 +1529,11 @@ class NotificationIT extends IntegrationBase {
         assertThat(source.getConsignor().getName()).isNull();
 
         Notification copy = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", source.getReferenceNumber())
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", source.getConcurrencyToken())
+                .build(source.getReferenceNumber()))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult().getResponseBody();
 
@@ -1785,7 +1793,10 @@ class NotificationIT extends IntegrationBase {
         // When — copy via the dedicated copy endpoint
         Notification copy = webClient("NoAuth")
             .post()
-            .uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", source.getConcurrencyToken())
+                .build(sourceRef))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -1835,7 +1846,11 @@ class NotificationIT extends IntegrationBase {
         assertThat(source).isNotNull();
 
         Notification copy = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", source.getReferenceNumber())
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", source.getConcurrencyToken())
+                .build(source.getReferenceNumber()))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult().getResponseBody();
 
@@ -1849,21 +1864,26 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void copy_shouldReturn400_whenSourceNotificationIsDeleted() {
-        // Given — create and soft-delete a source notification
-        String sourceRef = webClient("NoAuth")
+        // Given — create a source notification and capture the version the user's browser
+        // would have last seen. Someone else then soft-deletes it.
+        Notification source = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("DE", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
-            .getResponseBody().getReferenceNumber();
+            .expectBody(Notification.class).returnResult().getResponseBody();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", sourceRef)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", source.getReferenceNumber())
             .exchange().expectStatus().isOk();
 
-        // When — attempt to copy via the dedicated copy endpoint
+        // When — the user with the stale copy clicks copy. 
+        // Then — the status guard fires with 400.
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", source.getConcurrencyToken())
+                .build(source.getReferenceNumber()))
             .exchange()
             .expectStatus().isBadRequest();
     }
@@ -1882,9 +1902,16 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", sourceRef)
             .exchange().expectStatus().isOk();
 
+        Long submittedVersion = notificationRepository.findByReferenceNumber(sourceRef)
+            .orElseThrow().getConcurrencyToken();
+
         // When — copy the submitted notification
         Notification copy = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", sourceRef)
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", submittedVersion)
+                .build(sourceRef))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class)
@@ -1898,10 +1925,53 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void copy_shouldReturn409StaleConcurrencyToken_whenExpectedTokenDoesNotMatchSource() {
+        // Given — source starts at version 0 after POST.
+        Notification oldVersion = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class).returnResult().getResponseBody();
+
+        // A PUT edit advances the source to version 1.
+        NotificationDto newVersion = NotificationDto.builder()
+            .referenceNumber(oldVersion.getReferenceNumber())
+            .origin(new Origin("GB", "no", "EDITED"))
+            .commodity(Commodity.builder().name("Live cattle").build())
+            .concurrencyToken(oldVersion.getConcurrencyToken())
+            .build();
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", oldVersion.getReferenceNumber())
+            .bodyValue(SaveNotificationDto.of(newVersion))
+            .exchange()
+            .expectStatus().isOk();
+
+        // When — copy with the stake version 0 (eg in another browser)
+        // Then return CONFLICT to prevent non-WYSIWYG copies.
+        webClient("NoAuth")
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", oldVersion.getConcurrencyToken())
+                .build(oldVersion.getReferenceNumber()))
+            .exchange()
+            .expectStatus().isEqualTo(org.springframework.http.HttpStatus.CONFLICT)
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(409)
+            .jsonPath("$.code").isEqualTo("STALE_CONCURRENCY_TOKEN")
+            .jsonPath("$.title").isEqualTo("Stale Concurrency Token");
+    }
+
+    @Test
     void copy_shouldReturn404_whenSourceNotificationDoesNotExist() {
         // When / Then
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", NONEXISTENT_REF)
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", 0L)
+                .build(NONEXISTENT_REF))
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
@@ -1944,6 +2014,54 @@ class NotificationIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
+    }
+
+    @Test
+    void put_shouldReturn409StaleConcurrencyToken_whenTokenIsStale() {
+        // Given a notification with a version that has been progressed by an update.
+        Notification created = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Notification.class).returnResult().getResponseBody();
+        String ref = created.getReferenceNumber();
+        Long staleVersion = created.getConcurrencyToken();
+
+        NotificationDto firstEdit = NotificationDto.builder()
+            .referenceNumber(ref)
+            .origin(new Origin("GB", "no", "FIRST"))
+            .commodity(Commodity.builder().name("Live cattle").build())
+            .concurrencyToken(staleVersion)
+            .build();
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", ref)
+            .bodyValue(SaveNotificationDto.of(firstEdit))
+            .exchange()
+            .expectStatus().isOk();
+
+        // When — a second PUT is attempted using the stale version
+        NotificationDto staleEdit = NotificationDto.builder()
+            .referenceNumber(ref)
+            .origin(new Origin("GB", "no", "STALE"))
+            .commodity(Commodity.builder().name("Live cattle").build())
+            .concurrencyToken(staleVersion)
+            .build();
+
+        // Then — the update is rejected with 409 STALE_CONCURRENCY_TOKEN
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", ref)
+            .bodyValue(SaveNotificationDto.of(staleEdit))
+            .exchange()
+            .expectStatus().isEqualTo(org.springframework.http.HttpStatus.CONFLICT)
+            .expectBody()
+            .jsonPath("$.status").isEqualTo(409)
+            .jsonPath("$.code").isEqualTo("STALE_CONCURRENCY_TOKEN")
+            .jsonPath("$.title").isEqualTo("Stale Concurrency Token");
+
+        // And the stored notification reflects the first PUT's write, not the stale one.
+        Notification stored = notificationRepository.findByReferenceNumber(ref).orElseThrow();
+        assertThat(stored.getOrigin().getInternalReference()).isEqualTo("FIRST");
     }
 
     private String createAndSubmitNotificationWithFullContent() {

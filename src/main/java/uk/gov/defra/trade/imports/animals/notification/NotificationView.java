@@ -11,6 +11,7 @@ import java.time.LocalDateTime;
  */
 public record NotificationView(
     String referenceNumber,
+    Long concurrencyToken,
     NotificationStatus status,
     LocalDateTime created,
     Origin origin,

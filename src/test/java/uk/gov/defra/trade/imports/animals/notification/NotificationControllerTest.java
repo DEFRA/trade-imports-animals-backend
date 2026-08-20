@@ -321,10 +321,11 @@ class NotificationControllerTest {
             newNotification.setReferenceNumber(REF_2);
             newNotification.setStatus(NotificationStatus.DRAFT);
 
-            when(notificationService.copyNotification(REF_1)).thenReturn(newNotification);
+            when(notificationService.copyNotification(REF_1, 0L)).thenReturn(newNotification);
 
             // When & Then
-            mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1))
+            mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1)
+                    .queryParam("concurrencyToken", "0"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("507f1f77bcf86cd799439099"))
                 .andExpect(jsonPath("$.referenceNumber").value(REF_2))
@@ -333,20 +334,22 @@ class NotificationControllerTest {
 
         @Test
         void copy_shouldReturn404_whenSourceNotFound() throws Exception {
-            when(notificationService.copyNotification(REF_1))
+            when(notificationService.copyNotification(REF_1, 0L))
                 .thenThrow(new NotFoundException("not found"));
 
-            mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1))
+            mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1)
+                    .queryParam("concurrencyToken", "0"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("not found"));
         }
 
         @Test
         void copy_shouldReturn400_whenSourceIsNotCopyable() throws Exception {
-            when(notificationService.copyNotification(REF_1))
+            when(notificationService.copyNotification(REF_1, 0L))
                 .thenThrow(new BadRequestException("not copyable"));
 
-            mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1))
+            mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1)
+                    .queryParam("concurrencyToken", "0"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("not copyable"));
         }
@@ -645,7 +648,7 @@ class NotificationControllerTest {
 
         private NotificationView testView(String ref, NotificationStatus status, Origin origin,
                 Commodity commodity, ConsignmentParty consignor, Transport transport) {
-            return new NotificationView(ref, status, null, origin, commodity, consignor, null, transport);
+            return new NotificationView(ref, 0L, status, null, origin, commodity, consignor, null, transport);
         }
 
         @Test
@@ -803,6 +806,7 @@ class NotificationControllerTest {
             // bytecode fields; the real Spring Data proxy serializes cleanly in production and E2E).
             NotificationFulfilmentsView view = new NotificationFulfilmentsView() {
                 @Override public String getReferenceNumber() { return REF_1; }
+                @Override public Long getConcurrencyToken() { return 0L; }
                 @Override public NotificationStatus getStatus() { return NotificationStatus.SUBMITTED; }
                 @Override public java.time.LocalDateTime getCreated() { return null; }
                 @Override public java.time.LocalDateTime getSubmittedAt() { return null; }

@@ -14,6 +14,8 @@ public interface NotificationFulfilmentsView {
 
     String getReferenceNumber();
 
+    Long getConcurrencyToken();
+
     NotificationStatus getStatus();
 
     LocalDateTime getCreated();

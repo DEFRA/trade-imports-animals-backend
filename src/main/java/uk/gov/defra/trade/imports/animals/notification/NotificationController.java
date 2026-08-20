@@ -82,11 +82,13 @@ public class NotificationController {
         content = @Content(schema = @Schema(implementation = Notification.class)))
     @ApiResponse(responseCode = "400", description = "Source notification is not in a copyable status", content = @Content)
     @ApiResponse(responseCode = "404", description = "Source notification not found", content = @Content)
+    @ApiResponse(responseCode = "409", description = "concurrencyToken does not match the current source notification", content = @Content)
     @Timed("controller.copyNotification.time")
     public ResponseEntity<Notification> copy(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
-        log.info("POST /notifications/{}/copy - Copying notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.copyNotification(referenceNumber));
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
+        @RequestParam Long concurrencyToken) {
+        log.info("POST /notifications/{}/copy - Copying notification at expectedConcurrencyToken={}", referenceNumber, concurrencyToken);
+        return ResponseEntity.ok(notificationService.copyNotification(referenceNumber, concurrencyToken));
     }
 
     @PostMapping("/{referenceNumber}/submit")
