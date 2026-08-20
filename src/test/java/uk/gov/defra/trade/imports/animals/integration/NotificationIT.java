@@ -1529,7 +1529,11 @@ class NotificationIT extends IntegrationBase {
         assertThat(source.getConsignor().getName()).isNull();
 
         Notification copy = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/copy", source.getReferenceNumber())
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", source.getConcurrencyToken())
+                .build(source.getReferenceNumber()))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult().getResponseBody();
 
@@ -1925,7 +1929,7 @@ class NotificationIT extends IntegrationBase {
         // Given — source starts at version 0 after POST.
         Notification oldVersion = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class).returnResult().getResponseBody();
@@ -1939,7 +1943,7 @@ class NotificationIT extends IntegrationBase {
             .build();
         webClient("NoAuth")
             .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", oldVersion.getReferenceNumber())
-            .bodyValue(newVersion)
+            .bodyValue(SaveNotificationDto.of(newVersion))
             .exchange()
             .expectStatus().isOk();
 
@@ -2014,10 +2018,10 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void put_shouldReturn409StaleConcurrencyToken_whenTokenIsStale() {
-        // Given a notification with a version that has been progressed by an update. 
+        // Given a notification with a version that has been progressed by an update.
         Notification created = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(createNotificationDto("GB", "Live cattle"))
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange()
             .expectStatus().isOk()
             .expectBody(Notification.class).returnResult().getResponseBody();
@@ -2032,11 +2036,11 @@ class NotificationIT extends IntegrationBase {
             .build();
         webClient("NoAuth")
             .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", ref)
-            .bodyValue(firstEdit)
+            .bodyValue(SaveNotificationDto.of(firstEdit))
             .exchange()
             .expectStatus().isOk();
 
-        // When — a second PUT is attempted using the stale version 
+        // When — a second PUT is attempted using the stale version
         NotificationDto staleEdit = NotificationDto.builder()
             .referenceNumber(ref)
             .origin(new Origin("GB", "no", "STALE"))
@@ -2047,7 +2051,7 @@ class NotificationIT extends IntegrationBase {
         // Then — the update is rejected with 409 STALE_CONCURRENCY_TOKEN
         webClient("NoAuth")
             .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", ref)
-            .bodyValue(staleEdit)
+            .bodyValue(SaveNotificationDto.of(staleEdit))
             .exchange()
             .expectStatus().isEqualTo(org.springframework.http.HttpStatus.CONFLICT)
             .expectBody()
