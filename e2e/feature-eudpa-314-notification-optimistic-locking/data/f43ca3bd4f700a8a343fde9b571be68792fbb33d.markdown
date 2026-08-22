@@ -1,0 +1,173 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: e2e/features/documents-refresh-no-js.spec.ts >> Documents scan refresh without JavaScript >> the refresh fallback reflects scan progress without client JavaScript
+- Location: tests/e2e/features/documents-refresh-no-js.spec.ts:10:3
+
+# Error details
+
+```
+Error: expect(locator).toBeVisible() failed
+
+Locator: getByRole('heading', { name: 'Overview', level: 1 })
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" with timeout 5000ms
+  - waiting for getByRole('heading', { name: 'Overview', level: 1 })
+
+```
+
+```yaml
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "GOV.UK":
+    - /url: https://www.gov.uk/
+    - img "GOV.UK"
+  - region "Service information":
+    - link "Import notification service":
+      - /url: /
+- text: test.user11@defra.gov.uk
+- link "Sign out":
+  - /url: /auth/sign-out
+- navigation "Breadcrumb":
+  - list:
+    - listitem:
+      - link "Your notifications":
+        - /url: /
+    - listitem: Origin of the import
+- link "Back":
+  - /url: /
+- main:
+  - alert "There is a problem":
+    - heading "There is a problem" [level=2]
+    - paragraph: Sorry, there is a problem with the service. Your answers on this page have been saved. Try again in a few minutes.
+  - heading "Origin of the import" [level=1]
+  - text: Country of origin
+  - combobox "Country of origin":
+    - option "Select a country"
+    - option "──────────" [disabled]
+    - option "Austria"
+    - option "Belgium"
+    - option "Bulgaria"
+    - option "Croatia"
+    - option "Cyprus"
+    - option "Czechia"
+    - option "Denmark"
+    - option "Estonia"
+    - option "Finland"
+    - option "France" [selected]
+    - option "Germany"
+    - option "Greece"
+    - option "Hungary"
+    - option "Iceland"
+    - option "Ireland"
+    - option "Italy"
+    - option "Latvia"
+    - option "Liechtenstein"
+    - option "Lithuania"
+    - option "Luxembourg"
+    - option "Malta"
+    - option "Netherlands (the)"
+    - option "Norway"
+    - option "Poland"
+    - option "Portugal"
+    - option "Romania"
+    - option "Slovakia"
+    - option "Slovenia"
+    - option "Spain"
+    - option "Sweden"
+    - option "Switzerland"
+  - group "Does the consignment have a region of origin code?":
+    - text: Does the consignment have a region of origin code? If a region of origin code is required it will be shown on your health certificate.
+    - radio "Yes"
+    - text: Yes Region of origin code For example, FR-75
+    - textbox "Region of origin code"
+    - radio "No" [checked]
+    - text: "No"
+  - text: Your internal reference for this consignment (optional) Enter any internal reference you want to use to identify this consignment, or leave blank.
+  - textbox "Your internal reference for this consignment (optional)"
+  - button "Save and continue"
+  - button "Save and return to hub"
+  - link "Cancel and return to hub":
+    - /url: /notifications/GBN-AG-26-X9EQ5Y
+- contentinfo:
+  - heading "Support links" [level=2]
+  - list:
+    - listitem:
+      - link "Privacy":
+        - /url: https://www.gov.uk/help/privacy-notice
+    - listitem:
+      - link "Cookies":
+        - /url: https://www.gov.uk/help/cookies
+    - listitem:
+      - link "Accessibility statement":
+        - /url: https://www.gov.uk/help/accessibility-statement
+  - text: All content is available under the
+  - link "Open Government Licence v3.0":
+    - /url: https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+  - text: ", except where otherwise stated"
+  - link "© Crown copyright":
+    - /url: https://www.nationalarchives.gov.uk/information-management/re-using-public-sector-information/uk-government-licensing-framework/crown-copyright/
+```
+
+# Test source
+
+```ts
+  1  | import { test, expect } from '@fixtures';
+  2  | import { fileUploadTimeouts } from '@config/file-upload-timeouts';
+  3  | import { fileUploadPaths } from '@resources/file-upload/paths';
+  4  | 
+  5  | const issueDate = '03/01/2026';
+  6  | 
+  7  | test.describe('Documents scan refresh without JavaScript', { tag: ['@integration', '@duplicated-in-frontend'] }, () => {
+  8  |   test.use({ javaScriptEnabled: false });
+  9  | 
+  10 |   test('the refresh fallback reflects scan progress without client JavaScript', async ({ journey, pages }) => {
+  11 |     test.slow();
+  12 |     await journey.startNotification();
+  13 | 
+  14 |     await pages.overview.task('Where is this consignment coming from?').click();
+  15 |     await pages.page.getByLabel('Country of origin').selectOption('FR');
+  16 |     await pages.page.getByRole('radio', { name: 'No' }).check();
+  17 |     await pages.page.getByRole('button', { name: 'Save and continue' }).click();
+> 18 |     await expect(pages.overview.heading).toBeVisible();
+     |                                          ^ Error: expect(locator).toBeVisible() failed
+  19 | 
+  20 |     await journey.answerCommodity();
+  21 |     await pages.overview.task('Uploaded documents').click();
+  22 |     await expect(pages.accompanyingDocuments.heading).toBeVisible();
+  23 | 
+  24 |     const reference = `PWNOJS${Date.now()}`;
+  25 |     await pages.accompanyingDocuments.fillDocument(reference, issueDate, fileUploadPaths.safeFile1kbPdf);
+  26 |     await pages.accompanyingDocuments.saveAndAddAnother.click();
+  27 | 
+  28 |     const row = pages.accompanyingDocuments.documentRow(reference);
+  29 |     await expect(row).toContainText('Checking');
+  30 |     await expect(pages.accompanyingDocuments.refreshStatus).toBeVisible();
+  31 |     await expect(pages.accompanyingDocuments.refreshStatus).toHaveAttribute('href', /attempt=1/);
+  32 | 
+  33 |     await expect
+  34 |       .poll(
+  35 |         async () => {
+  36 |           await pages.accompanyingDocuments.refreshStatus.click();
+  37 |           return row.textContent();
+  38 |         },
+  39 |         { timeout: fileUploadTimeouts.virusScanComplete },
+  40 |       )
+  41 |       .toContain('Safe');
+  42 | 
+  43 |     await expect(pages.accompanyingDocuments.refreshStatus).toHaveCount(0);
+  44 |     await expect(pages.accompanyingDocuments.viewFile(1)).toBeVisible();
+  45 |   });
+  46 | });
+  47 | 
+```

@@ -1,0 +1,150 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: e2e/features/country-of-origin-select.spec.ts >> Country of origin plain select >> renders all options, submits the country code and persists it
+- Location: tests/e2e/features/country-of-origin-select.spec.ts:4:3
+
+# Error details
+
+```
+Error: expect(locator).toBeVisible() failed
+
+Locator: getByRole('heading', { name: 'Overview', level: 1 })
+Expected: visible
+Timeout: 5000ms
+Error: element(s) not found
+
+Call log:
+  - Expect "toBeVisible" with timeout 5000ms
+  - waiting for getByRole('heading', { name: 'Overview', level: 1 })
+
+```
+
+```yaml
+- link "Skip to main content":
+  - /url: "#main-content"
+- banner:
+  - link "GOV.UK":
+    - /url: https://www.gov.uk/
+    - img "GOV.UK"
+  - region "Service information":
+    - link "Import notification service":
+      - /url: /
+- text: test.user11@defra.gov.uk
+- link "Sign out":
+  - /url: /auth/sign-out
+- navigation "Breadcrumb":
+  - list:
+    - listitem:
+      - link "Your notifications":
+        - /url: /
+    - listitem: Origin of the import
+- link "Back":
+  - /url: /
+- main:
+  - alert "There is a problem":
+    - heading "There is a problem" [level=2]
+    - paragraph: Sorry, there is a problem with the service. Your answers on this page have been saved. Try again in a few minutes.
+  - heading "Origin of the import" [level=1]
+  - text: Country of origin
+  - combobox "Country of origin":
+    - option "Select a country"
+    - option "──────────" [disabled]
+    - option "Austria"
+    - option "Belgium" [selected]
+    - option "Bulgaria"
+    - option "Croatia"
+    - option "Cyprus"
+    - option "Czechia"
+    - option "Denmark"
+    - option "Estonia"
+    - option "Finland"
+    - option "France"
+    - option "Germany"
+    - option "Greece"
+    - option "Hungary"
+    - option "Iceland"
+    - option "Ireland"
+    - option "Italy"
+    - option "Latvia"
+    - option "Liechtenstein"
+    - option "Lithuania"
+    - option "Luxembourg"
+    - option "Malta"
+    - option "Netherlands (the)"
+    - option "Norway"
+    - option "Poland"
+    - option "Portugal"
+    - option "Romania"
+    - option "Slovakia"
+    - option "Slovenia"
+    - option "Spain"
+    - option "Sweden"
+    - option "Switzerland"
+  - group "Does the consignment have a region of origin code?":
+    - text: Does the consignment have a region of origin code? If a region of origin code is required it will be shown on your health certificate.
+    - radio "Yes"
+    - text: "Yes"
+    - radio "No" [checked]
+    - text: "No"
+  - text: Your internal reference for this consignment (optional) Enter any internal reference you want to use to identify this consignment, or leave blank.
+  - textbox "Your internal reference for this consignment (optional)"
+  - button "Save and continue"
+  - button "Save and return to hub"
+  - link "Cancel and return to hub":
+    - /url: /notifications/GBN-AG-26-4M98ZR
+- contentinfo:
+  - heading "Support links" [level=2]
+  - list:
+    - listitem:
+      - link "Privacy":
+        - /url: https://www.gov.uk/help/privacy-notice
+    - listitem:
+      - link "Cookies":
+        - /url: https://www.gov.uk/help/cookies
+    - listitem:
+      - link "Accessibility statement":
+        - /url: https://www.gov.uk/help/accessibility-statement
+  - text: All content is available under the
+  - link "Open Government Licence v3.0":
+    - /url: https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+  - text: ", except where otherwise stated"
+  - link "© Crown copyright":
+    - /url: https://www.nationalarchives.gov.uk/information-management/re-using-public-sector-information/uk-government-licensing-framework/crown-copyright/
+```
+
+# Test source
+
+```ts
+  1  | import { test, expect } from '@fixtures';
+  2  | 
+  3  | test.describe('Country of origin plain select', { tag: ['@integration', '@duplicated-in-frontend'] }, () => {
+  4  |   test('renders all options, submits the country code and persists it', async ({ journey, pages }) => {
+  5  |     await journey.startNotification();
+  6  |     await pages.overview.task('Where is this consignment coming from?').click();
+  7  | 
+  8  |     const select = pages.originOfImport.countryOfOrigin;
+  9  |     await expect(select).toBeVisible();
+  10 |     await expect(select).toHaveRole('combobox');
+  11 |     await expect(select).toHaveAccessibleName('Country of origin');
+  12 |     await expect(select.locator('option').first()).toHaveText('Select a country');
+  13 |     await expect(select.locator('option')).toHaveCount(33);
+  14 | 
+  15 |     await pages.originOfImport.selectCountry('Belgium');
+  16 |     await expect(select).toHaveValue('BE');
+  17 |     await pages.originOfImport.radioRequiresOriginCode('No').check();
+  18 |     await pages.originOfImport.saveAndContinue.click();
+> 19 |     await expect(pages.overview.heading).toBeVisible();
+     |                                          ^ Error: expect(locator).toBeVisible() failed
+  20 | 
+  21 |     await pages.overview.task('Where is this consignment coming from?').click();
+  22 |     await expect(select).toHaveValue('BE');
+  23 |   });
+  24 | });
+  25 | 
+```

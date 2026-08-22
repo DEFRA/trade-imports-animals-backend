@@ -1,0 +1,182 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: e2e/pages/origin.spec.ts >> Origin of the import page >> accepts valid origin details
+- Location: tests/e2e/pages/origin.spec.ts:19:3
+
+# Error details
+
+```
+Error: expect(locator).toHaveCount(expected) failed
+
+Locator:  getByRole('heading', { name: 'There is a problem' })
+Expected: 0
+Received: 1
+Timeout:  5000ms
+
+Call log:
+  - Expect "toHaveCount" with timeout 5000ms
+  - waiting for getByRole('heading', { name: 'There is a problem' })
+    14 × locator resolved to 1 element
+       - unexpected value "1"
+
+```
+
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=e3]:
+    - link "GOV.UK" [ref=e7] [cursor=pointer]:
+      - /url: https://www.gov.uk/
+      - img "GOV.UK" [ref=e8]
+    - region "Service information" [ref=e21]:
+      - link "Import notification service" [ref=e25] [cursor=pointer]:
+        - /url: /
+  - generic [ref=e26]:
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - img [ref=e31]
+        - generic [ref=e34]: test.user11@defra.gov.uk
+      - generic [ref=e35]: "|"
+      - link "Sign out" [ref=e36] [cursor=pointer]:
+        - /url: /auth/sign-out
+    - navigation "Breadcrumb" [ref=e37]:
+      - list [ref=e38]:
+        - listitem [ref=e39]:
+          - link "Your notifications" [ref=e40] [cursor=pointer]:
+            - /url: /
+        - listitem [ref=e41]: Origin of the import
+    - link "Back" [ref=e42] [cursor=pointer]:
+      - /url: /
+    - main [ref=e43]:
+      - generic [ref=e45]:
+        - alert "There is a problem" [ref=e46]:
+          - heading "There is a problem" [level=2] [ref=e48]
+          - paragraph [ref=e50]: Sorry, there is a problem with the service. Your answers on this page have been saved. Try again in a few minutes.
+        - heading "Origin of the import" [level=1] [ref=e51]
+        - generic [ref=e52]:
+          - generic [ref=e53]:
+            - generic [ref=e54]: Country of origin
+            - combobox "Country of origin" [ref=e55]:
+              - option "Select a country"
+              - option "──────────" [disabled]
+              - option "Austria"
+              - option "Belgium"
+              - option "Bulgaria"
+              - option "Croatia"
+              - option "Cyprus"
+              - option "Czechia"
+              - option "Denmark"
+              - option "Estonia"
+              - option "Finland"
+              - option "France" [selected]
+              - option "Germany"
+              - option "Greece"
+              - option "Hungary"
+              - option "Iceland"
+              - option "Ireland"
+              - option "Italy"
+              - option "Latvia"
+              - option "Liechtenstein"
+              - option "Lithuania"
+              - option "Luxembourg"
+              - option "Malta"
+              - option "Netherlands (the)"
+              - option "Norway"
+              - option "Poland"
+              - option "Portugal"
+              - option "Romania"
+              - option "Slovakia"
+              - option "Slovenia"
+              - option "Spain"
+              - option "Sweden"
+              - option "Switzerland"
+          - group "Does the consignment have a region of origin code?" [ref=e57]:
+            - generic [ref=e58]: Does the consignment have a region of origin code?
+            - generic [ref=e59]: If a region of origin code is required it will be shown on your health certificate.
+            - generic [ref=e60]:
+              - generic [ref=e61]:
+                - radio "Yes" [ref=e62] [cursor=pointer]
+                - generic [ref=e63] [cursor=pointer]: "Yes"
+              - generic [ref=e64]:
+                - radio "No" [checked] [ref=e65] [cursor=pointer]
+                - generic [ref=e66] [cursor=pointer]: "No"
+          - generic [ref=e67]:
+            - generic [ref=e68]: Your internal reference for this consignment (optional)
+            - generic [ref=e69]: Enter any internal reference you want to use to identify this consignment, or leave blank.
+            - textbox "Your internal reference for this consignment (optional)" [ref=e70]
+          - generic [ref=e71]:
+            - button "Save and continue" [ref=e72] [cursor=pointer]
+            - button "Save and return to hub" [ref=e73] [cursor=pointer]
+            - link "Cancel and return to hub" [ref=e74] [cursor=pointer]:
+              - /url: /notifications/GBN-AG-26-YM668D
+  - contentinfo [ref=e75]:
+    - generic [ref=e88]:
+      - generic [ref=e89]:
+        - heading "Support links" [level=2] [ref=e90]
+        - list [ref=e91]:
+          - listitem [ref=e92]:
+            - link "Privacy" [ref=e93] [cursor=pointer]:
+              - /url: https://www.gov.uk/help/privacy-notice
+          - listitem [ref=e94]:
+            - link "Cookies" [ref=e95] [cursor=pointer]:
+              - /url: https://www.gov.uk/help/cookies
+          - listitem [ref=e96]:
+            - link "Accessibility statement" [ref=e97] [cursor=pointer]:
+              - /url: https://www.gov.uk/help/accessibility-statement
+        - img [ref=e98]
+        - generic [ref=e100]:
+          - text: All content is available under the
+          - link "Open Government Licence v3.0" [ref=e101] [cursor=pointer]:
+            - /url: https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+          - text: ", except where otherwise stated"
+      - link "© Crown copyright" [ref=e103] [cursor=pointer]:
+        - /url: https://www.nationalarchives.gov.uk/information-management/re-using-public-sector-information/uk-government-licensing-framework/crown-copyright/
+```
+
+# Test source
+
+```ts
+  1  | import { test, expect } from '@fixtures';
+  2  | 
+  3  | test.describe('Origin of the import page', { tag: ['@integration', '@duplicated-in-frontend'] }, () => {
+  4  |   test.beforeEach(async ({ journey }) => {
+  5  |     await journey.toOriginOfImport();
+  6  |   });
+  7  | 
+  8  |   test('renders the page controls', async ({ pages }) => {
+  9  |     await expect(pages.originOfImport.heading).toBeVisible();
+  10 |     await expect(pages.originOfImport.countryOfOrigin).toBeVisible();
+  11 |     await expect(pages.originOfImport.radioRequiresOriginCode('No')).toBeVisible();
+  12 |     await expect(pages.originOfImport.saveAndContinue).toBeVisible();
+  13 |   });
+  14 | 
+  15 |   test('shows the country selector on load', async ({ pages }) => {
+  16 |     await expect(pages.originOfImport.countryOfOrigin).toBeVisible();
+  17 |   });
+  18 | 
+  19 |   test('accepts valid origin details', async ({ pages }) => {
+  20 |     await pages.originOfImport.selectCountry('France');
+  21 |     await pages.originOfImport.radioRequiresOriginCode('No').check();
+  22 |     await pages.originOfImport.saveAndContinue.click();
+  23 | 
+> 24 |     await expect(pages.page.getByRole('heading', { name: 'There is a problem' })).toHaveCount(0);
+     |                                                                                   ^ Error: expect(locator).toHaveCount(expected) failed
+  25 |   });
+  26 | 
+  27 |   test('shows an error summary when submitted without a country', async ({ pages }) => {
+  28 |     await pages.originOfImport.saveAndContinue.click();
+  29 | 
+  30 |     await expect(pages.page.getByRole('heading', { name: 'There is a problem' })).toBeVisible();
+  31 |   });
+  32 | });
+  33 | 
+```

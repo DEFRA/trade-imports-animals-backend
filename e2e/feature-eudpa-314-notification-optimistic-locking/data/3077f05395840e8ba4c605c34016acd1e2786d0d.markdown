@@ -1,0 +1,187 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: e2e/features/auth.spec.ts >> Authentication >> Origin of the import (unauthenticated entry) >> allows signing into a page further in the journey
+- Location: tests/e2e/features/auth.spec.ts:73:5
+
+# Error details
+
+```
+Error: No journey id in notification URL: http://localhost:3000/notifications
+```
+
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=e3]:
+    - link "GOV.UK" [ref=e7] [cursor=pointer]:
+      - /url: https://www.gov.uk/
+      - img "GOV.UK" [ref=e8]
+    - region "Service information" [ref=e21]:
+      - link "Import notification service" [ref=e25] [cursor=pointer]:
+        - /url: /
+  - generic [ref=e26]:
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - img [ref=e31]
+        - generic [ref=e34]: test.user11@defra.gov.uk
+      - generic [ref=e35]: "|"
+      - link "Sign out" [ref=e36] [cursor=pointer]:
+        - /url: /auth/sign-out
+    - main [ref=e37]:
+      - generic [ref=e39]:
+        - heading "500" [level=1] [ref=e40]
+        - paragraph [ref=e41]: Something went wrong
+  - contentinfo [ref=e42]:
+    - generic [ref=e55]:
+      - generic [ref=e56]:
+        - heading "Support links" [level=2] [ref=e57]
+        - list [ref=e58]:
+          - listitem [ref=e59]:
+            - link "Privacy" [ref=e60] [cursor=pointer]:
+              - /url: https://www.gov.uk/help/privacy-notice
+          - listitem [ref=e61]:
+            - link "Cookies" [ref=e62] [cursor=pointer]:
+              - /url: https://www.gov.uk/help/cookies
+          - listitem [ref=e63]:
+            - link "Accessibility statement" [ref=e64] [cursor=pointer]:
+              - /url: https://www.gov.uk/help/accessibility-statement
+        - img [ref=e65]
+        - generic [ref=e67]:
+          - text: All content is available under the
+          - link "Open Government Licence v3.0" [ref=e68] [cursor=pointer]:
+            - /url: https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+          - text: ", except where otherwise stated"
+      - link "© Crown copyright" [ref=e70] [cursor=pointer]:
+        - /url: https://www.nationalarchives.gov.uk/information-management/re-using-public-sector-information/uk-government-licensing-framework/crown-copyright/
+```
+
+# Test source
+
+```ts
+  14  |   }
+  15  |   return baseUrl;
+  16  | }
+  17  | 
+  18  | export class BasePage {
+  19  |   constructor(protected readonly page: Page) {}
+  20  | 
+  21  |   get linkHome(): Locator {
+  22  |     return this.page.getByRole('link', { name: 'Home' });
+  23  |   }
+  24  | 
+  25  |   get linkAbout(): Locator {
+  26  |     return this.page.getByRole('link', { name: 'About' });
+  27  |   }
+  28  | 
+  29  |   user(email: string = defaultUser.email): Locator {
+  30  |     return this.page.getByText(email);
+  31  |   }
+  32  | 
+  33  |   get linkSignOut(): Locator {
+  34  |     return this.page.getByRole('link', { name: 'Sign out' });
+  35  |   }
+  36  | 
+  37  |   async navigateToFrontend(path: string = '/'): Promise<void> {
+  38  |     const baseUrl = requireBaseUrl('TRADE_IMPORTS_ANIMALS_FRONTEND_BASE_URL');
+  39  |     await this.page.goto(`${baseUrl}${path}`);
+  40  |   }
+  41  | 
+  42  |   async navigateToAdminPortal(path: string = '/'): Promise<void> {
+  43  |     const baseUrl = requireBaseUrl('TRADE_IMPORTS_ANIMALS_ADMIN_BASE_URL');
+  44  |     await this.page.goto(`${baseUrl}${path}`);
+  45  |   }
+  46  | 
+  47  |   async navigateToInsFrontend(path: string = '/'): Promise<void> {
+  48  |     const baseUrl = requireBaseUrl('TRADE_IMPORTS_INS_FRONTEND_BASE_URL');
+  49  |     await this.page.goto(`${baseUrl}${path}`);
+  50  |   }
+  51  | 
+  52  |   /**
+  53  |    * organisationSbi is only needed for identities with more than one
+  54  |    * organisation — defra-id-stub shows its "Choose your organisation" picker
+  55  |    * after sign-in exclusively for those, so single-org identities never hit it.
+  56  |    */
+  57  |   protected async signInWhenRequested(attemptSignIn: boolean, options?: { userId?: string; organisationSbi?: string }): Promise<void> {
+  58  |     if (!attemptSignIn) return;
+  59  |     const signInPage = new SignInPage(this.page);
+  60  |     // Under concurrent load the auth stub can be slow; the caller may retry
+  61  |     // after a goto that landed directly on a post-auth page. Only sign in if
+  62  |     // the sign-in form is actually present.
+  63  |     try {
+  64  |       await signInPage.inputUserId.waitFor({
+  65  |         state: 'visible',
+  66  |         timeout: SIGN_IN_FORM_PROBE_MS,
+  67  |       });
+  68  |     } catch (error) {
+  69  |       if (error instanceof errors.TimeoutError) return;
+  70  |       throw error;
+  71  |     }
+  72  |     await signInPage.signIn({ userId: options?.userId });
+  73  |     const transientError = this.page.getByRole('heading', {
+  74  |       level: 1,
+  75  |       name: 'Sorry, we are unable to sign you in.',
+  76  |     });
+  77  |     if (await transientError.isVisible()) {
+  78  |       await this.page.getByRole('link', { name: 'try again' }).click();
+  79  |       await signInPage.inputUserId.waitFor();
+  80  |       await signInPage.signIn({ userId: options?.userId });
+  81  |     }
+  82  |     await this.selectOrganisationIfPrompted(options?.organisationSbi);
+  83  |   }
+  84  | 
+  85  |   private async selectOrganisationIfPrompted(organisationSbi?: string): Promise<void> {
+  86  |     const organisationPicker = new OrganisationPickerPage(this.page);
+  87  |     if (!organisationSbi) {
+  88  |       if (await organisationPicker.heading.isVisible()) {
+  89  |         throw new Error('Signed-in identity has more than one organisation but no organisationSbi was provided to select one.');
+  90  |       }
+  91  |       return;
+  92  |     }
+  93  |     await organisationPicker.heading.waitFor({ state: 'visible' });
+  94  |     await organisationPicker.select(organisationSbi);
+  95  |   }
+  96  | }
+  97  | 
+  98  | export class NotificationPage extends BasePage {
+  99  |   constructor(
+  100 |     page: Page,
+  101 |     readonly slug: string,
+  102 |   ) {
+  103 |     super(page);
+  104 |   }
+  105 | 
+  106 |   expectedUrl(journeyId: string): string {
+  107 |     const suffix = this.slug ? `/${this.slug}` : '';
+  108 |     return `/notifications/${journeyId}${suffix}`;
+  109 |   }
+  110 | 
+  111 |   journeyIdFromUrl(): string {
+  112 |     const match = new URL(this.page.url()).pathname.match(/^\/notifications\/([^/]+)/);
+  113 |     if (!match) {
+> 114 |       throw new Error(`No journey id in notification URL: ${this.page.url()}`);
+      |             ^ Error: No journey id in notification URL: http://localhost:3000/notifications
+  115 |     }
+  116 |     return match[1];
+  117 |   }
+  118 | 
+  119 |   currentJourneyUrl(slug: string = this.slug): string {
+  120 |     const suffix = slug ? `/${slug}` : '';
+  121 |     return `/notifications/${this.journeyIdFromUrl()}${suffix}`;
+  122 |   }
+  123 | 
+  124 |   async open(journeyId: string, attemptSignIn: boolean = true): Promise<void> {
+  125 |     await this.navigateToFrontend(this.expectedUrl(journeyId));
+  126 |     await this.signInWhenRequested(attemptSignIn);
+  127 |   }
+  128 | }
+  129 | 
+```

@@ -1,0 +1,243 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: e2e/features/animal-identifiers-conditional.spec.ts >> Animal identifiers — conditional identifier surface >> a unit form shows only the identifier types the commodity requires, plus the permanent address for cats and dogs
+- Location: tests/e2e/features/animal-identifiers-conditional.spec.ts:4:3
+
+# Error details
+
+```
+Test timeout of 30000ms exceeded.
+```
+
+```
+Error: locator.click: Test timeout of 30000ms exceeded.
+Call log:
+  - waiting for getByRole('link', { name: 'What are you importing?', exact: true })
+
+```
+
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - link "Skip to main content" [ref=e2] [cursor=pointer]:
+    - /url: "#main-content"
+  - banner [ref=e3]:
+    - link "GOV.UK" [ref=e7] [cursor=pointer]:
+      - /url: https://www.gov.uk/
+      - img "GOV.UK" [ref=e8]
+    - region "Service information" [ref=e21]:
+      - link "Import notification service" [ref=e25] [cursor=pointer]:
+        - /url: /
+  - generic [ref=e26]:
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - img [ref=e31]
+        - generic [ref=e34]: test.user11@defra.gov.uk
+      - generic [ref=e35]: "|"
+      - link "Sign out" [ref=e36] [cursor=pointer]:
+        - /url: /auth/sign-out
+    - link "Back" [ref=e37] [cursor=pointer]:
+      - /url: /
+    - main [ref=e38]:
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - strong [ref=e42]: Draft
+          - text: GBN-AG-26-7EP25S
+        - heading "Overview" [level=1] [ref=e43]
+        - heading "1. About the consignment" [level=2] [ref=e44]
+        - list [ref=e45]:
+          - listitem [ref=e46]:
+            - generic [ref=e47]:
+              - link "Where is this consignment coming from?" [ref=e48] [cursor=pointer]:
+                - /url: /notifications/GBN-AG-26-7EP25S/origin
+              - generic [ref=e49]: Country of origin, region of origin code, your internal reference
+            - strong [ref=e51]: Not yet started
+          - listitem [ref=e52]:
+            - generic [ref=e53]:
+              - generic [ref=e54]: What are you importing?
+              - generic [ref=e55]: The commodities, species and numbers of animals you are importing
+            - generic [ref=e56]: Cannot start yet
+          - listitem [ref=e57]:
+            - generic [ref=e58]:
+              - generic [ref=e59]: Main reason for importing
+              - generic [ref=e60]: Why you are importing the animals and their purpose in the internal market
+            - generic [ref=e61]: Cannot start yet
+        - heading "2. Commodity details" [level=2] [ref=e62]
+        - list [ref=e63]:
+          - listitem [ref=e64]:
+            - generic [ref=e65]:
+              - generic [ref=e66]: Additional commodity details
+              - generic [ref=e67]: What the animals are certified for and whether any are unweaned
+            - generic [ref=e68]: Cannot start yet
+          - listitem [ref=e69]:
+            - generic [ref=e70]:
+              - generic [ref=e71]: Animal identification details
+              - generic [ref=e72]: Identification details for the animals in each commodity
+            - generic [ref=e73]: Cannot start yet
+        - heading "3. Movement" [level=2] [ref=e74]
+        - list [ref=e75]:
+          - listitem [ref=e76]:
+            - generic [ref=e77]:
+              - generic [ref=e78]: Arrival details
+              - generic [ref=e79]: The port of entry, when the consignment will arrive and how the animals will travel
+            - generic [ref=e80]: Cannot start yet
+          - listitem [ref=e81]:
+            - generic [ref=e82]:
+              - generic [ref=e83]: Transporter
+              - generic [ref=e84]: Who transports the animals to their destination
+            - generic [ref=e85]: Cannot start yet
+        - heading "4. Addresses" [level=2] [ref=e86]
+        - list [ref=e87]:
+          - listitem [ref=e88]:
+            - generic [ref=e89]:
+              - generic [ref=e90]: Roles and addresses
+              - generic [ref=e91]: The consignor, consignee, importer and the places of origin and destination
+            - generic [ref=e92]: Cannot start yet
+          - listitem [ref=e93]:
+            - generic [ref=e94]:
+              - generic [ref=e95]: Contact address
+              - generic [ref=e96]: Who we should contact about this notification
+            - generic [ref=e97]: Cannot start yet
+        - heading "5. Documents" [level=2] [ref=e98]
+        - list [ref=e99]:
+          - listitem [ref=e100]:
+            - generic [ref=e101]:
+              - generic [ref=e102]: Uploaded documents
+              - generic [ref=e103]: Certificates, permits and other documents for the consignment
+            - generic [ref=e104]: Cannot start yet
+        - heading "6. Check and submit" [level=2] [ref=e105]
+        - list [ref=e106]:
+          - listitem [ref=e107]:
+            - generic [ref=e108]:
+              - generic [ref=e109]: Check and submit
+              - generic [ref=e110]: Check your answers before you submit the notification
+            - generic [ref=e111]: Cannot start yet
+        - button "Return to dashboard" [ref=e112] [cursor=pointer]
+  - contentinfo [ref=e113]:
+    - generic [ref=e126]:
+      - generic [ref=e127]:
+        - heading "Support links" [level=2] [ref=e128]
+        - list [ref=e129]:
+          - listitem [ref=e130]:
+            - link "Privacy" [ref=e131] [cursor=pointer]:
+              - /url: https://www.gov.uk/help/privacy-notice
+          - listitem [ref=e132]:
+            - link "Cookies" [ref=e133] [cursor=pointer]:
+              - /url: https://www.gov.uk/help/cookies
+          - listitem [ref=e134]:
+            - link "Accessibility statement" [ref=e135] [cursor=pointer]:
+              - /url: https://www.gov.uk/help/accessibility-statement
+        - img [ref=e136]
+        - generic [ref=e138]:
+          - text: All content is available under the
+          - link "Open Government Licence v3.0" [ref=e139] [cursor=pointer]:
+            - /url: https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
+          - text: ", except where otherwise stated"
+      - link "© Crown copyright" [ref=e141] [cursor=pointer]:
+        - /url: https://www.nationalarchives.gov.uk/information-management/re-using-public-sector-information/uk-government-licensing-framework/crown-copyright/
+```
+
+# Test source
+
+```ts
+  1  | import { test, expect } from '@fixtures';
+  2  | 
+  3  | test.describe('Animal identifiers — conditional identifier surface', { tag: ['@integration', '@duplicated-in-frontend'] }, () => {
+  4  |   test('a unit form shows only the identifier types the commodity requires, plus the permanent address for cats and dogs', async ({
+  5  |     journey,
+  6  |     pages,
+  7  |   }) => {
+  8  |     await journey.startNotification();
+  9  | 
+  10 |     // Batch-create a Cats commodity line — the counts are submit-enforced, so
+  11 |     // the consignment details page can be left blank.
+> 12 |     await pages.overview.task('What are you importing?').click();
+     |                                                          ^ Error: locator.click: Test timeout of 30000ms exceeded.
+  13 |     await pages.commoditySelection.selectSpecies(['Felis catus']);
+  14 |     await pages.commoditySelection.saveAndContinue.click();
+  15 |     await expect(pages.consignmentDetails.heading).toBeVisible();
+  16 | 
+  17 |     await pages.consignmentDetails.saveAndContinue.click();
+  18 |     await expect(pages.overview.heading).toBeVisible();
+  19 |     await pages.overview.task('Animal identification details').click();
+  20 |     await expect(pages.animalIdentification.heading).toBeVisible();
+  21 |     await expect(pages.page.getByRole('heading', { name: 'Enter details for Felis catus' })).toBeVisible();
+  22 | 
+  23 |     // Cats gate passport + tattoo + permanent address on; ear tag + horse name
+  24 |     // are hidden (they belong to other commodities), and the free-text fallbacks
+  25 |     // are hidden too — a typed commodity is in the notInUnionOf union.
+  26 |     await expect(pages.animalIdentification.passportNumber).toBeVisible();
+  27 |     await expect(pages.page.getByLabel('Tattoo')).toBeVisible();
+  28 |     await expect(pages.animalIdentification.earTag).toBeHidden();
+  29 |     await expect(pages.page.getByLabel('Horse name')).toBeHidden();
+  30 |     await expect(pages.page.getByLabel('Identification details')).toBeHidden();
+  31 |     await expect(pages.page.getByLabel('Animal description')).toBeHidden();
+  32 |     await expect(pages.page.getByLabel('Name or organisation name')).toBeVisible();
+  33 | 
+  34 |     // A partial permanent address blocks the add — the fieldGroup mandates apply
+  35 |     // once any part of the record is provided.
+  36 |     await pages.animalIdentification.passportNumber.fill('UK123456789');
+  37 |     await pages.page.getByLabel('Name or organisation name').fill('Pet Owner');
+  38 |     await pages.animalIdentification.saveAndAddAnother.click();
+  39 |     await expect(pages.page.getByRole('heading', { name: 'There is a problem' })).toBeVisible();
+  40 |     await expect(pages.page.getByRole('link', { name: 'Enter address line 1' })).toBeVisible();
+  41 | 
+  42 |     // Completing the mandatory address fields commits the unit with its
+  43 |     // { name, address } permanent address and keeps the surface open.
+  44 |     await pages.page.getByLabel('Address line 1').fill('1 Farm Lane');
+  45 |     await pages.page.getByLabel('Town or city').fill('Skipton');
+  46 |     await pages.page.getByLabel('Postal or zip code').fill('BD23 1UD');
+  47 |     await pages.page.getByLabel('Country').selectOption('United Kingdom');
+  48 |     await pages.page.getByLabel('Telephone number').fill('+44 1756 555 0192');
+  49 |     await pages.page.getByLabel('Email address').fill('owner@example.co.uk');
+  50 |     await pages.animalIdentification.saveAndAddAnother.click();
+  51 | 
+  52 |     await expect(pages.animalIdentification.heading).toBeVisible();
+  53 |     const unitRow = pages.page.locator('.govuk-summary-list__row', { hasText: 'Animal 1' });
+  54 |     await expect(unitRow).toContainText('Passport: UK123456789');
+  55 |     await expect(unitRow).toContainText('Permanent address: Pet Owner');
+  56 |   });
+  57 | 
+  58 |   test('a commodity with no typed identifier shows only the free-text fallbacks, and one satisfies the group', async ({
+  59 |     journey,
+  60 |     pages,
+  61 |   }) => {
+  62 |     await journey.startNotification();
+  63 | 
+  64 |     // Fish is in no typed-identifier list, so the notInUnionOf gate turns the
+  65 |     // free-text fallbacks ON and every typed input OFF.
+  66 |     await pages.overview.task('What are you importing?').click();
+  67 |     await pages.commoditySelection.selectSpecies(['Salmo salar']);
+  68 |     await pages.commoditySelection.saveAndContinue.click();
+  69 |     await expect(pages.consignmentDetails.heading).toBeVisible();
+  70 | 
+  71 |     await pages.consignmentDetails.saveAndContinue.click();
+  72 |     await expect(pages.overview.heading).toBeVisible();
+  73 |     await pages.overview.task('Animal identification details').click();
+  74 |     await expect(pages.animalIdentification.heading).toBeVisible();
+  75 | 
+  76 |     await expect(pages.page.getByLabel('Identification details')).toBeVisible();
+  77 |     await expect(pages.page.getByLabel('Animal description')).toBeVisible();
+  78 |     await expect(pages.animalIdentification.passportNumber).toBeHidden();
+  79 |     await expect(pages.page.getByLabel('Tattoo')).toBeHidden();
+  80 |     await expect(pages.animalIdentification.earTag).toBeHidden();
+  81 |     await expect(pages.page.getByLabel('Horse name')).toBeHidden();
+  82 | 
+  83 |     // A fallback alone satisfies the at-least-one identifier group.
+  84 |     await pages.page.getByLabel('Identification details').fill('Tank mark TM-77');
+  85 |     await pages.animalIdentification.saveAndAddAnother.click();
+  86 |     await expect(pages.animalIdentification.heading).toBeVisible();
+  87 |     await expect(pages.page.locator('.govuk-summary-list__row', { hasText: 'Animal 1' })).toContainText(
+  88 |       'Identification details: Tank mark TM-77',
+  89 |     );
+  90 |   });
+  91 | });
+  92 | 
+```
