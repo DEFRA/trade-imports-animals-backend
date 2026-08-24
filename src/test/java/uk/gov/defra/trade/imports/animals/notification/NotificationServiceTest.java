@@ -246,6 +246,7 @@ class NotificationServiceTest {
             Notification updatedNotification = Notification.builder()
                 .id(existingId)
                 .referenceNumber(referenceNumber)
+                .concurrencyToken(0L)
                 .status(DRAFT)
                 .origin(origin)
                 .commodity(commodity)
@@ -264,6 +265,7 @@ class NotificationServiceTest {
 
             NotificationDto updateDto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
+                .concurrencyToken(0L)
                 .origin(origin)
                 .commodity(commodity)
                 .consignor(consignors().getFirst())
@@ -307,6 +309,7 @@ class NotificationServiceTest {
 
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
+                .concurrencyToken(0L)
                 .consignor(NotificationTestData.reference(addressId))
                 .build();
 
@@ -339,7 +342,8 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-            NotificationDto dto = NotificationDto.builder().referenceNumber(referenceNumber).build();
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(referenceNumber).concurrencyToken(0L).build();
 
             // When
             notificationService.saveNotification(dto, "trace-amd-001", null);
@@ -390,6 +394,33 @@ class NotificationServiceTest {
         }
 
         @Test
+        void saveNotification_shouldThrowBadRequest_whenConcurrencyTokenIsNullOnUpdate() {
+            // Given — POST-with-referenceNumber routes through updateNotification, which now
+            // requires the client to send the concurrencyToken they last saw. Symmetric with replace().
+            String referenceNumber = "GBN-AG-26-NULLVU";
+            Notification existing = Notification.builder()
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .concurrencyToken(3L)
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(existing));
+
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(referenceNumber)
+                .origin(new Origin("GB", "no", "REF"))
+                .build();
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.saveNotification(dto, "trace-nvu", null))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("concurrencyToken");
+
+            verify(notificationRepository, never()).save(any());
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
+        }
+
+        @Test
         void saveNotification_shouldThrowOutboxWriteException_whenLockNotAcquired() {
             // Given
             String referenceNumber = "GBN-AG-26-LOCK01";
@@ -398,7 +429,8 @@ class NotificationServiceTest {
                     .referenceNumber(referenceNumber).status(DRAFT).build()));
             when(lockProvider.lock(any())).thenReturn(Optional.empty());
 
-            NotificationDto dto = NotificationDto.builder().referenceNumber(referenceNumber).build();
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(referenceNumber).concurrencyToken(0L).build();
 
             // When / Then
             assertThatThrownBy(() -> notificationService.saveNotification(dto, "trace-001", null))
@@ -436,7 +468,8 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty())
                 .thenReturn(Optional.of(mock(SimpleLock.class)));
 
-            NotificationDto dto = NotificationDto.builder().referenceNumber(referenceNumber).build();
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(referenceNumber).concurrencyToken(0L).build();
 
             // When
             Notification result = notificationService.saveNotification(dto, "trace-retry", null);
@@ -461,7 +494,8 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-            NotificationDto dto = NotificationDto.builder().referenceNumber(referenceNumber).build();
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(referenceNumber).concurrencyToken(0L).build();
 
             // When
             notificationService.saveNotification(dto, "trace-ord-001", null);
@@ -1566,6 +1600,7 @@ class NotificationServiceTest {
                 .referenceNumber(sourceRef)
                 .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                 .status(NotificationStatus.DRAFT)
+                .concurrencyToken(0L)
                 .build();
 
             Notification created = Notification.builder()
@@ -1579,7 +1614,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class))).thenReturn(created);
 
             // When
-            Notification result = notificationService.copyNotification(sourceRef);
+            Notification result = notificationService.copyNotification(sourceRef, 0L);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
@@ -1595,6 +1630,7 @@ class NotificationServiceTest {
                 .referenceNumber(sourceRef)
                 .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                 .status(NotificationStatus.SUBMITTED)
+                .concurrencyToken(0L)
                 .build();
 
             Notification created = Notification.builder()
@@ -1608,7 +1644,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(Notification.class))).thenReturn(created);
 
             // When
-            Notification result = notificationService.copyNotification(sourceRef);
+            Notification result = notificationService.copyNotification(sourceRef, 0L);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
@@ -1631,6 +1667,7 @@ class NotificationServiceTest {
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
+                .concurrencyToken(0L)
                 .origin(origin)
                 .commodity(commodity)
                 .reasonForImport("internalMarket")
@@ -1653,7 +1690,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef);
+            notificationService.copyNotification(sourceRef, 0L);
 
             // Then — capture what was saved and assert retained fields
             ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
@@ -1681,6 +1718,7 @@ class NotificationServiceTest {
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
+                .concurrencyToken(0L)
                 .origin(new Origin("FR", "no", "DO-NOT-COPY"))
                 .commodity(Commodity.builder()
                     .name("Cattle")
@@ -1701,7 +1739,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef);
+            notificationService.copyNotification(sourceRef, 0L);
 
             // Then — excluded fields must be null on the saved copy
             ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
@@ -1730,6 +1768,7 @@ class NotificationServiceTest {
                 .referenceNumber(sourceRef)
                 .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                 .status(AMEND)
+                .concurrencyToken(0L)
                 .build();
 
             Notification created = Notification.builder()
@@ -1742,7 +1781,7 @@ class NotificationServiceTest {
             when(referenceNumberGenerator.generate()).thenReturn(newRef);
             when(notificationRepository.save(any(Notification.class))).thenReturn(created);
 
-            Notification result = notificationService.copyNotification(sourceRef);
+            Notification result = notificationService.copyNotification(sourceRef, 0L);
 
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
             assertThat(result.getStatus()).isEqualTo(DRAFT);
@@ -1756,7 +1795,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef))
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, 0L))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(sourceRef);
 
@@ -1775,9 +1814,49 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(deleted));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef))
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, 0L))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DELETED");
+
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void copyNotification_shouldThrowIllegalState_whenExpectedConcurrencyTokenIsNull() {
+            // Given — a valid source with a real concurrencyToken.
+            String sourceRef = "GBN-AG-26-NULLEV";
+            Notification source = Notification.builder()
+                .referenceNumber(sourceRef)
+                .status(NotificationStatus.DRAFT)
+                .concurrencyToken(5L)
+                .build();
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+
+            // When / Then — a null expectedVersion is a caller-programming error; Spring
+            // rejects it at the HTTP boundary (@RequestParam Long is required), and the
+            // service defends the same invariant.
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, null))
+                .isInstanceOf(IllegalStateException.class);
+
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void copyNotification_shouldThrowIllegalState_whenPersistedConcurrencyTokenIsNull() {
+            // Given — a source read back with no concurrencyToken (pre-EUDPA-314 shape). All
+            // notifications written after this ticket carry one; a null here means data-integrity trouble.
+            String sourceRef = "GBN-AG-26-NULLPV";
+            Notification source = Notification.builder()
+                .referenceNumber(sourceRef)
+                .status(NotificationStatus.DRAFT)
+                .build();
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+
+            // When / Then
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, 0L))
+                .isInstanceOf(IllegalStateException.class);
 
             verify(notificationRepository, never()).save(any());
         }
@@ -1808,6 +1887,7 @@ class NotificationServiceTest {
             List<Document> newFulfilments = List.of(new Document("obligationId", "abc"));
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
+                .concurrencyToken(0L)
                 .origin(new Origin("GB", "no", "NEW"))
                 .fulfilments(newFulfilments)
                 .build();
@@ -1840,6 +1920,7 @@ class NotificationServiceTest {
                 .build();
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
+                .concurrencyToken(0L)
                 .origin(new Origin("GB", "no", "AMEND-EDIT"))
                 .fulfilments(List.of(new Document("obligationId", "xyz")))
                 .build();
@@ -1907,6 +1988,33 @@ class NotificationServiceTest {
             assertThatThrownBy(
                 () -> notificationService.replace("GBN-AG-26-ABSENT", dto, "trace", null))
                 .isInstanceOf(NotFoundException.class);
+            verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void replace_shouldThrowBadRequest_whenConcurrencyTokenIsNull() {
+            // Given — a notification
+            String ref = "GBN-AG-26-NULLVR";
+            Notification existing = Notification.builder()
+                .id("db-id-nv")
+                .referenceNumber(ref)
+                .status(DRAFT)
+                .concurrencyToken(3L)
+                .build();
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(existing));
+
+            //When a concurrency token is not supplied
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(ref)
+                .origin(new Origin("GB", "no", "REF"))
+                .build();
+
+            //Then the update should fail 
+            assertThatThrownBy(() -> notificationService.replace(ref, dto, "trace", null))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("concurrencyToken");
+
             verify(notificationRepository, never()).save(any());
         }
 
@@ -2107,6 +2215,7 @@ class NotificationServiceTest {
             Notification source = Notification.builder()
                 .referenceNumber(sourceRef)
                 .status(SUBMITTED)
+                .concurrencyToken(0L)
                 .origin(new Origin("GB", "no", "SOURCE-REF"))
                 .fulfilments(sourceFulfilments)
                 .build();
@@ -2119,7 +2228,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef);
+            notificationService.copyNotification(sourceRef, 0L);
 
             // Then — the saved (new) notification carries the source fulfilments.
             Notification saved = captor.getValue();
@@ -2252,7 +2361,7 @@ class NotificationServiceTest {
 
         NotificationView build() {
             return new NotificationView(
-                referenceNumber, status, created, origin, commodity, consignor, consignee, transport);
+                referenceNumber, 0L, status, created, origin, commodity, consignor, consignee, transport);
         }
     }
 }

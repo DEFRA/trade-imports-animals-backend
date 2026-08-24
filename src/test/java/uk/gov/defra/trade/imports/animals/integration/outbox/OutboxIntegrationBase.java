@@ -174,25 +174,26 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     }
 
     protected String createAndSaveNotification(String traceId) {
-        String referenceNumber = webClient("NoAuth")
+        Notification created = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
             .exchange().expectStatus().isOk()
             .expectBody(Notification.class).returnResult()
-            .getResponseBody().getReferenceNumber();
+            .getResponseBody();
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .header(HEADER_TRACE_ID, traceId)
             .bodyValue(SaveNotificationDto.of(NotificationDto.builder()
-                .referenceNumber(referenceNumber)
+                .referenceNumber(created.getReferenceNumber())
+                .concurrencyToken(created.getConcurrencyToken())
                 .origin(new Origin("GB", "true", "REF123"))
                 .commodity(Commodity.builder().name("Live cattle").build())
                 .build()))
             .exchange()
             .expectStatus().isOk();
 
-        return referenceNumber;
+        return created.getReferenceNumber();
     }
 
     protected static NotificationDto minimalNotificationDto() {

@@ -15,6 +15,8 @@ import org.bson.Document;
 @ToString(callSuper = true)
 public class NotificationDto extends NotificationBase {
 
+    private Long concurrencyToken;
+
     /** Opaque obligation-fulfilment payload — persisted byte-faithfully. */
     private List<Document> fulfilments;
 }

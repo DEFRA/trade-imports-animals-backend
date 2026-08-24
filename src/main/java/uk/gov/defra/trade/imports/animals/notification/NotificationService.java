@@ -108,13 +108,17 @@ public class NotificationService {
             throw new BadRequestException(
                 "Cannot replace notification content with status: " + notification.getStatus());
         }
+        if (dto.getConcurrencyToken() == null) {
+            throw new BadRequestException("concurrencyToken is required to replace a notification");
+        }
+        notification.setConcurrencyToken(dto.getConcurrencyToken());
         setNotificationDetails(dto, notification);
         return writeWithOutbox(notification, referenceNumber, correlationId,
             notification.getStatus(), OutboxEventType.NOTIFICATION_EDITED, actor);
     }
 
     @Transactional
-    public Notification copyNotification(String referenceNumber) {
+    public Notification copyNotification(String referenceNumber, Long expectedConcurrencyToken) {
         Notification source = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
@@ -122,6 +126,17 @@ public class NotificationService {
             && source.getStatus() != NotificationStatus.SUBMITTED
             && source.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException("Cannot copy notification with status: " + source.getStatus());
+        }
+        if (expectedConcurrencyToken == null || source.getConcurrencyToken() == null) {
+            throw new IllegalStateException(
+                "Cannot check copy source concurrencyToken for " + referenceNumber
+                    + ": expectedConcurrencyToken=" + expectedConcurrencyToken
+                    + ", source.concurrencyToken=" + source.getConcurrencyToken());
+        }
+        if (!source.getConcurrencyToken().equals(expectedConcurrencyToken)) {
+            throw new org.springframework.dao.OptimisticLockingFailureException(
+                "Copy source " + referenceNumber + " has advanced from expected concurrencyToken "
+                    + expectedConcurrencyToken + " to " + source.getConcurrencyToken());
         }
         log.info("Copying notification {}", referenceNumber);
         return createNotification(notificationCopyMapper.toCopyDto(source));
@@ -462,6 +477,10 @@ public class NotificationService {
             throw new BadRequestException(
                 "Cannot save notification with status: " + existing.getStatus());
         }
+        if (dto.getConcurrencyToken() == null) {
+            throw new BadRequestException("concurrencyToken is required to update a notification");
+        }
+        existing.setConcurrencyToken(dto.getConcurrencyToken());
         log.info("Updating notification {}", referenceNumber);
         setNotificationDetails(dto, existing);
         return writeWithOutbox(existing, referenceNumber, correlationId, existing.getStatus(),

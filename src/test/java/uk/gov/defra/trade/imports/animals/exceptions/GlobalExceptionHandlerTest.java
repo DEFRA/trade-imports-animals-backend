@@ -6,11 +6,13 @@ import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
+
 import java.lang.reflect.Method;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Path;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.MethodParameter;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
@@ -28,7 +31,6 @@ import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
-import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 
 class GlobalExceptionHandlerTest {
 
@@ -217,6 +219,51 @@ class GlobalExceptionHandlerTest {
             p -> assertThat(p).isNull(),
             p -> assertThat(p).doesNotContainKey("traceId")
         );
+    }
+
+    @Test
+    void handleOptimisticLockingFailure_shouldReturn409_withStaleConcurrencyTokenCode() {
+        // Given
+        String traceId = "test-trace-stale-1";
+        MDC.put("trace.id", traceId);
+        OptimisticLockingFailureException exception =
+            new OptimisticLockingFailureException(
+                "Cannot save entity with id 1; version does not match: expected 3, actual 5");
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleOptimisticLockingFailure(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
+        assertThat(problemDetail.getTitle()).isEqualTo("Stale Concurrency Token");
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/stale-concurrency-token"));
+        assertThat(problemDetail.getProperties())
+            .containsEntry("traceId", traceId)
+            .containsEntry("code", "STALE_CONCURRENCY_TOKEN");
+    }
+
+    @Test
+    void handleOptimisticLockingFailure_shouldHandleNullTraceId_andStillCarryTheCode() {
+        // Given - no trace id. 
+        OptimisticLockingFailureException exception = new OptimisticLockingFailureException("stale");
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleOptimisticLockingFailure(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
+        assertThat(problemDetail.getProperties())
+            .containsEntry("code", "STALE_CONCURRENCY_TOKEN")
+            .doesNotContainKey("traceId");
     }
 
     @Test
