@@ -71,10 +71,9 @@ public class ConsignmentPartyResolver {
 
     private NotificationAggregate resolveParties(
         NotificationAggregate notificationAggregate, String organisationId, boolean failOnMiss) {
-        Notification notification = notificationAggregate.getNotification();
-        if (notification == null) {
-            return notificationAggregate;
-        }
+        Notification notification = Objects.requireNonNull(
+            notificationAggregate.getNotification(),
+            "NotificationAggregate reaching party resolution must have a notification sub-object");
         List<String> addressIds = referencedAddressIds(notification);
         if (addressIds.isEmpty()) {
             return notificationAggregate;

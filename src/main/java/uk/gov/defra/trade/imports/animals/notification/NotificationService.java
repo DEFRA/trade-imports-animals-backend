@@ -215,7 +215,7 @@ public class NotificationService {
                 "Cannot amend notification with status: " + notification.getStatus());
         }
 
-        notification.setSubmittedBaseline(CONTENT_MAPPER.deepClone(notification.getNotification()));
+        notification.setSubmittedNotificationBaseline(CONTENT_MAPPER.deepClone(notification.getNotification()));
         List<Document> currentFulfilments = notification.getFulfilments();
         notification.setSubmittedFulfilmentsBaseline(
             currentFulfilments == null ? null : deepCopyFulfilments(currentFulfilments));
@@ -239,13 +239,13 @@ public class NotificationService {
             throw new BadRequestException(
                 "Cannot cancel amendment for notification with status: " + notification.getStatus());
         }
-        if (notification.getSubmittedBaseline() == null) {
+        if (notification.getSubmittedNotificationBaseline() == null) {
             throw new BadRequestException(
                 "Cannot cancel amendment: no submitted baseline stored for notification");
         }
 
-        notification.setNotification(CONTENT_MAPPER.deepClone(notification.getSubmittedBaseline()));
-        notification.setSubmittedBaseline(null);
+        notification.setNotification(CONTENT_MAPPER.deepClone(notification.getSubmittedNotificationBaseline()));
+        notification.setSubmittedNotificationBaseline(null);
         List<Document> priorFulfilments = notification.getSubmittedFulfilmentsBaseline();
         notification.setFulfilments(
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
@@ -277,7 +277,7 @@ public class NotificationService {
             OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
                 if (targetStatus == NotificationStatus.SUBMITTED
                     && notification.getStatus() == NotificationStatus.AMEND) {
-                    notification.setSubmittedBaseline(null);
+                    notification.setSubmittedNotificationBaseline(null);
                     notification.setSubmittedFulfilmentsBaseline(null);
                 }
                 notification.setStatus(targetStatus);

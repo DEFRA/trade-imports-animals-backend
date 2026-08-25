@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Objects;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
@@ -21,8 +22,10 @@ public record ExchangedDocument(
     private static final int VERSION_ID = 1;
 
     static ExchangedDocument from(NotificationAggregate notificationAggregate) {
-        Notification notification = notificationAggregate.getNotification();
-        Origin origin = notification != null ? notification.getOrigin() : null;
+        Notification notification = Objects.requireNonNull(
+            notificationAggregate.getNotification(),
+            "NotificationAggregate reaching outbox serialisation must have a notification sub-object");
+        Origin origin = notification.getOrigin();
         return new ExchangedDocument(
             notificationAggregate.getReferenceNumber(),
             origin != null ? origin.getInternalReference() : null,

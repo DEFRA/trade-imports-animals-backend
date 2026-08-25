@@ -228,6 +228,7 @@ class GbnAgMapperTest {
             NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-MIN001")
                 .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
                 .build());
 
         @Test

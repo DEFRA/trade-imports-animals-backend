@@ -899,11 +899,11 @@ class NotificationIT extends IntegrationBase {
         // Then — baseline captured in Mongo, separate from live content
         NotificationAggregate reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(NotificationStatus.AMEND);
-        assertThat(reloaded.getSubmittedBaseline()).isNotNull();
-        assertThat(reloaded.getSubmittedBaseline().getOrigin().getInternalReference())
+        assertThat(reloaded.getSubmittedNotificationBaseline()).isNotNull();
+        assertThat(reloaded.getSubmittedNotificationBaseline().getOrigin().getInternalReference())
             .isEqualTo("INTERNAL-DO-NOT-COPY");
-        assertThat(reloaded.getSubmittedBaseline().getOrigin()).isNotSameAs(reloaded.getNotification().getOrigin());
-        assertThat(reloaded.getSubmittedBaseline().getCommodity().getName())
+        assertThat(reloaded.getSubmittedNotificationBaseline().getOrigin()).isNotSameAs(reloaded.getNotification().getOrigin());
+        assertThat(reloaded.getSubmittedNotificationBaseline().getCommodity().getName())
             .isEqualTo(beforeAmend.getNotification().getCommodity().getName());
     }
 
@@ -1037,8 +1037,8 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate inAmendInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertThat(inAmendInMongo.getStatus()).isEqualTo(NotificationStatus.AMEND);
-        assertThat(inAmendInMongo.getSubmittedBaseline()).isNotNull();
-        assertAmendableContentMatches(submittedInMongo.getNotification(), inAmendInMongo.getSubmittedBaseline());
+        assertThat(inAmendInMongo.getSubmittedNotificationBaseline()).isNotNull();
+        assertAmendableContentMatches(submittedInMongo.getNotification(), inAmendInMongo.getSubmittedNotificationBaseline());
 
         // Simulate trader edits persisted to Mongo during AMEND
         inAmendInMongo.getNotification().getOrigin().setInternalReference("EDITED-REF");
@@ -1051,7 +1051,7 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate editedInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertThat(editedInMongo.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-REF");
-        assertThat(editedInMongo.getSubmittedBaseline()).isNotNull();
+        assertThat(editedInMongo.getSubmittedNotificationBaseline()).isNotNull();
 
         // When — cancel amendment via API
         webClient("NoAuth")
@@ -1062,7 +1062,7 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate restoredInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertThat(restoredInMongo.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(restoredInMongo.getSubmittedBaseline()).isNull();
+        assertThat(restoredInMongo.getSubmittedNotificationBaseline()).isNull();
         assertAmendableContentMatches(submittedInMongo.getNotification(), restoredInMongo.getNotification());
     }
 
@@ -1123,7 +1123,7 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate inAmend = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
         inAmend.getNotification().getOrigin().setInternalReference("EDITED-AND-KEPT");
         notificationRepository.save(inAmend);
-        assertThat(inAmend.getSubmittedBaseline()).isNotNull();
+        assertThat(inAmend.getSubmittedNotificationBaseline()).isNotNull();
 
         // When — resubmit amended notification
         NotificationAggregate resubmitted = webClient("NoAuth")
@@ -1138,7 +1138,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(resubmitted.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
 
         NotificationAggregate reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
-        assertThat(reloaded.getSubmittedBaseline()).isNull();
+        assertThat(reloaded.getSubmittedNotificationBaseline()).isNull();
         assertThat(reloaded.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
     }
 

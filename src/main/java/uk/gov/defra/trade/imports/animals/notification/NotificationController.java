@@ -31,7 +31,7 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 @RestController
 @RequestMapping("/notifications")
-@Tag(name = "NotificationAggregate API", description = "CRUD operations for the notification in the animals journey")
+@Tag(name = "Notification API", description = "CRUD operations for the notification in the animals journey")
 @Slf4j
 @RequiredArgsConstructor
 @Validated
@@ -60,10 +60,10 @@ public class NotificationController {
     @PutMapping("/{referenceNumber}")
     @Operation(summary = "Replace notification content",
         description = "Replaces the notification content (notification-shape fields + opaque fulfilments payload) at the given reference. Requires DRAFT or AMEND status. Emits a NotificationEdited outbox event on every save.")
-    @ApiResponse(responseCode = "200", description = "NotificationAggregate content replaced",
+    @ApiResponse(responseCode = "200", description = "Notification content replaced",
         content = @Content(schema = @Schema(implementation = NotificationAggregate.class)))
-    @ApiResponse(responseCode = "400", description = "NotificationAggregate not in a replaceable state", content = @Content)
-    @ApiResponse(responseCode = "404", description = "NotificationAggregate not found", content = @Content)
+    @ApiResponse(responseCode = "400", description = "Notification not in a replaceable state", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.replaceNotification.time")
     public ResponseEntity<NotificationAggregate> replace(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
@@ -94,11 +94,11 @@ public class NotificationController {
     @PostMapping("/{referenceNumber}/submit")
     @Operation(summary = "Submit notification",
         description = "Transitions notification status to SUBMITTED. Accepts DRAFT or AMEND as the source state.")
-    @ApiResponse(responseCode = "200", description = "NotificationAggregate submitted",
+    @ApiResponse(responseCode = "200", description = "Notification submitted",
         content = @Content(schema = @Schema(implementation = NotificationAggregate.class)))
-    @ApiResponse(responseCode = "400", description = "NotificationAggregate not in a submittable state", content = @Content)
+    @ApiResponse(responseCode = "400", description = "Notification not in a submittable state", content = @Content)
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
-    @ApiResponse(responseCode = "404", description = "NotificationAggregate not found", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @ApiResponse(responseCode = "500", description = "Submission failed", content = @Content)
     @Timed("controller.submitNotification.time")
     public ResponseEntity<NotificationAggregate> submit(
@@ -113,11 +113,11 @@ public class NotificationController {
     @PostMapping("/{referenceNumber}/amend")
     @Operation(summary = "Amend notification",
         description = "Transitions notification status from SUBMITTED to AMEND. Emits an outbox event.")
-    @ApiResponse(responseCode = "200", description = "NotificationAggregate moved to AMEND",
+    @ApiResponse(responseCode = "200", description = "Notification moved to AMEND",
         content = @Content(schema = @Schema(implementation = NotificationAggregate.class)))
-    @ApiResponse(responseCode = "400", description = "NotificationAggregate not in an amendable state", content = @Content)
+    @ApiResponse(responseCode = "400", description = "Notification not in an amendable state", content = @Content)
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
-    @ApiResponse(responseCode = "404", description = "NotificationAggregate not found", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @ApiResponse(responseCode = "500", description = "Amend failed", content = @Content)
     @Timed("controller.amendNotification.time")
     public ResponseEntity<NotificationAggregate> amend(
@@ -134,9 +134,9 @@ public class NotificationController {
         description = "Restores the submitted notification content and transitions status from AMEND to SUBMITTED.")
     @ApiResponse(responseCode = "200", description = "Amendment cancelled",
         content = @Content(schema = @Schema(implementation = NotificationAggregate.class)))
-    @ApiResponse(responseCode = "400", description = "NotificationAggregate not in AMEND status or baseline missing", content = @Content)
+    @ApiResponse(responseCode = "400", description = "Notification not in AMEND status or baseline missing", content = @Content)
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
-    @ApiResponse(responseCode = "404", description = "NotificationAggregate not found", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.cancelAmendNotification.time")
     public ResponseEntity<NotificationAggregate> cancelAmend(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
@@ -165,7 +165,7 @@ public class NotificationController {
         description = "Returns the fulfilment-view projection (referenceNumber, status, dates, opaque fulfilments payload) of the notification at the given reference. Backs the frontend engine's rehydrate path.")
     @ApiResponse(responseCode = "200", description = "Fulfilment view returned",
         content = @Content(schema = @Schema(implementation = NotificationFulfilmentsView.class)))
-    @ApiResponse(responseCode = "404", description = "NotificationAggregate not found", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.getFulfilments.time")
     public ResponseEntity<NotificationFulfilmentsView> findFulfilments(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
@@ -220,11 +220,11 @@ public class NotificationController {
     @PostMapping("/{referenceNumber}/soft-delete")
     @Operation(summary = "Soft-delete notification",
         description = "Transitions notification status to DELETED (soft delete). Only DRAFT and SUBMITTED notifications can be deleted.")
-    @ApiResponse(responseCode = "200", description = "NotificationAggregate soft-deleted",
+    @ApiResponse(responseCode = "200", description = "Notification soft-deleted",
         content = @Content(schema = @Schema(implementation = NotificationAggregate.class)))
-    @ApiResponse(responseCode = "400", description = "NotificationAggregate not in a deletable state", content = @Content)
+    @ApiResponse(responseCode = "400", description = "Notification not in a deletable state", content = @Content)
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
-    @ApiResponse(responseCode = "404", description = "NotificationAggregate not found", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.softDeleteNotification.time")
     public ResponseEntity<NotificationAggregate> softDelete(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {

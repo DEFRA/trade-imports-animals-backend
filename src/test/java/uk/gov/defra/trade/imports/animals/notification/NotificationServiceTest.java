@@ -251,6 +251,7 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .concurrencyToken(0L)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .origin(origin)
                     .commodity(commodity)
@@ -304,6 +305,7 @@ class NotificationServiceTest {
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .build();
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.of(existing));
@@ -340,6 +342,7 @@ class NotificationServiceTest {
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -364,6 +367,7 @@ class NotificationServiceTest {
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -406,6 +410,7 @@ class NotificationServiceTest {
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .concurrencyToken(3L)
                 .build();
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -459,10 +464,12 @@ class NotificationServiceTest {
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .build();
             NotificationAggregate saved = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -492,6 +499,7 @@ class NotificationServiceTest {
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1014,6 +1022,7 @@ class NotificationServiceTest {
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1040,6 +1049,7 @@ class NotificationServiceTest {
                 .id("notif-id-ref")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .consignor(NotificationTestData.reference(addressId))
                     .build())
@@ -1074,6 +1084,7 @@ class NotificationServiceTest {
                 .id("notif-id-copy")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .consignor(NotificationTestData.reference(addressId))
                     .build())
@@ -1108,6 +1119,7 @@ class NotificationServiceTest {
                 .id("notif-id-shared")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .consignor(NotificationTestData.reference(addressId))
                     .consignee(NotificationTestData.reference(addressId))
@@ -1139,6 +1151,7 @@ class NotificationServiceTest {
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1163,6 +1176,7 @@ class NotificationServiceTest {
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1205,6 +1219,7 @@ class NotificationServiceTest {
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1236,6 +1251,7 @@ class NotificationServiceTest {
                 .id("notif-id-amend-1")
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1262,6 +1278,7 @@ class NotificationServiceTest {
                 .id("notif-id-already")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1286,6 +1303,7 @@ class NotificationServiceTest {
                 .id("notif-id-deleted")
                 .referenceNumber(referenceNumber)
                 .status(NotificationStatus.DELETED)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1321,6 +1339,7 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
                 .notification(Notification.builder().build())
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1335,7 +1354,7 @@ class NotificationServiceTest {
             // Then
             assertThat(result.getStatus()).isEqualTo(AMEND);
             assertThat(result.getUpdated()).isNotNull();
-            assertThat(result.getSubmittedBaseline()).isNotNull();
+            assertThat(result.getSubmittedNotificationBaseline()).isNotNull();
             verify(notificationRepository).save(notification);
             verify(outboxService).appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-1", null);
         }
@@ -1349,6 +1368,7 @@ class NotificationServiceTest {
                 .id("notif-id-amd-8")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
+                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .origin(originalOrigin)
                     .build())
@@ -1363,8 +1383,8 @@ class NotificationServiceTest {
             notificationService.amendNotification(referenceNumber, "trace-amd-8", null);
 
             // Then
-            assertThat(notification.getSubmittedBaseline()).isNotNull();
-            assertThat(notification.getSubmittedBaseline().getOrigin().getInternalReference())
+            assertThat(notification.getSubmittedNotificationBaseline()).isNotNull();
+            assertThat(notification.getSubmittedNotificationBaseline().getOrigin().getInternalReference())
                 .isEqualTo("BASELINE-REF");
         }
 
@@ -1376,6 +1396,7 @@ class NotificationServiceTest {
                 .id("notif-id-amd-2")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1400,6 +1421,7 @@ class NotificationServiceTest {
                 .id("notif-id-amd-3")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1424,6 +1446,7 @@ class NotificationServiceTest {
                 .id("notif-id-amd-4")
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1465,6 +1488,7 @@ class NotificationServiceTest {
                 .id("notif-id-amd-6")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1495,6 +1519,7 @@ class NotificationServiceTest {
                 .id("notif-id-amd-7")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1525,10 +1550,11 @@ class NotificationServiceTest {
                 .id("notif-id-can-1")
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
+                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .origin(new Origin("FR", "false", "EDITED-REF"))
                     .build())
-                .submittedBaseline(baseline)
+                .submittedNotificationBaseline(baseline)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1541,7 +1567,7 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
-            assertThat(result.getSubmittedBaseline()).isNull();
+            assertThat(result.getSubmittedNotificationBaseline()).isNull();
             assertThat(result.getNotification().getOrigin().getInternalReference()).isEqualTo("ORIGINAL-REF");
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
@@ -1555,6 +1581,7 @@ class NotificationServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1575,7 +1602,8 @@ class NotificationServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
-                .submittedBaseline(null)
+                .notification(Notification.builder().build())
+                .submittedNotificationBaseline(null)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1618,12 +1646,14 @@ class NotificationServiceTest {
                     .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                     .build())
                 .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .build();
 
             NotificationAggregate created = NotificationAggregate.builder()
                 .referenceNumber(newRef)
                 .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(sourceRef))
@@ -1650,12 +1680,14 @@ class NotificationServiceTest {
                     .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                     .build())
                 .status(NotificationStatus.SUBMITTED)
+                .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .build();
 
             NotificationAggregate created = NotificationAggregate.builder()
                 .referenceNumber(newRef)
                 .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(sourceRef))
@@ -1687,6 +1719,7 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
                     .origin(origin)
@@ -1740,6 +1773,7 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
                     .origin(new Origin("FR", "no", "DO-NOT-COPY"))
@@ -1794,12 +1828,14 @@ class NotificationServiceTest {
                     .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
                     .build())
                 .status(AMEND)
+                .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .build();
 
             NotificationAggregate created = NotificationAggregate.builder()
                 .referenceNumber(newRef)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(sourceRef))
@@ -1835,6 +1871,7 @@ class NotificationServiceTest {
             NotificationAggregate deleted = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DELETED)
+                .notification(Notification.builder().build())
                 .build();
             when(notificationRepository.findByReferenceNumber(sourceRef))
                 .thenReturn(Optional.of(deleted));
@@ -1854,6 +1891,7 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
                 .concurrencyToken(5L)
                 .build();
             when(notificationRepository.findByReferenceNumber(sourceRef))
@@ -1876,6 +1914,7 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
                 .build();
             when(notificationRepository.findByReferenceNumber(sourceRef))
                 .thenReturn(Optional.of(source));
@@ -1908,6 +1947,7 @@ class NotificationServiceTest {
                 .id("db-id-1")
                 .referenceNumber(ref)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .origin(new Origin("FR", "no", "OLD"))
                     .build())
@@ -1945,6 +1985,7 @@ class NotificationServiceTest {
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(ref)
                 .status(AMEND)
+                .notification(Notification.builder().build())
                 .build();
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
@@ -1974,6 +2015,7 @@ class NotificationServiceTest {
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(ref)
                 .status(SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
             NotificationDto dto = NotificationDto.builder().referenceNumber(ref).build();
 
@@ -1994,6 +2036,7 @@ class NotificationServiceTest {
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(ref)
                 .status(DELETED)
+                .notification(Notification.builder().build())
                 .build();
             NotificationDto dto = NotificationDto.builder().referenceNumber(ref).build();
 
@@ -2027,6 +2070,7 @@ class NotificationServiceTest {
                 .id("db-id-nv")
                 .referenceNumber(ref)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .concurrencyToken(3L)
                 .build();
             when(notificationRepository.findByReferenceNumber(ref))
@@ -2056,6 +2100,7 @@ class NotificationServiceTest {
                 .id("db-id-a")
                 .referenceNumber(ref)
                 .status(SUBMITTED)
+                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .origin(new Origin("GB", "no", "REF"))
                     .build())
@@ -2093,10 +2138,11 @@ class NotificationServiceTest {
                 .id("db-id-c")
                 .referenceNumber(ref)
                 .status(AMEND)
+                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .origin(new Origin("FR", "yes", "EDITED"))
                     .build())
-                .submittedBaseline(baseline)
+                .submittedNotificationBaseline(baseline)
                 .submittedFulfilmentsBaseline(new ArrayList<>(priorFulfilments))
                 .fulfilments(List.of(new Document("obligationId", "in-flight-edit")))
                 .submittedAt(originalSubmittedAt)
@@ -2112,7 +2158,7 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
-            assertThat(result.getSubmittedBaseline()).isNull();
+            assertThat(result.getSubmittedNotificationBaseline()).isNull();
             assertThat(result.getSubmittedFulfilmentsBaseline()).isNull();
             assertThat(result.getFulfilments()).isEqualTo(priorFulfilments);
             assertThat(result.getSubmittedAt()).isEqualTo(originalSubmittedAt);
@@ -2161,6 +2207,7 @@ class NotificationServiceTest {
                 .id("db-id-cycle")
                 .referenceNumber(ref)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(ref))
@@ -2193,7 +2240,8 @@ class NotificationServiceTest {
                 .id("db-id-s")
                 .referenceNumber(ref)
                 .status(AMEND)
-                .submittedBaseline(Notification.builder().build())
+                .notification(Notification.builder().build())
+                .submittedNotificationBaseline(Notification.builder().build())
                 .submittedFulfilmentsBaseline(new ArrayList<>(
                     List.of(new Document("obligationId", "prior"))))
                 .fulfilments(List.of(new Document("obligationId", "current")))
@@ -2210,7 +2258,7 @@ class NotificationServiceTest {
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getSubmittedAt()).isNotNull();
-            assertThat(result.getSubmittedBaseline()).isNull();
+            assertThat(result.getSubmittedNotificationBaseline()).isNull();
             assertThat(result.getSubmittedFulfilmentsBaseline()).isNull();
             // Fulfilments are the in-flight edit, NOT the baseline (submit-from-amend accepts the edit).
             assertThat(result.getFulfilments()).extracting("obligationId").containsExactly("current");
@@ -2223,6 +2271,7 @@ class NotificationServiceTest {
             NotificationAggregate alreadyDeleted = NotificationAggregate.builder()
                 .referenceNumber(ref)
                 .status(DELETED)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(ref))
@@ -2247,6 +2296,7 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .status(SUBMITTED)
+                .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
                     .origin(new Origin("GB", "no", "SOURCE-REF"))
@@ -2285,6 +2335,7 @@ class NotificationServiceTest {
                 .id("notif-id-001")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -2309,6 +2360,7 @@ class NotificationServiceTest {
                 .id("notif-id-002")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -2335,6 +2387,7 @@ class NotificationServiceTest {
                 .id("notif-id-amend-del")
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))

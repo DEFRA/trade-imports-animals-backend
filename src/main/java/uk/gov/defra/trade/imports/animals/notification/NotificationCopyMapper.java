@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /**
@@ -20,25 +21,24 @@ import org.springframework.stereotype.Component;
 public class NotificationCopyMapper {
 
     public NotificationDto toCopyDto(NotificationAggregate source) {
-        Notification notification = source.getNotification();
-        NotificationDto.NotificationDtoBuilder<?, ?> builder = NotificationDto.builder()
-            .fulfilments(source.getFulfilments() == null ? null : new ArrayList<>(source.getFulfilments()));
-        if (notification != null) {
-            builder
-                .origin(mapOrigin(notification.getOrigin()))
-                .commodity(mapCommodity(notification.getCommodity()))
-                .reasonForImport(notification.getReasonForImport())
-                .additionalDetails(mapAdditionalDetails(notification.getAdditionalDetails()))
-                .placeOfOrigin(mapConsignmentParty(notification.getPlaceOfOrigin()))
-                .consignor(mapConsignmentParty(notification.getConsignor()))
-                .consignee(mapConsignmentParty(notification.getConsignee()))
-                .importer(mapConsignmentParty(notification.getImporter()))
-                .destination(mapConsignmentParty(notification.getDestination()))
-                .cphNumber(notification.getCphNumber());
+        Notification notification = Objects.requireNonNull(
+            source.getNotification(),
+            "NotificationAggregate reaching copy mapping must have a notification sub-object");
+        return NotificationDto.builder()
+            .fulfilments(source.getFulfilments() == null ? null : new ArrayList<>(source.getFulfilments()))
+            .origin(mapOrigin(notification.getOrigin()))
+            .commodity(mapCommodity(notification.getCommodity()))
+            .reasonForImport(notification.getReasonForImport())
+            .additionalDetails(mapAdditionalDetails(notification.getAdditionalDetails()))
+            .placeOfOrigin(mapConsignmentParty(notification.getPlaceOfOrigin()))
+            .consignor(mapConsignmentParty(notification.getConsignor()))
+            .consignee(mapConsignmentParty(notification.getConsignee()))
+            .importer(mapConsignmentParty(notification.getImporter()))
+            .destination(mapConsignmentParty(notification.getDestination()))
+            .cphNumber(notification.getCphNumber())
             // transport intentionally omitted — logistical fields (portOfEntry, arrivalDate, transporter) are reset on copy
             // consignment intentionally omitted — contact address is reset on copy
-        }
-        return builder.build();
+            .build();
     }
 
     private ConsignmentParty mapConsignmentParty(ConsignmentParty source) {

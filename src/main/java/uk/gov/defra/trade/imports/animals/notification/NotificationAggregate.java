@@ -60,7 +60,7 @@ public class NotificationAggregate {
 
     /** Pre-amend snapshot of {@link #notification}. Non-null iff status is AMEND; restored by cancelAmend, cleared by submit-from-amend. */
     @JsonIgnore
-    private Notification submittedBaseline;
+    private Notification submittedNotificationBaseline;
 
     /** Pre-amend snapshot of {@link #fulfilments}. Non-null iff status is AMEND; restored by cancelAmend, cleared by submit-from-amend. */
     @JsonIgnore

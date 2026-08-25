@@ -7,7 +7,6 @@ import org.mapstruct.Named;
 import org.mapstruct.ReportingPolicy;
 import org.mapstruct.control.DeepClone;
 
-/** Deep-clones a {@link Notification} — used by amend to snapshot, and cancel-amend to restore. */
 @Mapper(unmappedTargetPolicy = ReportingPolicy.ERROR, mappingControl = DeepClone.class)
 public interface NotificationContentMapper {
 

@@ -24,6 +24,7 @@ import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
+import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
@@ -54,6 +55,7 @@ class OutboxServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .status(NotificationStatus.SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
@@ -91,6 +93,7 @@ class OutboxServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .status(NotificationStatus.SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
 
             OutboxEvent existing = OutboxEvent.builder()
@@ -127,7 +130,7 @@ class OutboxServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .status(NotificationStatus.SUBMITTED)
-                .notification(uk.gov.defra.trade.imports.animals.notification.Notification.builder()
+                .notification(Notification.builder()
                     .origin(origin)
                     .commodity(commodity)
                     .reasonForImport("PERMANENT")
@@ -173,6 +176,7 @@ class OutboxServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-AMD009")
                 .status(NotificationStatus.AMEND)
+                .notification(Notification.builder().build())
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
@@ -199,6 +203,7 @@ class OutboxServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-AMD007")
                 .status(NotificationStatus.SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
 
             OutboxEvent latest = OutboxEvent.builder()
@@ -224,6 +229,7 @@ class OutboxServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-ACT001")
                 .status(NotificationStatus.SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
             Actor actor = Actor.builder()
                 .id("contact-guid-001")
@@ -260,6 +266,7 @@ class OutboxServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-ACT002")
                 .status(NotificationStatus.AMEND)
+                .notification(Notification.builder().build())
                 .build();
             Actor submitActor = Actor.builder()
                 .id("contact-guid-001")
@@ -313,6 +320,7 @@ class OutboxServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-EDIT01")
                 .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
@@ -337,6 +345,7 @@ class OutboxServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-EDIT02")
                 .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
                 .build();
             StatusChange priorChange = StatusChange.builder()
                 .status(NotificationStatus.DRAFT)
@@ -371,6 +380,7 @@ class OutboxServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-EDIT03")
                 .status(NotificationStatus.AMEND)
+                .notification(Notification.builder().build())
                 .build();
             StatusChange priorChange = StatusChange.builder()
                 .status(NotificationStatus.AMEND)
@@ -405,6 +415,7 @@ class OutboxServiceTest {
             NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .status(NotificationStatus.SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(

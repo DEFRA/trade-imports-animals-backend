@@ -6,7 +6,6 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 import lombok.experimental.SuperBuilder;
 
-/** Notification content sub-object of {@link NotificationAggregate}. Embedded, not a Mongo collection. */
 @Data
 @SuperBuilder(toBuilder = true)
 @NoArgsConstructor
