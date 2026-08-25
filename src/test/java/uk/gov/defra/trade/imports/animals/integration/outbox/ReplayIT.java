@@ -84,9 +84,9 @@ class ReplayIT extends OutboxIntegrationBase {
     void replay_shouldRepublishMultipleEventsInVersionOrder() throws Exception {
         // Given — two outbox events (submit, reset to DRAFT, submit again)
         String referenceNumber = createAndSubmitNotification("trace-v1");
-        NotificationAggregate notification = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
-        notification.setStatus(NotificationStatus.DRAFT);
-        notificationRepository.save(notification);
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        notificationAggregate.setStatus(NotificationStatus.DRAFT);
+        notificationRepository.save(notificationAggregate);
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)

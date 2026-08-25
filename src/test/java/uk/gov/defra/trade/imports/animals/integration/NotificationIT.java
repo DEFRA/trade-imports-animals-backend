@@ -1305,9 +1305,9 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         // Reset status to DRAFT so we can submit again (simulates re-submission scenario)
-        NotificationAggregate notification = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
-        notification.setStatus(NotificationStatus.DRAFT);
-        notificationRepository.save(notification);
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        notificationAggregate.setStatus(NotificationStatus.DRAFT);
+        notificationRepository.save(notificationAggregate);
 
         // When — submit again (version 2)
         webClient("NoAuth")
@@ -1626,20 +1626,20 @@ class NotificationIT extends IntegrationBase {
         return findAllNotificationsPage().content();
     }
 
-    private void assertNotificationMappedFields(NotificationAggregate notification) {
-        assertNotificationMappedFields(notification, "REF-001");
+    private void assertNotificationMappedFields(NotificationAggregate notificationAggregate) {
+        assertNotificationMappedFields(notificationAggregate, "REF-001");
     }
 
-    private void assertNotificationMappedFields(NotificationAggregate notification, String internalReference) {
-        assertThat(notification.getNotification().getOrigin())
+    private void assertNotificationMappedFields(NotificationAggregate notificationAggregate, String internalReference) {
+        assertThat(notificationAggregate.getNotification().getOrigin())
             .extracting(Origin::getCountryCode, Origin::getRequiresRegionCode, Origin::getInternalReference)
             .containsExactly("GB", "true", internalReference);
 
-        assertThat(notification.getNotification().getCommodity())
+        assertThat(notificationAggregate.getNotification().getCommodity())
             .extracting(Commodity::getName)
             .isEqualTo("Live bovine animals");
 
-        CommodityComplement complement = notification.getNotification().getCommodity().getCommodityComplement().getFirst();
+        CommodityComplement complement = notificationAggregate.getNotification().getCommodity().getCommodityComplement().getFirst();
         assertThat(complement)
             .extracting(
                 CommodityComplement::getTypeOfCommodity,
@@ -1658,15 +1658,15 @@ class NotificationIT extends IntegrationBase {
                 Species::getPassport)
             .containsExactly("BOV", "Bovine", 10, 5, "UK01234567890", "UK0123456700999");
 
-        assertThat(notification.getNotification())
+        assertThat(notificationAggregate.getNotification())
             .extracting(Notification::getReasonForImport, Notification::getCphNumber)
             .containsExactly("PERMANENT", "22/123/4567");
 
-        assertThat(notification.getNotification().getAdditionalDetails())
+        assertThat(notificationAggregate.getNotification().getAdditionalDetails())
             .extracting(AdditionalDetails::getCertifiedFor, AdditionalDetails::getUnweanedAnimals)
             .containsExactly("HUMAN_CONSUMPTION", "true");
 
-        assertThat(notification.getNotification().getTransport())
+        assertThat(notificationAggregate.getNotification().getTransport())
             .extracting(
                 Transport::getPortOfEntry,
                 Transport::getArrivalDate,
@@ -1713,9 +1713,9 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         // Reset status to DRAFT so we can submit again
-        NotificationAggregate notification = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
-        notification.setStatus(NotificationStatus.DRAFT);
-        notificationRepository.save(notification);
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        notificationAggregate.setStatus(NotificationStatus.DRAFT);
+        notificationRepository.save(notificationAggregate);
 
         // Submit again (version 2)
         webClient("NoAuth")

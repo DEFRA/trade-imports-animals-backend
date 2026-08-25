@@ -355,22 +355,22 @@ public class NotificationService {
 
     @Transactional
     public NotificationAggregate softDeleteNotification(String referenceNumber) {
-        NotificationAggregate notification = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
         // Idempotent per REST DELETE convention — a repeat call after a lost response is a no-op.
-        if (notification.getStatus() == NotificationStatus.DELETED) {
-            return notification;
+        if (notificationAggregate.getStatus() == NotificationStatus.DELETED) {
+            return notificationAggregate;
         }
-        if (notification.getStatus() != NotificationStatus.DRAFT
-            && notification.getStatus() != NotificationStatus.SUBMITTED
-            && notification.getStatus() != NotificationStatus.AMEND) {
+        if (notificationAggregate.getStatus() != NotificationStatus.DRAFT
+            && notificationAggregate.getStatus() != NotificationStatus.SUBMITTED
+            && notificationAggregate.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException(
-                "Cannot delete notification with status: " + notification.getStatus());
+                "Cannot delete notification with status: " + notificationAggregate.getStatus());
         }
-        notification.setStatus(NotificationStatus.DELETED);
-        notification.setUpdated(LocalDateTime.now());
-        return notificationRepository.save(notification);
+        notificationAggregate.setStatus(NotificationStatus.DELETED);
+        notificationAggregate.setUpdated(LocalDateTime.now());
+        return notificationRepository.save(notificationAggregate);
     }
 
     public ReferenceNumberPageResponse findAllReferenceNumbers(int page) {
@@ -447,24 +447,24 @@ public class NotificationService {
      * Anchored to {@code created}, so a notification expires a fixed window after creation
      * regardless of later activity.
      */
-    private void stampExpiry(NotificationAggregate notification) {
+    private void stampExpiry(NotificationAggregate notificationAggregate) {
         Integer days = ttlConfig.days();
         if (days == null || ttlConfig.isProd()) {
             return;
         }
-        notification.setExpireAt(notification.getCreated().plusDays(days));
+        notificationAggregate.setExpireAt(notificationAggregate.getCreated().plusDays(days));
     }
 
     private NotificationAggregate createNotification(NotificationDto dto) {
-        NotificationAggregate notification = new NotificationAggregate();
-        notification.setCreated(LocalDateTime.now());
-        notification.setStatus(NotificationStatus.DRAFT);
-        stampExpiry(notification);
-        setNotificationDetails(dto, notification);
+        NotificationAggregate notificationAggregate = new NotificationAggregate();
+        notificationAggregate.setCreated(LocalDateTime.now());
+        notificationAggregate.setStatus(NotificationStatus.DRAFT);
+        stampExpiry(notificationAggregate);
+        setNotificationDetails(dto, notificationAggregate);
         for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
-            notification.setReferenceNumber(referenceNumberGenerator.generate());
+            notificationAggregate.setReferenceNumber(referenceNumberGenerator.generate());
             try {
-                NotificationAggregate saved = notificationRepository.save(notification);
+                NotificationAggregate saved = notificationRepository.save(notificationAggregate);
                 log.info("NotificationAggregate saved with reference number: {}", saved.getReferenceNumber());
                 return saved;
             } catch (DuplicateKeyException _) {

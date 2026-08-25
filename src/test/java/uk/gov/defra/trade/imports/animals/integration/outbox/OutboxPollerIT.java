@@ -83,10 +83,10 @@ class OutboxPollerIT extends OutboxIntegrationBase {
     @Test
     void publishUnpublishedEvents_shouldPublishAggregateVersionsInOrder() throws Exception {
         String referenceNumber = createAndSubmitNotification("trace-v1");
-        NotificationAggregate notification = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
-        notification.setStatus(NotificationStatus.DRAFT);
-        notificationRepository.save(notification);
+        notificationAggregate.setStatus(NotificationStatus.DRAFT);
+        notificationRepository.save(notificationAggregate);
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
