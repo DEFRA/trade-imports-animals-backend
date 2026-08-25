@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 
@@ -19,16 +20,17 @@ public record ExchangedDocument(
 
     private static final int VERSION_ID = 1;
 
-    static ExchangedDocument from(NotificationAggregate notification) {
-        Origin origin = notification.getOrigin();
+    static ExchangedDocument from(NotificationAggregate notificationAggregate) {
+        Notification notification = notificationAggregate.getNotification();
+        Origin origin = notification != null ? notification.getOrigin() : null;
         return new ExchangedDocument(
-            notification.getReferenceNumber(),
+            notificationAggregate.getReferenceNumber(),
             origin != null ? origin.getInternalReference() : null,
-            notification.getStatus() != null ? notification.getStatus().name() : null,
+            notificationAggregate.getStatus() != null ? notificationAggregate.getStatus().name() : null,
             VERSION_ID,
-            toUtcDateTime(notification.getUpdated()),
+            toUtcDateTime(notificationAggregate.getUpdated()),
             null,
-            Authentication.from(notification),
+            Authentication.from(notificationAggregate),
             null);
     }
 

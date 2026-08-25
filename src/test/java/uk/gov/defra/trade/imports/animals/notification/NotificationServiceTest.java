@@ -149,8 +149,9 @@ class NotificationServiceTest {
             String expectedRef = "GBN-AG-26-ABC123";
 
             NotificationAggregate saved = new NotificationAggregate();
+            saved.setNotification(new Notification());
             saved.setId(generatedId);
-            saved.setOrigin(origin);
+            saved.getNotification().setOrigin(origin);
             saved.setReferenceNumber(expectedRef);
 
             when(referenceNumberGenerator.generate()).thenReturn(expectedRef);
@@ -162,7 +163,7 @@ class NotificationServiceTest {
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(expectedRef);
             assertThat(result.getId()).isEqualTo(generatedId);
-            assertThat(result.getOrigin()).isEqualTo(origin);
+            assertThat(result.getNotification().getOrigin()).isEqualTo(origin);
             verify(referenceNumberGenerator).generate();
             verify(notificationRepository, times(1)).save(any(NotificationAggregate.class));
             verify(outboxService, never()).appendEvent(any(), any(), any(), any());
@@ -175,8 +176,9 @@ class NotificationServiceTest {
             NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
 
             NotificationAggregate saved = new NotificationAggregate();
+            saved.setNotification(new Notification());
             saved.setId("507f1f77bcf86cd799439011");
-            saved.setOrigin(origin);
+            saved.getNotification().setOrigin(origin);
             saved.setReferenceNumber("GBN-AG-26-ABC002");
 
             when(referenceNumberGenerator.generate())
@@ -238,25 +240,28 @@ class NotificationServiceTest {
                 .build();
 
             NotificationAggregate existingNotification = new NotificationAggregate();
+            existingNotification.setNotification(new Notification());
             existingNotification.setId(existingId);
             existingNotification.setReferenceNumber(referenceNumber);
             existingNotification.setStatus(DRAFT);
-            existingNotification.setOrigin(origin);
+            existingNotification.getNotification().setOrigin(origin);
 
             NotificationAggregate updatedNotification = NotificationAggregate.builder()
                 .id(existingId)
                 .referenceNumber(referenceNumber)
                 .concurrencyToken(0L)
                 .status(DRAFT)
-                .origin(origin)
-                .commodity(commodity)
-                .consignor(consignors().getFirst())
-                .destination(destinations().getFirst())
-                .additionalDetails(additionalDetails)
-                .reasonForImport("PERMANENT")
-                .cphNumber(cphNumber)
-                .transport(transport)
-                .consignment(consignments().getFirst())
+                .notification(Notification.builder()
+                    .origin(origin)
+                    .commodity(commodity)
+                    .consignor(consignors().getFirst())
+                    .destination(destinations().getFirst())
+                    .additionalDetails(additionalDetails)
+                    .reasonForImport("PERMANENT")
+                    .cphNumber(cphNumber)
+                    .transport(transport)
+                    .consignment(consignments().getFirst())
+                    .build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -318,14 +323,14 @@ class NotificationServiceTest {
                 dto, "trace-edit-001", Actor.builder().organisationId(ORG_ID).build());
 
             // Then — the draft is saved, still holding the reference
-            assertThat(saved.getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
+            assertThat(saved.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
 
             // And the event carries the role blank rather than failing the write
             ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(outboxService).appendEvent(
                 captor.capture(), eq(OutboxEventType.NOTIFICATION_EDITED), eq("trace-edit-001"),
                 any());
-            assertThat(captor.getValue().getConsignor()).isNull();
+            assertThat(captor.getValue().getNotification().getConsignor()).isNull();
         }
 
         @Test
@@ -552,7 +557,7 @@ class NotificationServiceTest {
 
             // Then — only DRAFT and SUBMITTED are returned
             assertThat(result.content()).hasSize(2);
-            assertThat(result.content()).extracting(NotificationView::status)
+            assertThat(result.content()).extracting(NotificationView::getStatus)
                 .containsExactlyInAnyOrder(DRAFT, SUBMITTED);
             assertThat(result.page()).isEqualTo(1);
             assertThat(result.size()).isEqualTo(54);
@@ -579,9 +584,9 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result.content()).hasSize(1);
-            assertThat(result.content().getFirst().referenceNumber()).isEqualTo(
+            assertThat(result.content().getFirst().getReferenceNumber()).isEqualTo(
                 "GBN-AG-26-ABC123");
-            assertThat(result.content().getFirst().status()).isEqualTo(
+            assertThat(result.content().getFirst().getStatus()).isEqualTo(
                 SUBMITTED);
         }
 
@@ -604,7 +609,7 @@ class NotificationServiceTest {
             NotificationPageResponse result = notificationService.findAll(1, null);
 
             assertThat(result.content()).hasSize(1);
-            assertThat(result.content()).extracting(NotificationView::status)
+            assertThat(result.content()).extracting(NotificationView::getStatus)
                 .containsExactly(AMEND);
         }
 
@@ -640,7 +645,7 @@ class NotificationServiceTest {
                 notificationService.findAll(1, null, "GBN-AG-26-ABC123");
 
             assertThat(result.content()).hasSize(1);
-            assertThat(result.content().getFirst().referenceNumber())
+            assertThat(result.content().getFirst().getReferenceNumber())
                 .isEqualTo("GBN-AG-26-ABC123");
             assertThat(result.totalElements()).isEqualTo(1);
             verify(notificationRepository, never())
@@ -1035,7 +1040,9 @@ class NotificationServiceTest {
                 .id("notif-id-ref")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
-                .consignor(NotificationTestData.reference(addressId))
+                .notification(Notification.builder()
+                    .consignor(NotificationTestData.reference(addressId))
+                    .build())
                 .build();
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.of(notification));
@@ -1053,8 +1060,8 @@ class NotificationServiceTest {
             verify(outboxService).appendEvent(
                 captor.capture(), eq(OutboxEventType.NOTIFICATION_SUBMITTED), eq("trace-ref-001"),
                 eq(actor));
-            assertThat(captor.getValue().getConsignor().getName()).isEqualTo("Astra Rosales");
-            assertThat(captor.getValue().getConsignor().getAddress().getPostcode()).isEqualTo("30055");
+            assertThat(captor.getValue().getNotification().getConsignor().getName()).isEqualTo("Astra Rosales");
+            assertThat(captor.getValue().getNotification().getConsignor().getAddress().getPostcode()).isEqualTo("30055");
         }
 
         @Test
@@ -1067,7 +1074,9 @@ class NotificationServiceTest {
                 .id("notif-id-copy")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
-                .consignor(NotificationTestData.reference(addressId))
+                .notification(Notification.builder()
+                    .consignor(NotificationTestData.reference(addressId))
+                    .build())
                 .build();
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.of(notification));
@@ -1081,10 +1090,10 @@ class NotificationServiceTest {
                 referenceNumber, "trace-copy-001", Actor.builder().organisationId(ORG_ID).build());
 
             // Then
-            assertThat(returned.getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
+            assertThat(returned.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
             ArgumentCaptor<NotificationAggregate> saved = ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(notificationRepository).save(saved.capture());
-            assertThat(saved.getValue().getConsignor())
+            assertThat(saved.getValue().getNotification().getConsignor())
                 .isEqualTo(ConsignmentParty.reference(addressId));
         }
 
@@ -1099,8 +1108,10 @@ class NotificationServiceTest {
                 .id("notif-id-shared")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
-                .consignor(NotificationTestData.reference(addressId))
-                .consignee(NotificationTestData.reference(addressId))
+                .notification(Notification.builder()
+                    .consignor(NotificationTestData.reference(addressId))
+                    .consignee(NotificationTestData.reference(addressId))
+                    .build())
                 .build();
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.of(notification));
@@ -1116,7 +1127,7 @@ class NotificationServiceTest {
             // Then
             ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(outboxService).appendEvent(captor.capture(), any(), any(), any());
-            assertThat(captor.getValue().getConsignee().getName()).isEqualTo("Astra Rosales");
+            assertThat(captor.getValue().getNotification().getConsignee().getName()).isEqualTo("Astra Rosales");
             verify(addressBookClient, times(1)).findById(ORG_ID, addressId);
         }
 
@@ -1309,6 +1320,7 @@ class NotificationServiceTest {
                 .id("notif-id-amd-1")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1337,7 +1349,9 @@ class NotificationServiceTest {
                 .id("notif-id-amd-8")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
-                .origin(originalOrigin)
+                .notification(Notification.builder()
+                    .origin(originalOrigin)
+                    .build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1504,14 +1518,16 @@ class NotificationServiceTest {
         void cancelAmendNotification_shouldRestoreBaselineAndSetSubmitted() {
             // Given
             String referenceNumber = "GBN-AG-26-CAN001";
-            NotificationContentSnapshot baseline = NotificationContentSnapshot.builder()
+            Notification baseline = Notification.builder()
                 .origin(new Origin("GB", "true", "ORIGINAL-REF"))
                 .build();
             NotificationAggregate notification = NotificationAggregate.builder()
                 .id("notif-id-can-1")
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
-                .origin(new Origin("FR", "false", "EDITED-REF"))
+                .notification(Notification.builder()
+                    .origin(new Origin("FR", "false", "EDITED-REF"))
+                    .build())
                 .submittedBaseline(baseline)
                 .build();
 
@@ -1526,7 +1542,7 @@ class NotificationServiceTest {
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getSubmittedBaseline()).isNull();
-            assertThat(result.getOrigin().getInternalReference()).isEqualTo("ORIGINAL-REF");
+            assertThat(result.getNotification().getOrigin().getInternalReference()).isEqualTo("ORIGINAL-REF");
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notification);
             verify(outboxService, never()).appendEvent(any(), any(), any(), any());
@@ -1598,7 +1614,9 @@ class NotificationServiceTest {
             String newRef = "GBN-AG-26-NEW001";
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
-                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
+                .notification(Notification.builder()
+                    .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
+                    .build())
                 .status(NotificationStatus.DRAFT)
                 .concurrencyToken(0L)
                 .build();
@@ -1628,7 +1646,9 @@ class NotificationServiceTest {
             String newRef = "GBN-AG-26-NEW002";
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
-                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
+                .notification(Notification.builder()
+                    .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
+                    .build())
                 .status(NotificationStatus.SUBMITTED)
                 .concurrencyToken(0L)
                 .build();
@@ -1668,19 +1688,21 @@ class NotificationServiceTest {
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
                 .concurrencyToken(0L)
-                .origin(origin)
-                .commodity(commodity)
-                .reasonForImport("internalMarket")
-                .additionalDetails(additionalDetails)
-                .consignor(consignors().getFirst())
-                .destination(destinations().getFirst())
-                .cphNumber("12/345/6789")
-                .transport(Transport.builder()
-                    .portOfEntry("GBDVR")
-                    .arrivalDate(LocalDate.of(2026, Month.MAY, 1))
-                    .transporter(transporters().getFirst())
+                .notification(Notification.builder()
+                    .origin(origin)
+                    .commodity(commodity)
+                    .reasonForImport("internalMarket")
+                    .additionalDetails(additionalDetails)
+                    .consignor(consignors().getFirst())
+                    .destination(destinations().getFirst())
+                    .cphNumber("12/345/6789")
+                    .transport(Transport.builder()
+                        .portOfEntry("GBDVR")
+                        .arrivalDate(LocalDate.of(2026, Month.MAY, 1))
+                        .transporter(transporters().getFirst())
+                        .build())
+                    .consignment(consignments().getFirst())
                     .build())
-                .consignment(consignments().getFirst())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(sourceRef))
@@ -1699,14 +1721,14 @@ class NotificationServiceTest {
 
             // Retained
             assertThat(saved.getStatus()).isEqualTo(NotificationStatus.DRAFT);
-            assertThat(saved.getOrigin().getCountryCode()).isEqualTo("DE");
-            assertThat(saved.getOrigin().getRequiresRegionCode()).isEqualTo("yes");
-            assertThat(saved.getReasonForImport()).isEqualTo("internalMarket");
-            assertThat(saved.getCommodity().getName()).isEqualTo("Live bovine animals");
-            assertThat(saved.getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
-            assertThat(saved.getConsignor()).isEqualTo(consignors().getFirst());
-            assertThat(saved.getDestination()).isEqualTo(destinations().getFirst());
-            assertThat(saved.getCphNumber()).isEqualTo("12/345/6789");
+            assertThat(saved.getNotification().getOrigin().getCountryCode()).isEqualTo("DE");
+            assertThat(saved.getNotification().getOrigin().getRequiresRegionCode()).isEqualTo("yes");
+            assertThat(saved.getNotification().getReasonForImport()).isEqualTo("internalMarket");
+            assertThat(saved.getNotification().getCommodity().getName()).isEqualTo("Live bovine animals");
+            assertThat(saved.getNotification().getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
+            assertThat(saved.getNotification().getConsignor()).isEqualTo(consignors().getFirst());
+            assertThat(saved.getNotification().getDestination()).isEqualTo(destinations().getFirst());
+            assertThat(saved.getNotification().getCphNumber()).isEqualTo("12/345/6789");
         }
 
         @Test
@@ -1719,17 +1741,19 @@ class NotificationServiceTest {
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
                 .concurrencyToken(0L)
-                .origin(new Origin("FR", "no", "DO-NOT-COPY"))
-                .commodity(Commodity.builder()
-                    .name("Cattle")
-                    .commodityComplement(List.of(complement))
+                .notification(Notification.builder()
+                    .origin(new Origin("FR", "no", "DO-NOT-COPY"))
+                    .commodity(Commodity.builder()
+                        .name("Cattle")
+                        .commodityComplement(List.of(complement))
+                        .build())
+                    .additionalDetails(new AdditionalDetails("Slaughter", "no"))
+                    .transport(Transport.builder()
+                        .portOfEntry("GBFXT")
+                        .arrivalDate(LocalDate.of(2026, Month.JUNE, 1))
+                        .build())
+                    .consignment(consignments().getFirst())
                     .build())
-                .additionalDetails(new AdditionalDetails("Slaughter", "no"))
-                .transport(Transport.builder()
-                    .portOfEntry("GBFXT")
-                    .arrivalDate(LocalDate.of(2026, Month.JUNE, 1))
-                    .build())
-                .consignment(consignments().getFirst())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(sourceRef))
@@ -1746,12 +1770,12 @@ class NotificationServiceTest {
             verify(notificationRepository).save(captor.capture());
             NotificationAggregate saved = captor.getValue();
 
-            assertThat(saved.getOrigin().getInternalReference()).isNull();
-            assertThat(saved.getAdditionalDetails().getUnweanedAnimals()).isNull();
-            assertThat(saved.getTransport()).isNull();
-            assertThat(saved.getConsignment()).isNull();
+            assertThat(saved.getNotification().getOrigin().getInternalReference()).isNull();
+            assertThat(saved.getNotification().getAdditionalDetails().getUnweanedAnimals()).isNull();
+            assertThat(saved.getNotification().getTransport()).isNull();
+            assertThat(saved.getNotification().getConsignment()).isNull();
             // Commodity complement strips per-animal data
-            CommodityComplement cc = saved.getCommodity().getCommodityComplement().getFirst();
+            CommodityComplement cc = saved.getNotification().getCommodity().getCommodityComplement().getFirst();
             assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
             assertThat(cc.getTotalNoOfAnimals()).isNull();
             assertThat(cc.getTotalNoOfPackages()).isNull();
@@ -1766,7 +1790,9 @@ class NotificationServiceTest {
             String newRef = "GBN-AG-26-NEW-AMD";
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
-                .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
+                .notification(Notification.builder()
+                    .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY"))
+                    .build())
                 .status(AMEND)
                 .concurrencyToken(0L)
                 .build();
@@ -1882,7 +1908,9 @@ class NotificationServiceTest {
                 .id("db-id-1")
                 .referenceNumber(ref)
                 .status(DRAFT)
-                .origin(new Origin("FR", "no", "OLD"))
+                .notification(Notification.builder()
+                    .origin(new Origin("FR", "no", "OLD"))
+                    .build())
                 .build();
             List<Document> newFulfilments = List.of(new Document("obligationId", "abc"));
             NotificationDto dto = NotificationDto.builder()
@@ -1901,7 +1929,7 @@ class NotificationServiceTest {
             NotificationAggregate result = notificationService.replace(ref, dto, "trace", null);
 
             // Then
-            assertThat(result.getOrigin().getCountryCode()).isEqualTo("GB");
+            assertThat(result.getNotification().getOrigin().getCountryCode()).isEqualTo("GB");
             assertThat(result.getFulfilments()).isEqualTo(newFulfilments);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(existing);
@@ -1935,7 +1963,7 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result.getStatus()).isEqualTo(AMEND);
-            assertThat(result.getOrigin().getInternalReference()).isEqualTo("AMEND-EDIT");
+            assertThat(result.getNotification().getOrigin().getInternalReference()).isEqualTo("AMEND-EDIT");
             assertThat(result.getFulfilments()).hasSize(1);
         }
 
@@ -2028,7 +2056,9 @@ class NotificationServiceTest {
                 .id("db-id-a")
                 .referenceNumber(ref)
                 .status(SUBMITTED)
-                .origin(new Origin("GB", "no", "REF"))
+                .notification(Notification.builder()
+                    .origin(new Origin("GB", "no", "REF"))
+                    .build())
                 .fulfilments(fulfilments)
                 .build();
 
@@ -2056,14 +2086,16 @@ class NotificationServiceTest {
             String ref = "GBN-AG-26-CAN001";
             LocalDateTime originalSubmittedAt = LocalDateTime.of(2026, Month.APRIL, 15, 10, 0);
             List<Document> priorFulfilments = List.of(new Document("obligationId", "prior"));
-            NotificationContentSnapshot baseline = NotificationContentSnapshot.builder()
+            Notification baseline = Notification.builder()
                 .origin(new Origin("GB", "no", "ORIGINAL"))
                 .build();
             NotificationAggregate notification = NotificationAggregate.builder()
                 .id("db-id-c")
                 .referenceNumber(ref)
                 .status(AMEND)
-                .origin(new Origin("FR", "yes", "EDITED"))
+                .notification(Notification.builder()
+                    .origin(new Origin("FR", "yes", "EDITED"))
+                    .build())
                 .submittedBaseline(baseline)
                 .submittedFulfilmentsBaseline(new ArrayList<>(priorFulfilments))
                 .fulfilments(List.of(new Document("obligationId", "in-flight-edit")))
@@ -2084,7 +2116,7 @@ class NotificationServiceTest {
             assertThat(result.getSubmittedFulfilmentsBaseline()).isNull();
             assertThat(result.getFulfilments()).isEqualTo(priorFulfilments);
             assertThat(result.getSubmittedAt()).isEqualTo(originalSubmittedAt);
-            assertThat(result.getOrigin().getInternalReference()).isEqualTo("ORIGINAL");
+            assertThat(result.getNotification().getOrigin().getInternalReference()).isEqualTo("ORIGINAL");
         }
 
         @Test
@@ -2161,7 +2193,7 @@ class NotificationServiceTest {
                 .id("db-id-s")
                 .referenceNumber(ref)
                 .status(AMEND)
-                .submittedBaseline(NotificationContentSnapshot.builder().build())
+                .submittedBaseline(Notification.builder().build())
                 .submittedFulfilmentsBaseline(new ArrayList<>(
                     List.of(new Document("obligationId", "prior"))))
                 .fulfilments(List.of(new Document("obligationId", "current")))
@@ -2216,7 +2248,9 @@ class NotificationServiceTest {
                 .referenceNumber(sourceRef)
                 .status(SUBMITTED)
                 .concurrencyToken(0L)
-                .origin(new Origin("GB", "no", "SOURCE-REF"))
+                .notification(Notification.builder()
+                    .origin(new Origin("GB", "no", "SOURCE-REF"))
+                    .build())
                 .fulfilments(sourceFulfilments)
                 .build();
 
@@ -2360,8 +2394,25 @@ class NotificationServiceTest {
         NotificationViewBuilder transport(Transport v) { this.transport = v; return this; }
 
         NotificationView build() {
-            return new NotificationView(
-                referenceNumber, 0L, status, created, origin, commodity, consignor, consignee, transport);
+            String ref = referenceNumber;
+            NotificationStatus s = status;
+            LocalDateTime c = created;
+            Origin o = origin;
+            Commodity cm = commodity;
+            ConsignmentParty cor = consignor;
+            ConsignmentParty cee = consignee;
+            Transport t = transport;
+            return new NotificationView() {
+                @Override public String getReferenceNumber() { return ref; }
+                @Override public Long getConcurrencyToken() { return 0L; }
+                @Override public NotificationStatus getStatus() { return s; }
+                @Override public LocalDateTime getCreated() { return c; }
+                @Override public Origin getOrigin() { return o; }
+                @Override public Commodity getCommodity() { return cm; }
+                @Override public ConsignmentParty getConsignor() { return cor; }
+                @Override public ConsignmentParty getConsignee() { return cee; }
+                @Override public Transport getTransport() { return t; }
+            };
         }
     }
 }

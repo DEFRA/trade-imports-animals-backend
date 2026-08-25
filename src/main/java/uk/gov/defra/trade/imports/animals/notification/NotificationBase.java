@@ -1,24 +1,14 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
-import java.time.LocalDateTime;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
-import org.springframework.data.mongodb.core.index.Indexed;
 
-/**
- * Shared fields for the notification domain. {@link NotificationAggregate} (entity) and
- * {@link NotificationDto} (API DTO) both extend this class to avoid duplicating the field
- * declarations. {@link NotificationAggregate} adds the MongoDB {@code @Id} and {@code @Document}
- * annotations; {@link NotificationDto} carries no additional fields.
- */
+/** Shared content fields extended by {@link Notification} (content sub-object) and {@link NotificationDto} (wire type). */
 @Data
 @SuperBuilder(toBuilder = true)
 @NoArgsConstructor
 public abstract class NotificationBase {
-
-    @Indexed(unique = true, sparse = true)
-    private String referenceNumber;
 
     private Origin origin;
 
@@ -43,10 +33,4 @@ public abstract class NotificationBase {
     private String cphNumber;
 
     private Transport transport;
-
-    private NotificationStatus status;
-
-    private LocalDateTime created;
-
-    private LocalDateTime updated;
 }

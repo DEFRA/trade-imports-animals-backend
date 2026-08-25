@@ -30,8 +30,8 @@ import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
 import uk.gov.defra.trade.imports.animals.notification.MeansOfTransport;
+import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
-import uk.gov.defra.trade.imports.animals.notification.NotificationContentSnapshot;
 import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
@@ -198,7 +198,7 @@ class NotificationIT extends IntegrationBase {
         NotificationPageResponse page = findAllNotificationsPage(1, null, matchingRef);
 
         assertThat(page.content()).hasSize(1);
-        assertThat(page.content().getFirst().referenceNumber()).isEqualTo(matchingRef);
+        assertThat(page.content().getFirst().getReferenceNumber()).isEqualTo(matchingRef);
         assertThat(page.totalElements()).isEqualTo(1);
     }
 
@@ -272,12 +272,12 @@ class NotificationIT extends IntegrationBase {
         // Then — arrival dates across pages are ordered descending
         assertThat(page0.content()).hasSize(2);
         assertThat(page0.content())
-            .extracting(n -> n.transport().getArrivalDate())
+            .extracting(n -> n.getTransport().getArrivalDate())
             .containsExactly(
                 LocalDate.of(2026, Month.JUNE, 15),
                 LocalDate.of(2026, Month.MARCH, 1));
         assertThat(page1.content()).hasSize(1);
-        assertThat(page1.content().getFirst().transport().getArrivalDate())
+        assertThat(page1.content().getFirst().getTransport().getArrivalDate())
             .isEqualTo(LocalDate.of(2026, Month.JANUARY, 10));
     }
 
@@ -316,8 +316,8 @@ class NotificationIT extends IntegrationBase {
         NotificationPageResponse page = findAllNotificationsPage(1, "createdAt,asc");
 
         assertThat(page.content()).hasSize(2);
-        assertThat(page.content().getFirst().referenceNumber()).isEqualTo(refOlder);
-        assertThat(page.content().get(1).referenceNumber()).isEqualTo(refNewer);
+        assertThat(page.content().getFirst().getReferenceNumber()).isEqualTo(refOlder);
+        assertThat(page.content().get(1).getReferenceNumber()).isEqualTo(refNewer);
     }
 
     @Test
@@ -360,7 +360,7 @@ class NotificationIT extends IntegrationBase {
             .containsOnlyNulls();
         assertThat(page1.content()).hasSize(2);
         assertThat(page1.content())
-            .extracting(n -> n.transport().getArrivalDate())
+            .extracting(n -> n.getTransport().getArrivalDate())
             .containsExactly(LocalDate.of(2026, Month.JANUARY, 10), LocalDate.of(2026, Month.JUNE, 15));
     }
 
@@ -400,7 +400,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(page0.totalElements()).isEqualTo(4);
         assertThat(page0.content()).hasSize(2);
         assertThat(page0.content())
-            .extracting(n -> n.transport().getArrivalDate())
+            .extracting(n -> n.getTransport().getArrivalDate())
             .containsExactly(LocalDate.of(2026, Month.JUNE, 15), LocalDate.of(2026, Month.JANUARY, 10));
         assertThat(page1.content()).hasSize(2);
         assertThat(page1.content())
@@ -453,16 +453,16 @@ class NotificationIT extends IntegrationBase {
 
         assertThat(all).hasSize(3);
         assertThat(all)
-            .extracting(NotificationView::status)
+            .extracting(NotificationView::getStatus)
             .containsExactlyInAnyOrder(
                 NotificationStatus.DRAFT,
                 NotificationStatus.DRAFT,
                 NotificationStatus.SUBMITTED);
-        assertThat(all.getFirst().referenceNumber()).isEqualTo(submittedRef);
-        assertThat(all.getFirst().status()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(all.getFirst().transport().getArrivalDate())
+        assertThat(all.getFirst().getReferenceNumber()).isEqualTo(submittedRef);
+        assertThat(all.getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(all.getFirst().getTransport().getArrivalDate())
             .isEqualTo(LocalDate.of(2026, Month.JUNE, 15));
-        assertThat(all.get(1).transport().getArrivalDate())
+        assertThat(all.get(1).getTransport().getArrivalDate())
             .isEqualTo(LocalDate.of(2026, Month.MARCH, 1));
         assertThat(extractArrivalDate(all.get(2))).isNull();
     }
@@ -505,10 +505,10 @@ class NotificationIT extends IntegrationBase {
         // Then — only DRAFT and SUBMITTED are returned; DELETED is excluded
         assertThat(notifications).hasSize(2);
         assertThat(notifications)
-            .extracting(NotificationView::referenceNumber)
+            .extracting(NotificationView::getReferenceNumber)
             .containsExactlyInAnyOrder(draftRef, submittedRef);
         assertThat(notifications)
-            .extracting(NotificationView::status)
+            .extracting(NotificationView::getStatus)
             .doesNotContain(NotificationStatus.DELETED);
     }
 
@@ -548,10 +548,10 @@ class NotificationIT extends IntegrationBase {
         allNotifications.addAll(page1Response.content());
         assertThat(allNotifications).hasSize(3);
         assertThat(allNotifications)
-            .extracting(NotificationView::referenceNumber)
+            .extracting(NotificationView::getReferenceNumber)
             .allMatch(ref -> ref != null && ref.startsWith("GBN-AG-"));
         assertThat(allNotifications)
-            .extracting(n -> n.origin().getCountryCode())
+            .extracting(n -> n.getOrigin().getCountryCode())
             .containsExactlyInAnyOrder("GB", "IE", "FR");
     }
 
@@ -666,12 +666,12 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody();
 
         assertThat(updated).isNotNull();
-        assertThat(updated.getTransport().getMeansOfTransport()).isEqualTo(MeansOfTransport.VESSEL);
-        assertThat(updated.getTransport().getTransitedCountries()).isNullOrEmpty();
+        assertThat(updated.getNotification().getTransport().getMeansOfTransport()).isEqualTo(MeansOfTransport.VESSEL);
+        assertThat(updated.getNotification().getTransport().getTransitedCountries()).isNullOrEmpty();
 
         NotificationAggregate persisted = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
-        assertThat(persisted.getTransport().getTransitedCountries()).isNullOrEmpty();
+        assertThat(persisted.getNotification().getTransport().getTransitedCountries()).isNullOrEmpty();
     }
 
     @Test
@@ -801,7 +801,7 @@ class NotificationIT extends IntegrationBase {
         // Then — the existing notification was NOT deleted (all-or-nothing)
         List<NotificationView> remaining = findAllNotifications();
         assertThat(remaining).hasSize(1);
-        assertThat(remaining.getFirst().referenceNumber()).isEqualTo(existingRef);
+        assertThat(remaining.getFirst().getReferenceNumber()).isEqualTo(existingRef);
     }
 
     @Test
@@ -902,9 +902,9 @@ class NotificationIT extends IntegrationBase {
         assertThat(reloaded.getSubmittedBaseline()).isNotNull();
         assertThat(reloaded.getSubmittedBaseline().getOrigin().getInternalReference())
             .isEqualTo("INTERNAL-DO-NOT-COPY");
-        assertThat(reloaded.getSubmittedBaseline().getOrigin()).isNotSameAs(reloaded.getOrigin());
+        assertThat(reloaded.getSubmittedBaseline().getOrigin()).isNotSameAs(reloaded.getNotification().getOrigin());
         assertThat(reloaded.getSubmittedBaseline().getCommodity().getName())
-            .isEqualTo(beforeAmend.getCommodity().getName());
+            .isEqualTo(beforeAmend.getNotification().getCommodity().getName());
     }
 
     @Test
@@ -967,7 +967,7 @@ class NotificationIT extends IntegrationBase {
         // stale copy of the address beside the reference that exists to avoid exactly that.
         NotificationAggregate stored = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
-        assertThat(stored.getConsignor()).isEqualTo(ConsignmentParty.reference(ADDRESS_ID));
+        assertThat(stored.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(ADDRESS_ID));
     }
 
     @Test
@@ -1038,19 +1038,19 @@ class NotificationIT extends IntegrationBase {
             .orElseThrow();
         assertThat(inAmendInMongo.getStatus()).isEqualTo(NotificationStatus.AMEND);
         assertThat(inAmendInMongo.getSubmittedBaseline()).isNotNull();
-        assertAmendableContentMatches(submittedInMongo, inAmendInMongo.getSubmittedBaseline());
+        assertAmendableContentMatches(submittedInMongo.getNotification(), inAmendInMongo.getSubmittedBaseline());
 
         // Simulate trader edits persisted to Mongo during AMEND
-        inAmendInMongo.getOrigin().setInternalReference("EDITED-REF");
-        inAmendInMongo.getOrigin().setCountryCode("FR");
-        inAmendInMongo.getCommodity().setName("Changed commodity");
-        inAmendInMongo.setReasonForImport("changedReason");
-        inAmendInMongo.setCphNumber("99/999/9999");
+        inAmendInMongo.getNotification().getOrigin().setInternalReference("EDITED-REF");
+        inAmendInMongo.getNotification().getOrigin().setCountryCode("FR");
+        inAmendInMongo.getNotification().getCommodity().setName("Changed commodity");
+        inAmendInMongo.getNotification().setReasonForImport("changedReason");
+        inAmendInMongo.getNotification().setCphNumber("99/999/9999");
         notificationRepository.save(inAmendInMongo);
 
         NotificationAggregate editedInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
-        assertThat(editedInMongo.getOrigin().getInternalReference()).isEqualTo("EDITED-REF");
+        assertThat(editedInMongo.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-REF");
         assertThat(editedInMongo.getSubmittedBaseline()).isNotNull();
 
         // When — cancel amendment via API
@@ -1063,7 +1063,7 @@ class NotificationIT extends IntegrationBase {
             .orElseThrow();
         assertThat(restoredInMongo.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(restoredInMongo.getSubmittedBaseline()).isNull();
-        assertAmendableContentMatches(submittedInMongo, restoredInMongo);
+        assertAmendableContentMatches(submittedInMongo.getNotification(), restoredInMongo.getNotification());
     }
 
     @Test
@@ -1121,7 +1121,7 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         NotificationAggregate inAmend = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
-        inAmend.getOrigin().setInternalReference("EDITED-AND-KEPT");
+        inAmend.getNotification().getOrigin().setInternalReference("EDITED-AND-KEPT");
         notificationRepository.save(inAmend);
         assertThat(inAmend.getSubmittedBaseline()).isNotNull();
 
@@ -1135,11 +1135,11 @@ class NotificationIT extends IntegrationBase {
 
         // Then — edited content kept, baseline cleared
         assertThat(resubmitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(resubmitted.getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
+        assertThat(resubmitted.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
 
         NotificationAggregate reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
         assertThat(reloaded.getSubmittedBaseline()).isNull();
-        assertThat(reloaded.getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
+        assertThat(reloaded.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
     }
 
     @Test
@@ -1525,8 +1525,8 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
         assertThat(source).isNotNull();
-        assertThat(source.getConsignor().getAddressId()).isEqualTo(ADDRESS_ID);
-        assertThat(source.getConsignor().getName()).isNull();
+        assertThat(source.getNotification().getConsignor().getAddressId()).isEqualTo(ADDRESS_ID);
+        assertThat(source.getNotification().getConsignor().getName()).isNull();
 
         NotificationAggregate copy = webClient("NoAuth")
             .post()
@@ -1538,7 +1538,7 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
         assertThat(copy).isNotNull();
-        assertThat(copy.getConsignor()).isEqualTo(ConsignmentParty.reference(ADDRESS_ID));
+        assertThat(copy.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(ADDRESS_ID));
     }
 
     @Test
@@ -1631,15 +1631,15 @@ class NotificationIT extends IntegrationBase {
     }
 
     private void assertNotificationMappedFields(NotificationAggregate notification, String internalReference) {
-        assertThat(notification.getOrigin())
+        assertThat(notification.getNotification().getOrigin())
             .extracting(Origin::getCountryCode, Origin::getRequiresRegionCode, Origin::getInternalReference)
             .containsExactly("GB", "true", internalReference);
 
-        assertThat(notification.getCommodity())
+        assertThat(notification.getNotification().getCommodity())
             .extracting(Commodity::getName)
             .isEqualTo("Live bovine animals");
 
-        CommodityComplement complement = notification.getCommodity().getCommodityComplement().getFirst();
+        CommodityComplement complement = notification.getNotification().getCommodity().getCommodityComplement().getFirst();
         assertThat(complement)
             .extracting(
                 CommodityComplement::getTypeOfCommodity,
@@ -1658,15 +1658,15 @@ class NotificationIT extends IntegrationBase {
                 Species::getPassport)
             .containsExactly("BOV", "Bovine", 10, 5, "UK01234567890", "UK0123456700999");
 
-        assertThat(notification)
-            .extracting(NotificationAggregate::getReasonForImport, NotificationAggregate::getCphNumber)
+        assertThat(notification.getNotification())
+            .extracting(Notification::getReasonForImport, Notification::getCphNumber)
             .containsExactly("PERMANENT", "22/123/4567");
 
-        assertThat(notification.getAdditionalDetails())
+        assertThat(notification.getNotification().getAdditionalDetails())
             .extracting(AdditionalDetails::getCertifiedFor, AdditionalDetails::getUnweanedAnimals)
             .containsExactly("HUMAN_CONSUMPTION", "true");
 
-        assertThat(notification.getTransport())
+        assertThat(notification.getNotification().getTransport())
             .extracting(
                 Transport::getPortOfEntry,
                 Transport::getArrivalDate,
@@ -1683,22 +1683,7 @@ class NotificationIT extends IntegrationBase {
                 List.of("FR", "DE"));
     }
 
-    private void assertAmendableContentMatches(NotificationAggregate expected, NotificationAggregate actual) {
-        assertThat(actual.getOrigin()).isEqualTo(expected.getOrigin());
-        assertThat(actual.getReasonForImport()).isEqualTo(expected.getReasonForImport());
-        assertThat(actual.getCommodity()).isEqualTo(expected.getCommodity());
-        assertThat(actual.getAdditionalDetails()).isEqualTo(expected.getAdditionalDetails());
-        assertThat(actual.getPlaceOfOrigin()).isEqualTo(expected.getPlaceOfOrigin());
-        assertThat(actual.getConsignor()).isEqualTo(expected.getConsignor());
-        assertThat(actual.getConsignee()).isEqualTo(expected.getConsignee());
-        assertThat(actual.getImporter()).isEqualTo(expected.getImporter());
-        assertThat(actual.getDestination()).isEqualTo(expected.getDestination());
-        assertThat(actual.getConsignment()).isEqualTo(expected.getConsignment());
-        assertThat(actual.getCphNumber()).isEqualTo(expected.getCphNumber());
-        assertThat(actual.getTransport()).isEqualTo(expected.getTransport());
-    }
-
-    private void assertAmendableContentMatches(NotificationAggregate expected, NotificationContentSnapshot actual) {
+    private void assertAmendableContentMatches(Notification expected, Notification actual) {
         assertThat(actual.getOrigin()).isEqualTo(expected.getOrigin());
         assertThat(actual.getReasonForImport()).isEqualTo(expected.getReasonForImport());
         assertThat(actual.getCommodity()).isEqualTo(expected.getCommodity());
@@ -1809,19 +1794,19 @@ class NotificationIT extends IntegrationBase {
         assertThat(copy.getStatus()).isEqualTo(NotificationStatus.DRAFT);
 
         // Retained fields
-        assertThat(copy.getOrigin().getCountryCode()).isEqualTo("DE");
-        assertThat(copy.getOrigin().getRequiresRegionCode()).isEqualTo("yes");
-        assertThat(copy.getReasonForImport()).isEqualTo("internalMarket");
-        assertThat(copy.getCommodity().getName()).isEqualTo("Live bovine animals");
-        assertThat(copy.getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
-        assertThat(copy.getCphNumber()).isEqualTo("12/345/6789");
+        assertThat(copy.getNotification().getOrigin().getCountryCode()).isEqualTo("DE");
+        assertThat(copy.getNotification().getOrigin().getRequiresRegionCode()).isEqualTo("yes");
+        assertThat(copy.getNotification().getReasonForImport()).isEqualTo("internalMarket");
+        assertThat(copy.getNotification().getCommodity().getName()).isEqualTo("Live bovine animals");
+        assertThat(copy.getNotification().getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
+        assertThat(copy.getNotification().getCphNumber()).isEqualTo("12/345/6789");
 
         // Excluded fields
-        assertThat(copy.getOrigin().getInternalReference()).isNull();
-        assertThat(copy.getAdditionalDetails().getUnweanedAnimals()).isNull();
-        assertThat(copy.getTransport()).isNull();
-        assertThat(copy.getConsignment()).isNull();
-        CommodityComplement cc = copy.getCommodity().getCommodityComplement().getFirst();
+        assertThat(copy.getNotification().getOrigin().getInternalReference()).isNull();
+        assertThat(copy.getNotification().getAdditionalDetails().getUnweanedAnimals()).isNull();
+        assertThat(copy.getNotification().getTransport()).isNull();
+        assertThat(copy.getNotification().getConsignment()).isNull();
+        CommodityComplement cc = copy.getNotification().getCommodity().getCommodityComplement().getFirst();
         assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
         assertThat(cc.getTotalNoOfAnimals()).isNull();
         assertThat(cc.getTotalNoOfPackages()).isNull();
@@ -1829,9 +1814,9 @@ class NotificationIT extends IntegrationBase {
 
         // Original unchanged
         NotificationAggregate original = notificationRepository.findByReferenceNumber(sourceRef).orElseThrow();
-        assertThat(original.getOrigin().getInternalReference()).isEqualTo("INTERNAL-DO-NOT-COPY");
-        assertThat(original.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("yes");
-        assertThat(original.getTransport().getPortOfEntry()).isEqualTo("GBDVR");
+        assertThat(original.getNotification().getOrigin().getInternalReference()).isEqualTo("INTERNAL-DO-NOT-COPY");
+        assertThat(original.getNotification().getAdditionalDetails().getUnweanedAnimals()).isEqualTo("yes");
+        assertThat(original.getNotification().getTransport().getPortOfEntry()).isEqualTo("GBDVR");
     }
 
     @Test
@@ -1855,11 +1840,11 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
         assertThat(copy).isNotNull();
-        assertThat(copy.getPlaceOfOrigin()).isEqualTo(NotificationTestData.placesOfOrigin().getFirst());
-        assertThat(copy.getConsignor()).isEqualTo(NotificationTestData.consignors().getFirst());
-        assertThat(copy.getConsignee()).isEqualTo(NotificationTestData.consignees().getFirst());
-        assertThat(copy.getImporter()).isEqualTo(NotificationTestData.importers().getFirst());
-        assertThat(copy.getDestination()).isEqualTo(NotificationTestData.destinations().getFirst());
+        assertThat(copy.getNotification().getPlaceOfOrigin()).isEqualTo(NotificationTestData.placesOfOrigin().getFirst());
+        assertThat(copy.getNotification().getConsignor()).isEqualTo(NotificationTestData.consignors().getFirst());
+        assertThat(copy.getNotification().getConsignee()).isEqualTo(NotificationTestData.consignees().getFirst());
+        assertThat(copy.getNotification().getImporter()).isEqualTo(NotificationTestData.importers().getFirst());
+        assertThat(copy.getNotification().getDestination()).isEqualTo(NotificationTestData.destinations().getFirst());
     }
 
     @Test
@@ -2061,7 +2046,7 @@ class NotificationIT extends IntegrationBase {
 
         // And the stored notification reflects the first PUT's write, not the stale one.
         NotificationAggregate stored = notificationRepository.findByReferenceNumber(ref).orElseThrow();
-        assertThat(stored.getOrigin().getInternalReference()).isEqualTo("FIRST");
+        assertThat(stored.getNotification().getOrigin().getInternalReference()).isEqualTo("FIRST");
     }
 
     private String createAndSubmitNotificationWithFullContent() {
@@ -2177,9 +2162,9 @@ class NotificationIT extends IntegrationBase {
     }
 
     private LocalDate extractArrivalDate(NotificationView notification) {
-        if (notification.transport() == null) {
+        if (notification.getTransport() == null) {
             return null;
         }
-        return notification.transport().getArrivalDate();
+        return notification.getTransport().getArrivalDate();
     }
 }

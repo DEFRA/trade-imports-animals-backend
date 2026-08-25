@@ -49,8 +49,8 @@ public class ConsignmentPartyResolver {
      *
      * <p>Mutates the given instance, so pass a copy — what is stored must keep the reference alone.
      */
-    public NotificationAggregate resolveForSubmission(NotificationAggregate notification, String organisationId) {
-        return resolveParties(notification, organisationId, true);
+    public NotificationAggregate resolveForSubmission(NotificationAggregate notificationAggregate, String organisationId) {
+        return resolveParties(notificationAggregate, organisationId, true);
     }
 
     /**
@@ -61,19 +61,23 @@ public class ConsignmentPartyResolver {
      *
      * <p>Mutates the given instance, so pass a copy — what is stored must keep the reference alone.
      */
-    public NotificationAggregate resolveForDraft(NotificationAggregate notification, String organisationId) {
+    public NotificationAggregate resolveForDraft(NotificationAggregate notificationAggregate, String organisationId) {
         if (organisationId == null || organisationId.isBlank()) {
             // No organisation to look in. The draft still saves; the names simply stay unresolved.
-            return notification;
+            return notificationAggregate;
         }
-        return resolveParties(notification, organisationId, false);
+        return resolveParties(notificationAggregate, organisationId, false);
     }
 
     private NotificationAggregate resolveParties(
-        NotificationAggregate notification, String organisationId, boolean failOnMiss) {
+        NotificationAggregate notificationAggregate, String organisationId, boolean failOnMiss) {
+        Notification notification = notificationAggregate.getNotification();
+        if (notification == null) {
+            return notificationAggregate;
+        }
         List<String> addressIds = referencedAddressIds(notification);
         if (addressIds.isEmpty()) {
-            return notification;
+            return notificationAggregate;
         }
         if (failOnMiss && (organisationId == null || organisationId.isBlank())) {
             throw new BadRequestException(
@@ -90,7 +94,7 @@ public class ConsignmentPartyResolver {
             resolveIfReference(notification.getImporter(), failOnMiss, lookups));
         notification.setDestination(
             resolveIfReference(notification.getDestination(), failOnMiss, lookups));
-        return notification;
+        return notificationAggregate;
     }
 
     private Map<String, Optional<ConsignmentParty>> lookUpAll(
@@ -164,7 +168,7 @@ public class ConsignmentPartyResolver {
      * are always inline, so they are not read here even if one arrives carrying an
      * {@code addressId}.
      */
-    private static List<String> referencedAddressIds(NotificationAggregate notification) {
+    private static List<String> referencedAddressIds(Notification notification) {
         return Stream.of(
                 notification.getConsignor(),
                 notification.getConsignee(),

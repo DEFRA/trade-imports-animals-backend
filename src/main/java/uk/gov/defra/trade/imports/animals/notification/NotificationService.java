@@ -12,6 +12,7 @@ import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.apache.commons.lang3.StringUtils;
 import org.bson.Document;
+import org.mapstruct.factory.Mappers;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
@@ -42,6 +43,8 @@ public class NotificationService {
     private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
     private static final int MAX_REF_RETRIES = 3;
     private static final int MAX_LOCK_RETRIES = 2;
+    private static final NotificationContentMapper CONTENT_MAPPER =
+        Mappers.getMapper(NotificationContentMapper.class);
   
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
@@ -212,7 +215,7 @@ public class NotificationService {
                 "Cannot amend notification with status: " + notification.getStatus());
         }
 
-        notification.setSubmittedBaseline(NotificationContentSnapshot.from(notification));
+        notification.setSubmittedBaseline(CONTENT_MAPPER.deepClone(notification.getNotification()));
         List<Document> currentFulfilments = notification.getFulfilments();
         notification.setSubmittedFulfilmentsBaseline(
             currentFulfilments == null ? null : deepCopyFulfilments(currentFulfilments));
@@ -241,7 +244,7 @@ public class NotificationService {
                 "Cannot cancel amendment: no submitted baseline stored for notification");
         }
 
-        notification.getSubmittedBaseline().applyTo(notification);
+        notification.setNotification(CONTENT_MAPPER.deepClone(notification.getSubmittedBaseline()));
         notification.setSubmittedBaseline(null);
         List<Document> priorFulfilments = notification.getSubmittedFulfilmentsBaseline();
         notification.setFulfilments(
@@ -299,9 +302,14 @@ public class NotificationService {
      * draft edit is best-effort, so an address deleted since does not block the save.
      */
     private NotificationAggregate resolvedForOutbox(
-        NotificationAggregate notification, OutboxEventType eventType, Actor actor) {
+        NotificationAggregate notificationAggregate, OutboxEventType eventType, Actor actor) {
         String organisationId = actor != null ? actor.getOrganisationId() : null;
-        NotificationAggregate copy = notification.toBuilder().build();
+        NotificationAggregate copy = notificationAggregate.toBuilder().build();
+        // toBuilder is shallow; deep-clone the notification so the resolver's party mutations
+        // don't leak back into the persisted aggregate.
+        if (copy.getNotification() != null) {
+            copy.setNotification(CONTENT_MAPPER.deepClone(copy.getNotification()));
+        }
         return eventType == OutboxEventType.NOTIFICATION_EDITED
             ? consignmentPartyResolver.resolveForDraft(copy, organisationId)
             : consignmentPartyResolver.resolveForSubmission(copy, organisationId);
@@ -487,7 +495,11 @@ public class NotificationService {
             OutboxEventType.NOTIFICATION_EDITED, actor);
     }
 
-    private void setNotificationDetails(NotificationDto dto, NotificationAggregate notification) {
+    private void setNotificationDetails(NotificationDto dto, NotificationAggregate notificationAggregate) {
+        if (notificationAggregate.getNotification() == null) {
+            notificationAggregate.setNotification(new Notification());
+        }
+        Notification notification = notificationAggregate.getNotification();
         notification.setOrigin(dto.getOrigin());
         notification.setCommodity(dto.getCommodity());
         notification.setReasonForImport(dto.getReasonForImport());
@@ -502,8 +514,8 @@ public class NotificationService {
         notification.setCphNumber(dto.getCphNumber());
         notification.setTransport(dto.getTransport());
         notification.setConsignment(ConsignmentParty.inlineOnly(dto.getConsignment()));
-        notification.setFulfilments(dto.getFulfilments());
-        notification.setUpdated(LocalDateTime.now());
+        notificationAggregate.setFulfilments(dto.getFulfilments());
+        notificationAggregate.setUpdated(LocalDateTime.now());
     }
 
     private void createNotificationAuditRecord(

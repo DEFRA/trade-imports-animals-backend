@@ -1,13 +1,11 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDateTime;
 import java.util.List;
+import lombok.Builder;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import lombok.ToString;
-import lombok.experimental.SuperBuilder;
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.bson.Document;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Version;
@@ -15,21 +13,33 @@ import org.springframework.data.mongodb.core.index.Indexed;
 
 @org.springframework.data.mongodb.core.mapping.Document(collection = "notification")
 @Data
-@SuperBuilder(toBuilder = true)
+@Builder(toBuilder = true)
 @NoArgsConstructor
-@EqualsAndHashCode(callSuper = true)
-@ToString(callSuper = true)
-public class NotificationAggregate extends NotificationBase {
+@lombok.AllArgsConstructor
+public class NotificationAggregate {
 
     @Id
     private String id;
 
+    @Indexed(unique = true, sparse = true)
+    private String referenceNumber;
+
     @Version
     private Long concurrencyToken;
 
-    /** Submitted notification content captured when an amendment begins. */
-    @JsonIgnore
-    private NotificationContentSnapshot submittedBaseline;
+    private NotificationStatus status;
+
+    private LocalDateTime created;
+
+    private LocalDateTime updated;
+
+    /**
+     * Timestamp of the most recent submission — set the first time the notification is submitted
+     * (from DRAFT) and refreshed whenever it is re-submitted from AMEND. Left unchanged by amend
+     * and cancel-amend, so it always points at the latest submission event rather than the
+     * original one. Set by {@code submitNotification}; carried into the fulfilment-view projection.
+     */
+    private LocalDateTime submittedAt;
 
     /**
      * When this notification becomes eligible for automatic expiry, anchored to {@code created}.
@@ -42,16 +52,15 @@ public class NotificationAggregate extends NotificationBase {
     @Indexed
     private LocalDateTime expireAt;
 
-    /**
-     * Timestamp of the most recent submission — set the first time the notification is submitted
-     * (from DRAFT) and refreshed whenever it is re-submitted from AMEND. Left unchanged by amend
-     * and cancel-amend, so it always points at the latest submission event rather than the
-     * original one. Set by {@code submitNotification}; carried into the fulfilment-view projection.
-     */
-    private LocalDateTime submittedAt;
+    /** The notification content — parties, commodity, transport, etc. Symmetric to {@link #fulfilments}. */
+    private Notification notification;
 
     /** Opaque obligation-fulfilment payload — persisted byte-faithfully; never interpreted by the backend. */
     private List<Document> fulfilments;
+
+    /** Pre-amend snapshot of {@link #notification}. Non-null iff status is AMEND; restored by cancelAmend, cleared by submit-from-amend. */
+    @JsonIgnore
+    private Notification submittedBaseline;
 
     /** Pre-amend snapshot of {@link #fulfilments}. Non-null iff status is AMEND; restored by cancelAmend, cleared by submit-from-amend. */
     @JsonIgnore

@@ -8,7 +8,7 @@ import org.springframework.data.domain.Sort;
  */
 public final class NotificationSort {
 
-    private static final String ARRIVAL_DATE_FIELD = "transport.arrivalDate";
+    private static final String ARRIVAL_DATE_FIELD = "notification.transport.arrivalDate";
     private static final String CREATED_AT_FIELD = "created";
 
     private NotificationSort() {

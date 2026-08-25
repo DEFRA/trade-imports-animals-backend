@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
 import java.util.List;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
+import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
 
@@ -20,26 +21,27 @@ public record SpecifiedConsignment(
     List<ConsignmentItem> includedConsignmentItem
 ) {
 
-    static SpecifiedConsignment from(NotificationAggregate notification) {
-        Transport transport = notification.getTransport();
-        AdditionalDetails additionalDetails = notification.getAdditionalDetails();
+    static SpecifiedConsignment from(NotificationAggregate notificationAggregate) {
+        Notification notification = notificationAggregate.getNotification();
+        Transport transport = notification != null ? notification.getTransport() : null;
+        AdditionalDetails additionalDetails = notification != null ? notification.getAdditionalDetails() : null;
         // Tri-state: TRUE / FALSE when supplied, null when the field is absent upstream.
         Boolean isOrHasUnweanedAnimals =
             additionalDetails == null || additionalDetails.getUnweanedAnimals() == null
                 ? null
                 : Boolean.valueOf(additionalDetails.getUnweanedAnimals());
         return new SpecifiedConsignment(
-            TradeParty.from(notification.getConsignor()),
-            TradeParty.from(notification.getConsignee()),
-            TradeParty.from(notification.getPlaceOfOrigin()),
-            TradeParty.from(notification.getDestination()),
-            TradeParty.from(notification.getImporter()),
+            TradeParty.from(notification != null ? notification.getConsignor() : null),
+            TradeParty.from(notification != null ? notification.getConsignee() : null),
+            TradeParty.from(notification != null ? notification.getPlaceOfOrigin() : null),
+            TradeParty.from(notification != null ? notification.getDestination() : null),
+            TradeParty.from(notification != null ? notification.getImporter() : null),
             TradeParty.from(transport != null ? transport.getTransporter() : null),
-            TradeCountry.from(notification.getOrigin()),
+            TradeCountry.from(notification != null ? notification.getOrigin() : null),
             LogisticsLocation.from(transport != null ? transport.getPortOfEntry() : null),
             LogisticsTransportMovement.from(transport),
             null,
             isOrHasUnweanedAnimals,
-            ConsignmentItem.from(notification.getCommodity()));
+            ConsignmentItem.from(notification != null ? notification.getCommodity() : null));
     }
 }

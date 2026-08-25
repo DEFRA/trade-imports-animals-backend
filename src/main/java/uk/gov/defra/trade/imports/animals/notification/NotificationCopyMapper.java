@@ -20,21 +20,25 @@ import org.springframework.stereotype.Component;
 public class NotificationCopyMapper {
 
     public NotificationDto toCopyDto(NotificationAggregate source) {
-        return NotificationDto.builder()
-            .origin(mapOrigin(source.getOrigin()))
-            .commodity(mapCommodity(source.getCommodity()))
-            .reasonForImport(source.getReasonForImport())
-            .additionalDetails(mapAdditionalDetails(source.getAdditionalDetails()))
-            .placeOfOrigin(mapConsignmentParty(source.getPlaceOfOrigin()))
-            .consignor(mapConsignmentParty(source.getConsignor()))
-            .consignee(mapConsignmentParty(source.getConsignee()))
-            .importer(mapConsignmentParty(source.getImporter()))
-            .destination(mapConsignmentParty(source.getDestination()))
-            .cphNumber(source.getCphNumber())
-            .fulfilments(source.getFulfilments() == null ? null : new ArrayList<>(source.getFulfilments()))
+        Notification notification = source.getNotification();
+        NotificationDto.NotificationDtoBuilder<?, ?> builder = NotificationDto.builder()
+            .fulfilments(source.getFulfilments() == null ? null : new ArrayList<>(source.getFulfilments()));
+        if (notification != null) {
+            builder
+                .origin(mapOrigin(notification.getOrigin()))
+                .commodity(mapCommodity(notification.getCommodity()))
+                .reasonForImport(notification.getReasonForImport())
+                .additionalDetails(mapAdditionalDetails(notification.getAdditionalDetails()))
+                .placeOfOrigin(mapConsignmentParty(notification.getPlaceOfOrigin()))
+                .consignor(mapConsignmentParty(notification.getConsignor()))
+                .consignee(mapConsignmentParty(notification.getConsignee()))
+                .importer(mapConsignmentParty(notification.getImporter()))
+                .destination(mapConsignmentParty(notification.getDestination()))
+                .cphNumber(notification.getCphNumber());
             // transport intentionally omitted — logistical fields (portOfEntry, arrivalDate, transporter) are reset on copy
             // consignment intentionally omitted — contact address is reset on copy
-            .build();
+        }
+        return builder.build();
     }
 
     private ConsignmentParty mapConsignmentParty(ConsignmentParty source) {
