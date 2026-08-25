@@ -3,7 +3,7 @@ package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 
 public record ExchangedDocument(
@@ -19,7 +19,7 @@ public record ExchangedDocument(
 
     private static final int VERSION_ID = 1;
 
-    static ExchangedDocument from(Notification notification) {
+    static ExchangedDocument from(NotificationAggregate notification) {
         Origin origin = notification.getOrigin();
         return new ExchangedDocument(
             notification.getReferenceNumber(),

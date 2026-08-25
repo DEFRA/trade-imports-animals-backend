@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import software.amazon.awssdk.services.sqs.model.Message;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxPublishService;
@@ -48,7 +48,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         assertThat(publishedMessage.get("aggregateVersion").asLong()).isEqualTo(1L);
         assertThat(publishedMessage.get("eventId").asText()).isEqualTo(event.getEventId());
         assertThat(publishedMessage.get("aggregateId").asText()).isEqualTo(event.getAggregateId());
-        assertThat(publishedMessage.get("aggregateType").asText()).isEqualTo("Notification");
+        assertThat(publishedMessage.get("aggregateType").asText()).isEqualTo("NotificationAggregate");
         assertThat(publishedMessage.get("subType").asText()).isEqualTo("GBN-AG");
         assertThat(publishedMessage.get("eventType").asText())
             .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
@@ -83,7 +83,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
     @Test
     void publishUnpublishedEvents_shouldPublishAggregateVersionsInOrder() throws Exception {
         String referenceNumber = createAndSubmitNotification("trace-v1");
-        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate notification = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         notification.setStatus(NotificationStatus.DRAFT);
         notificationRepository.save(notification);

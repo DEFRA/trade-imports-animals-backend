@@ -70,7 +70,7 @@ public class DocumentController {
   @ApiResponse(responseCode = "201", description = "Upload session created",
       content = @Content(schema = @Schema(implementation = DocumentUploadResponse.class)))
   @ApiResponse(responseCode = "400", description = "Validation error", content = @Content)
-  @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
+  @ApiResponse(responseCode = "404", description = "NotificationAggregate not found", content = @Content)
   @Timed("document.initiate")
   public ResponseEntity<DocumentUploadResponse> initiate(
       @PathVariable String ref,
@@ -96,7 +96,7 @@ public class DocumentController {
       description = "Returns all accompanying documents for a notification reference")
   @ApiResponse(responseCode = "200", description = "Document list returned",
       content = @Content(schema = @Schema(implementation = DocumentListResponse.class)))
-  @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
+  @ApiResponse(responseCode = "404", description = "NotificationAggregate not found", content = @Content)
   @Timed("document.list")
   public ResponseEntity<DocumentListResponse> list(@PathVariable String ref) {
     log.info("GET /notifications/{}/document-uploads", ref);

@@ -1,7 +1,7 @@
 package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 
 public record GbnAgEventData(
     @JsonProperty("$model") String model,
@@ -13,7 +13,7 @@ public record GbnAgEventData(
     public static final String MODEL_VALUE = "defra/certificate-internal/1";
     public static final String TYPE_VALUE = "gbn-ag";
 
-    public static GbnAgEventData from(Notification notification) {
+    public static GbnAgEventData from(NotificationAggregate notification) {
         if (notification == null) {
             return null;
         }

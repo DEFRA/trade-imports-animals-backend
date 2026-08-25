@@ -25,7 +25,7 @@ class NotificationContentSnapshotTest {
         void from_shouldDeepCopyAllAmendableFields() {
             // Given
             CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species()));
-            Notification source = fullNotification(complement);
+            NotificationAggregate source = fullNotification(complement);
 
             // When
             NotificationContentSnapshot snapshot = NotificationContentSnapshot.from(source);
@@ -52,7 +52,7 @@ class NotificationContentSnapshotTest {
         void from_shouldNotShareNestedReferencesWithSource() {
             // Given
             CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species()));
-            Notification source = fullNotification(complement);
+            NotificationAggregate source = fullNotification(complement);
             NotificationContentSnapshot snapshot = NotificationContentSnapshot.from(source);
 
             // When
@@ -75,7 +75,7 @@ class NotificationContentSnapshotTest {
         @Test
         void from_shouldUseEmptyList_whenCommodityComplementIsNull() {
             // Given
-            Notification source = Notification.builder()
+            NotificationAggregate source = NotificationAggregate.builder()
                 .commodity(Commodity.builder().name("Cattle").commodityComplement(null).build())
                 .build();
 
@@ -89,7 +89,7 @@ class NotificationContentSnapshotTest {
         @Test
         void from_shouldHandleNullNestedObjects() {
             // Given
-            Notification source = Notification.builder()
+            NotificationAggregate source = NotificationAggregate.builder()
                 .origin(null)
                 .commodity(null)
                 .additionalDetails(null)
@@ -121,7 +121,7 @@ class NotificationContentSnapshotTest {
         @Test
         void from_shouldHandleTransportWithoutTransporter() {
             // Given
-            Notification source = Notification.builder()
+            NotificationAggregate source = NotificationAggregate.builder()
                 .transport(Transport.builder()
                     .portOfEntry("Dover")
                     .arrivalDate(LocalDate.of(2026, 3, 1))
@@ -140,7 +140,7 @@ class NotificationContentSnapshotTest {
         @Test
         void from_shouldHandlePartyWithNullAddress() {
             // Given
-            Notification source = Notification.builder()
+            NotificationAggregate source = NotificationAggregate.builder()
                 .consignor(ConsignmentParty.builder().name("No address party").address(null).build())
                 .build();
 
@@ -154,7 +154,7 @@ class NotificationContentSnapshotTest {
 
         @Test
         void from_shouldRoundTripReferencedPartyAddressId() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = NotificationAggregate.builder()
                 .consignor(reference("addr-1"))
                 .build();
 
@@ -174,7 +174,7 @@ class NotificationContentSnapshotTest {
             // Given
             CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species()));
             NotificationContentSnapshot snapshot = NotificationContentSnapshot.from(fullNotification(complement));
-            Notification target = Notification.builder()
+            NotificationAggregate target = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-RESTORE")
                 .build();
 
@@ -194,18 +194,18 @@ class NotificationContentSnapshotTest {
         @Test
         void applyTo_shouldDeepCopyOntoTarget() {
             // Given
-            Notification source = fullNotification(
+            NotificationAggregate source = fullNotification(
                 new CommodityComplement("LIVE", 10, 5, List.of(species())));
             NotificationContentSnapshot snapshot = NotificationContentSnapshot.from(source);
-            Notification target = Notification.builder().build();
+            NotificationAggregate target = NotificationAggregate.builder().build();
             snapshot.applyTo(target);
 
             // When
             target.getConsignor().setName("Mutated on target");
-            snapshot.applyTo(Notification.builder().build());
+            snapshot.applyTo(NotificationAggregate.builder().build());
 
             // Then — re-apply from unchanged snapshot still restores original value
-            Notification secondTarget = Notification.builder().build();
+            NotificationAggregate secondTarget = NotificationAggregate.builder().build();
             snapshot.applyTo(secondTarget);
             assertThat(secondTarget.getConsignor().getName()).isEqualTo(consignors().getFirst().getName());
         }
@@ -214,7 +214,7 @@ class NotificationContentSnapshotTest {
         void applyTo_shouldClearFields_whenSnapshotValuesAreNull() {
             // Given
             NotificationContentSnapshot snapshot = NotificationContentSnapshot.builder().build();
-            Notification target = fullNotification(
+            NotificationAggregate target = fullNotification(
                 new CommodityComplement("LIVE", 10, 5, List.of(species())));
 
             // When
@@ -231,8 +231,8 @@ class NotificationContentSnapshotTest {
         @Test
         void applyTo_shouldRestoreReferencedPartyAddressId() {
             NotificationContentSnapshot snapshot = NotificationContentSnapshot.from(
-                Notification.builder().consignor(reference("addr-1")).build());
-            Notification target = Notification.builder().build();
+                NotificationAggregate.builder().consignor(reference("addr-1")).build());
+            NotificationAggregate target = NotificationAggregate.builder().build();
 
             snapshot.applyTo(target);
 
@@ -242,8 +242,8 @@ class NotificationContentSnapshotTest {
         }
     }
 
-    private static Notification fullNotification(CommodityComplement complement) {
-        return Notification.builder()
+    private static NotificationAggregate fullNotification(CommodityComplement complement) {
+        return NotificationAggregate.builder()
             .origin(new Origin("DE", "yes", "INTERNAL-REF"))
             .reasonForImport("internalMarket")
             .commodity(Commodity.builder()

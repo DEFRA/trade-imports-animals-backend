@@ -49,7 +49,7 @@ public class ConsignmentPartyResolver {
      *
      * <p>Mutates the given instance, so pass a copy — what is stored must keep the reference alone.
      */
-    public Notification resolveForSubmission(Notification notification, String organisationId) {
+    public NotificationAggregate resolveForSubmission(NotificationAggregate notification, String organisationId) {
         return resolveParties(notification, organisationId, true);
     }
 
@@ -61,7 +61,7 @@ public class ConsignmentPartyResolver {
      *
      * <p>Mutates the given instance, so pass a copy — what is stored must keep the reference alone.
      */
-    public Notification resolveForDraft(Notification notification, String organisationId) {
+    public NotificationAggregate resolveForDraft(NotificationAggregate notification, String organisationId) {
         if (organisationId == null || organisationId.isBlank()) {
             // No organisation to look in. The draft still saves; the names simply stay unresolved.
             return notification;
@@ -69,8 +69,8 @@ public class ConsignmentPartyResolver {
         return resolveParties(notification, organisationId, false);
     }
 
-    private Notification resolveParties(
-        Notification notification, String organisationId, boolean failOnMiss) {
+    private NotificationAggregate resolveParties(
+        NotificationAggregate notification, String organisationId, boolean failOnMiss) {
         List<String> addressIds = referencedAddressIds(notification);
         if (addressIds.isEmpty()) {
             return notification;
@@ -164,7 +164,7 @@ public class ConsignmentPartyResolver {
      * are always inline, so they are not read here even if one arrives carrying an
      * {@code addressId}.
      */
-    private static List<String> referencedAddressIds(Notification notification) {
+    private static List<String> referencedAddressIds(NotificationAggregate notification) {
         return Stream.of(
                 notification.getConsignor(),
                 notification.getConsignee(),

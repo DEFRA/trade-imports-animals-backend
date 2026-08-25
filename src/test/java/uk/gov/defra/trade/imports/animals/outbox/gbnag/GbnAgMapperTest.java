@@ -15,7 +15,7 @@ import uk.gov.defra.trade.imports.animals.notification.Address;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.MeansOfTransport;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Species;
@@ -224,7 +224,7 @@ class GbnAgMapperTest {
     class MinimalAndDefaults {
 
         private final GbnAgEventData result = mapper.toGbnAgEventData(
-            Notification.builder()
+            NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-MIN001")
                 .status(NotificationStatus.DRAFT)
                 .build());
@@ -278,7 +278,7 @@ class GbnAgMapperTest {
     @ParameterizedTest
     @CsvSource({"VESSEL,1", "RAILWAY,2", "ROAD_VEHICLE,3", "AIRPLANE,4"})
     void shouldMapMeansOfTransportToUnRec19ModeCode(MeansOfTransport means, int expectedCode) {
-        Notification notification = Notification.builder()
+        NotificationAggregate notification = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-MODE01")
             .transport(Transport.builder().meansOfTransport(means).build())
             .build();
@@ -291,7 +291,7 @@ class GbnAgMapperTest {
 
     @Test
     void shouldMapLogisticsPackageToNull_whenTotalNoOfPackagesNull() {
-        Notification notification = Notification.builder()
+        NotificationAggregate notification = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-PKG001")
             .commodity(Commodity.builder()
                 .commodityComplement(List.of(CommodityComplement.builder()
@@ -310,7 +310,7 @@ class GbnAgMapperTest {
 
     @Test
     void shouldMapIndividualTradeProductInstanceToNull_whenSpeciesAbsent() {
-        Notification notification = Notification.builder()
+        NotificationAggregate notification = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-SPC001")
             .commodity(Commodity.builder()
                 .commodityComplement(List.of(CommodityComplement.builder()
@@ -327,8 +327,8 @@ class GbnAgMapperTest {
         assertThat(line.individualTradeProductInstance()).isNull();
     }
 
-    private static Notification fullyPopulatedNotification() {
-        return Notification.builder()
+    private static NotificationAggregate fullyPopulatedNotification() {
+        return NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-7K8M2P")
             .status(NotificationStatus.SUBMITTED)
             .updated(LocalDateTime.of(2026, Month.MAY, 21, 10, 15, 0))
@@ -384,7 +384,7 @@ class GbnAgMapperTest {
     void shouldEmitNullNameAndPostalAddress_whenConsignorIsUnresolvedReference() {
         // TradeParty.from does not resolve address-book references; NotificationService must call
         // ConsignmentPartyResolver.resolveForSubmission before appendEvent, or GBNAG receives nulls.
-        Notification notification = Notification.builder()
+        NotificationAggregate notification = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-REFMAP")
             .consignor(NotificationTestData.reference("665f1c2ab3e4d51a2c9d0e77"))
             .build();
@@ -399,7 +399,7 @@ class GbnAgMapperTest {
     @Test
     void shouldMapResolvedReferencedParty_toConsignorNameAndPostalAddress() {
         // Shape after ConsignmentPartyResolver resolution: addressId retained with filled details.
-        Notification notification = Notification.builder()
+        NotificationAggregate notification = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-REFRES")
             .consignor(ConsignmentParty.builder()
                 .addressId("665f1c2ab3e4d51a2c9d0e77")
@@ -424,7 +424,7 @@ class GbnAgMapperTest {
 
     @Test
     void shouldMapPartyEmailAndPhoneToDefinedContact() {
-        Notification notification = Notification.builder()
+        NotificationAggregate notification = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-CONTACT")
             .consignor(ConsignmentParty.builder()
                 .addressId("665f1c2ab3e4d51a2c9d0e77")
@@ -448,7 +448,7 @@ class GbnAgMapperTest {
 
     @Test
     void shouldMapDefinedContact_whenOnlyOneOfEmailOrPhoneIsHeld() {
-        Notification notification = Notification.builder()
+        NotificationAggregate notification = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-PHONLY")
             .consignor(ConsignmentParty.builder()
                 .name("Astra Rosales")

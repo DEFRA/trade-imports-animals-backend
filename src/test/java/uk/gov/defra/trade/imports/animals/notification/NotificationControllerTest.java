@@ -82,7 +82,7 @@ class NotificationControllerTest {
                 .actor(ActorRequest.builder().organisationId("5900002").build())
                 .build();
 
-            Notification replaced = new Notification();
+            NotificationAggregate replaced = new NotificationAggregate();
             replaced.setReferenceNumber(REF_1);
             when(notificationService.replace(eq(REF_1), any(NotificationDto.class), any(), any()))
                 .thenReturn(replaced);
@@ -103,7 +103,7 @@ class NotificationControllerTest {
             SaveNotificationDto body = SaveNotificationDto.of(
                 NotificationDto.builder().referenceNumber(REF_1).build());
 
-            Notification replaced = new Notification();
+            NotificationAggregate replaced = new NotificationAggregate();
             replaced.setReferenceNumber(REF_1);
             when(notificationService.replace(eq(REF_1), any(NotificationDto.class), any(), any()))
                 .thenReturn(replaced);
@@ -141,7 +141,7 @@ class NotificationControllerTest {
                 .consignment(consignments().getFirst())
                 .build();
 
-            Notification savedNotification = new Notification();
+            NotificationAggregate savedNotification = new NotificationAggregate();
             savedNotification.setId("507f1f77bcf86cd799439011");
             savedNotification.setReferenceNumber(REF_1);
             savedNotification.setOrigin(origin);
@@ -197,7 +197,7 @@ class NotificationControllerTest {
                 .origin(origin)
                 .build();
 
-            Notification savedNotification = new Notification();
+            NotificationAggregate savedNotification = new NotificationAggregate();
             savedNotification.setId("507f1f77bcf86cd799439012");
             savedNotification.setReferenceNumber(REF_2);
             savedNotification.setOrigin(origin);
@@ -227,7 +227,7 @@ class NotificationControllerTest {
                 .origin(origin)
                 .build();
 
-            Notification savedNotification = new Notification();
+            NotificationAggregate savedNotification = new NotificationAggregate();
             savedNotification.setId(existingId);
             savedNotification.setReferenceNumber(REF_3);
             savedNotification.setOrigin(origin);
@@ -253,7 +253,7 @@ class NotificationControllerTest {
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(new Origin("GB", "true", "REF"))
                 .build();
-            Notification saved = new Notification();
+            NotificationAggregate saved = new NotificationAggregate();
             saved.setReferenceNumber(REF_1);
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(saved);
@@ -275,7 +275,7 @@ class NotificationControllerTest {
                 .referenceNumber(REF_1)
                 .origin(new Origin("GB", "true", "REF"))
                 .build();
-            Notification saved = new Notification();
+            NotificationAggregate saved = new NotificationAggregate();
             saved.setReferenceNumber(REF_1);
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(saved);
@@ -316,7 +316,7 @@ class NotificationControllerTest {
         @Test
         void copy_shouldReturn200WithNewDraftNotification() throws Exception {
             // Given
-            Notification newNotification = new Notification();
+            NotificationAggregate newNotification = new NotificationAggregate();
             newNotification.setId("507f1f77bcf86cd799439099");
             newNotification.setReferenceNumber(REF_2);
             newNotification.setStatus(NotificationStatus.DRAFT);
@@ -361,7 +361,7 @@ class NotificationControllerTest {
         @Test
         void submit_shouldReturn200WithSubmittedNotification() throws Exception {
             // Given
-            Notification submitted = new Notification();
+            NotificationAggregate submitted = new NotificationAggregate();
             submitted.setId("notif-id-001");
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
@@ -380,7 +380,7 @@ class NotificationControllerTest {
         @Test
         void submit_shouldPassTraceIdAsCorrelationId() throws Exception {
             // Given
-            Notification submitted = new Notification();
+            NotificationAggregate submitted = new NotificationAggregate();
             submitted.setId("notif-id-001");
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
@@ -430,7 +430,7 @@ class NotificationControllerTest {
         @Test
         void submit_shouldPassActorToService_whenActorBodyProvided() throws Exception {
             // Given
-            Notification submitted = new Notification();
+            NotificationAggregate submitted = new NotificationAggregate();
             submitted.setId("notif-id-001");
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
@@ -471,7 +471,7 @@ class NotificationControllerTest {
         @Test
         void amend_shouldReturn200WithAmendNotification() throws Exception {
             // Given
-            Notification amended = new Notification();
+            NotificationAggregate amended = new NotificationAggregate();
             amended.setId("notif-id-001");
             amended.setReferenceNumber(REF_1);
             amended.setStatus(NotificationStatus.AMEND);
@@ -490,7 +490,7 @@ class NotificationControllerTest {
         @Test
         void amend_shouldPassTraceIdAsCorrelationId() throws Exception {
             // Given
-            Notification amended = new Notification();
+            NotificationAggregate amended = new NotificationAggregate();
             amended.setId("notif-id-001");
             amended.setReferenceNumber(REF_1);
             amended.setStatus(NotificationStatus.AMEND);
@@ -544,7 +544,7 @@ class NotificationControllerTest {
         @Test
         void cancelAmend_shouldReturn200WithSubmittedNotification() throws Exception {
             // Given
-            Notification restored = new Notification();
+            NotificationAggregate restored = new NotificationAggregate();
             restored.setId("notif-id-001");
             restored.setReferenceNumber(REF_1);
             restored.setStatus(NotificationStatus.SUBMITTED);
@@ -946,7 +946,7 @@ class NotificationControllerTest {
         @Test
         void softDelete_shouldReturn200WithDeletedNotification() throws Exception {
             // Given
-            Notification deleted = new Notification();
+            NotificationAggregate deleted = new NotificationAggregate();
             deleted.setId("notif-id-001");
             deleted.setReferenceNumber(REF_1);
             deleted.setStatus(NotificationStatus.DELETED);

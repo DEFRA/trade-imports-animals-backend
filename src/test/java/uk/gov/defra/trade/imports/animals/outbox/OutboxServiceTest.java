@@ -24,7 +24,7 @@ import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
@@ -51,13 +51,13 @@ class OutboxServiceTest {
         @Test
         void appendEvent_shouldWriteEventWithVersionOne_whenNoExistingEvents() {
             // Given
-            Notification notification = Notification.builder()
+            NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-ABC123"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123"))
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -70,8 +70,8 @@ class OutboxServiceTest {
             OutboxEvent saved = captor.getValue();
 
             assertThat(saved.getAggregateVersion()).isEqualTo(1L);
-            assertThat(saved.getAggregateId()).isEqualTo("Imports.Notification.GBN-AG.GBN-AG-26-ABC123");
-            assertThat(saved.getAggregateType()).isEqualTo("Notification");
+            assertThat(saved.getAggregateId()).isEqualTo("Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123");
+            assertThat(saved.getAggregateType()).isEqualTo("NotificationAggregate");
             assertThat(saved.getSubType()).isEqualTo("GBN-AG");
             assertThat(saved.getEventType()).isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
             assertThat(saved.getMetadata().getCorrelationId()).isEqualTo("trace-001");
@@ -88,18 +88,18 @@ class OutboxServiceTest {
         @Test
         void appendEvent_shouldIncrementVersion_whenPriorEventsExist() {
             // Given
-            Notification notification = Notification.builder()
+            NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
             OutboxEvent existing = OutboxEvent.builder()
-                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-ABC123")
+                .aggregateId("Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123")
                 .aggregateVersion(3L)
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-ABC123"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123"))
                 .thenReturn(Optional.of(existing));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -124,7 +124,7 @@ class OutboxServiceTest {
                 .arrivalDate(LocalDate.of(2026, Month.APRIL, 22))
                 .build();
 
-            Notification notification = Notification.builder()
+            NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .status(NotificationStatus.SUBMITTED)
                 .origin(origin)
@@ -138,14 +138,14 @@ class OutboxServiceTest {
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-ABC123"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123"))
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             // When
             outboxService.appendEvent(notification, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
 
-            // Then — data is the GBN-AG payload (mapped from the Notification), stored as
+            // Then — data is the GBN-AG payload (mapped from the NotificationAggregate), stored as
             // Map<String, Object>. Field-level mapping is covered by GbnAgMapperTest; here we
             // assert the service stores the GBN-AG shape rather than the raw notification.
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
@@ -168,13 +168,13 @@ class OutboxServiceTest {
 
         @Test
         void appendEvent_shouldStoreEventTypeFromArgument_whenAmendType() {
-            Notification notification = Notification.builder()
+            NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-AMD009")
                 .status(NotificationStatus.AMEND)
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-AMD009"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-AMD009"))
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -194,18 +194,18 @@ class OutboxServiceTest {
             // derived findTopBy…OrderBy…Desc method returns the single highest
             // version (or empty); appendEvent must compute nextVersion from it
             // without exception.
-            Notification notification = Notification.builder()
+            NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-AMD007")
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
             OutboxEvent latest = OutboxEvent.builder()
-                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-AMD007")
+                .aggregateId("Imports.NotificationAggregate.GBN-AG.GBN-AG-26-AMD007")
                 .aggregateVersion(2L)
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-AMD007"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-AMD007"))
                 .thenReturn(Optional.of(latest));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -219,7 +219,7 @@ class OutboxServiceTest {
         @Test
         void appendEvent_shouldStampActorOnEvent_whenActorProvided() {
             // Given
-            Notification notification = Notification.builder()
+            NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-ACT001")
                 .status(NotificationStatus.SUBMITTED)
                 .build();
@@ -232,7 +232,7 @@ class OutboxServiceTest {
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-ACT001"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ACT001"))
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -255,7 +255,7 @@ class OutboxServiceTest {
         @Test
         void appendEvent_shouldBuildCumulativeStatusChanges_fromLatestPriorEvent() {
             // Given — latest prior event already has a SUBMITTED statusChange
-            Notification notification = Notification.builder()
+            NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-ACT002")
                 .status(NotificationStatus.AMEND)
                 .build();
@@ -279,13 +279,13 @@ class OutboxServiceTest {
                 .actor(submitActor)
                 .build();
             OutboxEvent latestEvent = OutboxEvent.builder()
-                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-ACT002")
+                .aggregateId("Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ACT002")
                 .aggregateVersion(1L)
                 .statusChanges(List.of(priorChange))
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-ACT002"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ACT002"))
                 .thenReturn(Optional.of(latestEvent));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -308,13 +308,13 @@ class OutboxServiceTest {
         @Test
         void appendEvent_shouldAppendDraftStatusChange_forFirstPageSave() {
             // Given — first-ever event for this notification is a DRAFT page save (no prior events)
-            Notification notification = Notification.builder()
+            NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-EDIT01")
                 .status(NotificationStatus.DRAFT)
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-EDIT01"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-EDIT01"))
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -332,7 +332,7 @@ class OutboxServiceTest {
         @Test
         void appendEvent_shouldNotDuplicateStatusChange_forConsecutivePageSavesWithSameStatus() {
             // Given — second DRAFT page save; prior event already records DRAFT
-            Notification notification = Notification.builder()
+            NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-EDIT02")
                 .status(NotificationStatus.DRAFT)
                 .build();
@@ -342,13 +342,13 @@ class OutboxServiceTest {
                 .actor(null)
                 .build();
             OutboxEvent latestEvent = OutboxEvent.builder()
-                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-EDIT02")
+                .aggregateId("Imports.NotificationAggregate.GBN-AG.GBN-AG-26-EDIT02")
                 .aggregateVersion(1L)
                 .statusChanges(List.of(priorChange))
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-EDIT02"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-EDIT02"))
                 .thenReturn(Optional.of(latestEvent));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -366,7 +366,7 @@ class OutboxServiceTest {
         @Test
         void appendEvent_shouldNotDuplicateStatusChange_forAmendPhasePageSave() {
             // Given — AMEND phase page save; prior event already records AMEND
-            Notification notification = Notification.builder()
+            NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-EDIT03")
                 .status(NotificationStatus.AMEND)
                 .build();
@@ -376,13 +376,13 @@ class OutboxServiceTest {
                 .actor(null)
                 .build();
             OutboxEvent latestEvent = OutboxEvent.builder()
-                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-EDIT03")
+                .aggregateId("Imports.NotificationAggregate.GBN-AG.GBN-AG-26-EDIT03")
                 .aggregateVersion(2L)
                 .statusChanges(List.of(priorChange))
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-EDIT03"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-EDIT03"))
                 .thenReturn(Optional.of(latestEvent));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -400,13 +400,13 @@ class OutboxServiceTest {
         @Test
         void appendEvent_shouldThrowOutboxWriteException_onDuplicateKey() {
             // Given
-            Notification notification = Notification.builder()
+            NotificationAggregate notification = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .status(NotificationStatus.SUBMITTED)
                 .build();
 
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-ABC123"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123"))
                 .thenReturn(Optional.empty());
             when(outboxEventRepository.save(any()))
                 .thenThrow(new DuplicateKeyException("duplicate key"));
@@ -417,7 +417,7 @@ class OutboxServiceTest {
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;
                     assertThat(owe.getAggregateId())
-                        .isEqualTo("Imports.Notification.GBN-AG.GBN-AG-26-ABC123");
+                        .isEqualTo("Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123");
                     assertThat(owe.getAggregateVersion()).isEqualTo(1L);
                     assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
                 });
@@ -431,16 +431,16 @@ class OutboxServiceTest {
         void findByReferenceNumber_shouldReturnEventsInAggregateVersionOrder() {
             // Given
             OutboxEvent v1 = OutboxEvent.builder()
-                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-ABC123")
+                .aggregateId("Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123")
                 .aggregateVersion(1L)
                 .build();
             OutboxEvent v2 = OutboxEvent.builder()
-                .aggregateId("Imports.Notification.GBN-AG.GBN-AG-26-ABC123")
+                .aggregateId("Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123")
                 .aggregateVersion(2L)
                 .build();
 
             when(outboxEventRepository.findAllByAggregateIdOrderByAggregateVersionAsc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-ABC123"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123"))
                 .thenReturn(List.of(v1, v2));
 
             // When
@@ -454,7 +454,7 @@ class OutboxServiceTest {
         void findByReferenceNumber_shouldReturnEmptyList_whenNoEventsExist() {
             // Given
             when(outboxEventRepository.findAllByAggregateIdOrderByAggregateVersionAsc(
-                "Imports.Notification.GBN-AG.GBN-AG-26-ABSENT"))
+                "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABSENT"))
                 .thenReturn(List.of());
 
             // When
@@ -471,7 +471,7 @@ class OutboxServiceTest {
         @Test
         void buildAggregateId_shouldPrefixReferenceNumber() {
             assertThat(OutboxService.buildAggregateId("GBN-AG-26-ABC123"))
-                .isEqualTo("Imports.Notification.GBN-AG.GBN-AG-26-ABC123");
+                .isEqualTo("Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123");
         }
     }
 }

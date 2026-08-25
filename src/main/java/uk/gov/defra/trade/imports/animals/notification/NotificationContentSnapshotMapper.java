@@ -23,7 +23,7 @@ public interface NotificationContentSnapshotMapper {
         "submittedBaseline", "expireAt", "submittedAt", "fulfilments", "submittedFulfilmentsBaseline"
     })
     @Mapping(target = "commodity", source = "commodity", qualifiedByName = "copyCommodity")
-    NotificationContentSnapshot capture(Notification source);
+    NotificationContentSnapshot capture(NotificationAggregate source);
 
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "concurrencyToken", ignore = true)
@@ -37,7 +37,7 @@ public interface NotificationContentSnapshotMapper {
     @Mapping(target = "fulfilments", ignore = true)
     @Mapping(target = "submittedFulfilmentsBaseline", ignore = true)
     @Mapping(target = "commodity", source = "commodity", qualifiedByName = "copyCommodity")
-    void restore(NotificationContentSnapshot snapshot, @MappingTarget Notification target);
+    void restore(NotificationContentSnapshot snapshot, @MappingTarget NotificationAggregate target);
 
     @Named("copyCommodity")
     default Commodity copyCommodity(Commodity source) {

@@ -144,7 +144,7 @@ class GlobalExceptionHandlerTest {
         // Given
         String traceId = "test-trace-456";
         MDC.put("trace.id", traceId);
-        NotFoundException exception = new NotFoundException("Notification with id 12345 not found");
+        NotFoundException exception = new NotFoundException("NotificationAggregate with id 12345 not found");
 
         // When
         ResponseEntity<ProblemDetail> response = exceptionHandler.handleNotFoundException(exception);
@@ -156,7 +156,7 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Resource Not Found");
-        assertThat(problemDetail.getDetail()).isEqualTo("Notification with id 12345 not found");
+        assertThat(problemDetail.getDetail()).isEqualTo("NotificationAggregate with id 12345 not found");
         assertThat(problemDetail.getType()).isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/not-found"));
         assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
     }
@@ -185,7 +185,7 @@ class GlobalExceptionHandlerTest {
         // Given
         String traceId = "test-trace-789";
         MDC.put("trace.id", traceId);
-        ConflictException exception = new ConflictException("Notification with reference GBN-AG-26-000001 already exists");
+        ConflictException exception = new ConflictException("NotificationAggregate with reference GBN-AG-26-000001 already exists");
 
         // When
         ResponseEntity<ProblemDetail> response = exceptionHandler.handleConflictException(exception);
@@ -197,7 +197,7 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
         assertThat(problemDetail.getTitle()).isEqualTo("Resource Conflict");
-        assertThat(problemDetail.getDetail()).isEqualTo("Notification with reference GBN-AG-26-000001 already exists");
+        assertThat(problemDetail.getDetail()).isEqualTo("NotificationAggregate with reference GBN-AG-26-000001 already exists");
         assertThat(problemDetail.getType()).isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/conflict"));
         assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
     }
@@ -432,7 +432,7 @@ class GlobalExceptionHandlerTest {
         MDC.put("trace.id", traceId);
         OutboxWriteException exception = new OutboxWriteException(
             "Duplicate aggregateVersion on outbox insert",
-            "Imports.Notification.GBN-AG.GBN-AG-26-ABC123",
+            "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123",
             1L,
             "correlation-abc");
 
@@ -461,7 +461,7 @@ class GlobalExceptionHandlerTest {
         // Given - no trace ID in MDC
         OutboxWriteException exception = new OutboxWriteException(
             "Could not acquire outbox lock",
-            "Imports.Notification.GBN-AG.GBN-AG-26-ABC123",
+            "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123",
             null,
             "correlation-xyz");
 

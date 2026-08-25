@@ -7,9 +7,9 @@ import lombok.experimental.SuperBuilder;
 import org.springframework.data.mongodb.core.index.Indexed;
 
 /**
- * Shared fields for the notification domain. {@link Notification} (entity) and
+ * Shared fields for the notification domain. {@link NotificationAggregate} (entity) and
  * {@link NotificationDto} (API DTO) both extend this class to avoid duplicating the field
- * declarations. {@link Notification} adds the MongoDB {@code @Id} and {@code @Document}
+ * declarations. {@link NotificationAggregate} adds the MongoDB {@code @Id} and {@code @Document}
  * annotations; {@link NotificationDto} carries no additional fields.
  */
 @Data

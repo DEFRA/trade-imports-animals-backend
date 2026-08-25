@@ -10,9 +10,9 @@ import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 @Repository
-public interface NotificationRepository extends MongoRepository<Notification, String> {
+public interface NotificationRepository extends MongoRepository<NotificationAggregate, String> {
 
-    Optional<Notification> findByReferenceNumber(String referenceNumber);
+    Optional<NotificationAggregate> findByReferenceNumber(String referenceNumber);
 
     List<NotificationReferenceOnly> findAllByReferenceNumberIn(List<String> referenceNumbers);
 

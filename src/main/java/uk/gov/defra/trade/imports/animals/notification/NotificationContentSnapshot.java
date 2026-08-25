@@ -28,11 +28,11 @@ public class NotificationContentSnapshot {
     String cphNumber;
     Transport transport;
 
-    static NotificationContentSnapshot from(Notification notification) {
+    static NotificationContentSnapshot from(NotificationAggregate notification) {
         return MAPPER.capture(notification);
     }
 
-    void applyTo(Notification notification) {
+    void applyTo(NotificationAggregate notification) {
         MAPPER.restore(this, notification);
     }
 }

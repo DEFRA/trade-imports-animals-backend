@@ -14,7 +14,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.outbox.gbnag.GbnAgEventDataMapper;
 
@@ -25,16 +25,16 @@ public class OutboxService {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
-    static final String AGGREGATE_TYPE = "Notification";
+    static final String AGGREGATE_TYPE = "NotificationAggregate";
     static final String SUB_TYPE = "GBN-AG";
     static final String SCHEMA_VERSION = "1";
-    static final String AGGREGATE_ID_PREFIX = "Imports.Notification.GBN-AG.";
+    static final String AGGREGATE_ID_PREFIX = "Imports.NotificationAggregate.GBN-AG.";
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
     private final GbnAgEventDataMapper gbnAgEventDataMapper;
 
-    public void appendEvent(Notification notification, OutboxEventType eventType, String correlationId, Actor actor) {
+    public void appendEvent(NotificationAggregate notification, OutboxEventType eventType, String correlationId, Actor actor) {
         String aggregateId = buildAggregateId(notification.getReferenceNumber());
 
         Optional<OutboxEvent> latestEvent = outboxEventRepository

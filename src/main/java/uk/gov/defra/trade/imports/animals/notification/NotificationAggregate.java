@@ -19,7 +19,7 @@ import org.springframework.data.mongodb.core.index.Indexed;
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
-public class Notification extends NotificationBase {
+public class NotificationAggregate extends NotificationBase {
 
     @Id
     private String id;

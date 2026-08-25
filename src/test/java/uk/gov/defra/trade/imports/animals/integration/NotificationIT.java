@@ -30,7 +30,7 @@ import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
 import uk.gov.defra.trade.imports.animals.notification.MeansOfTransport;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationContentSnapshot;
 import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
@@ -124,13 +124,13 @@ class NotificationIT extends IntegrationBase {
             .build();
 
         // When
-        Notification created = webClient("NoAuth")
+        NotificationAggregate created = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(notificationDto))
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody();
 
         // Then — verify response
@@ -140,7 +140,7 @@ class NotificationIT extends IntegrationBase {
         assertNotificationMappedFields(created);
 
         // Verify persisted — reload via API
-        Notification persisted = notificationRepository.findByReferenceNumber(created.getReferenceNumber())
+        NotificationAggregate persisted = notificationRepository.findByReferenceNumber(created.getReferenceNumber())
             .orElseThrow();
         assertThat(persisted.getId()).isEqualTo(created.getId());
         assertNotificationMappedFields(persisted);
@@ -188,7 +188,7 @@ class NotificationIT extends IntegrationBase {
         String matchingRef = webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(notificationDto1)).exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody().getReferenceNumber();
 
         webClient("NoAuth").post().uri(NOTIFICATION_ENDPOINT)
@@ -221,7 +221,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
@@ -289,7 +289,7 @@ class NotificationIT extends IntegrationBase {
             .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("GB", LocalDate.of(2026, Month.JANUARY, 10))))
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult()
             .getResponseBody()
             .getReferenceNumber();
@@ -300,16 +300,16 @@ class NotificationIT extends IntegrationBase {
             .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15))))
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult()
             .getResponseBody()
             .getReferenceNumber();
 
-        Notification older = notificationRepository.findByReferenceNumber(refOlder).orElseThrow();
+        NotificationAggregate older = notificationRepository.findByReferenceNumber(refOlder).orElseThrow();
         older.setCreated(LocalDateTime.of(2026, Month.JANUARY, 1, 10, 0));
         notificationRepository.save(older);
 
-        Notification newer = notificationRepository.findByReferenceNumber(refNewer).orElseThrow();
+        NotificationAggregate newer = notificationRepository.findByReferenceNumber(refNewer).orElseThrow();
         newer.setCreated(LocalDateTime.of(2026, Month.JANUARY, 2, 10, 0));
         notificationRepository.save(newer);
 
@@ -424,7 +424,7 @@ class NotificationIT extends IntegrationBase {
             .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", LocalDate.of(2026, Month.JUNE, 15))))
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult()
             .getResponseBody()
             .getReferenceNumber();
@@ -474,21 +474,21 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         String submittedRef = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("IE", "Live sheep")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         String deletedRef = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("FR", "Live pigs")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
@@ -572,10 +572,10 @@ class NotificationIT extends IntegrationBase {
             .transport(Transport.builder().portOfEntry("GBBEL").arrivalDate(LocalDate.of(2026, Month.JANUARY, 1)).build())
             .build();
 
-        Notification created = webClient("NoAuth")
+        NotificationAggregate created = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(initial))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody();
         String referenceNumber = created.getReferenceNumber();
 
@@ -603,10 +603,10 @@ class NotificationIT extends IntegrationBase {
                 .build())
             .build();
 
-        Notification updated = webClient("NoAuth")
+        NotificationAggregate updated = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(updateDto))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody();
 
         // Then — verify response reflects updated values
@@ -617,7 +617,7 @@ class NotificationIT extends IntegrationBase {
         // Verify only one notification exists and reload via API
         List<NotificationView> all = findAllNotifications();
         assertThat(all).hasSize(1);
-        Notification persisted = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate persisted = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertNotificationMappedFields(persisted, "REF-updated");
     }
@@ -637,10 +637,10 @@ class NotificationIT extends IntegrationBase {
                 .build())
             .build();
 
-        Notification created = webClient("NoAuth")
+        NotificationAggregate created = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(initial))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody();
         String referenceNumber = created.getReferenceNumber();
 
@@ -659,17 +659,17 @@ class NotificationIT extends IntegrationBase {
                 .build())
             .build();
 
-        Notification updated = webClient("NoAuth")
+        NotificationAggregate updated = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(updateDto))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody();
 
         assertThat(updated).isNotNull();
         assertThat(updated.getTransport().getMeansOfTransport()).isEqualTo(MeansOfTransport.VESSEL);
         assertThat(updated.getTransport().getTransitedCountries()).isNullOrEmpty();
 
-        Notification persisted = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate persisted = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertThat(persisted.getTransport().getTransitedCountries()).isNullOrEmpty();
     }
@@ -681,14 +681,14 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         String ref2 = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("IE", "Live sheep")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         // When — delete both by reference number
@@ -712,7 +712,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         // When
@@ -783,7 +783,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("FR", "Live pigs")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         // When — attempt to delete the existing one plus a missing one
@@ -846,15 +846,15 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         // When — submit the notification
-        Notification submitted = webClient("NoAuth")
+        NotificationAggregate submitted = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody();
 
         // Then — status is SUBMITTED
@@ -870,11 +870,11 @@ class NotificationIT extends IntegrationBase {
         String referenceNumber = createAndSubmitNotificationWithFullContent();
 
         // When
-        Notification amended = webClient("NoAuth")
+        NotificationAggregate amended = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody();
 
         // Then
@@ -888,7 +888,7 @@ class NotificationIT extends IntegrationBase {
     void amend_shouldPersistSubmittedBaselineInMongo() {
         // Given — submitted notification with identifiable content
         String referenceNumber = createAndSubmitNotificationWithFullContent();
-        Notification beforeAmend = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate beforeAmend = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
 
         // When
         webClient("NoAuth")
@@ -897,7 +897,7 @@ class NotificationIT extends IntegrationBase {
             .expectStatus().isOk();
 
         // Then — baseline captured in Mongo, separate from live content
-        Notification reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(NotificationStatus.AMEND);
         assertThat(reloaded.getSubmittedBaseline()).isNotNull();
         assertThat(reloaded.getSubmittedBaseline().getOrigin().getInternalReference())
@@ -965,7 +965,7 @@ class NotificationIT extends IntegrationBase {
 
         // And — storage still holds only the reference. Resolving for transmission must not grow a
         // stale copy of the address beside the reference that exists to avoid exactly that.
-        Notification stored = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate stored = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertThat(stored.getConsignor()).isEqualTo(ConsignmentParty.reference(ADDRESS_ID));
     }
@@ -1009,7 +1009,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         // When / Then
@@ -1025,7 +1025,7 @@ class NotificationIT extends IntegrationBase {
     void cancelAmend_shouldRestoreBaselineAndRevertStatusInMongo() {
         // Given — submitted notification reloaded from Mongo as the golden baseline
         String referenceNumber = createAndSubmitNotificationWithFullContent();
-        Notification submittedInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate submittedInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertThat(submittedInMongo.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
 
@@ -1034,7 +1034,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
             .exchange().expectStatus().isOk();
 
-        Notification inAmendInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate inAmendInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertThat(inAmendInMongo.getStatus()).isEqualTo(NotificationStatus.AMEND);
         assertThat(inAmendInMongo.getSubmittedBaseline()).isNotNull();
@@ -1048,7 +1048,7 @@ class NotificationIT extends IntegrationBase {
         inAmendInMongo.setCphNumber("99/999/9999");
         notificationRepository.save(inAmendInMongo);
 
-        Notification editedInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate editedInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertThat(editedInMongo.getOrigin().getInternalReference()).isEqualTo("EDITED-REF");
         assertThat(editedInMongo.getSubmittedBaseline()).isNotNull();
@@ -1059,7 +1059,7 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         // Then — reload from Mongo: status reverted, baseline cleared, all amendable fields restored
-        Notification restoredInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate restoredInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertThat(restoredInMongo.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(restoredInMongo.getSubmittedBaseline()).isNull();
@@ -1120,24 +1120,24 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
             .exchange().expectStatus().isOk();
 
-        Notification inAmend = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate inAmend = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
         inAmend.getOrigin().setInternalReference("EDITED-AND-KEPT");
         notificationRepository.save(inAmend);
         assertThat(inAmend.getSubmittedBaseline()).isNotNull();
 
         // When — resubmit amended notification
-        Notification resubmitted = webClient("NoAuth")
+        NotificationAggregate resubmitted = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody();
 
         // Then — edited content kept, baseline cleared
         assertThat(resubmitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(resubmitted.getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
 
-        Notification reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
         assertThat(reloaded.getSubmittedBaseline()).isNull();
         assertThat(reloaded.getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
     }
@@ -1162,7 +1162,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         // When — submit it with a trace ID
@@ -1179,7 +1179,7 @@ class NotificationIT extends IntegrationBase {
 
         assertThat(event.getAggregateId())
             .isEqualTo(OutboxService.buildAggregateId(referenceNumber));
-        assertThat(event.getAggregateType()).isEqualTo("Notification");
+        assertThat(event.getAggregateType()).isEqualTo("NotificationAggregate");
         assertThat(event.getSubType()).isEqualTo("GBN-AG");
         assertThat(event.getEventType())
             .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
@@ -1204,7 +1204,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         var actorBody = Map.of(
@@ -1247,7 +1247,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         var submitActor = Map.of(
@@ -1297,7 +1297,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
@@ -1305,7 +1305,7 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         // Reset status to DRAFT so we can submit again (simulates re-submission scenario)
-        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate notification = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
         notification.setStatus(NotificationStatus.DRAFT);
         notificationRepository.save(notification);
 
@@ -1356,15 +1356,15 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         // When — soft-delete the notification
-        Notification result = webClient("NoAuth")
+        NotificationAggregate result = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody();
 
         // Then — status transitions to DELETED
@@ -1381,7 +1381,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
@@ -1389,11 +1389,11 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         // When — soft-delete the submitted notification
-        Notification result = webClient("NoAuth")
+        NotificationAggregate result = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody();
 
         // Then — status transitions to DELETED
@@ -1423,7 +1423,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
@@ -1435,7 +1435,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .value(n -> assertThat(n.getStatus()).isEqualTo(NotificationStatus.DELETED));
     }
 
@@ -1458,21 +1458,21 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         String ref2 = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("IE", "Live sheep")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         String ref3 = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("FR", "Live pigs")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         // When — fetch page 0 + page 1 + page 2
@@ -1519,23 +1519,23 @@ class NotificationIT extends IntegrationBase {
         NotificationDto sourceDto = createNotificationDto("DE", "Live cattle");
         sourceDto.setConsignor(ConsignmentParty.reference(ADDRESS_ID));
 
-        Notification source = webClient("NoAuth")
+        NotificationAggregate source = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(sourceDto))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult().getResponseBody();
+            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
         assertThat(source).isNotNull();
         assertThat(source.getConsignor().getAddressId()).isEqualTo(ADDRESS_ID);
         assertThat(source.getConsignor().getName()).isNull();
 
-        Notification copy = webClient("NoAuth")
+        NotificationAggregate copy = webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
                 .queryParam("concurrencyToken", source.getConcurrencyToken())
                 .build(source.getReferenceNumber()))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult().getResponseBody();
+            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
         assertThat(copy).isNotNull();
         assertThat(copy.getConsignor()).isEqualTo(ConsignmentParty.reference(ADDRESS_ID));
@@ -1548,7 +1548,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("FR", "Live pigs")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         // And persist an accompanying document directly
@@ -1626,11 +1626,11 @@ class NotificationIT extends IntegrationBase {
         return findAllNotificationsPage().content();
     }
 
-    private void assertNotificationMappedFields(Notification notification) {
+    private void assertNotificationMappedFields(NotificationAggregate notification) {
         assertNotificationMappedFields(notification, "REF-001");
     }
 
-    private void assertNotificationMappedFields(Notification notification, String internalReference) {
+    private void assertNotificationMappedFields(NotificationAggregate notification, String internalReference) {
         assertThat(notification.getOrigin())
             .extracting(Origin::getCountryCode, Origin::getRequiresRegionCode, Origin::getInternalReference)
             .containsExactly("GB", "true", internalReference);
@@ -1659,7 +1659,7 @@ class NotificationIT extends IntegrationBase {
             .containsExactly("BOV", "Bovine", 10, 5, "UK01234567890", "UK0123456700999");
 
         assertThat(notification)
-            .extracting(Notification::getReasonForImport, Notification::getCphNumber)
+            .extracting(NotificationAggregate::getReasonForImport, NotificationAggregate::getCphNumber)
             .containsExactly("PERMANENT", "22/123/4567");
 
         assertThat(notification.getAdditionalDetails())
@@ -1683,7 +1683,7 @@ class NotificationIT extends IntegrationBase {
                 List.of("FR", "DE"));
     }
 
-    private void assertAmendableContentMatches(Notification expected, Notification actual) {
+    private void assertAmendableContentMatches(NotificationAggregate expected, NotificationAggregate actual) {
         assertThat(actual.getOrigin()).isEqualTo(expected.getOrigin());
         assertThat(actual.getReasonForImport()).isEqualTo(expected.getReasonForImport());
         assertThat(actual.getCommodity()).isEqualTo(expected.getCommodity());
@@ -1698,7 +1698,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(actual.getTransport()).isEqualTo(expected.getTransport());
     }
 
-    private void assertAmendableContentMatches(Notification expected, NotificationContentSnapshot actual) {
+    private void assertAmendableContentMatches(NotificationAggregate expected, NotificationContentSnapshot actual) {
         assertThat(actual.getOrigin()).isEqualTo(expected.getOrigin());
         assertThat(actual.getReasonForImport()).isEqualTo(expected.getReasonForImport());
         assertThat(actual.getCommodity()).isEqualTo(expected.getCommodity());
@@ -1720,7 +1720,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
@@ -1728,7 +1728,7 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         // Reset status to DRAFT so we can submit again
-        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate notification = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
         notification.setStatus(NotificationStatus.DRAFT);
         notificationRepository.save(notification);
 
@@ -1759,7 +1759,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         // When
@@ -1778,20 +1778,20 @@ class NotificationIT extends IntegrationBase {
         // Given — create a source notification with a full set of fields
         NotificationDto sourceDto = sourceNotificationWithAllOperators();
 
-        Notification source = webClient("NoAuth")
+        NotificationAggregate source = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(sourceDto))
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody();
 
         assertThat(source).isNotNull();
         String sourceRef = source.getReferenceNumber();
 
         // When — copy via the dedicated copy endpoint
-        Notification copy = webClient("NoAuth")
+        NotificationAggregate copy = webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
@@ -1799,7 +1799,7 @@ class NotificationIT extends IntegrationBase {
                 .build(sourceRef))
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody();
 
         // Then — new reference number, DRAFT status
@@ -1828,7 +1828,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(cc.getSpecies()).isNull();
 
         // Original unchanged
-        Notification original = notificationRepository.findByReferenceNumber(sourceRef).orElseThrow();
+        NotificationAggregate original = notificationRepository.findByReferenceNumber(sourceRef).orElseThrow();
         assertThat(original.getOrigin().getInternalReference()).isEqualTo("INTERNAL-DO-NOT-COPY");
         assertThat(original.getAdditionalDetails().getUnweanedAnimals()).isEqualTo("yes");
         assertThat(original.getTransport().getPortOfEntry()).isEqualTo("GBDVR");
@@ -1838,21 +1838,21 @@ class NotificationIT extends IntegrationBase {
     void copy_shouldRetainAllOperatorAddresses() {
         NotificationDto sourceDto = sourceNotificationWithAllOperators();
 
-        Notification source = webClient("NoAuth")
+        NotificationAggregate source = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(sourceDto))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult().getResponseBody();
+            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
         assertThat(source).isNotNull();
 
-        Notification copy = webClient("NoAuth")
+        NotificationAggregate copy = webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
                 .queryParam("concurrencyToken", source.getConcurrencyToken())
                 .build(source.getReferenceNumber()))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult().getResponseBody();
+            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
         assertThat(copy).isNotNull();
         assertThat(copy.getPlaceOfOrigin()).isEqualTo(NotificationTestData.placesOfOrigin().getFirst());
@@ -1866,11 +1866,11 @@ class NotificationIT extends IntegrationBase {
     void copy_shouldReturn400_whenSourceNotificationIsDeleted() {
         // Given — create a source notification and capture the version the user's browser
         // would have last seen. Someone else then soft-deletes it.
-        Notification source = webClient("NoAuth")
+        NotificationAggregate source = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("DE", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult().getResponseBody();
+            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", source.getReferenceNumber())
@@ -1895,7 +1895,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("IE", "Live cattle")))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
@@ -1906,7 +1906,7 @@ class NotificationIT extends IntegrationBase {
             .orElseThrow().getConcurrencyToken();
 
         // When — copy the submitted notification
-        Notification copy = webClient("NoAuth")
+        NotificationAggregate copy = webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
@@ -1914,7 +1914,7 @@ class NotificationIT extends IntegrationBase {
                 .build(sourceRef))
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class)
+            .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody();
 
         // Then — copy is a new DRAFT with a different reference number
@@ -1927,12 +1927,12 @@ class NotificationIT extends IntegrationBase {
     @Test
     void copy_shouldReturn409StaleConcurrencyToken_whenExpectedTokenDoesNotMatchSource() {
         // Given — source starts at version 0 after POST.
-        Notification oldVersion = webClient("NoAuth")
+        NotificationAggregate oldVersion = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class).returnResult().getResponseBody();
+            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
         // A PUT edit advances the source to version 1.
         NotificationDto newVersion = NotificationDto.builder()
@@ -1990,7 +1990,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(dto))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         // When / Then
@@ -2019,12 +2019,12 @@ class NotificationIT extends IntegrationBase {
     @Test
     void put_shouldReturn409StaleConcurrencyToken_whenTokenIsStale() {
         // Given a notification with a version that has been progressed by an update.
-        Notification created = webClient("NoAuth")
+        NotificationAggregate created = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange()
             .expectStatus().isOk()
-            .expectBody(Notification.class).returnResult().getResponseBody();
+            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
         String ref = created.getReferenceNumber();
         Long staleVersion = created.getConcurrencyToken();
 
@@ -2060,7 +2060,7 @@ class NotificationIT extends IntegrationBase {
             .jsonPath("$.title").isEqualTo("Stale Concurrency Token");
 
         // And the stored notification reflects the first PUT's write, not the stale one.
-        Notification stored = notificationRepository.findByReferenceNumber(ref).orElseThrow();
+        NotificationAggregate stored = notificationRepository.findByReferenceNumber(ref).orElseThrow();
         assertThat(stored.getOrigin().getInternalReference()).isEqualTo("FIRST");
     }
 
@@ -2069,7 +2069,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(sourceNotificationWithAllOperators()))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
@@ -2096,7 +2096,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(dto))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
     }
 
