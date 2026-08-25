@@ -9,6 +9,7 @@ import ch.qos.logback.classic.Logger;
 
 import java.lang.reflect.Method;
 import java.net.URI;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -308,6 +309,61 @@ class GlobalExceptionHandlerTest {
             p -> assertThat(p).isNull(),
             p -> assertThat(p).doesNotContainKey("traceId")
         );
+    }
+
+    @Test
+    void handleUnresolvableConsignmentPartyException_shouldNameEveryRoleInTheErrorsMap() {
+        // Given
+        String traceId = "test-trace-unresolvable-1";
+        MDC.put("trace.id", traceId);
+        Map<String, String> addressIdByRole = new LinkedHashMap<>();
+        addressIdByRole.put("consignor", "665f1c2ab3e4d51a2c9d0e11");
+        addressIdByRole.put("destination", "665f1c2ab3e4d51a2c9d0e88");
+        UnresolvableConsignmentPartyException exception =
+            new UnresolvableConsignmentPartyException(addressIdByRole);
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleUnresolvableConsignmentPartyException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problemDetail.getTitle()).isEqualTo("Validation Error");
+        assertThat(problemDetail.getType()).isEqualTo(
+            URI.create("https://api.cdp.defra.cloud/problems/unresolvable-consignment-party"));
+        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
+
+        // Both roles, in the order the resolver walked them, each carrying the address it refers
+        // to — a caller correcting them needs to see all of them, not just the first.
+        @SuppressWarnings("unchecked")
+        Map<String, List<String>> errors =
+            (Map<String, List<String>>) problemDetail.getProperties().get("errors");
+        assertThat(errors.keySet()).containsExactly("consignor", "destination");
+        assertThat(errors.get("consignor")).containsExactly(
+            "No address-book record for 665f1c2ab3e4d51a2c9d0e11");
+        assertThat(errors.get("destination")).containsExactly(
+            "No address-book record for 665f1c2ab3e4d51a2c9d0e88");
+    }
+
+    @Test
+    void handleUnresolvableConsignmentPartyException_shouldHandleNullTraceId() {
+        // Given - no trace ID in MDC
+        UnresolvableConsignmentPartyException exception =
+            new UnresolvableConsignmentPartyException(Map.of("consignor", "gone"));
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleUnresolvableConsignmentPartyException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problemDetail.getProperties()).doesNotContainKey("traceId");
     }
 
     @Test

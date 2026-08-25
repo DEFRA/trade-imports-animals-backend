@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -22,6 +23,7 @@ import org.springframework.http.HttpStatus;
 import uk.gov.defra.trade.imports.animals.addressbook.AddressBookClient;
 import uk.gov.defra.trade.imports.animals.addressbook.AddressBookRecord;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
+import uk.gov.defra.trade.imports.animals.exceptions.UnresolvableConsignmentPartyException;
 
 @ExtendWith(MockitoExtension.class)
 class ConsignmentPartyResolverTest {
@@ -116,9 +118,10 @@ class ConsignmentPartyResolverTest {
     }
 
     @Test
-    void shouldFailSubmissionNamingTheFirstUnresolvableRoleInRoleOrder() {
-        // Both miss. Consignor is checked first whichever lookup finished first, so the message
-        // does not depend on the order the concurrent lookups completed in.
+    void shouldFailSubmissionNamingEveryUnresolvableRoleInRoleOrder() {
+        // Both miss, and both are reported — one pass tells the submitter about all of them.
+        // The roles are walked in a fixed order, so the failure reads the same way whichever of
+        // the concurrent lookups finished first.
         when(addressBookClient.findById(ORG, "missing-consignor")).thenReturn(Optional.empty());
         when(addressBookClient.findById(ORG, "missing-importer")).thenReturn(Optional.empty());
         Notification notification = Notification.builder()
@@ -126,9 +129,41 @@ class ConsignmentPartyResolverTest {
             .importer(ConsignmentParty.reference("missing-importer"))
             .build();
 
-        assertThatExceptionOfType(BadRequestException.class)
+        assertThatExceptionOfType(UnresolvableConsignmentPartyException.class)
             .isThrownBy(() -> resolver.resolveForSubmission(notification, ORG))
-            .withMessageContaining("missing-consignor");
+            .satisfies(thrown -> assertThat(thrown.addressIdByRole()).containsExactly(
+                entry("consignor", "missing-consignor"),
+                entry("importer", "missing-importer")));
+    }
+
+    @Test
+    void shouldNameOnlyTheRolesThatMissed() {
+        stub("resolves", "Consignee Ltd");
+        when(addressBookClient.findById(ORG, "gone")).thenReturn(Optional.empty());
+        Notification notification = Notification.builder()
+            .consignor(ConsignmentParty.reference("gone"))
+            .consignee(ConsignmentParty.reference("resolves"))
+            .build();
+
+        assertThatExceptionOfType(UnresolvableConsignmentPartyException.class)
+            .isThrownBy(() -> resolver.resolveForSubmission(notification, ORG))
+            .satisfies(thrown -> assertThat(thrown.addressIdByRole())
+                .containsExactly(entry("consignor", "gone")));
+    }
+
+    @Test
+    void shouldReportASoftDeletedAddressAsUnresolvableOnSubmission() {
+        when(addressBookClient.findById(ORG, "gone")).thenReturn(Optional.of(
+            new AddressBookRecord("gone", "Gone Ltd", null, null, null, null, null, null, null,
+                null, true)));
+        Notification notification = Notification.builder()
+            .destination(ConsignmentParty.reference("gone"))
+            .build();
+
+        assertThatExceptionOfType(UnresolvableConsignmentPartyException.class)
+            .isThrownBy(() -> resolver.resolveForSubmission(notification, ORG))
+            .satisfies(thrown -> assertThat(thrown.addressIdByRole())
+                .containsExactly(entry("destination", "gone")));
     }
 
     @Test

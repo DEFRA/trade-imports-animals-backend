@@ -96,7 +96,11 @@ public class NotificationController {
         description = "Transitions notification status to SUBMITTED. Accepts DRAFT or AMEND as the source state.")
     @ApiResponse(responseCode = "200", description = "Notification submitted",
         content = @Content(schema = @Schema(implementation = Notification.class)))
-    @ApiResponse(responseCode = "400", description = "Notification not in a submittable state", content = @Content)
+    @ApiResponse(responseCode = "400",
+        description = "Notification not in a submittable state, or it references address-book "
+            + "records that no longer resolve — the response body's `errors` names each affected "
+            + "role",
+        content = @Content)
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @ApiResponse(responseCode = "500", description = "Submission failed", content = @Content)

@@ -99,6 +99,42 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * Handle a submit whose address-book references no longer resolve (400 Bad Request).
+     *
+     * <p>More specific than {@link #handleBadRequestException}, which would otherwise catch it:
+     * this one reports the affected roles in the same {@code errors} shape the field-validation
+     * handlers use, so a caller has one response shape to parse rather than two.
+     */
+    @ExceptionHandler(UnresolvableConsignmentPartyException.class)
+    public ResponseEntity<ProblemDetail> handleUnresolvableConsignmentPartyException(
+        UnresolvableConsignmentPartyException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Unresolvable consignment parties (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST,
+            ex.getMessage()
+        );
+
+        problemDetail.setType(
+            URI.create("https://api.cdp.defra.cloud/problems/unresolvable-consignment-party"));
+        problemDetail.setTitle("Validation Error");
+
+        if (traceId != null) {
+            problemDetail.setProperty("traceId", traceId);
+        }
+
+        Map<String, List<String>> errors = new LinkedHashMap<>();
+        ex.addressIdByRole().forEach((role, addressId) ->
+            errors.put(role, List.of("No address-book record for " + addressId)));
+        problemDetail.setProperty("errors", errors);
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
      * Handle application-level bad-request errors (400 Bad Request).
      */
     @ExceptionHandler(BadRequestException.class)
