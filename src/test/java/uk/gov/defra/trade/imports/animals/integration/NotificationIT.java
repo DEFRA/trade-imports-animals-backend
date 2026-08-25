@@ -1179,7 +1179,7 @@ class NotificationIT extends IntegrationBase {
 
         assertThat(event.getAggregateId())
             .isEqualTo(OutboxService.buildAggregateId(referenceNumber));
-        assertThat(event.getAggregateType()).isEqualTo("NotificationAggregate");
+        assertThat(event.getAggregateType()).isEqualTo("Notification");
         assertThat(event.getSubType()).isEqualTo("GBN-AG");
         assertThat(event.getEventType())
             .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");

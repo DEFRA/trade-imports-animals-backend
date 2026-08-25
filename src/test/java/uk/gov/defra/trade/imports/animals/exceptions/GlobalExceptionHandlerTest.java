@@ -432,7 +432,7 @@ class GlobalExceptionHandlerTest {
         MDC.put("trace.id", traceId);
         OutboxWriteException exception = new OutboxWriteException(
             "Duplicate aggregateVersion on outbox insert",
-            "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123",
+            "Imports.Notification.GBN-AG.GBN-AG-26-ABC123",
             1L,
             "correlation-abc");
 
@@ -461,7 +461,7 @@ class GlobalExceptionHandlerTest {
         // Given - no trace ID in MDC
         OutboxWriteException exception = new OutboxWriteException(
             "Could not acquire outbox lock",
-            "Imports.NotificationAggregate.GBN-AG.GBN-AG-26-ABC123",
+            "Imports.Notification.GBN-AG.GBN-AG-26-ABC123",
             null,
             "correlation-xyz");
 

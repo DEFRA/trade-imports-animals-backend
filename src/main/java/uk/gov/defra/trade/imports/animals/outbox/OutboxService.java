@@ -25,10 +25,10 @@ public class OutboxService {
 
     private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
 
-    static final String AGGREGATE_TYPE = "NotificationAggregate";
+    static final String AGGREGATE_TYPE = "Notification";
     static final String SUB_TYPE = "GBN-AG";
     static final String SCHEMA_VERSION = "1";
-    static final String AGGREGATE_ID_PREFIX = "Imports.NotificationAggregate.GBN-AG.";
+    static final String AGGREGATE_ID_PREFIX = "Imports.Notification.GBN-AG.";
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;

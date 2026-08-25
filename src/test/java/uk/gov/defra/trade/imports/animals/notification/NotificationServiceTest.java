@@ -438,7 +438,7 @@ class NotificationServiceTest {
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;
                     assertThat(owe.getAggregateId())
-                        .isEqualTo("Imports.NotificationAggregate.GBN-AG." + referenceNumber);
+                        .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
                     assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
                 });
 
@@ -1209,7 +1209,7 @@ class NotificationServiceTest {
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;
                     assertThat(owe.getAggregateId())
-                        .isEqualTo("Imports.NotificationAggregate.GBN-AG." + referenceNumber);
+                        .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
                     assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
                 });
 
@@ -1465,7 +1465,7 @@ class NotificationServiceTest {
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;
                     assertThat(owe.getAggregateId())
-                        .isEqualTo("Imports.NotificationAggregate.GBN-AG." + referenceNumber);
+                        .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
                     assertThat(owe.getCorrelationId()).isEqualTo("trace-amd-6");
                 });
 

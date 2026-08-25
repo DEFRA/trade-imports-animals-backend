@@ -48,7 +48,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         assertThat(publishedMessage.get("aggregateVersion").asLong()).isEqualTo(1L);
         assertThat(publishedMessage.get("eventId").asText()).isEqualTo(event.getEventId());
         assertThat(publishedMessage.get("aggregateId").asText()).isEqualTo(event.getAggregateId());
-        assertThat(publishedMessage.get("aggregateType").asText()).isEqualTo("NotificationAggregate");
+        assertThat(publishedMessage.get("aggregateType").asText()).isEqualTo("Notification");
         assertThat(publishedMessage.get("subType").asText()).isEqualTo("GBN-AG");
         assertThat(publishedMessage.get("eventType").asText())
             .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
