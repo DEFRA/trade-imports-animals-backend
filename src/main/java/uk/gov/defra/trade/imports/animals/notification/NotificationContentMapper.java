@@ -7,7 +7,7 @@ import org.mapstruct.Named;
 import org.mapstruct.ReportingPolicy;
 import org.mapstruct.control.DeepClone;
 
-@Mapper(unmappedTargetPolicy = ReportingPolicy.ERROR, mappingControl = DeepClone.class)
+@Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR, mappingControl = DeepClone.class)
 public interface NotificationContentMapper {
 
     @Mapping(target = "commodity", source = "commodity", qualifiedByName = "copyCommodity")

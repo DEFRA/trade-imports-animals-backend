@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.bson.Document;
+import org.mapstruct.factory.Mappers;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -118,6 +119,7 @@ class NotificationServiceTest {
         return new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
             new NotificationCopyMapper(),
+            Mappers.getMapper(NotificationContentMapper.class),
             new ConsignmentPartyResolver(addressBookClient),
             referenceNumberGenerator, ttlConfig,
             Duration.ZERO, 54, 50);
@@ -251,7 +253,6 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .concurrencyToken(0L)
                 .status(DRAFT)
-                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .origin(origin)
                     .commodity(commodity)
@@ -1049,7 +1050,6 @@ class NotificationServiceTest {
                 .id("notif-id-ref")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
-                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .consignor(NotificationTestData.reference(addressId))
                     .build())
@@ -1084,7 +1084,6 @@ class NotificationServiceTest {
                 .id("notif-id-copy")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
-                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .consignor(NotificationTestData.reference(addressId))
                     .build())
@@ -1119,7 +1118,6 @@ class NotificationServiceTest {
                 .id("notif-id-shared")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
-                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .consignor(NotificationTestData.reference(addressId))
                     .consignee(NotificationTestData.reference(addressId))
@@ -1339,7 +1337,6 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
                 .notification(Notification.builder().build())
-                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1368,7 +1365,6 @@ class NotificationServiceTest {
                 .id("notif-id-amd-8")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
-                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .origin(originalOrigin)
                     .build())
@@ -1550,7 +1546,6 @@ class NotificationServiceTest {
                 .id("notif-id-can-1")
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
-                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .origin(new Origin("FR", "false", "EDITED-REF"))
                     .build())
@@ -1947,7 +1942,6 @@ class NotificationServiceTest {
                 .id("db-id-1")
                 .referenceNumber(ref)
                 .status(DRAFT)
-                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .origin(new Origin("FR", "no", "OLD"))
                     .build())
@@ -2100,7 +2094,6 @@ class NotificationServiceTest {
                 .id("db-id-a")
                 .referenceNumber(ref)
                 .status(SUBMITTED)
-                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .origin(new Origin("GB", "no", "REF"))
                     .build())
@@ -2124,6 +2117,54 @@ class NotificationServiceTest {
         }
 
         @Test
+        void amend_shouldSnapshotNotificationContentIntoBaseline_withMutationIndependence() {
+            // Given — a submitted notification with content that will be snapshotted on amend.
+            String ref = "GBN-AG-26-AMD002";
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .id("db-id-b")
+                .referenceNumber(ref)
+                .status(SUBMITTED)
+                .notification(Notification.builder()
+                    .origin(new Origin("GB", "no", "ORIGINAL"))
+                    .commodity(Commodity.builder().name("Cattle").build())
+                    .reasonForImport("PERMANENT")
+                    .cphNumber("12/345/6789")
+                    .build())
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notificationAggregate));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            NotificationAggregate result = notificationService.amendNotification(ref, "trace", null);
+
+            // Then — baseline captured the pre-amend content.
+            assertThat(result.getSubmittedNotificationBaseline()).isNotNull();
+            assertThat(result.getSubmittedNotificationBaseline().getOrigin().getInternalReference())
+                .isEqualTo("ORIGINAL");
+            assertThat(result.getSubmittedNotificationBaseline().getCommodity().getName())
+                .isEqualTo("Cattle");
+
+            // And — the baseline is a distinct object graph: mutating the live notification (as a
+            // trader would during their edit) must not bleed through into the baseline.
+            result.getNotification().getOrigin().setInternalReference("EDITED");
+            result.getNotification().getCommodity().setName("MutatedCattle");
+            result.getNotification().setReasonForImport("CHANGED");
+            result.getNotification().setCphNumber("99/999/9999");
+
+            assertThat(result.getSubmittedNotificationBaseline().getOrigin().getInternalReference())
+                .isEqualTo("ORIGINAL");
+            assertThat(result.getSubmittedNotificationBaseline().getCommodity().getName())
+                .isEqualTo("Cattle");
+            assertThat(result.getSubmittedNotificationBaseline().getReasonForImport())
+                .isEqualTo("PERMANENT");
+            assertThat(result.getSubmittedNotificationBaseline().getCphNumber())
+                .isEqualTo("12/345/6789");
+        }
+
+        @Test
         void cancelAmend_shouldRestoreFulfilmentsAndPreserveOriginalSubmittedAt() {
             // Given — an in-flight amendment carries the original submittedAt (writeWithOutbox
             // does not touch it on the SUBMITTED -> AMEND transition), so cancel-amend must
@@ -2138,7 +2179,6 @@ class NotificationServiceTest {
                 .id("db-id-c")
                 .referenceNumber(ref)
                 .status(AMEND)
-                .notification(Notification.builder().build())
                 .notification(Notification.builder()
                     .origin(new Origin("FR", "yes", "EDITED"))
                     .build())
@@ -2447,25 +2487,9 @@ class NotificationServiceTest {
         NotificationViewBuilder transport(Transport v) { this.transport = v; return this; }
 
         NotificationView build() {
-            String ref = referenceNumber;
-            NotificationStatus s = status;
-            LocalDateTime c = created;
-            Origin o = origin;
-            Commodity cm = commodity;
-            ConsignmentParty cor = consignor;
-            ConsignmentParty cee = consignee;
-            Transport t = transport;
-            return new NotificationView() {
-                @Override public String getReferenceNumber() { return ref; }
-                @Override public Long getConcurrencyToken() { return 0L; }
-                @Override public NotificationStatus getStatus() { return s; }
-                @Override public LocalDateTime getCreated() { return c; }
-                @Override public Origin getOrigin() { return o; }
-                @Override public Commodity getCommodity() { return cm; }
-                @Override public ConsignmentParty getConsignor() { return cor; }
-                @Override public ConsignmentParty getConsignee() { return cee; }
-                @Override public Transport getTransport() { return t; }
-            };
+            return new NotificationView.Data(
+                referenceNumber, 0L, status, created,
+                origin, commodity, consignor, consignee, transport);
         }
     }
 }

@@ -12,7 +12,6 @@ import net.javacrumbs.shedlock.core.LockConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.apache.commons.lang3.StringUtils;
 import org.bson.Document;
-import org.mapstruct.factory.Mappers;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
@@ -43,15 +42,14 @@ public class NotificationService {
     private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
     private static final int MAX_REF_RETRIES = 3;
     private static final int MAX_LOCK_RETRIES = 2;
-    private static final NotificationContentMapper CONTENT_MAPPER =
-        Mappers.getMapper(NotificationContentMapper.class);
-  
+
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
     private final DocumentService documentService;
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
     private final NotificationCopyMapper notificationCopyMapper;
+    private final NotificationContentMapper notificationContentMapper;
     private final ConsignmentPartyResolver consignmentPartyResolver;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final NotificationTtlConfig ttlConfig;
@@ -66,6 +64,7 @@ public class NotificationService {
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
         NotificationCopyMapper notificationCopyMapper,
+        NotificationContentMapper notificationContentMapper,
         ConsignmentPartyResolver consignmentPartyResolver,
         ReferenceNumberGenerator referenceNumberGenerator,
         NotificationTtlConfig ttlConfig,
@@ -78,6 +77,7 @@ public class NotificationService {
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
         this.notificationCopyMapper = notificationCopyMapper;
+        this.notificationContentMapper = notificationContentMapper;
         this.consignmentPartyResolver = consignmentPartyResolver;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.ttlConfig = ttlConfig;
@@ -215,7 +215,7 @@ public class NotificationService {
                 "Cannot amend notification with status: " + notificationAggregate.getStatus());
         }
 
-        notificationAggregate.setSubmittedNotificationBaseline(CONTENT_MAPPER.deepClone(notificationAggregate.getNotification()));
+        notificationAggregate.setSubmittedNotificationBaseline(notificationContentMapper.deepClone(notificationAggregate.getNotification()));
         List<Document> currentFulfilments = notificationAggregate.getFulfilments();
         notificationAggregate.setSubmittedFulfilmentsBaseline(
             currentFulfilments == null ? null : deepCopyFulfilments(currentFulfilments));
@@ -244,7 +244,7 @@ public class NotificationService {
                 "Cannot cancel amendment: no submitted baseline stored for notification");
         }
 
-        notificationAggregate.setNotification(CONTENT_MAPPER.deepClone(notificationAggregate.getSubmittedNotificationBaseline()));
+        notificationAggregate.setNotification(notificationContentMapper.deepClone(notificationAggregate.getSubmittedNotificationBaseline()));
         notificationAggregate.setSubmittedNotificationBaseline(null);
         List<Document> priorFulfilments = notificationAggregate.getSubmittedFulfilmentsBaseline();
         notificationAggregate.setFulfilments(
@@ -308,7 +308,7 @@ public class NotificationService {
         // toBuilder is shallow; deep-clone the notification so the resolver's party mutations
         // don't leak back into the persisted aggregate.
         if (copy.getNotification() != null) {
-            copy.setNotification(CONTENT_MAPPER.deepClone(copy.getNotification()));
+            copy.setNotification(notificationContentMapper.deepClone(copy.getNotification()));
         }
         return eventType == OutboxEventType.NOTIFICATION_EDITED
             ? consignmentPartyResolver.resolveForDraft(copy, organisationId)

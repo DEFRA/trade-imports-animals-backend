@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDateTime;
 import java.util.List;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -13,11 +14,16 @@ import org.springframework.data.mongodb.core.index.Indexed;
 
 import static java.util.Objects.requireNonNull;
 
+/**
+ * Aggregate root: identity + metadata at the top, with the well-structured content held as a
+ * composed {@link Notification} sub-object (symmetric with the opaque {@link #fulfilments} payload).
+ * Amend baselines snapshot the two sub-objects independently.
+ */
 @org.springframework.data.mongodb.core.mapping.Document(collection = "notification")
 @Data
 @Builder(toBuilder = true)
 @NoArgsConstructor
-@lombok.AllArgsConstructor
+@AllArgsConstructor
 public class NotificationAggregate {
 
     @Id

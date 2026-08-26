@@ -6,8 +6,12 @@ import org.springframework.beans.factory.annotation.Value;
 
 /**
  * Interface projection backing {@code GET /notifications?…}. SpEL accessors unwrap
- * {@code notification.*} content fields to preserve the pre-refactor flat wire shape. Forces
- * open-projection (full aggregate load) — acceptable for the dashboard read.
+ * {@code notification.*} content fields to preserve the pre-refactor flat wire shape.
+ *
+ * <p>The {@code @Value} accessors force Spring Data into an open projection, so the full
+ * aggregate document (including the opaque {@code fulfilments} payload) is loaded per row.
+ * Accepted trade-off: this endpoint is being replaced by an event-populated dashboard service
+ * and there are no live users to notice the cost.
  *
  * <p>{@link Data} is the concrete carrier Jackson deserializes into on the client side; Spring
  * Data returns proxy instances on the server side.

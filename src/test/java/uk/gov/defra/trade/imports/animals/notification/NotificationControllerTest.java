@@ -651,17 +651,8 @@ class NotificationControllerTest {
 
         private NotificationView testView(String ref, NotificationStatus status, Origin origin,
                 Commodity commodity, ConsignmentParty consignor, Transport transport) {
-            return new NotificationView() {
-                @Override public String getReferenceNumber() { return ref; }
-                @Override public Long getConcurrencyToken() { return 0L; }
-                @Override public NotificationStatus getStatus() { return status; }
-                @Override public java.time.LocalDateTime getCreated() { return null; }
-                @Override public Origin getOrigin() { return origin; }
-                @Override public Commodity getCommodity() { return commodity; }
-                @Override public ConsignmentParty getConsignor() { return consignor; }
-                @Override public ConsignmentParty getConsignee() { return null; }
-                @Override public Transport getTransport() { return transport; }
-            };
+            return new NotificationView.Data(
+                ref, 0L, status, null, origin, commodity, consignor, null, transport);
         }
 
         @Test
