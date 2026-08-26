@@ -21,6 +21,6 @@ public record GbnAgEventData(
             MODEL_VALUE,
             TYPE_VALUE,
             ExchangedDocument.from(notificationAggregate),
-            SpecifiedConsignment.from(notificationAggregate));
+            SpecifiedConsignment.from(notificationAggregate.requireNotification()));
     }
 }

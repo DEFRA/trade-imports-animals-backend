@@ -3,7 +3,6 @@ package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 import java.util.List;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
-import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
 
 public record SpecifiedConsignment(
@@ -21,8 +20,7 @@ public record SpecifiedConsignment(
     List<ConsignmentItem> includedConsignmentItem
 ) {
 
-    static SpecifiedConsignment from(NotificationAggregate notificationAggregate) {
-        Notification notification = notificationAggregate.requireNotification();
+    static SpecifiedConsignment from(Notification notification) {
         Transport transport = notification.getTransport();
         AdditionalDetails additionalDetails = notification.getAdditionalDetails();
         // Tri-state: TRUE / FALSE when supplied, null when the field is absent upstream.

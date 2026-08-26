@@ -30,7 +30,7 @@ public record ExchangedDocument(
             VERSION_ID,
             toUtcDateTime(notificationAggregate.getUpdated()),
             null,
-            Authentication.from(notificationAggregate),
+            Authentication.from(notification),
             null);
     }
 
