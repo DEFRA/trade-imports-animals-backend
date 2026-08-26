@@ -22,7 +22,6 @@ public class NotificationCopyMapper {
     public NotificationDto toCopyDto(NotificationAggregate notificationAggregate) {
         Notification source = notificationAggregate.requireNotification();
         return NotificationDto.builder()
-            .fulfilments(notificationAggregate.getFulfilments() == null ? null : new ArrayList<>(notificationAggregate.getFulfilments()))
             .origin(mapOrigin(source.getOrigin()))
             .commodity(mapCommodity(source.getCommodity()))
             .reasonForImport(source.getReasonForImport())
@@ -33,6 +32,7 @@ public class NotificationCopyMapper {
             .importer(mapConsignmentParty(source.getImporter()))
             .destination(mapConsignmentParty(source.getDestination()))
             .cphNumber(source.getCphNumber())
+            .fulfilments(notificationAggregate.getFulfilments() == null ? null : new ArrayList<>(notificationAggregate.getFulfilments()))
             // transport intentionally omitted — logistical fields (portOfEntry, arrivalDate, transporter) are reset on copy
             // consignment intentionally omitted — contact address is reset on copy
             .build();
