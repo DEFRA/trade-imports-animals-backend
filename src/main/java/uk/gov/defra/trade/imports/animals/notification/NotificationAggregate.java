@@ -11,6 +11,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Version;
 import org.springframework.data.mongodb.core.index.Indexed;
 
+import static java.util.Objects.requireNonNull;
+
 @org.springframework.data.mongodb.core.mapping.Document(collection = "notification")
 @Data
 @Builder(toBuilder = true)
@@ -68,7 +70,7 @@ public class NotificationAggregate {
 
     /** Returns the notification sub-object, failing fast if absent. Use at seams that require content. */
     public Notification requireNotification() {
-        return java.util.Objects.requireNonNull(notification,
+        return requireNonNull(notification,
             "NotificationAggregate requires a notification sub-object at this seam");
     }
 }
