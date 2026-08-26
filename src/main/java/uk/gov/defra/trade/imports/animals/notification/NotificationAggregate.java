@@ -65,4 +65,10 @@ public class NotificationAggregate {
     /** Pre-amend snapshot of {@link #fulfilments}. Non-null iff status is AMEND; restored by cancelAmend, cleared by submit-from-amend. */
     @JsonIgnore
     private List<Document> submittedFulfilmentsBaseline;
+
+    /** Returns the notification sub-object, failing fast if absent. Use at seams that require content. */
+    public Notification requireNotification() {
+        return java.util.Objects.requireNonNull(notification,
+            "NotificationAggregate requires a notification sub-object at this seam");
+    }
 }

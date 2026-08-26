@@ -1,7 +1,6 @@
 package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
 import java.util.List;
-import java.util.Objects;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
@@ -23,9 +22,7 @@ public record SpecifiedConsignment(
 ) {
 
     static SpecifiedConsignment from(NotificationAggregate notificationAggregate) {
-        Notification notification = Objects.requireNonNull(
-            notificationAggregate.getNotification(),
-            "NotificationAggregate reaching outbox serialisation must have a notification sub-object");
+        Notification notification = notificationAggregate.requireNotification();
         Transport transport = notification.getTransport();
         AdditionalDetails additionalDetails = notification.getAdditionalDetails();
         // Tri-state: TRUE / FALSE when supplied, null when the field is absent upstream.

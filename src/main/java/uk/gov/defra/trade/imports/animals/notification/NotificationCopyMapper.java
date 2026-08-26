@@ -2,7 +2,6 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,9 +20,7 @@ import org.springframework.stereotype.Component;
 public class NotificationCopyMapper {
 
     public NotificationDto toCopyDto(NotificationAggregate source) {
-        Notification notification = Objects.requireNonNull(
-            source.getNotification(),
-            "NotificationAggregate reaching copy mapping must have a notification sub-object");
+        Notification notification = source.requireNotification();
         return NotificationDto.builder()
             .fulfilments(source.getFulfilments() == null ? null : new ArrayList<>(source.getFulfilments()))
             .origin(mapOrigin(notification.getOrigin()))
