@@ -34,8 +34,8 @@ public class OutboxService {
     private final ObjectMapper objectMapper;
     private final GbnAgEventDataMapper gbnAgEventDataMapper;
 
-    public void appendEvent(NotificationAggregate notification, OutboxEventType eventType, String correlationId, Actor actor) {
-        String aggregateId = buildAggregateId(notification.getReferenceNumber());
+    public void appendEvent(NotificationAggregate notificationAggregate, OutboxEventType eventType, String correlationId, Actor actor) {
+        String aggregateId = buildAggregateId(notificationAggregate.getReferenceNumber());
 
         Optional<OutboxEvent> latestEvent = outboxEventRepository
             .findTopByAggregateIdOrderByAggregateVersionDesc(aggregateId);
@@ -52,9 +52,9 @@ public class OutboxService {
             : priorChanges.getLast().getStatus();
 
         List<StatusChange> statusChanges;
-        if (notification.getStatus() != lastStatus) {
+        if (notificationAggregate.getStatus() != lastStatus) {
             StatusChange currentChange = StatusChange.builder()
-                .status(notification.getStatus())
+                .status(notificationAggregate.getStatus())
                 .dateChanged(now)
                 .actor(actor)
                 .build();
@@ -64,7 +64,7 @@ public class OutboxService {
         }
 
         Map<String, Object> data = objectMapper.convertValue(
-            gbnAgEventDataMapper.toGbnAgEventData(notification), MAP_TYPE);
+            gbnAgEventDataMapper.toGbnAgEventData(notificationAggregate), MAP_TYPE);
 
         OutboxEvent event = OutboxEvent.builder()
             .eventId(UUID.randomUUID().toString())
