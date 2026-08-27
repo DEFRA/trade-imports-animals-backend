@@ -1309,6 +1309,13 @@ class NotificationIT extends IntegrationBase {
         return exchangedDocument.get("identifier");
     }
 
+    @SuppressWarnings("unchecked")
+    private static Object gbnAgVersionId(OutboxEvent event) {
+        Map<String, Object> exchangedDocument =
+            (Map<String, Object>) event.getData().get("exchangedDocument");
+        return exchangedDocument.get("versionId");
+    }
+
     @Test
     void submit_shouldIncrementAggregateVersion_onSubsequentSubmissions() {
         // Given — create and submit a notification (version 1)
@@ -1461,6 +1468,120 @@ class NotificationIT extends IntegrationBase {
             .expectStatus().isOk()
             .expectBody(NotificationAggregate.class)
             .value(n -> assertThat(n.getStatus()).isEqualTo(NotificationStatus.DELETED));
+    }
+
+    @Test
+    void softDelete_shouldWriteNotificationDeletedEvent_whenDraft() {
+        // Given — create a DRAFT notification (NOTIFICATION_CREATED at v1)
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When — soft-delete the draft
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // Then — NOTIFICATION_DELETED emitted at v2 (DRAFT never submitted, no versionId)
+        List<OutboxEvent> events = outboxEventRepository.findAll().stream()
+            .sorted(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
+            .toList();
+        assertThat(events).hasSize(2);
+        OutboxEvent deleteEvent = events.get(1);
+        assertThat(deleteEvent.getEventType())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationDeleted");
+        assertThat(deleteEvent.getAggregateVersion()).isEqualTo(2L);
+        assertThat(gbnAgVersionId(deleteEvent)).isNull();
+    }
+
+    @Test
+    void softDelete_shouldWriteNotificationSubmissionDeletedEvent_whenSubmitted() {
+        // Given — create and submit (NOTIFICATION_CREATED v1, NOTIFICATION_SUBMITTED v2)
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // When — soft-delete the submitted notification
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // Then — NOTIFICATION_SUBMISSION_DELETED emitted at v3, carrying versionId=1
+        List<OutboxEvent> events = outboxEventRepository.findAll().stream()
+            .sorted(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
+            .toList();
+        assertThat(events).hasSize(3);
+        OutboxEvent deleteEvent = events.get(2);
+        assertThat(deleteEvent.getEventType())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmissionDeleted");
+        assertThat(deleteEvent.getAggregateVersion()).isEqualTo(3L);
+        assertThat(gbnAgVersionId(deleteEvent)).isEqualTo(1);
+    }
+
+    @Test
+    void submit_shouldSetVersionIdToOne_onFirstSubmission() {
+        // Given — create a notification
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When — submit
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // Then — NOTIFICATION_SUBMITTED carries versionId=1
+        OutboxEvent submitEvent = outboxEventRepository.findAll().stream()
+            .filter(e -> e.getEventType().endsWith("NotificationSubmitted"))
+            .findFirst().orElseThrow();
+        assertThat(gbnAgVersionId(submitEvent)).isEqualTo(1);
+    }
+
+    @Test
+    void submit_shouldIncrementVersionId_onResubmission() {
+        // Given — create, submit, force back to DRAFT, submit again
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        NotificationAggregate notificationAggregate =
+            notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        notificationAggregate.setStatus(NotificationStatus.DRAFT);
+        notificationRepository.save(notificationAggregate);
+
+        // When — resubmit
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        // Then — second NOTIFICATION_SUBMITTED carries versionId=2
+        List<OutboxEvent> submitEvents = outboxEventRepository.findAll().stream()
+            .filter(e -> e.getEventType().endsWith("NotificationSubmitted"))
+            .sorted(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
+            .toList();
+        assertThat(submitEvents).hasSize(2);
+        assertThat(gbnAgVersionId(submitEvents.get(0))).isEqualTo(1);
+        assertThat(gbnAgVersionId(submitEvents.get(1))).isEqualTo(2);
     }
 
     @Test
@@ -1991,6 +2112,43 @@ class NotificationIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
+    }
+
+    @Test
+    void copy_shouldWriteNotificationCreatedEvent_forNewNotification() {
+        // Given — source notification
+        NotificationAggregate source = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody();
+
+        // When — copy it
+        NotificationAggregate copy = webClient("NoAuth")
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", source.getConcurrencyToken())
+                .build(source.getReferenceNumber()))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody();
+
+        // Then — NOTIFICATION_CREATED written for the new notification (not for the source)
+        List<OutboxEvent> allEvents = outboxEventRepository.findAll();
+        List<OutboxEvent> createdEvents = allEvents.stream()
+            .filter(e -> e.getEventType().endsWith("NotificationCreated"))
+            .toList();
+        // One NOTIFICATION_CREATED per notification (source + copy = 2 total)
+        assertThat(createdEvents).hasSize(2);
+        assertThat(createdEvents).anyMatch(
+            e -> e.getAggregateId().equals(OutboxService.buildAggregateId(copy.getReferenceNumber())));
+        // Source aggregate has exactly one event (its own NOTIFICATION_CREATED, not a second one from the copy)
+        long sourceEventCount = allEvents.stream()
+            .filter(e -> e.getAggregateId().equals(OutboxService.buildAggregateId(source.getReferenceNumber())))
+            .count();
+        assertThat(sourceEventCount).isEqualTo(1);
     }
 
     @Test

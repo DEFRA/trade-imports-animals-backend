@@ -1934,6 +1934,31 @@ class NotificationServiceTest {
 
             verify(notificationRepository, never()).save(any());
         }
+
+        @Test
+        void copyNotification_shouldEmitNotificationCreated_forNewNotification() {
+            // Given
+            String sourceRef = "GBN-AG-26-CPY-SRC";
+            String newRef = "GBN-AG-26-CPY-NEW";
+            NotificationAggregate source = NotificationAggregate.builder()
+                .referenceNumber(sourceRef)
+                .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
+                .concurrencyToken(0L)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+            when(referenceNumberGenerator.generate()).thenReturn(newRef);
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.copyNotification(sourceRef, 0L, "trace", null);
+
+            // Then — the new notification emits NOTIFICATION_CREATED; the source produces no event
+            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_CREATED), any(), any());
+        }
     }
 
     // Fulfilments handling. Covers the PUT/replace path, the amend/cancelAmend/submit snapshot
@@ -2460,6 +2485,75 @@ class NotificationServiceTest {
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notificationAggregate);
+        }
+
+        @Test
+        void softDeleteNotification_shouldEmitNotificationDeleted_whenDraft() {
+            // Given
+            String referenceNumber = "GBN-AG-26-DEL-DRAFT";
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .id("notif-id-del-draft")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .notification(Notification.builder().build())
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notificationAggregate));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.softDeleteNotification(referenceNumber, "trace", null);
+
+            // Then — DRAFT → DELETED emits NOTIFICATION_DELETED (no prior submission)
+            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_DELETED), any(), any());
+        }
+
+        @Test
+        void softDeleteNotification_shouldEmitNotificationSubmissionDeleted_whenSubmitted() {
+            // Given
+            String referenceNumber = "GBN-AG-26-DEL-SUB";
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .id("notif-id-del-sub")
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .notification(Notification.builder().build())
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notificationAggregate));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.softDeleteNotification(referenceNumber, "trace", null);
+
+            // Then — SUBMITTED → DELETED emits NOTIFICATION_SUBMISSION_DELETED
+            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_SUBMISSION_DELETED), any(), any());
+        }
+
+        @Test
+        void softDeleteNotification_shouldEmitNotificationSubmissionDeleted_whenAmend() {
+            // Given
+            String referenceNumber = "GBN-AG-26-DEL-AMD";
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .id("notif-id-del-amd")
+                .referenceNumber(referenceNumber)
+                .status(AMEND)
+                .notification(Notification.builder().build())
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notificationAggregate));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.softDeleteNotification(referenceNumber, "trace", null);
+
+            // Then — AMEND → DELETED also emits NOTIFICATION_SUBMISSION_DELETED
+            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_SUBMISSION_DELETED), any(), any());
         }
 
         // NB: soft-delete on an already-DELETED notification is idempotent — returns the existing
