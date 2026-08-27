@@ -59,8 +59,8 @@ public class ConsignmentPartyResolver {
      *
      * <p>Mutates the given instance, so pass a copy — what is stored must keep the reference alone.
      */
-    public Notification resolveForSubmission(Notification notification, String organisationId) {
-        return resolveParties(notification, organisationId, true);
+    public NotificationAggregate resolveForSubmission(NotificationAggregate notificationAggregate, String organisationId) {
+        return resolveParties(notificationAggregate, organisationId, true);
     }
 
     /**
@@ -71,19 +71,20 @@ public class ConsignmentPartyResolver {
      *
      * <p>Mutates the given instance, so pass a copy — what is stored must keep the reference alone.
      */
-    public Notification resolveForDraft(Notification notification, String organisationId) {
+    public NotificationAggregate resolveForDraft(NotificationAggregate notificationAggregate, String organisationId) {
         if (organisationId == null || organisationId.isBlank()) {
             // No organisation to look in. The draft still saves; the names simply stay unresolved.
-            return notification;
+            return notificationAggregate;
         }
-        return resolveParties(notification, organisationId, false);
+        return resolveParties(notificationAggregate, organisationId, false);
     }
 
-    private Notification resolveParties(
-        Notification notification, String organisationId, boolean failOnMiss) {
+    private NotificationAggregate resolveParties(
+        NotificationAggregate notificationAggregate, String organisationId, boolean failOnMiss) {
+        Notification notification = notificationAggregate.requireNotification();
         List<String> addressIds = referencedAddressIds(notification);
         if (addressIds.isEmpty()) {
-            return notification;
+            return notificationAggregate;
         }
         if (failOnMiss && (organisationId == null || organisationId.isBlank())) {
             throw new BadRequestException(
@@ -105,7 +106,7 @@ public class ConsignmentPartyResolver {
             log.error("Address-book parties could not be resolved for submission: {}", unresolved);
             throw new UnresolvableConsignmentPartyException(unresolved);
         }
-        return notification;
+        return notificationAggregate;
     }
 
     private Map<String, Optional<ConsignmentParty>> lookUpAll(

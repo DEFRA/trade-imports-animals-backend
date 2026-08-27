@@ -16,6 +16,7 @@ import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.MeansOfTransport;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Species;
@@ -224,9 +225,10 @@ class GbnAgMapperTest {
     class MinimalAndDefaults {
 
         private final GbnAgEventData result = mapper.toGbnAgEventData(
-            Notification.builder()
+            NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-MIN001")
                 .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
                 .build());
 
         @Test
@@ -278,12 +280,14 @@ class GbnAgMapperTest {
     @ParameterizedTest
     @CsvSource({"VESSEL,1", "RAILWAY,2", "ROAD_VEHICLE,3", "AIRPLANE,4"})
     void shouldMapMeansOfTransportToUnRec19ModeCode(MeansOfTransport means, int expectedCode) {
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-MODE01")
-            .transport(Transport.builder().meansOfTransport(means).build())
+            .notification(Notification.builder()
+                .transport(Transport.builder().meansOfTransport(means).build())
+                .build())
             .build();
 
-        Integer modeCode = mapper.toGbnAgEventData(notification)
+        Integer modeCode = mapper.toGbnAgEventData(notificationAggregate)
             .specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst().modeCode();
 
         assertThat(modeCode).isEqualTo(expectedCode);
@@ -291,17 +295,19 @@ class GbnAgMapperTest {
 
     @Test
     void shouldMapLogisticsPackageToNull_whenTotalNoOfPackagesNull() {
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-PKG001")
-            .commodity(Commodity.builder()
-                .commodityComplement(List.of(CommodityComplement.builder()
-                    .typeOfCommodity("01020000")
-                    .totalNoOfPackages(null)
-                    .build()))
+            .notification(Notification.builder()
+                .commodity(Commodity.builder()
+                    .commodityComplement(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("01020000")
+                        .totalNoOfPackages(null)
+                        .build()))
+                    .build())
                 .build())
             .build();
 
-        TradeLineItem line = mapper.toGbnAgEventData(notification)
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate)
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
 
@@ -310,71 +316,75 @@ class GbnAgMapperTest {
 
     @Test
     void shouldMapIndividualTradeProductInstanceToNull_whenSpeciesAbsent() {
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-SPC001")
-            .commodity(Commodity.builder()
-                .commodityComplement(List.of(CommodityComplement.builder()
-                    .typeOfCommodity("01020000")
-                    .species(null)
-                    .build()))
+            .notification(Notification.builder()
+                .commodity(Commodity.builder()
+                    .commodityComplement(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("01020000")
+                        .species(null)
+                        .build()))
+                    .build())
                 .build())
             .build();
 
-        TradeLineItem line = mapper.toGbnAgEventData(notification)
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate)
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
 
         assertThat(line.individualTradeProductInstance()).isNull();
     }
 
-    private static Notification fullyPopulatedNotification() {
-        return Notification.builder()
+    private static NotificationAggregate fullyPopulatedNotification() {
+        return NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-7K8M2P")
             .status(NotificationStatus.SUBMITTED)
             .updated(LocalDateTime.of(2026, Month.MAY, 21, 10, 15, 0))
-            .origin(new Origin("FR", "true", "Imports456_GB"))
-            .reasonForImport("INTERNAL_MARKET")
-            .additionalDetails(new AdditionalDetails("BREEDING_AND_PRODUCTION", "true"))
-            .consignor(party("Astra Rosales",
-                Address.builder()
-                    .addressLine1("43 East Hague Extension")
-                    .addressLine2("Delectus sit odio p")
-                    .townOrCity("Quas occaecat ut ear")
-                    .county("Soleure")
-                    .postcode("2051")
-                    .countryCode("CH")
-                    .build()))
-            .consignee(party("Linus George Ltd", simpleAddress("558 Oak Street", "CH")))
-            .destination(party("Linus George Ltd", simpleAddress("558 Oak Street", "CH")))
-            .importer(party("GB Animal Imports", simpleAddress("5 Port Way", "GB")))
-            .placeOfOrigin(party("Ferme du Massif Central", simpleAddress("Route de la Vallée 12", "FR")))
-            .consignment(party("Animal and Plant Health Agency", simpleAddress("Woodham Lane", "GB")))
-            .cphNumber("CPH19876")
-            .commodity(Commodity.builder()
-                .name("Live bovine animals")
-                .commodityComplement(List.of(CommodityComplement.builder()
-                    .typeOfCommodity("01020000")
-                    .totalNoOfAnimals(20)
-                    .totalNoOfPackages(1)
-                    .species(List.of(Species.builder()
-                        .value("BOV")
-                        .text("Cattle")
-                        .earTag("UK01234567890")
-                        .passport("UK0123456700999")
+            .notification(Notification.builder()
+                .origin(new Origin("FR", "true", "Imports456_GB"))
+                .reasonForImport("INTERNAL_MARKET")
+                .additionalDetails(new AdditionalDetails("BREEDING_AND_PRODUCTION", "true"))
+                .consignor(party("Astra Rosales",
+                    Address.builder()
+                        .addressLine1("43 East Hague Extension")
+                        .addressLine2("Delectus sit odio p")
+                        .townOrCity("Quas occaecat ut ear")
+                        .county("Soleure")
+                        .postcode("2051")
+                        .countryCode("CH")
                         .build()))
-                    .build()))
-                .build())
-            .transport(Transport.builder()
-                .portOfEntry("GBDVR")
-                .arrivalDate(LocalDate.of(2026, Month.MAY, 6))
-                .meansOfTransport(MeansOfTransport.ROAD_VEHICLE)
-                .transportIdentification("AB-1234")
-                .transportDocumentReference("BOL-2026-884721")
-                .transporter(Transporter.builder()
-                    .name("Acme Transport Ltd")
-                    .address(simpleAddress("1 Haulage Way", "GB"))
-                    .approvalNumber("UK-TR-123456")
-                    .type("COMMERCIAL")
+                .consignee(party("Linus George Ltd", simpleAddress("558 Oak Street", "CH")))
+                .destination(party("Linus George Ltd", simpleAddress("558 Oak Street", "CH")))
+                .importer(party("GB Animal Imports", simpleAddress("5 Port Way", "GB")))
+                .placeOfOrigin(party("Ferme du Massif Central", simpleAddress("Route de la Vallée 12", "FR")))
+                .consignment(party("Animal and Plant Health Agency", simpleAddress("Woodham Lane", "GB")))
+                .cphNumber("CPH19876")
+                .commodity(Commodity.builder()
+                    .name("Live bovine animals")
+                    .commodityComplement(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("01020000")
+                        .totalNoOfAnimals(20)
+                        .totalNoOfPackages(1)
+                        .species(List.of(Species.builder()
+                            .value("BOV")
+                            .text("Cattle")
+                            .earTag("UK01234567890")
+                            .passport("UK0123456700999")
+                            .build()))
+                        .build()))
+                    .build())
+                .transport(Transport.builder()
+                    .portOfEntry("GBDVR")
+                    .arrivalDate(LocalDate.of(2026, Month.MAY, 6))
+                    .meansOfTransport(MeansOfTransport.ROAD_VEHICLE)
+                    .transportIdentification("AB-1234")
+                    .transportDocumentReference("BOL-2026-884721")
+                    .transporter(Transporter.builder()
+                        .name("Acme Transport Ltd")
+                        .address(simpleAddress("1 Haulage Way", "GB"))
+                        .approvalNumber("UK-TR-123456")
+                        .type("COMMERCIAL")
+                        .build())
                     .build())
                 .build())
             .build();
@@ -384,12 +394,14 @@ class GbnAgMapperTest {
     void shouldEmitNullNameAndPostalAddress_whenConsignorIsUnresolvedReference() {
         // TradeParty.from does not resolve address-book references; NotificationService must call
         // ConsignmentPartyResolver.resolveForSubmission before appendEvent, or GBNAG receives nulls.
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-REFMAP")
-            .consignor(NotificationTestData.reference("665f1c2ab3e4d51a2c9d0e77"))
+            .notification(Notification.builder()
+                .consignor(NotificationTestData.reference("665f1c2ab3e4d51a2c9d0e77"))
+                .build())
             .build();
 
-        TradeParty consignor = mapper.toGbnAgEventData(notification)
+        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate)
             .specifiedConsignment().consignorParty();
 
         assertThat(consignor.name()).isNull();
@@ -399,21 +411,23 @@ class GbnAgMapperTest {
     @Test
     void shouldMapResolvedReferencedParty_toConsignorNameAndPostalAddress() {
         // Shape after ConsignmentPartyResolver resolution: addressId retained with filled details.
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-REFRES")
-            .consignor(ConsignmentParty.builder()
-                .addressId("665f1c2ab3e4d51a2c9d0e77")
-                .name("Astra Rosales")
-                .address(Address.builder()
-                    .addressLine1("43 East Hague Extension")
-                    .townOrCity("Vernier")
-                    .postcode("30055")
-                    .countryCode("CH")
+            .notification(Notification.builder()
+                .consignor(ConsignmentParty.builder()
+                    .addressId("665f1c2ab3e4d51a2c9d0e77")
+                    .name("Astra Rosales")
+                    .address(Address.builder()
+                        .addressLine1("43 East Hague Extension")
+                        .townOrCity("Vernier")
+                        .postcode("30055")
+                        .countryCode("CH")
+                        .build())
                     .build())
                 .build())
             .build();
 
-        TradeParty consignor = mapper.toGbnAgEventData(notification)
+        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate)
             .specifiedConsignment().consignorParty();
 
         assertThat(consignor.name()).isEqualTo("Astra Rosales");
@@ -424,18 +438,20 @@ class GbnAgMapperTest {
 
     @Test
     void shouldMapPartyEmailAndPhoneToDefinedContact() {
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-CONTACT")
-            .consignor(ConsignmentParty.builder()
-                .addressId("665f1c2ab3e4d51a2c9d0e77")
-                .name("Astra Rosales")
-                .email("astra@example.com")
-                .phone("01632 960111")
-                .address(simpleAddress("43 East Hague Extension", "CH"))
+            .notification(Notification.builder()
+                .consignor(ConsignmentParty.builder()
+                    .addressId("665f1c2ab3e4d51a2c9d0e77")
+                    .name("Astra Rosales")
+                    .email("astra@example.com")
+                    .phone("01632 960111")
+                    .address(simpleAddress("43 East Hague Extension", "CH"))
+                    .build())
                 .build())
             .build();
 
-        TradeParty consignor = mapper.toGbnAgEventData(notification)
+        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate)
             .specifiedConsignment().consignorParty();
 
         assertThat(consignor.definedContact()).singleElement().satisfies(contact -> {
@@ -448,16 +464,18 @@ class GbnAgMapperTest {
 
     @Test
     void shouldMapDefinedContact_whenOnlyOneOfEmailOrPhoneIsHeld() {
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-PHONLY")
-            .consignor(ConsignmentParty.builder()
-                .name("Astra Rosales")
-                .phone("01632 960111")
-                .address(simpleAddress("43 East Hague Extension", "CH"))
+            .notification(Notification.builder()
+                .consignor(ConsignmentParty.builder()
+                    .name("Astra Rosales")
+                    .phone("01632 960111")
+                    .address(simpleAddress("43 East Hague Extension", "CH"))
+                    .build())
                 .build())
             .build();
 
-        TradeParty consignor = mapper.toGbnAgEventData(notification)
+        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate)
             .specifiedConsignment().consignorParty();
 
         assertThat(consignor.definedContact()).singleElement().satisfies(contact -> {

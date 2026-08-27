@@ -14,7 +14,7 @@ import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
@@ -48,7 +48,7 @@ class NotificationExpiryIT extends IntegrationBase {
     }
 
     private void saveNotification(String referenceNumber, LocalDateTime expireAt) {
-        notificationRepository.save(Notification.builder()
+        notificationRepository.save(NotificationAggregate.builder()
             .referenceNumber(referenceNumber)
             .status(NotificationStatus.DRAFT)
             .created(LocalDateTime.now().minusDays(8))

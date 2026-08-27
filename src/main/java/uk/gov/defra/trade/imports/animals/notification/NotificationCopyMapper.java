@@ -5,7 +5,7 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 /**
- * Maps a source {@link Notification} to a {@link NotificationDto} for the copy-as-new
+ * Maps a source {@link NotificationAggregate} to a {@link NotificationDto} for the copy-as-new
  * feature: identification, commodity type, and address details are retained, while
  * logistical fields (transport, consignment contact) and per-animal counts are reset
  * so the copy starts as a fresh incomplete draft.
@@ -19,7 +19,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class NotificationCopyMapper {
 
-    public NotificationDto toCopyDto(Notification source) {
+    public NotificationDto toCopyDto(NotificationAggregate notificationAggregate) {
+        Notification source = notificationAggregate.requireNotification();
         return NotificationDto.builder()
             .origin(mapOrigin(source.getOrigin()))
             .commodity(mapCommodity(source.getCommodity()))
@@ -31,7 +32,7 @@ public class NotificationCopyMapper {
             .importer(mapConsignmentParty(source.getImporter()))
             .destination(mapConsignmentParty(source.getDestination()))
             .cphNumber(source.getCphNumber())
-            .fulfilments(source.getFulfilments() == null ? null : new ArrayList<>(source.getFulfilments()))
+            .fulfilments(notificationAggregate.getFulfilments() == null ? null : new ArrayList<>(notificationAggregate.getFulfilments()))
             // transport intentionally omitted — logistical fields (portOfEntry, arrivalDate, transporter) are reset on copy
             // consignment intentionally omitted — contact address is reset on copy
             .build();

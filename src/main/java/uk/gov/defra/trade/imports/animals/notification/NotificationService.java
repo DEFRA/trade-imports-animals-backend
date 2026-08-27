@@ -42,13 +42,14 @@ public class NotificationService {
     private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
     private static final int MAX_REF_RETRIES = 3;
     private static final int MAX_LOCK_RETRIES = 2;
-  
+
     private final NotificationRepository notificationRepository;
     private final AuditRepository auditRepository;
     private final DocumentService documentService;
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
     private final NotificationCopyMapper notificationCopyMapper;
+    private final NotificationContentMapper notificationContentMapper;
     private final ConsignmentPartyResolver consignmentPartyResolver;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final NotificationTtlConfig ttlConfig;
@@ -63,6 +64,7 @@ public class NotificationService {
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
         NotificationCopyMapper notificationCopyMapper,
+        NotificationContentMapper notificationContentMapper,
         ConsignmentPartyResolver consignmentPartyResolver,
         ReferenceNumberGenerator referenceNumberGenerator,
         NotificationTtlConfig ttlConfig,
@@ -75,6 +77,7 @@ public class NotificationService {
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
         this.notificationCopyMapper = notificationCopyMapper;
+        this.notificationContentMapper = notificationContentMapper;
         this.consignmentPartyResolver = consignmentPartyResolver;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.ttlConfig = ttlConfig;
@@ -83,7 +86,7 @@ public class NotificationService {
         this.adminPageSize = adminPageSize;
     }
 
-    public Notification saveNotification(NotificationDto notificationDto, String correlationId, Actor actor) {
+    public NotificationAggregate saveNotification(NotificationDto notificationDto, String correlationId, Actor actor) {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
             return createNotification(notificationDto);
         } else {
@@ -98,28 +101,28 @@ public class NotificationService {
      * (EUDPA-304), mirroring {@link #updateNotification}.
      */
     @Transactional
-    public Notification replace(String referenceNumber, NotificationDto dto,
+    public NotificationAggregate replace(String referenceNumber, NotificationDto dto,
         String correlationId, Actor actor) {
-        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        if (notification.getStatus() != NotificationStatus.DRAFT
-            && notification.getStatus() != NotificationStatus.AMEND) {
+        if (notificationAggregate.getStatus() != NotificationStatus.DRAFT
+            && notificationAggregate.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException(
-                "Cannot replace notification content with status: " + notification.getStatus());
+                "Cannot replace notification content with status: " + notificationAggregate.getStatus());
         }
         if (dto.getConcurrencyToken() == null) {
             throw new BadRequestException("concurrencyToken is required to replace a notification");
         }
-        notification.setConcurrencyToken(dto.getConcurrencyToken());
-        setNotificationDetails(dto, notification);
-        return writeWithOutbox(notification, referenceNumber, correlationId,
-            notification.getStatus(), OutboxEventType.NOTIFICATION_EDITED, actor);
+        notificationAggregate.setConcurrencyToken(dto.getConcurrencyToken());
+        setNotificationDetails(dto, notificationAggregate);
+        return writeWithOutbox(notificationAggregate, referenceNumber, correlationId,
+            notificationAggregate.getStatus(), OutboxEventType.NOTIFICATION_EDITED, actor);
     }
 
     @Transactional
-    public Notification copyNotification(String referenceNumber, Long expectedConcurrencyToken) {
-        Notification source = notificationRepository.findByReferenceNumber(referenceNumber)
+    public NotificationAggregate copyNotification(String referenceNumber, Long expectedConcurrencyToken) {
+        NotificationAggregate source = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
         if (source.getStatus() != NotificationStatus.DRAFT
@@ -181,19 +184,19 @@ public class NotificationService {
     }
 
     @Transactional
-    public Notification submitNotification(String referenceNumber, String correlationId, Actor actor) {
-        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+    public NotificationAggregate submitNotification(String referenceNumber, String correlationId, Actor actor) {
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
 
-        if (notification.getStatus() != NotificationStatus.DRAFT
-            && notification.getStatus() != NotificationStatus.AMEND) {
+        if (notificationAggregate.getStatus() != NotificationStatus.DRAFT
+            && notificationAggregate.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException(
-                "Cannot submit notification with status: " + notification.getStatus());
+                "Cannot submit notification with status: " + notificationAggregate.getStatus());
         }
 
         return writeWithOutbox(
-            notification,
+            notificationAggregate,
             referenceNumber,
             correlationId,
             NotificationStatus.SUBMITTED,
@@ -202,23 +205,23 @@ public class NotificationService {
     }
 
     @Transactional
-    public Notification amendNotification(String referenceNumber, String correlationId, Actor actor) {
-        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+    public NotificationAggregate amendNotification(String referenceNumber, String correlationId, Actor actor) {
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
 
-        if (notification.getStatus() != NotificationStatus.SUBMITTED) {
+        if (notificationAggregate.getStatus() != NotificationStatus.SUBMITTED) {
             throw new BadRequestException(
-                "Cannot amend notification with status: " + notification.getStatus());
+                "Cannot amend notification with status: " + notificationAggregate.getStatus());
         }
 
-        notification.setSubmittedBaseline(NotificationContentSnapshot.from(notification));
-        List<Document> currentFulfilments = notification.getFulfilments();
-        notification.setSubmittedFulfilmentsBaseline(
+        notificationAggregate.setSubmittedNotificationBaseline(notificationContentMapper.deepClone(notificationAggregate.getNotification()));
+        List<Document> currentFulfilments = notificationAggregate.getFulfilments();
+        notificationAggregate.setSubmittedFulfilmentsBaseline(
             currentFulfilments == null ? null : deepCopyFulfilments(currentFulfilments));
 
         return writeWithOutbox(
-            notification,
+            notificationAggregate,
             referenceNumber,
             correlationId,
             NotificationStatus.AMEND,
@@ -227,38 +230,38 @@ public class NotificationService {
     }
 
     @Transactional
-    public Notification cancelAmendNotification(String referenceNumber) {
-        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+    public NotificationAggregate cancelAmendNotification(String referenceNumber) {
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
 
-        if (notification.getStatus() != NotificationStatus.AMEND) {
+        if (notificationAggregate.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException(
-                "Cannot cancel amendment for notification with status: " + notification.getStatus());
+                "Cannot cancel amendment for notification with status: " + notificationAggregate.getStatus());
         }
-        if (notification.getSubmittedBaseline() == null) {
+        if (notificationAggregate.getSubmittedNotificationBaseline() == null) {
             throw new BadRequestException(
                 "Cannot cancel amendment: no submitted baseline stored for notification");
         }
 
-        notification.getSubmittedBaseline().applyTo(notification);
-        notification.setSubmittedBaseline(null);
-        List<Document> priorFulfilments = notification.getSubmittedFulfilmentsBaseline();
-        notification.setFulfilments(
+        notificationAggregate.setNotification(notificationContentMapper.deepClone(notificationAggregate.getSubmittedNotificationBaseline()));
+        notificationAggregate.setSubmittedNotificationBaseline(null);
+        List<Document> priorFulfilments = notificationAggregate.getSubmittedFulfilmentsBaseline();
+        notificationAggregate.setFulfilments(
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
-        notification.setSubmittedFulfilmentsBaseline(null);
-        notification.setStatus(NotificationStatus.SUBMITTED);
-        notification.setUpdated(LocalDateTime.now());
+        notificationAggregate.setSubmittedFulfilmentsBaseline(null);
+        notificationAggregate.setStatus(NotificationStatus.SUBMITTED);
+        notificationAggregate.setUpdated(LocalDateTime.now());
         // submittedAt is deliberately NOT reset — the amendment is being cancelled to revert to the
         // previously-submitted state, so the original submission timestamp must be preserved.
         // (submittedAt is never touched during the SUBMITTED -> AMEND transition, so it still
         // holds the last-submit value when we get here.)
         log.info("Cancelled amendment for notification {}", referenceNumber);
-        return notificationRepository.save(notification);
+        return notificationRepository.save(notificationAggregate);
     }
 
-    private Notification writeWithOutbox(
-        Notification notification,
+    private NotificationAggregate writeWithOutbox(
+        NotificationAggregate notification,
         String referenceNumber,
         String correlationId,
         NotificationStatus targetStatus,
@@ -268,13 +271,13 @@ public class NotificationService {
         // the outbox critical section is bounded by LOCK_AT_MOST_FOR, and a slow address book that
         // outlived it would let a second writer in behind us. It resolves into a copy, so the
         // notification we save keeps the reference alone and only the event carries the details.
-        Notification forOutbox = resolvedForOutbox(notification, eventType, actor);
+        NotificationAggregate forOutbox = resolvedForOutbox(notification, eventType, actor);
 
         return executeWithOutboxLock(
             OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
                 if (targetStatus == NotificationStatus.SUBMITTED
                     && notification.getStatus() == NotificationStatus.AMEND) {
-                    notification.setSubmittedBaseline(null);
+                    notification.setSubmittedNotificationBaseline(null);
                     notification.setSubmittedFulfilmentsBaseline(null);
                 }
                 notification.setStatus(targetStatus);
@@ -282,7 +285,7 @@ public class NotificationService {
                 if (targetStatus == NotificationStatus.SUBMITTED) {
                     notification.setSubmittedAt(LocalDateTime.now());
                 }
-                Notification saved = notificationRepository.save(notification);
+                NotificationAggregate saved = notificationRepository.save(notification);
                 forOutbox.setStatus(saved.getStatus());
                 forOutbox.setUpdated(saved.getUpdated());
                 forOutbox.setSubmittedAt(saved.getSubmittedAt());
@@ -298,10 +301,15 @@ public class NotificationService {
      * <p>Submit and amend resolve strictly — a GBNAG document cannot carry a nameless party. A
      * draft edit is best-effort, so an address deleted since does not block the save.
      */
-    private Notification resolvedForOutbox(
-        Notification notification, OutboxEventType eventType, Actor actor) {
+    private NotificationAggregate resolvedForOutbox(
+        NotificationAggregate notificationAggregate, OutboxEventType eventType, Actor actor) {
         String organisationId = actor != null ? actor.getOrganisationId() : null;
-        Notification copy = notification.toBuilder().build();
+        NotificationAggregate copy = notificationAggregate.toBuilder().build();
+        // toBuilder is shallow; deep-clone the notification so the resolver's party mutations
+        // don't leak back into the persisted aggregate.
+        if (copy.getNotification() != null) {
+            copy.setNotification(notificationContentMapper.deepClone(copy.getNotification()));
+        }
         return eventType == OutboxEventType.NOTIFICATION_EDITED
             ? consignmentPartyResolver.resolveForDraft(copy, organisationId)
             : consignmentPartyResolver.resolveForSubmission(copy, organisationId);
@@ -346,23 +354,23 @@ public class NotificationService {
     }
 
     @Transactional
-    public Notification softDeleteNotification(String referenceNumber) {
-        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+    public NotificationAggregate softDeleteNotification(String referenceNumber) {
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
         // Idempotent per REST DELETE convention — a repeat call after a lost response is a no-op.
-        if (notification.getStatus() == NotificationStatus.DELETED) {
-            return notification;
+        if (notificationAggregate.getStatus() == NotificationStatus.DELETED) {
+            return notificationAggregate;
         }
-        if (notification.getStatus() != NotificationStatus.DRAFT
-            && notification.getStatus() != NotificationStatus.SUBMITTED
-            && notification.getStatus() != NotificationStatus.AMEND) {
+        if (notificationAggregate.getStatus() != NotificationStatus.DRAFT
+            && notificationAggregate.getStatus() != NotificationStatus.SUBMITTED
+            && notificationAggregate.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException(
-                "Cannot delete notification with status: " + notification.getStatus());
+                "Cannot delete notification with status: " + notificationAggregate.getStatus());
         }
-        notification.setStatus(NotificationStatus.DELETED);
-        notification.setUpdated(LocalDateTime.now());
-        return notificationRepository.save(notification);
+        notificationAggregate.setStatus(NotificationStatus.DELETED);
+        notificationAggregate.setUpdated(LocalDateTime.now());
+        return notificationRepository.save(notificationAggregate);
     }
 
     public ReferenceNumberPageResponse findAllReferenceNumbers(int page) {
@@ -439,25 +447,25 @@ public class NotificationService {
      * Anchored to {@code created}, so a notification expires a fixed window after creation
      * regardless of later activity.
      */
-    private void stampExpiry(Notification notification) {
+    private void stampExpiry(NotificationAggregate notificationAggregate) {
         Integer days = ttlConfig.days();
         if (days == null || ttlConfig.isProd()) {
             return;
         }
-        notification.setExpireAt(notification.getCreated().plusDays(days));
+        notificationAggregate.setExpireAt(notificationAggregate.getCreated().plusDays(days));
     }
 
-    private Notification createNotification(NotificationDto dto) {
-        Notification notification = new Notification();
-        notification.setCreated(LocalDateTime.now());
-        notification.setStatus(NotificationStatus.DRAFT);
-        stampExpiry(notification);
-        setNotificationDetails(dto, notification);
+    private NotificationAggregate createNotification(NotificationDto dto) {
+        NotificationAggregate notificationAggregate = new NotificationAggregate();
+        notificationAggregate.setCreated(LocalDateTime.now());
+        notificationAggregate.setStatus(NotificationStatus.DRAFT);
+        stampExpiry(notificationAggregate);
+        setNotificationDetails(dto, notificationAggregate);
         for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
-            notification.setReferenceNumber(referenceNumberGenerator.generate());
+            notificationAggregate.setReferenceNumber(referenceNumberGenerator.generate());
             try {
-                Notification saved = notificationRepository.save(notification);
-                log.info("Notification saved with reference number: {}", saved.getReferenceNumber());
+                NotificationAggregate saved = notificationRepository.save(notificationAggregate);
+                log.info("NotificationAggregate saved with reference number: {}", saved.getReferenceNumber());
                 return saved;
             } catch (DuplicateKeyException _) {
                 log.warn("Reference number collision on persistence attempt {}/{}; retrying", attempt, MAX_REF_RETRIES);
@@ -467,9 +475,9 @@ public class NotificationService {
             "Failed to generate a unique reference number after " + MAX_REF_RETRIES + " attempts");
     }
 
-    private Notification updateNotification(NotificationDto dto, String correlationId, Actor actor) {
+    private NotificationAggregate updateNotification(NotificationDto dto, String correlationId, Actor actor) {
         String referenceNumber = dto.getReferenceNumber();
-        Notification existing = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate existing = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
         if (existing.getStatus() != NotificationStatus.DRAFT
@@ -487,7 +495,11 @@ public class NotificationService {
             OutboxEventType.NOTIFICATION_EDITED, actor);
     }
 
-    private void setNotificationDetails(NotificationDto dto, Notification notification) {
+    private void setNotificationDetails(NotificationDto dto, NotificationAggregate notificationAggregate) {
+        if (notificationAggregate.getNotification() == null) {
+            notificationAggregate.setNotification(new Notification());
+        }
+        Notification notification = notificationAggregate.getNotification();
         notification.setOrigin(dto.getOrigin());
         notification.setCommodity(dto.getCommodity());
         notification.setReasonForImport(dto.getReasonForImport());
@@ -502,8 +514,8 @@ public class NotificationService {
         notification.setCphNumber(dto.getCphNumber());
         notification.setTransport(dto.getTransport());
         notification.setConsignment(ConsignmentParty.inlineOnly(dto.getConsignment()));
-        notification.setFulfilments(dto.getFulfilments());
-        notification.setUpdated(LocalDateTime.now());
+        notificationAggregate.setFulfilments(dto.getFulfilments());
+        notificationAggregate.setUpdated(LocalDateTime.now());
     }
 
     private void createNotificationAuditRecord(

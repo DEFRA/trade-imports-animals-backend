@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import software.amazon.awssdk.services.sqs.model.Message;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxPublishService;
@@ -83,10 +83,10 @@ class OutboxPollerIT extends OutboxIntegrationBase {
     @Test
     void publishUnpublishedEvents_shouldPublishAggregateVersionsInOrder() throws Exception {
         String referenceNumber = createAndSubmitNotification("trace-v1");
-        Notification notification = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
-        notification.setStatus(NotificationStatus.DRAFT);
-        notificationRepository.save(notification);
+        notificationAggregate.setStatus(NotificationStatus.DRAFT);
+        notificationRepository.save(notificationAggregate);
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
