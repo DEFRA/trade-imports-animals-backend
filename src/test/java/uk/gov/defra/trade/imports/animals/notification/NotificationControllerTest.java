@@ -324,7 +324,7 @@ class NotificationControllerTest {
             newNotification.setReferenceNumber(REF_2);
             newNotification.setStatus(NotificationStatus.DRAFT);
 
-            when(notificationService.copyNotification(REF_1, 0L)).thenReturn(newNotification);
+            when(notificationService.copyNotification(eq(REF_1), eq(0L), any(), any())).thenReturn(newNotification);
 
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1)
@@ -337,7 +337,7 @@ class NotificationControllerTest {
 
         @Test
         void copy_shouldReturn404_whenSourceNotFound() throws Exception {
-            when(notificationService.copyNotification(REF_1, 0L))
+            when(notificationService.copyNotification(eq(REF_1), eq(0L), any(), any()))
                 .thenThrow(new NotFoundException("not found"));
 
             mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1)
@@ -348,7 +348,7 @@ class NotificationControllerTest {
 
         @Test
         void copy_shouldReturn400_whenSourceIsNotCopyable() throws Exception {
-            when(notificationService.copyNotification(REF_1, 0L))
+            when(notificationService.copyNotification(eq(REF_1), eq(0L), any(), any()))
                 .thenThrow(new BadRequestException("not copyable"));
 
             mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1)
@@ -552,7 +552,7 @@ class NotificationControllerTest {
             restored.setReferenceNumber(REF_1);
             restored.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.cancelAmendNotification(REF_1)).thenReturn(restored);
+            when(notificationService.cancelAmendNotification(eq(REF_1), any(), any())).thenReturn(restored);
 
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/cancel-amend", REF_1)
@@ -561,12 +561,12 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.status").value("SUBMITTED"));
 
-            verify(notificationService).cancelAmendNotification(REF_1);
+            verify(notificationService).cancelAmendNotification(eq(REF_1), any(), any());
         }
 
         @Test
         void cancelAmend_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
-            when(notificationService.cancelAmendNotification(NONEXISTENT_REF))
+            when(notificationService.cancelAmendNotification(eq(NONEXISTENT_REF), any(), any()))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
@@ -577,7 +577,7 @@ class NotificationControllerTest {
 
         @Test
         void cancelAmend_shouldReturn400_whenNotificationNotInAmendStatus() throws Exception {
-            when(notificationService.cancelAmendNotification(REF_1))
+            when(notificationService.cancelAmendNotification(eq(REF_1), any(), any()))
                 .thenThrow(new BadRequestException(
                     "Cannot cancel amendment for notification with status: SUBMITTED"));
 
@@ -955,7 +955,7 @@ class NotificationControllerTest {
             deleted.setReferenceNumber(REF_1);
             deleted.setStatus(NotificationStatus.DELETED);
 
-            when(notificationService.softDeleteNotification(REF_1)).thenReturn(deleted);
+            when(notificationService.softDeleteNotification(eq(REF_1), any(), any())).thenReturn(deleted);
 
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/soft-delete", REF_1)
@@ -968,7 +968,7 @@ class NotificationControllerTest {
         @Test
         void softDelete_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            when(notificationService.softDeleteNotification(NONEXISTENT_REF))
+            when(notificationService.softDeleteNotification(eq(NONEXISTENT_REF), any(), any()))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
@@ -983,7 +983,7 @@ class NotificationControllerTest {
         @Test
         void softDelete_shouldReturn400_whenNotificationNotInDeletableState() throws Exception {
             // Given
-            when(notificationService.softDeleteNotification(REF_1))
+            when(notificationService.softDeleteNotification(eq(REF_1), any(), any()))
                 .thenThrow(new BadRequestException("Cannot delete notification with status: DELETED"));
 
             // When & Then

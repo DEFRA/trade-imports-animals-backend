@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.integration.outbox;
 
 import static org.awaitility.Awaitility.await;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.floci.testcontainers.FlociContainer;
 import java.time.Duration;
@@ -152,6 +153,18 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
         receiveMessages().forEach(message -> SQS_CLIENT.deleteMessage(builder -> builder
             .queueUrl(QUEUE_URL)
             .receiptHandle(message.receiptHandle())));
+    }
+
+    protected JsonNode snsEnvelopeByAggregateVersion(List<Message> messages, long aggregateVersion)
+        throws Exception {
+        for (Message message : messages) {
+            JsonNode snsEnvelope = objectMapper.readTree(message.body());
+            JsonNode payload = objectMapper.readTree(snsEnvelope.get("Message").asText());
+            if (payload.get("aggregateVersion").asLong() == aggregateVersion) {
+                return snsEnvelope;
+            }
+        }
+        throw new AssertionError("No SNS message found for aggregateVersion " + aggregateVersion);
     }
 
     // --- NotificationAggregate helpers ---

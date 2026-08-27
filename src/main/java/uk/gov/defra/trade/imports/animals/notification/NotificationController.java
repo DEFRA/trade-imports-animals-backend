@@ -86,9 +86,12 @@ public class NotificationController {
     @Timed("controller.copyNotification.time")
     public ResponseEntity<NotificationAggregate> copy(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @RequestParam Long concurrencyToken) {
+        @RequestParam Long concurrencyToken,
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestBody(required = false) ActorRequest actorRequest) {
         log.info("POST /notifications/{}/copy - Copying notification at expectedConcurrencyToken={}", referenceNumber, concurrencyToken);
-        return ResponseEntity.ok(notificationService.copyNotification(referenceNumber, concurrencyToken));
+        Actor actor = actorRequest != null ? actorRequest.toActor() : null;
+        return ResponseEntity.ok(notificationService.copyNotification(referenceNumber, concurrencyToken, traceId, actor));
     }
 
     @PostMapping("/{referenceNumber}/submit")
@@ -139,9 +142,12 @@ public class NotificationController {
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.cancelAmendNotification.time")
     public ResponseEntity<NotificationAggregate> cancelAmend(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestBody(required = false) ActorRequest actorRequest) {
         log.info("POST /notifications/{}/cancel-amend - Cancelling amendment", referenceNumber);
-        return ResponseEntity.ok(notificationService.cancelAmendNotification(referenceNumber));
+        Actor actor = actorRequest != null ? actorRequest.toActor() : null;
+        return ResponseEntity.ok(notificationService.cancelAmendNotification(referenceNumber, traceId, actor));
     }
 
     @GetMapping
@@ -227,9 +233,12 @@ public class NotificationController {
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @Timed("controller.softDeleteNotification.time")
     public ResponseEntity<NotificationAggregate> softDelete(
-        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber) {
+        @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
+        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestBody(required = false) ActorRequest actorRequest) {
         log.info("POST /notifications/{}/soft-delete - Soft deleting notification", referenceNumber);
-        return ResponseEntity.ok(notificationService.softDeleteNotification(referenceNumber));
+        Actor actor = actorRequest != null ? actorRequest.toActor() : null;
+        return ResponseEntity.ok(notificationService.softDeleteNotification(referenceNumber, traceId, actor));
     }
 
     @DeleteMapping

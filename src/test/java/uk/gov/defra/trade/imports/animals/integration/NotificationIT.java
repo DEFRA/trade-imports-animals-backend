@@ -919,25 +919,28 @@ class NotificationIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk();
 
-        // Then — submit + amend events exist with correct types and versions
+        // Then — created + submitted + amendment-requested events exist in order
         List<OutboxEvent> events = outboxEventRepository.findAll()
             .stream()
             .sorted(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
             .toList();
 
-        assertThat(events).hasSize(2);
+        assertThat(events).hasSize(3);
         assertThat(events.get(0).getEventType())
-            .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationCreated");
         assertThat(events.get(0).getAggregateVersion()).isEqualTo(1L);
+        assertThat(events.get(1).getEventType())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
+        assertThat(events.get(1).getAggregateVersion()).isEqualTo(2L);
 
-        OutboxEvent amendEvent = events.get(1);
+        OutboxEvent amendEvent = events.get(2);
         assertThat(amendEvent.getAggregateId())
             .isEqualTo(OutboxService.buildAggregateId(referenceNumber));
         assertThat(amendEvent.getEventType())
-            .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmissionAmended");
-        assertThat(amendEvent.getAggregateVersion()).isEqualTo(2L);
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationAmendmentRequested");
+        assertThat(amendEvent.getAggregateVersion()).isEqualTo(3L);
         assertThat(amendEvent.getMetadata().getCorrelationId()).isEqualTo("trace-amend-001");
-        assertThat(amendEvent.getMetadata().getSchemaUrl()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED.schemaUrl());
+        assertThat(amendEvent.getMetadata().getSchemaUrl()).isEqualTo(OutboxEventType.NOTIFICATION_AMENDMENT_REQUESTED.schemaUrl());
         assertThat(gbnAgIdentifier(amendEvent)).isEqualTo(referenceNumber);
     }
 
@@ -957,7 +960,7 @@ class NotificationIT extends IntegrationBase {
         submitAs(referenceNumber, ORG_ID);
 
         // Then — GBNAG carries the resolved details
-        Map<String, Object> consignor = outboxConsignorParty(onlyOutboxEvent());
+        Map<String, Object> consignor = outboxConsignorParty(submittedOutboxEvent());
         assertThat(consignor).containsEntry("name", "Astra Rosales");
         assertThat((Map<String, Object>) consignor.get("postalAddress"))
             .containsEntry("postcodeCode", "30055")
@@ -986,7 +989,11 @@ class NotificationIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.detail").value(Matchers.containsString(ADDRESS_ID));
 
-        assertThat(outboxEventRepository.findAll()).isEmpty();
+        // NOTIFICATION_CREATED was written when the draft was created; no NOTIFICATION_SUBMITTED
+        // because the submit failed before the outbox write.
+        assertThat(outboxEventRepository.findAll())
+            .hasSize(1)
+            .allMatch(e -> e.getEventType().endsWith("NotificationCreated"));
         assertThat(notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow()
             .getStatus()).isEqualTo(NotificationStatus.DRAFT);
     }
@@ -1092,8 +1099,8 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void cancelAmend_shouldNotWriteOutboxEvent() {
-        // Given — notification in AMEND with edited content
+    void cancelAmend_shouldWriteAmendmentCancelledOutboxEvent() {
+        // Given — notification in AMEND: CREATED(v1) + SUBMITTED(v2) + AMENDMENT_REQUESTED(v3)
         String referenceNumber = createAndSubmitNotificationWithFullContent();
 
         webClient("NoAuth")
@@ -1107,8 +1114,13 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/cancel-amend", referenceNumber)
             .exchange().expectStatus().isOk();
 
-        // Then — no additional outbox event written
-        assertThat(outboxEventRepository.count()).isEqualTo(eventsBeforeCancel);
+        // Then — NOTIFICATION_AMENDMENT_CANCELLED event added
+        assertThat(outboxEventRepository.count()).isEqualTo(eventsBeforeCancel + 1);
+        OutboxEvent cancelEvent = outboxEventRepository.findAll().stream()
+            .max(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
+            .orElseThrow();
+        assertThat(cancelEvent.getEventType())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationAmendmentCancelled");
     }
 
     @Test
@@ -1172,10 +1184,12 @@ class NotificationIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk();
 
-        // Then — one outbox event exists with the correct envelope
+        // Then — NOTIFICATION_CREATED (v1) + NOTIFICATION_SUBMITTED (v2) exist; verify envelope of v2
         List<OutboxEvent> events = outboxEventRepository.findAll();
-        assertThat(events).hasSize(1);
-        OutboxEvent event = events.getFirst();
+        assertThat(events).hasSize(2);
+        OutboxEvent event = events.stream()
+            .filter(e -> e.getEventType().endsWith("NotificationSubmitted"))
+            .findFirst().orElseThrow();
 
         assertThat(event.getAggregateId())
             .isEqualTo(OutboxService.buildAggregateId(referenceNumber));
@@ -1183,7 +1197,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getSubType()).isEqualTo("GBN-AG");
         assertThat(event.getEventType())
             .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
-        assertThat(event.getAggregateVersion()).isEqualTo(1L);
+        assertThat(event.getAggregateVersion()).isEqualTo(2L);
         assertThat(event.getTimestamp()).isNotNull();
         assertThat(event.getEventId()).isNotNull();
         assertThat(event.getMetadata().getCorrelationId()).isEqualTo("trace-outbox-001");
@@ -1191,10 +1205,11 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getMetadata().getSchemaUrl()).isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.schemaUrl());
         assertThat(gbnAgIdentifier(event)).isEqualTo(referenceNumber);
         assertThat(event.getActor()).isNull();
-        assertThat(event.getStatusChanges()).hasSize(1);
-        assertThat(event.getStatusChanges().getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(event.getStatusChanges().getFirst().getDateChanged()).isNotNull();
-        assertThat(event.getStatusChanges().getFirst().getActor()).isNull();
+        // statusChanges accumulates from DRAFT (v1 NOTIFICATION_CREATED) through SUBMITTED
+        assertThat(event.getStatusChanges()).hasSize(2);
+        assertThat(event.getStatusChanges().getLast().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(event.getStatusChanges().getLast().getDateChanged()).isNotNull();
+        assertThat(event.getStatusChanges().getLast().getActor()).isNull();
     }
 
     @Test
@@ -1222,10 +1237,12 @@ class NotificationIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk();
 
-        // Then — actor is stamped on the event and statusChanges carries it
+        // Then — actor is stamped on the SUBMITTED event and statusChanges carries it
         List<OutboxEvent> events = outboxEventRepository.findAll();
-        assertThat(events).hasSize(1);
-        OutboxEvent event = events.getFirst();
+        assertThat(events).hasSize(2);
+        OutboxEvent event = events.stream()
+            .filter(e -> e.getEventType().endsWith("NotificationSubmitted"))
+            .findFirst().orElseThrow();
 
         assertThat(event.getActor()).isNotNull();
         assertThat(event.getActor().getId()).isEqualTo("contact-guid-001");
@@ -1235,9 +1252,10 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getActor().getOrganisationId()).isEqualTo("org-001");
         assertThat(event.getActor().getOnBehalfOfOrganisationId()).isNull();
 
-        assertThat(event.getStatusChanges()).hasSize(1);
-        assertThat(event.getStatusChanges().getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(event.getStatusChanges().getFirst().getActor()).isEqualTo(event.getActor());
+        // statusChanges: DRAFT (from NOTIFICATION_CREATED, no actor) + SUBMITTED (with actor)
+        assertThat(event.getStatusChanges()).hasSize(2);
+        assertThat(event.getStatusChanges().getLast().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(event.getStatusChanges().getLast().getActor()).isEqualTo(event.getActor());
     }
 
     @Test
@@ -1268,19 +1286,20 @@ class NotificationIT extends IntegrationBase {
             .bodyValue(amendActor)
             .exchange().expectStatus().isOk();
 
-        // Then — amend event has both status changes in order
+        // Then — CREATED(v1) + SUBMITTED(v2) + AMENDMENT_REQUESTED(v3); check statusChanges on v3
         List<OutboxEvent> events = outboxEventRepository.findAll()
             .stream()
             .sorted(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
             .toList();
 
-        assertThat(events).hasSize(2);
-        OutboxEvent amendEvent = events.get(1);
-        assertThat(amendEvent.getStatusChanges()).hasSize(2);
-        assertThat(amendEvent.getStatusChanges().get(0).getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(amendEvent.getStatusChanges().get(0).getActor().getId()).isEqualTo("contact-sub-001");
-        assertThat(amendEvent.getStatusChanges().get(1).getStatus()).isEqualTo(NotificationStatus.AMEND);
-        assertThat(amendEvent.getStatusChanges().get(1).getActor().getId()).isEqualTo("contact-sub-002");
+        assertThat(events).hasSize(3);
+        OutboxEvent amendEvent = events.get(2);
+        // statusChanges: DRAFT (NOTIFICATION_CREATED) + SUBMITTED (Alice) + AMEND (Bob)
+        assertThat(amendEvent.getStatusChanges()).hasSize(3);
+        assertThat(amendEvent.getStatusChanges().get(1).getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(amendEvent.getStatusChanges().get(1).getActor().getId()).isEqualTo("contact-sub-001");
+        assertThat(amendEvent.getStatusChanges().get(2).getStatus()).isEqualTo(NotificationStatus.AMEND);
+        assertThat(amendEvent.getStatusChanges().get(2).getActor().getId()).isEqualTo("contact-sub-002");
     }
 
     @SuppressWarnings("unchecked")
@@ -1314,15 +1333,16 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
             .exchange().expectStatus().isOk();
 
-        // Then — two outbox events with incrementing versions
+        // Then — CREATED(v1) + SUBMITTED(v2) + SUBMITTED(v3) with incrementing versions
         List<OutboxEvent> events = outboxEventRepository.findAll()
             .stream()
             .sorted(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
             .toList();
 
-        assertThat(events).hasSize(2);
+        assertThat(events).hasSize(3);
         assertThat(events.get(0).getAggregateVersion()).isEqualTo(1L);
         assertThat(events.get(1).getAggregateVersion()).isEqualTo(2L);
+        assertThat(events.get(2).getAggregateVersion()).isEqualTo(3L);
     }
 
     @Test
@@ -1338,15 +1358,19 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void post_shouldNotWriteOutboxEvent_whenCreatingDraftNotification() {
+    void post_shouldWriteNotificationCreatedEvent_whenCreatingDraftNotification() {
         // When — create a draft notification
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk();
 
-        // Then — no outbox events written
-        assertThat(outboxEventRepository.findAll()).isEmpty();
+        // Then — NOTIFICATION_CREATED outbox event written at v1
+        List<OutboxEvent> events = outboxEventRepository.findAll();
+        assertThat(events).hasSize(1);
+        assertThat(events.getFirst().getEventType())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationCreated");
+        assertThat(events.getFirst().getAggregateVersion()).isEqualTo(1L);
     }
 
     @Test
@@ -1729,16 +1753,19 @@ class NotificationIT extends IntegrationBase {
             .expectBodyList(OutboxEvent.class).returnResult()
             .getResponseBody();
 
-        // Then — two events returned in version ascending order
-        assertThat(events).hasSize(2);
+        // Then — CREATED(v1) + SUBMITTED(v2) + SUBMITTED(v3) returned in ascending order
+        assertThat(events).hasSize(3);
         assertThat(events.get(0).getAggregateVersion()).isEqualTo(1L);
         assertThat(events.get(1).getAggregateVersion()).isEqualTo(2L);
+        assertThat(events.get(2).getAggregateVersion()).isEqualTo(3L);
         assertThat(events.get(0).getEventType())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationCreated");
+        assertThat(events.get(1).getEventType())
             .isEqualTo("uk.gov.defra.imports.notification.NotificationSubmitted");
     }
 
     @Test
-    void getOutboxEvents_shouldReturnEmptyList_whenNoEventsExist() {
+    void getOutboxEvents_shouldReturnNotificationCreatedEvent_forUnsubmittedDraft() {
         // Given — create a notification but do not submit it
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
@@ -1754,8 +1781,10 @@ class NotificationIT extends IntegrationBase {
             .expectBodyList(OutboxEvent.class).returnResult()
             .getResponseBody();
 
-        // Then
-        assertThat(events).isEmpty();
+        // Then — NOTIFICATION_CREATED is the only event for an unsubmitted draft
+        assertThat(events).hasSize(1);
+        assertThat(events.getFirst().getEventType())
+            .isEqualTo("uk.gov.defra.imports.notification.NotificationCreated");
     }
 
     @Test
@@ -2107,10 +2136,11 @@ class NotificationIT extends IntegrationBase {
                 .withBody(body));
     }
 
-    private OutboxEvent onlyOutboxEvent() {
-        List<OutboxEvent> events = outboxEventRepository.findAll();
-        assertThat(events).hasSize(1);
-        return events.getFirst();
+    private OutboxEvent submittedOutboxEvent() {
+        return outboxEventRepository.findAll().stream()
+            .filter(e -> e.getEventType().endsWith("NotificationSubmitted"))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("No NotificationSubmitted event found"));
     }
 
     @SuppressWarnings("unchecked")

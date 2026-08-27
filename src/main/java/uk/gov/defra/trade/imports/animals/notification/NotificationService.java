@@ -88,7 +88,7 @@ public class NotificationService {
 
     public NotificationAggregate saveNotification(NotificationDto notificationDto, String correlationId, Actor actor) {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
-            return createNotification(notificationDto);
+            return createNotification(notificationDto, correlationId, actor);
         } else {
             return updateNotification(notificationDto, correlationId, actor);
         }
@@ -121,7 +121,8 @@ public class NotificationService {
     }
 
     @Transactional
-    public NotificationAggregate copyNotification(String referenceNumber, Long expectedConcurrencyToken) {
+    public NotificationAggregate copyNotification(String referenceNumber, Long expectedConcurrencyToken,
+        String correlationId, Actor actor) {
         NotificationAggregate source = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
@@ -142,7 +143,7 @@ public class NotificationService {
                     + expectedConcurrencyToken + " to " + source.getConcurrencyToken());
         }
         log.info("Copying notification {}", referenceNumber);
-        return createNotification(notificationCopyMapper.toCopyDto(source));
+        return createNotification(notificationCopyMapper.toCopyDto(source), correlationId, actor);
     }
 
     public NotificationPageResponse findAll(int page, String sort) {
@@ -195,12 +196,17 @@ public class NotificationService {
                 "Cannot submit notification with status: " + notificationAggregate.getStatus());
         }
 
+        // AMEND -> SUBMITTED is a re-submission; DRAFT -> SUBMITTED is the first submission.
+        OutboxEventType eventType = notificationAggregate.getStatus() == NotificationStatus.AMEND
+            ? OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED
+            : OutboxEventType.NOTIFICATION_SUBMITTED;
+
         return writeWithOutbox(
             notificationAggregate,
             referenceNumber,
             correlationId,
             NotificationStatus.SUBMITTED,
-            OutboxEventType.NOTIFICATION_SUBMITTED,
+            eventType,
             actor);
     }
 
@@ -225,12 +231,12 @@ public class NotificationService {
             referenceNumber,
             correlationId,
             NotificationStatus.AMEND,
-            OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED,
+            OutboxEventType.NOTIFICATION_AMENDMENT_REQUESTED,
             actor);
     }
 
     @Transactional
-    public NotificationAggregate cancelAmendNotification(String referenceNumber) {
+    public NotificationAggregate cancelAmendNotification(String referenceNumber, String correlationId, Actor actor) {
         NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
@@ -250,14 +256,15 @@ public class NotificationService {
         notificationAggregate.setFulfilments(
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
         notificationAggregate.setSubmittedFulfilmentsBaseline(null);
-        notificationAggregate.setStatus(NotificationStatus.SUBMITTED);
-        notificationAggregate.setUpdated(LocalDateTime.now());
-        // submittedAt is deliberately NOT reset — the amendment is being cancelled to revert to the
-        // previously-submitted state, so the original submission timestamp must be preserved.
-        // (submittedAt is never touched during the SUBMITTED -> AMEND transition, so it still
-        // holds the last-submit value when we get here.)
-        log.info("Cancelled amendment for notification {}", referenceNumber);
-        return notificationRepository.save(notificationAggregate);
+        // submittedAt is deliberately NOT reset — reverting to the previously-submitted state
+        // preserves the original submission timestamp.
+        return writeWithOutbox(
+            notificationAggregate,
+            referenceNumber,
+            correlationId,
+            NotificationStatus.SUBMITTED,
+            OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED,
+            actor);
     }
 
     private NotificationAggregate writeWithOutbox(
@@ -282,7 +289,10 @@ public class NotificationService {
                 }
                 notification.setStatus(targetStatus);
                 notification.setUpdated(LocalDateTime.now());
-                if (targetStatus == NotificationStatus.SUBMITTED) {
+                // Only actual submissions mint a new submittedAt; cancel-amend restores to SUBMITTED
+                // but must preserve the timestamp from the original submission.
+                if (eventType == OutboxEventType.NOTIFICATION_SUBMITTED
+                    || eventType == OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED) {
                     notification.setSubmittedAt(LocalDateTime.now());
                 }
                 NotificationAggregate saved = notificationRepository.save(notification);
@@ -301,6 +311,12 @@ public class NotificationService {
      * <p>Submit and amend resolve strictly — a GBNAG document cannot carry a nameless party. A
      * draft edit is best-effort, so an address deleted since does not block the save.
      */
+    // Draft-grade events: notification may not be fully resolved; best-effort is appropriate.
+    private static final Set<OutboxEventType> DRAFT_GRADE_EVENTS = Set.of(
+        OutboxEventType.NOTIFICATION_CREATED,
+        OutboxEventType.NOTIFICATION_EDITED,
+        OutboxEventType.NOTIFICATION_DELETED);
+
     private NotificationAggregate resolvedForOutbox(
         NotificationAggregate notificationAggregate, OutboxEventType eventType, Actor actor) {
         String organisationId = actor != null ? actor.getOrganisationId() : null;
@@ -310,7 +326,7 @@ public class NotificationService {
         if (copy.getNotification() != null) {
             copy.setNotification(notificationContentMapper.deepClone(copy.getNotification()));
         }
-        return eventType == OutboxEventType.NOTIFICATION_EDITED
+        return DRAFT_GRADE_EVENTS.contains(eventType)
             ? consignmentPartyResolver.resolveForDraft(copy, organisationId)
             : consignmentPartyResolver.resolveForSubmission(copy, organisationId);
     }
@@ -354,7 +370,7 @@ public class NotificationService {
     }
 
     @Transactional
-    public NotificationAggregate softDeleteNotification(String referenceNumber) {
+    public NotificationAggregate softDeleteNotification(String referenceNumber, String correlationId, Actor actor) {
         NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
@@ -368,9 +384,17 @@ public class NotificationService {
             throw new BadRequestException(
                 "Cannot delete notification with status: " + notificationAggregate.getStatus());
         }
-        notificationAggregate.setStatus(NotificationStatus.DELETED);
-        notificationAggregate.setUpdated(LocalDateTime.now());
-        return notificationRepository.save(notificationAggregate);
+        // DRAFT -> DELETED has no submission history; SUBMITTED/AMEND -> DELETED does.
+        OutboxEventType eventType = notificationAggregate.getStatus() == NotificationStatus.DRAFT
+            ? OutboxEventType.NOTIFICATION_DELETED
+            : OutboxEventType.NOTIFICATION_SUBMISSION_DELETED;
+        return writeWithOutbox(
+            notificationAggregate,
+            referenceNumber,
+            correlationId,
+            NotificationStatus.DELETED,
+            eventType,
+            actor);
     }
 
     public ReferenceNumberPageResponse findAllReferenceNumbers(int page) {
@@ -455,7 +479,7 @@ public class NotificationService {
         notificationAggregate.setExpireAt(notificationAggregate.getCreated().plusDays(days));
     }
 
-    private NotificationAggregate createNotification(NotificationDto dto) {
+    private NotificationAggregate createNotification(NotificationDto dto, String correlationId, Actor actor) {
         NotificationAggregate notificationAggregate = new NotificationAggregate();
         notificationAggregate.setCreated(LocalDateTime.now());
         notificationAggregate.setStatus(NotificationStatus.DRAFT);
@@ -464,7 +488,13 @@ public class NotificationService {
         for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
             notificationAggregate.setReferenceNumber(referenceNumberGenerator.generate());
             try {
-                NotificationAggregate saved = notificationRepository.save(notificationAggregate);
+                NotificationAggregate saved = writeWithOutbox(
+                    notificationAggregate,
+                    notificationAggregate.getReferenceNumber(),
+                    correlationId,
+                    NotificationStatus.DRAFT,
+                    OutboxEventType.NOTIFICATION_CREATED,
+                    actor);
                 log.info("NotificationAggregate saved with reference number: {}", saved.getReferenceNumber());
                 return saved;
             } catch (DuplicateKeyException _) {
