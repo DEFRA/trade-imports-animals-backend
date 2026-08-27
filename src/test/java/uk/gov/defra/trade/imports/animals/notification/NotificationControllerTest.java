@@ -82,7 +82,7 @@ class NotificationControllerTest {
                 .actor(ActorRequest.builder().organisationId("5900002").build())
                 .build();
 
-            Notification replaced = new Notification();
+            NotificationAggregate replaced = new NotificationAggregate();
             replaced.setReferenceNumber(REF_1);
             when(notificationService.replace(eq(REF_1), any(NotificationDto.class), any(), any()))
                 .thenReturn(replaced);
@@ -103,7 +103,7 @@ class NotificationControllerTest {
             SaveNotificationDto body = SaveNotificationDto.of(
                 NotificationDto.builder().referenceNumber(REF_1).build());
 
-            Notification replaced = new Notification();
+            NotificationAggregate replaced = new NotificationAggregate();
             replaced.setReferenceNumber(REF_1);
             when(notificationService.replace(eq(REF_1), any(NotificationDto.class), any(), any()))
                 .thenReturn(replaced);
@@ -141,16 +141,17 @@ class NotificationControllerTest {
                 .consignment(consignments().getFirst())
                 .build();
 
-            Notification savedNotification = new Notification();
+            NotificationAggregate savedNotification = new NotificationAggregate();
+            savedNotification.setNotification(new Notification());
             savedNotification.setId("507f1f77bcf86cd799439011");
             savedNotification.setReferenceNumber(REF_1);
-            savedNotification.setOrigin(origin);
-            savedNotification.setCommodity(commodity);
-            savedNotification.setReasonForImport("PERMANENT");
-            savedNotification.setConsignor(consignors().getFirst());
-            savedNotification.setDestination(destinations().getFirst());
-            savedNotification.setTransport(Transport.builder().transporter(transporters().getFirst()).build());
-            savedNotification.setConsignment(consignments().getFirst());
+            savedNotification.getNotification().setOrigin(origin);
+            savedNotification.getNotification().setCommodity(commodity);
+            savedNotification.getNotification().setReasonForImport("PERMANENT");
+            savedNotification.getNotification().setConsignor(consignors().getFirst());
+            savedNotification.getNotification().setDestination(destinations().getFirst());
+            savedNotification.getNotification().setTransport(Transport.builder().transporter(transporters().getFirst()).build());
+            savedNotification.getNotification().setConsignment(consignments().getFirst());
 
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(savedNotification);
@@ -163,29 +164,29 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("507f1f77bcf86cd799439011"))
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
-                .andExpect(jsonPath("$.origin.countryCode").value("GB"))
-                .andExpect(jsonPath("$.origin.internalReference").value("CUSTOMER-REF-123"))
-                .andExpect(jsonPath("$.commodity.name").value("Live bovine animals"))
-                .andExpect(jsonPath("$.commodity.commodityComplement[0].typeOfCommodity").value("LIVE"))
-                .andExpect(jsonPath("$.commodity.commodityComplement[0].species[0].value").value("BOV"))
-                .andExpect(jsonPath("$.commodity.commodityComplement[0].species[0].earTag").value(
+                .andExpect(jsonPath("$.notification.origin.countryCode").value("GB"))
+                .andExpect(jsonPath("$.notification.origin.internalReference").value("CUSTOMER-REF-123"))
+                .andExpect(jsonPath("$.notification.commodity.name").value("Live bovine animals"))
+                .andExpect(jsonPath("$.notification.commodity.commodityComplement[0].typeOfCommodity").value("LIVE"))
+                .andExpect(jsonPath("$.notification.commodity.commodityComplement[0].species[0].value").value("BOV"))
+                .andExpect(jsonPath("$.notification.commodity.commodityComplement[0].species[0].earTag").value(
                     "UK01234567890"))
-                .andExpect(jsonPath("$.commodity.commodityComplement[0].species[0].passport").value(
+                .andExpect(jsonPath("$.notification.commodity.commodityComplement[0].species[0].passport").value(
                     "UK0123456700999"))
-                .andExpect(jsonPath("$.reasonForImport").value("PERMANENT"))
-                .andExpect(jsonPath("$.consignor.name").value(consignors().getFirst().getName()))
-                .andExpect(jsonPath("$.consignor.address").value(consignors().getFirst().getAddress()))
-                .andExpect(jsonPath("$.destination.name").value(destinations().getFirst().getName()))
-                .andExpect(jsonPath("$.destination.address").value(destinations().getFirst().getAddress()))
-                .andExpect(jsonPath("$.transport.transporter.name").value(transporters().getFirst().getName()))
-                .andExpect(jsonPath("$.transport.transporter.address").value(transporters().getFirst().getAddress()))
-                .andExpect(jsonPath("$.transport.transporter.approvalNumber").value(transporters().getFirst().getApprovalNumber()))
-                .andExpect(jsonPath("$.transport.transporter.type").value(transporters().getFirst().getType()))
-                .andExpect(jsonPath("$.consignment.name")
+                .andExpect(jsonPath("$.notification.reasonForImport").value("PERMANENT"))
+                .andExpect(jsonPath("$.notification.consignor.name").value(consignors().getFirst().getName()))
+                .andExpect(jsonPath("$.notification.consignor.address").value(consignors().getFirst().getAddress()))
+                .andExpect(jsonPath("$.notification.destination.name").value(destinations().getFirst().getName()))
+                .andExpect(jsonPath("$.notification.destination.address").value(destinations().getFirst().getAddress()))
+                .andExpect(jsonPath("$.notification.transport.transporter.name").value(transporters().getFirst().getName()))
+                .andExpect(jsonPath("$.notification.transport.transporter.address").value(transporters().getFirst().getAddress()))
+                .andExpect(jsonPath("$.notification.transport.transporter.approvalNumber").value(transporters().getFirst().getApprovalNumber()))
+                .andExpect(jsonPath("$.notification.transport.transporter.type").value(transporters().getFirst().getType()))
+                .andExpect(jsonPath("$.notification.consignment.name")
                     .value(consignments().getFirst().getName()))
-                .andExpect(jsonPath("$.consignment.address.addressLine1")
+                .andExpect(jsonPath("$.notification.consignment.address.addressLine1")
                     .value(consignments().getFirst().getAddress().getAddressLine1()))
-                .andExpect(jsonPath("$.consignment.address.countryCode")
+                .andExpect(jsonPath("$.notification.consignment.address.countryCode")
                     .value(consignments().getFirst().getAddress().getCountryCode()));
         }
 
@@ -197,10 +198,11 @@ class NotificationControllerTest {
                 .origin(origin)
                 .build();
 
-            Notification savedNotification = new Notification();
+            NotificationAggregate savedNotification = new NotificationAggregate();
+            savedNotification.setNotification(new Notification());
             savedNotification.setId("507f1f77bcf86cd799439012");
             savedNotification.setReferenceNumber(REF_2);
-            savedNotification.setOrigin(origin);
+            savedNotification.getNotification().setOrigin(origin);
 
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(savedNotification);
@@ -213,8 +215,8 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value("507f1f77bcf86cd799439012"))
                 .andExpect(jsonPath("$.referenceNumber").value(REF_2))
-                .andExpect(jsonPath("$.origin.countryCode").value("FR"))
-                .andExpect(jsonPath("$.origin.internalReference").value("INTERNAL-456"));
+                .andExpect(jsonPath("$.notification.origin.countryCode").value("FR"))
+                .andExpect(jsonPath("$.notification.origin.internalReference").value("INTERNAL-456"));
         }
 
         @Test
@@ -227,10 +229,11 @@ class NotificationControllerTest {
                 .origin(origin)
                 .build();
 
-            Notification savedNotification = new Notification();
+            NotificationAggregate savedNotification = new NotificationAggregate();
+            savedNotification.setNotification(new Notification());
             savedNotification.setId(existingId);
             savedNotification.setReferenceNumber(REF_3);
-            savedNotification.setOrigin(origin);
+            savedNotification.getNotification().setOrigin(origin);
 
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(savedNotification);
@@ -243,8 +246,8 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(existingId))
                 .andExpect(jsonPath("$.referenceNumber").value(REF_3))
-                .andExpect(jsonPath("$.origin.countryCode").value("DE"))
-                .andExpect(jsonPath("$.origin.internalReference").value("UPDATE-REF"));
+                .andExpect(jsonPath("$.notification.origin.countryCode").value("DE"))
+                .andExpect(jsonPath("$.notification.origin.internalReference").value("UPDATE-REF"));
         }
 
         @Test
@@ -253,7 +256,7 @@ class NotificationControllerTest {
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(new Origin("GB", "true", "REF"))
                 .build();
-            Notification saved = new Notification();
+            NotificationAggregate saved = new NotificationAggregate();
             saved.setReferenceNumber(REF_1);
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(saved);
@@ -275,7 +278,7 @@ class NotificationControllerTest {
                 .referenceNumber(REF_1)
                 .origin(new Origin("GB", "true", "REF"))
                 .build();
-            Notification saved = new Notification();
+            NotificationAggregate saved = new NotificationAggregate();
             saved.setReferenceNumber(REF_1);
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(saved);
@@ -316,7 +319,7 @@ class NotificationControllerTest {
         @Test
         void copy_shouldReturn200WithNewDraftNotification() throws Exception {
             // Given
-            Notification newNotification = new Notification();
+            NotificationAggregate newNotification = new NotificationAggregate();
             newNotification.setId("507f1f77bcf86cd799439099");
             newNotification.setReferenceNumber(REF_2);
             newNotification.setStatus(NotificationStatus.DRAFT);
@@ -361,7 +364,7 @@ class NotificationControllerTest {
         @Test
         void submit_shouldReturn200WithSubmittedNotification() throws Exception {
             // Given
-            Notification submitted = new Notification();
+            NotificationAggregate submitted = new NotificationAggregate();
             submitted.setId("notif-id-001");
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
@@ -380,7 +383,7 @@ class NotificationControllerTest {
         @Test
         void submit_shouldPassTraceIdAsCorrelationId() throws Exception {
             // Given
-            Notification submitted = new Notification();
+            NotificationAggregate submitted = new NotificationAggregate();
             submitted.setId("notif-id-001");
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
@@ -430,7 +433,7 @@ class NotificationControllerTest {
         @Test
         void submit_shouldPassActorToService_whenActorBodyProvided() throws Exception {
             // Given
-            Notification submitted = new Notification();
+            NotificationAggregate submitted = new NotificationAggregate();
             submitted.setId("notif-id-001");
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
@@ -471,7 +474,7 @@ class NotificationControllerTest {
         @Test
         void amend_shouldReturn200WithAmendNotification() throws Exception {
             // Given
-            Notification amended = new Notification();
+            NotificationAggregate amended = new NotificationAggregate();
             amended.setId("notif-id-001");
             amended.setReferenceNumber(REF_1);
             amended.setStatus(NotificationStatus.AMEND);
@@ -490,7 +493,7 @@ class NotificationControllerTest {
         @Test
         void amend_shouldPassTraceIdAsCorrelationId() throws Exception {
             // Given
-            Notification amended = new Notification();
+            NotificationAggregate amended = new NotificationAggregate();
             amended.setId("notif-id-001");
             amended.setReferenceNumber(REF_1);
             amended.setStatus(NotificationStatus.AMEND);
@@ -544,7 +547,7 @@ class NotificationControllerTest {
         @Test
         void cancelAmend_shouldReturn200WithSubmittedNotification() throws Exception {
             // Given
-            Notification restored = new Notification();
+            NotificationAggregate restored = new NotificationAggregate();
             restored.setId("notif-id-001");
             restored.setReferenceNumber(REF_1);
             restored.setStatus(NotificationStatus.SUBMITTED);
@@ -648,7 +651,8 @@ class NotificationControllerTest {
 
         private NotificationView testView(String ref, NotificationStatus status, Origin origin,
                 Commodity commodity, ConsignmentParty consignor, Transport transport) {
-            return new NotificationView(ref, 0L, status, null, origin, commodity, consignor, null, transport);
+            return new NotificationView.Data(
+                ref, 0L, status, null, origin, commodity, consignor, null, transport);
         }
 
         @Test
@@ -946,7 +950,7 @@ class NotificationControllerTest {
         @Test
         void softDelete_shouldReturn200WithDeletedNotification() throws Exception {
             // Given
-            Notification deleted = new Notification();
+            NotificationAggregate deleted = new NotificationAggregate();
             deleted.setId("notif-id-001");
             deleted.setReferenceNumber(REF_1);
             deleted.setStatus(NotificationStatus.DELETED);

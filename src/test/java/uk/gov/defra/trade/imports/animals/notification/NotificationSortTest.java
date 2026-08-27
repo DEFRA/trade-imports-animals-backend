@@ -9,19 +9,19 @@ class NotificationSortTest {
 
     @Test
     void toSort_shouldDefaultToArrivalDateDescending_whenMissingOrInvalid() {
-        assertThat(NotificationSort.toSort(null).getOrderFor("transport.arrivalDate").getDirection())
+        assertThat(NotificationSort.toSort(null).getOrderFor("notification.transport.arrivalDate").getDirection())
             .isEqualTo(Sort.Direction.DESC);
-        assertThat(NotificationSort.toSort("").getOrderFor("transport.arrivalDate").getDirection())
+        assertThat(NotificationSort.toSort("").getOrderFor("notification.transport.arrivalDate").getDirection())
             .isEqualTo(Sort.Direction.DESC);
-        assertThat(NotificationSort.toSort("invalid").getOrderFor("transport.arrivalDate").getDirection())
+        assertThat(NotificationSort.toSort("invalid").getOrderFor("notification.transport.arrivalDate").getDirection())
             .isEqualTo(Sort.Direction.DESC);
     }
 
     @Test
     void toSort_shouldMapArrivalDateSort() {
-        assertThat(NotificationSort.toSort("arrivalDate,asc").getOrderFor("transport.arrivalDate").getDirection())
+        assertThat(NotificationSort.toSort("arrivalDate,asc").getOrderFor("notification.transport.arrivalDate").getDirection())
             .isEqualTo(Sort.Direction.ASC);
-        assertThat(NotificationSort.toSort("arrivalDate,desc").getOrderFor("transport.arrivalDate").getDirection())
+        assertThat(NotificationSort.toSort("arrivalDate,desc").getOrderFor("notification.transport.arrivalDate").getDirection())
             .isEqualTo(Sort.Direction.DESC);
     }
 

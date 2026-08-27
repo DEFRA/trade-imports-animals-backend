@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 
 public record ExchangedDocument(
@@ -19,14 +20,15 @@ public record ExchangedDocument(
 
     private static final int VERSION_ID = 1;
 
-    static ExchangedDocument from(Notification notification) {
+    static ExchangedDocument from(NotificationAggregate notificationAggregate) {
+        Notification notification = notificationAggregate.requireNotification();
         Origin origin = notification.getOrigin();
         return new ExchangedDocument(
-            notification.getReferenceNumber(),
+            notificationAggregate.getReferenceNumber(),
             origin != null ? origin.getInternalReference() : null,
-            notification.getStatus() != null ? notification.getStatus().name() : null,
+            notificationAggregate.getStatus() != null ? notificationAggregate.getStatus().name() : null,
             VERSION_ID,
-            toUtcDateTime(notification.getUpdated()),
+            toUtcDateTime(notificationAggregate.getUpdated()),
             null,
             Authentication.from(notification),
             null);

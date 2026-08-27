@@ -44,19 +44,19 @@ class ConsignmentPartyResolverTest {
         stub("b", "Consignee Ltd");
         stub("c", "Importer Ltd");
         stub("d", "Destination Ltd");
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .consignor(ConsignmentParty.reference("a"))
             .consignee(ConsignmentParty.reference("b"))
             .importer(ConsignmentParty.reference("c"))
             .destination(ConsignmentParty.reference("d"))
-            .build();
+            .build());
 
-        Notification resolved = resolver.resolveForSubmission(notification, ORG);
+        NotificationAggregate resolved = resolver.resolveForSubmission(notificationAggregate, ORG);
 
-        assertThat(resolved.getConsignor().getName()).isEqualTo("Consignor Ltd");
-        assertThat(resolved.getConsignee().getName()).isEqualTo("Consignee Ltd");
-        assertThat(resolved.getImporter().getName()).isEqualTo("Importer Ltd");
-        assertThat(resolved.getDestination().getName()).isEqualTo("Destination Ltd");
+        assertThat(resolved.getNotification().getConsignor().getName()).isEqualTo("Consignor Ltd");
+        assertThat(resolved.getNotification().getConsignee().getName()).isEqualTo("Consignee Ltd");
+        assertThat(resolved.getNotification().getImporter().getName()).isEqualTo("Importer Ltd");
+        assertThat(resolved.getNotification().getDestination().getName()).isEqualTo("Destination Ltd");
     }
 
     @Test
@@ -65,38 +65,38 @@ class ConsignmentPartyResolverTest {
         // (ConsignmentParty.inlineOnly), but the resolver does not read them either way.
         ConsignmentParty origin = ConsignmentParty.builder().name("Origin Farm").build();
         ConsignmentParty contact = ConsignmentParty.builder().name("Contact Ltd").build();
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .placeOfOrigin(origin)
             .consignment(contact)
-            .build();
+            .build());
 
-        Notification resolved = resolver.resolveForSubmission(notification, ORG);
+        NotificationAggregate resolved = resolver.resolveForSubmission(notificationAggregate, ORG);
 
-        assertThat(resolved.getPlaceOfOrigin()).isSameAs(origin);
-        assertThat(resolved.getConsignment()).isSameAs(contact);
+        assertThat(resolved.getNotification().getPlaceOfOrigin()).isSameAs(origin);
+        assertThat(resolved.getNotification().getConsignment()).isSameAs(contact);
         verify(addressBookClient, never()).findById(any(), any());
     }
 
     @Test
     void shouldFetchOnceWhenTwoRolesShareAnAddress() {
         stub("shared", "Both Ends Ltd");
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .consignor(ConsignmentParty.reference("shared"))
             .consignee(ConsignmentParty.reference("shared"))
-            .build();
+            .build());
 
-        resolver.resolveForSubmission(notification, ORG);
+        resolver.resolveForSubmission(notificationAggregate, ORG);
 
         verify(addressBookClient, times(1)).findById(ORG, "shared");
     }
 
     @Test
     void shouldNotTouchTheAddressBookWhenNoRoleIsAReference() {
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .consignor(ConsignmentParty.builder().name("Inline Ltd").build())
-            .build();
+            .build());
 
-        resolver.resolveForSubmission(notification, ORG);
+        resolver.resolveForSubmission(notificationAggregate, ORG);
 
         verify(addressBookClient, never()).findById(any(), any());
     }
@@ -105,14 +105,14 @@ class ConsignmentPartyResolverTest {
     void shouldPassInlinePartiesThroughUnchanged() {
         stub("a", "Consignor Ltd");
         ConsignmentParty inline = ConsignmentParty.builder().name("Inline Ltd").build();
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .consignor(ConsignmentParty.reference("a"))
             .consignee(inline)
-            .build();
+            .build());
 
-        Notification resolved = resolver.resolveForSubmission(notification, ORG);
+        NotificationAggregate resolved = resolver.resolveForSubmission(notificationAggregate, ORG);
 
-        assertThat(resolved.getConsignee()).isSameAs(inline);
+        assertThat(resolved.getNotification().getConsignee()).isSameAs(inline);
     }
 
     @Test
@@ -121,13 +121,13 @@ class ConsignmentPartyResolverTest {
         // does not depend on the order the concurrent lookups completed in.
         when(addressBookClient.findById(ORG, "missing-consignor")).thenReturn(Optional.empty());
         when(addressBookClient.findById(ORG, "missing-importer")).thenReturn(Optional.empty());
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .consignor(ConsignmentParty.reference("missing-consignor"))
             .importer(ConsignmentParty.reference("missing-importer"))
-            .build();
+            .build());
 
         assertThatExceptionOfType(BadRequestException.class)
-            .isThrownBy(() -> resolver.resolveForSubmission(notification, ORG))
+            .isThrownBy(() -> resolver.resolveForSubmission(notificationAggregate, ORG))
             .withMessageContaining("missing-consignor");
     }
 
@@ -136,25 +136,25 @@ class ConsignmentPartyResolverTest {
         when(addressBookClient.findById(ORG, "gone")).thenReturn(Optional.of(
             new AddressBookRecord("gone", "Gone Ltd", null, null, null, null, null, null, null,
                 null, true)));
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .consignor(ConsignmentParty.reference("gone"))
-            .build();
+            .build());
 
-        Notification resolved = resolver.resolveForDraft(notification, ORG);
+        NotificationAggregate resolved = resolver.resolveForDraft(notificationAggregate, ORG);
 
-        assertThat(resolved.getConsignor()).isNull();
+        assertThat(resolved.getNotification().getConsignor()).isNull();
     }
 
     @Test
     void shouldLeaveTheRoleBlankOnADraftRatherThanFailing() {
         when(addressBookClient.findById(ORG, "missing")).thenReturn(Optional.empty());
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .consignor(ConsignmentParty.reference("missing"))
-            .build();
+            .build());
 
-        Notification resolved = resolver.resolveForDraft(notification, ORG);
+        NotificationAggregate resolved = resolver.resolveForDraft(notificationAggregate, ORG);
 
-        assertThat(resolved.getConsignor()).isNull();
+        assertThat(resolved.getNotification().getConsignor()).isNull();
     }
 
     @Test
@@ -164,12 +164,12 @@ class ConsignmentPartyResolverTest {
         // handler that maps it never sees it.
         when(addressBookClient.findById(ORG, "a")).thenThrow(
             new HttpServerErrorException(HttpStatus.SERVICE_UNAVAILABLE));
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .consignor(ConsignmentParty.reference("a"))
-            .build();
+            .build());
 
         assertThatExceptionOfType(HttpServerErrorException.class)
-            .isThrownBy(() -> resolver.resolveForSubmission(notification, ORG));
+            .isThrownBy(() -> resolver.resolveForSubmission(notificationAggregate, ORG));
     }
 
     @Test
@@ -181,14 +181,14 @@ class ConsignmentPartyResolverTest {
             seen.add(String.valueOf(MDC.get("trace.id")));
             return Optional.of(addressRecord(invocation.getArgument(1), "Anything Ltd"));
         });
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .consignor(ConsignmentParty.reference("a"))
             .consignee(ConsignmentParty.reference("b"))
-            .build();
+            .build());
 
         MDC.put("trace.id", "trace-abc");
         try {
-            resolver.resolveForSubmission(notification, ORG);
+            resolver.resolveForSubmission(notificationAggregate, ORG);
         } finally {
             MDC.clear();
         }
@@ -198,24 +198,24 @@ class ConsignmentPartyResolverTest {
 
     @Test
     void shouldRequireAnOrganisationToResolveForSubmission() {
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .consignor(ConsignmentParty.reference("a"))
-            .build();
+            .build());
 
         assertThatExceptionOfType(BadRequestException.class)
-            .isThrownBy(() -> resolver.resolveForSubmission(notification, null))
+            .isThrownBy(() -> resolver.resolveForSubmission(notificationAggregate, null))
             .withMessageContaining("organisation id is required");
     }
 
     @Test
     void shouldSaveADraftUnresolvedWhenThereIsNoOrganisation() {
-        Notification notification = Notification.builder()
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .consignor(ConsignmentParty.reference("a"))
-            .build();
+            .build());
 
-        Notification resolved = resolver.resolveForDraft(notification, null);
+        NotificationAggregate resolved = resolver.resolveForDraft(notificationAggregate, null);
 
-        assertThat(resolved.getConsignor().getAddressId()).isEqualTo("a");
+        assertThat(resolved.getNotification().getConsignor().getAddressId()).isEqualTo("a");
         verify(addressBookClient, never()).findById(any(), any());
     }
 
@@ -227,5 +227,9 @@ class ConsignmentPartyResolverTest {
     private static AddressBookRecord addressRecord(String addressId, String name) {
         return new AddressBookRecord(addressId, name, "1 Test Street", null, "London", null,
             "SW1A 1AA", "GB", "01632 960000", "test@example.com", false);
+    }
+
+    private static NotificationAggregate aggregateOf(Notification notification) {
+        return NotificationAggregate.builder().notification(notification).build();
     }
 }

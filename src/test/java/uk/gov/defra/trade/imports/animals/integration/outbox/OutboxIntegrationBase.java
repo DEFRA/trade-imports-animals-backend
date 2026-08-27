@@ -27,7 +27,7 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
@@ -154,14 +154,14 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
             .receiptHandle(message.receiptHandle())));
     }
 
-    // --- Notification helpers ---
+    // --- NotificationAggregate helpers ---
 
     protected String createAndSubmitNotification(String traceId) {
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
@@ -174,11 +174,11 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     }
 
     protected String createAndSaveNotification(String traceId) {
-        Notification created = webClient("NoAuth")
+        NotificationAggregate created = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
             .exchange().expectStatus().isOk()
-            .expectBody(Notification.class).returnResult()
+            .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody();
 
         webClient("NoAuth")

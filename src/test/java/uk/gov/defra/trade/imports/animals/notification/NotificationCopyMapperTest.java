@@ -30,9 +30,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldRetainCountryOfOriginAndRequiresRegionCode() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .origin(new Origin("DE", "yes", "INTERNAL-REF"))
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -42,9 +42,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldRetainReasonForImport() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .reasonForImport("internalMarket")
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -54,12 +54,12 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldRetainCommodityNameAndTypeOfCommodity() {
             CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species()));
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .commodity(Commodity.builder()
                     .name("Live bovine animals")
                     .commodityComplement(List.of(complement))
                     .build())
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -71,9 +71,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldRetainCertifiedFor() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .additionalDetails(new AdditionalDetails("Breeding", "yes"))
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -82,9 +82,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldRetainPlaceOfOrigin() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .placeOfOrigin(placesOfOrigin().getFirst())
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -93,9 +93,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldRetainConsignor() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .consignor(consignors().getFirst())
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -104,9 +104,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldCopyReferencedPartyAsReferenceAlone() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .consignor(reference("addr-1"))
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -119,9 +119,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldRetainConsignee() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .consignee(consignees().getFirst())
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -130,9 +130,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldRetainImporter() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .importer(importers().getFirst())
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -141,9 +141,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldRetainDestination() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .destination(destinations().getFirst())
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -152,13 +152,28 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldRetainCphNumber() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .cphNumber("12/345/6789")
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
             assertThat(result.getCphNumber()).isEqualTo("12/345/6789");
+        }
+
+        @Test
+        void toCopyDto_shouldRetainFulfilments() {
+            List<org.bson.Document> fulfilments = List.of(
+                new org.bson.Document("obligationId", "abc"),
+                new org.bson.Document("obligationId", "def"));
+            NotificationAggregate source = NotificationAggregate.builder()
+                .notification(Notification.builder().build())
+                .fulfilments(fulfilments)
+                .build();
+
+            NotificationDto result = mapper.toCopyDto(source);
+
+            assertThat(result.getFulfilments()).isEqualTo(fulfilments);
         }
     }
 
@@ -167,9 +182,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldOmitInternalReference() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .origin(new Origin("FR", "no", "DO-NOT-COPY"))
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -179,11 +194,11 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldOmitPerAnimalDataFromCommodityComplement() {
             CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species()));
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .commodity(Commodity.builder()
                     .commodityComplement(List.of(complement))
                     .build())
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -199,9 +214,9 @@ class NotificationCopyMapperTest {
                 new CommodityComplement("LIVE", 3, 1, List.of(species())),
                 new CommodityComplement("GERM", 7, 2, List.of(species()))
             );
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .commodity(Commodity.builder().commodityComplement(complements).build())
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -214,9 +229,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldOmitUnweanedAnimals() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .additionalDetails(new AdditionalDetails("Breeding", "yes"))
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -225,12 +240,12 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldOmitTransport() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .transport(Transport.builder()
                     .portOfEntry("GBDVR")
                     .arrivalDate(LocalDate.of(2026, 6, 1))
                     .build())
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -239,9 +254,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldOmitConsignment() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .consignment(consignments().getFirst())
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -253,8 +268,17 @@ class NotificationCopyMapperTest {
     class NullSafety {
 
         @Test
+        void toCopyDto_shouldThrow_whenAggregateHasNoNotification() {
+            NotificationAggregate source = new NotificationAggregate();
+
+            org.assertj.core.api.Assertions.assertThatNullPointerException()
+                .isThrownBy(() -> mapper.toCopyDto(source))
+                .withMessageContaining("requires a notification sub-object");
+        }
+
+        @Test
         void toCopyDto_shouldHandleNullOrigin() {
-            Notification source = Notification.builder().origin(null).build();
+            NotificationAggregate source = aggregateOf(Notification.builder().origin(null).build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -263,7 +287,7 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldHandleNullCommodity() {
-            Notification source = Notification.builder().commodity(null).build();
+            NotificationAggregate source = aggregateOf(Notification.builder().commodity(null).build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -272,9 +296,9 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldHandleNullCommodityComplementList() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .commodity(Commodity.builder().name("Cattle").commodityComplement(null).build())
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -283,7 +307,7 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldHandleNullAdditionalDetails() {
-            Notification source = Notification.builder().additionalDetails(null).build();
+            NotificationAggregate source = aggregateOf(Notification.builder().additionalDetails(null).build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -292,13 +316,13 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldHandleNullOperatorFields() {
-            Notification source = Notification.builder()
+            NotificationAggregate source = aggregateOf(Notification.builder()
                 .placeOfOrigin(null)
                 .consignor(null)
                 .consignee(null)
                 .importer(null)
                 .destination(null)
-                .build();
+                .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
@@ -308,5 +332,9 @@ class NotificationCopyMapperTest {
             assertThat(result.getImporter()).isNull();
             assertThat(result.getDestination()).isNull();
         }
+    }
+
+    private static NotificationAggregate aggregateOf(Notification notification) {
+        return NotificationAggregate.builder().notification(notification).build();
     }
 }
