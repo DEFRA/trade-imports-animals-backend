@@ -71,9 +71,11 @@ WORKDIR /app
 # Maven + curl for healthcheck; bash for the dev-run entrypoint
 RUN apk add --no-cache maven curl bash
 
-# Pre-fetch dependencies (cached layer; invalidated only when pom.xml changes)
+# Reuse the fully-warmed Maven cache from the build stage. The build stage runs
+# mvn clean package which downloads all deps including optional transitives that
+# dependency:go-offline misses (e.g. nimbus-jose-jwt's optional spring-security-crypto).
+COPY --from=build /root/.m2 /root/.m2
 COPY pom.xml .
-RUN mvn dependency:go-offline -B
 
 # Source is volume-mounted at runtime; copy here only so the image builds
 COPY src ./src

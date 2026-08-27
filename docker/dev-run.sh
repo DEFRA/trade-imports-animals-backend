@@ -42,4 +42,4 @@ watch_and_compile() {
 
 watch_and_compile &
 
-exec mvn spring-boot:run -Dspring-boot.run.profiles=local
+exec mvn spring-boot:run -Dspring-boot.run.profiles=local -Dmaven.test.skip=true
