@@ -103,7 +103,7 @@ public class ConsignmentPartyResolver {
         notification.setDestination(
             resolveIfReference(DESTINATION, notification.getDestination(), lookups, unresolved));
         if (failOnMiss && !unresolved.isEmpty()) {
-            log.error("Address-book parties could not be resolved for submission: {}", unresolved);
+            // Not logged here: the exception handler logs the rejected submit at WARN.
             throw new UnresolvableConsignmentPartyException(unresolved);
         }
         return notificationAggregate;
