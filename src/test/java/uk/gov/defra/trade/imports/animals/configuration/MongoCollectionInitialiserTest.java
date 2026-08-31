@@ -47,7 +47,8 @@ class MongoCollectionInitialiserTest {
         mongoTemplate = mock(MongoTemplate.class);
         database = mock(MongoDatabase.class);
         when(mongoTemplate.getDb()).thenReturn(database);
-        when(mongoTemplate.indexOps(anyString())).thenReturn(mock(IndexOperations.class));
+        IndexOperations indexOperations = mock(IndexOperations.class);
+        when(mongoTemplate.indexOps(anyString())).thenReturn(indexOperations);
 
         mappingContext = new MongoMappingContext();
         // Without this the context treats Instant as an entity and tries to reflect into its
