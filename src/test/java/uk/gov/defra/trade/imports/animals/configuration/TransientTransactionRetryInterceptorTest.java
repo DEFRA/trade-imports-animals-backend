@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.transientNetworkFailureAtCommit;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.unknownCommitResultAtCommit;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.writeConflictAtCommit;
 
@@ -155,6 +156,35 @@ class TransientTransactionRetryInterceptorTest {
         assertThatThrownBy(proxy::run).isInstanceOf(TransactionSystemException.class);
         assertThat(Thread.currentThread().isInterrupted()).isTrue();
         assertThat(work.invocations).isEqualTo(1);
+    }
+
+    /**
+     * A misconfigured retry budget is a startup problem, not a runtime one. Failing in the
+     * constructor keeps a zero or negative {@code max-attempts} from silently turning the
+     * interceptor into a pass-through that never retries anything.
+     */
+    @Test
+    void construct_shouldRejectARetryBudget_thatWouldNeverRunAnAttempt() {
+        assertThatThrownBy(() -> new TransientTransactionRetryInterceptor(0, 1, 2, 0))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("mongo.transaction.retry.max-attempts must be at least 1");
+    }
+
+    /**
+     * Not every transient failure carries a server response. A commit lost to a network blip is
+     * labelled {@code TransientTransactionError} on a plain {@link com.mongodb.MongoException},
+     * so the WARN has to name the exception type and message rather than a Mongo error code.
+     */
+    @Test
+    void invoke_shouldSummariseTheExceptionItself_whenTheFailureCarriesNoServerResponse() {
+        CountingWork work = new CountingWork(1, transientNetworkFailureAtCommit());
+
+        assertThat(proxied(work).run()).isEqualTo(RESULT);
+        assertThat(logged(Level.WARN))
+            .singleElement()
+            .satisfies(message -> assertThat(message)
+                .contains("MongoException: Connection reset by peer")
+                .doesNotContain("code="));
     }
 
     private static Work proxied(Work target) {

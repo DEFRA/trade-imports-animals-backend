@@ -60,7 +60,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
     void transactionalMethod_shouldSucceed_whenTheFirstAttemptFailsTransiently() {
         flakyTransactionalService.failNextAttempts(1);
 
-        flakyTransactionalService.record("probe");
+        flakyTransactionalService.recordAttempt("probe");
 
         assertThat(flakyTransactionalService.attempts()).isEqualTo(2);
     }
@@ -69,7 +69,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
     void transactionalMethod_shouldCommitOnlyTheSuccessfulAttempt_whenAnEarlierOneFailed() {
         flakyTransactionalService.failNextAttempts(1);
 
-        flakyTransactionalService.record("probe");
+        flakyTransactionalService.recordAttempt("probe");
 
         // One document, written by the second attempt: the first attempt's write rolled back, so
         // the retry ran in a genuinely new transaction rather than inside the failed one.
@@ -82,7 +82,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
     void transactionalMethod_shouldPropagate_whenEveryAttemptFailsTransiently() {
         flakyTransactionalService.failNextAttempts(Integer.MAX_VALUE);
 
-        assertThatThrownBy(() -> flakyTransactionalService.record("probe"))
+        assertThatThrownBy(() -> flakyTransactionalService.recordAttempt("probe"))
             .isInstanceOf(TransactionSystemException.class);
 
         // max-attempts is 3 in application-integration-test.yml.
@@ -100,7 +100,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
     void transactionalMethod_shouldSucceed_whenTheCommitItselfFailsTransiently() {
         transactionManager.failNextCommits(1);
 
-        flakyTransactionalService.record("probe");
+        flakyTransactionalService.recordAttempt("probe");
 
         assertThat(flakyTransactionalService.attempts()).isEqualTo(2);
         // The failed commit left nothing behind, so only the second attempt's write is stored.
@@ -184,7 +184,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
         }
 
         @Transactional
-        public void record(String id) {
+        public void recordAttempt(String id) {
             attempts++;
             mongoTemplate.save(new Document("_id", id).append("attempt", attempts), COLLECTION);
             if (failuresRemaining > 0) {

@@ -136,7 +136,7 @@ public class TransientTransactionRetryInterceptor implements MethodInterceptor {
         long jitter = jitterMs > 0 ? ThreadLocalRandom.current().nextLong(jitterMs) : 0;
         try {
             Thread.sleep(delay + jitter);
-        } catch (InterruptedException e) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             throw failure;
         }

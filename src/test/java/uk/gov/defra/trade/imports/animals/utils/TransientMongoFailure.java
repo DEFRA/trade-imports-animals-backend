@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.utils;
 
 import com.mongodb.MongoCommandException;
+import com.mongodb.MongoException;
 import com.mongodb.ServerAddress;
 import java.util.List;
 import org.bson.BsonArray;
@@ -48,6 +49,18 @@ public final class TransientMongoFailure {
         return new TransactionSystemException("Could not commit Mongo transaction",
             commandFailure(91, "ShutdownInProgress", "The server is shutting down",
                 "UnknownTransactionCommitResult"));
+    }
+
+    /**
+     * A transient failure that is <em>not</em> a {@link MongoCommandException}. The driver labels
+     * a commit lost to a network blip {@code TransientTransactionError} too, and it arrives as a
+     * plain {@link MongoException} with no server response to quote — so the interceptor's log
+     * summary has to fall back to the exception's own type and message.
+     */
+    public static TransactionSystemException transientNetworkFailureAtCommit() {
+        MongoException cause = new MongoException("Connection reset by peer");
+        cause.addLabel("TransientTransactionError");
+        return new TransactionSystemException("Could not commit Mongo transaction", cause);
     }
 
     private static MongoCommandException commandFailure(int code, String codeName, String errmsg,
