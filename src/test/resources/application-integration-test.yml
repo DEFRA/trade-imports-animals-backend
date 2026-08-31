@@ -9,7 +9,7 @@ spring:
     mongodb:
       uri: ${MONGO_URI:mongodb://localhost:27017}
       database: ${MONGO_DATABASE:trade-imports-animals-backend}
-      auto-index-creation: true
+      auto-index-creation: false
       read-preference: primary
       write-concern: ${MONGO_WRITE_CONCERN:majority}
       connection-pool:
@@ -113,6 +113,16 @@ notification:
     sweep:
       enabled: false
       batch-size: 10
+
+# Retry stays on so the advisor wiring is exercised, but the backoff is squeezed — ShedLock's
+# minimum hold is 0ms above, so a retry has nothing to wait for.
+mongo:
+  transaction:
+    retry:
+      max-attempts: 3
+      initial-backoff-ms: 5
+      max-backoff-ms: 20
+      jitter-ms: 5
 
 outbox:
   poller:

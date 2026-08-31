@@ -12,7 +12,10 @@ spring:
     mongodb:
       uri: ${MONGO_URI:mongodb://localhost:27017/}
       database: ${MONGO_DATABASE:trade-imports-animals-backend}
-      auto-index-creation: true
+      # Collections and their annotation-declared indexes are created by
+      # MongoCollectionInitialiser before the port opens, so Spring Data's own
+      # index-creation side effect is redundant here.
+      auto-index-creation: false
       read-preference: ${MONGO_READ_PREFERENCE:primary}
       write-concern: ${MONGO_WRITE_CONCERN:majority}
       connection-pool:
@@ -152,6 +155,17 @@ notification:
       batch-size: 10
       lock-at-least-for: 1s
       lock-at-most-for: 30s
+
+# Bounded retry of transactions MongoDB labels TransientTransactionError (WriteConflict among
+# them). initial-backoff-ms must stay above notification.submit.lock-at-least-for, or a retry can
+# re-enter the outbox ShedLock while the failed attempt's hold is still in force.
+mongo:
+  transaction:
+    retry:
+      max-attempts: ${MONGO_TX_RETRY_MAX_ATTEMPTS:3}
+      initial-backoff-ms: ${MONGO_TX_RETRY_INITIAL_BACKOFF_MS:60}
+      max-backoff-ms: ${MONGO_TX_RETRY_MAX_BACKOFF_MS:500}
+      jitter-ms: ${MONGO_TX_RETRY_JITTER_MS:40}
 
 # Transactional outbox SNS relay (ADR-EUDP-001)
 outbox:
