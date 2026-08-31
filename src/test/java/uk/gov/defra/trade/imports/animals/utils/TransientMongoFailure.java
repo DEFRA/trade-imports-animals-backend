@@ -31,14 +31,33 @@ public final class TransientMongoFailure {
     }
 
     public static MongoCommandException writeConflictOnOutboxCreation() {
+        return commandFailure(112, "WriteConflict",
+            "Caused by :: Collection namespace 'trade-imports-animals-backend.outbox' is already "
+                + "in use.",
+            "TransientTransactionError");
+    }
+
+    /**
+     * The other label a commit can come back with, and the one that must <em>not</em> be retried
+     * from the top. {@code UnknownTransactionCommitResult} says the commit may already have
+     * succeeded; MongoDB's contract is to retry {@code commitTransaction} on the same session, and
+     * re-running the method body would repeat work against state the first attempt has already
+     * changed.
+     */
+    public static TransactionSystemException unknownCommitResultAtCommit() {
+        return new TransactionSystemException("Could not commit Mongo transaction",
+            commandFailure(91, "ShutdownInProgress", "The server is shutting down",
+                "UnknownTransactionCommitResult"));
+    }
+
+    private static MongoCommandException commandFailure(int code, String codeName, String errmsg,
+        String errorLabel) {
         BsonDocument response = new BsonDocument()
             .append("ok", new BsonDouble(0.0))
-            .append("code", new BsonInt32(112))
-            .append("codeName", new BsonString("WriteConflict"))
-            .append("errmsg", new BsonString("Caused by :: Collection namespace "
-                + "'trade-imports-animals-backend.outbox' is already in use."))
-            .append("errorLabels",
-                new BsonArray(List.of(new BsonString("TransientTransactionError"))));
+            .append("code", new BsonInt32(code))
+            .append("codeName", new BsonString(codeName))
+            .append("errmsg", new BsonString(errmsg))
+            .append("errorLabels", new BsonArray(List.of(new BsonString(errorLabel))));
         return new MongoCommandException(response, new ServerAddress());
     }
 }

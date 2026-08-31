@@ -157,8 +157,10 @@ notification:
       lock-at-most-for: 30s
 
 # Bounded retry of transactions MongoDB labels TransientTransactionError (WriteConflict among
-# them). initial-backoff-ms must stay above notification.submit.lock-at-least-for, or a retry can
-# re-enter the outbox ShedLock while the failed attempt's hold is still in force.
+# them). Where initial-backoff-ms is below notification.submit.lock-at-least-for, a retry re-enters
+# the outbox ShedLock while the failed attempt's minimum hold is still running, and pays one extra
+# wait inside executeWithOutboxLock before it gets in. That loop sleeps for lock-at-least-for
+# between its own attempts, so it still succeeds; the ordering below just avoids the wasted wait.
 mongo:
   transaction:
     retry:

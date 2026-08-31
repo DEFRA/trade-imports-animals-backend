@@ -111,10 +111,17 @@ public class MongoCollectionInitialiser implements InitializingBean {
     /**
      * Creates the annotation-declared indexes for one entity.
      *
-     * <p>An index failure is logged and skipped rather than fatal. A unique index can legitimately
-     * fail to build against data that accumulated while the index was missing, and refusing to
-     * start would leave the service undeployable. A logged failure here means the data needs
-     * cleaning, not that the code needs changing.
+     * <p>A unique index that will not build is fatal, because the application relies on those
+     * indexes for correctness rather than for speed: {@code notification.referenceNumber} is what
+     * makes {@code createNotification}'s collision retry work, and {@code outbox}'s
+     * {@code aggregate_version_uq} is what makes {@code OutboxService.appendEvent}'s duplicate
+     * guard work. Both are written as "insert and catch the duplicate key", so a missing index
+     * does not fail loudly — it silently persists the duplicate. Starting without one would trade
+     * a refused deployment for corrupt data, so the service refuses to start instead. A failure
+     * here means the collection holds duplicates that need clearing before the index can build.
+     *
+     * <p>A non-unique index enforces nothing, so a failure to build one costs query performance
+     * and no more. Those are logged and skipped, and the service starts.
      */
     private int createIndexes(MongoPersistentEntity<?> entity) {
         int ensured = 0;
@@ -124,11 +131,22 @@ public class MongoCollectionInitialiser implements InitializingBean {
                 mongoTemplate.indexOps(collection).createIndex(definition);
                 ensured++;
             } catch (RuntimeException e) {
+                if (isUnique(definition)) {
+                    throw new IllegalStateException(
+                        "Could not create unique index %s on collection %s; the service will not "
+                            .formatted(indexName(definition), collection)
+                            + "start without it because application code relies on it to reject "
+                            + "duplicates", e);
+                }
                 log.error("Could not create index {} on collection {}", indexName(definition),
                     collection, e);
             }
         }
         return ensured;
+    }
+
+    private static boolean isUnique(IndexDefinition definition) {
+        return definition.getIndexOptions().getBoolean("unique", false);
     }
 
     private static String collectionFor(MongoPersistentEntity<?> entity,

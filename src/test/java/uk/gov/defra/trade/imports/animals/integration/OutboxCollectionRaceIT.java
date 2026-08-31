@@ -10,6 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +18,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import uk.gov.defra.trade.imports.animals.configuration.MongoCollectionInitialiser;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
@@ -52,10 +54,24 @@ class OutboxCollectionRaceIT extends IntegrationBase {
     @Autowired
     private MongoTemplate mongoTemplate;
 
+    @Autowired
+    private MongoCollectionInitialiser initialiser;
+
     @BeforeEach
     void setUp() {
         notificationRepository.deleteAll();
         outboxEventRepository.deleteAll();
+    }
+
+    /**
+     * Puts back what the test deliberately broke. Dropping {@code outbox} takes its indexes with
+     * it, and the writes that recreate it implicitly do not restore them — so without this, every
+     * integration test that runs afterwards against this shared container would be relying on an
+     * {@code aggregate_version_uq} index that is no longer there.
+     */
+    @AfterEach
+    void restoreTheCollectionsThisTestDropped() {
+        initialiser.ensureCollectionsAndIndexes();
     }
 
     @Test
