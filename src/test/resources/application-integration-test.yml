@@ -122,7 +122,6 @@ mongo:
       max-attempts: 3
       initial-backoff-ms: 5
       max-backoff-ms: 20
-      jitter-ms: 5
 
 outbox:
   poller:

@@ -11,16 +11,7 @@ import org.bson.BsonInt32;
 import org.bson.BsonString;
 import org.springframework.transaction.TransactionSystemException;
 
-/**
- * Builds the failure EUDPA-356 was raised for, in the shape it really arrives in: MongoDB rejects
- * the commit with error 112 {@code WriteConflict} and labels it {@code TransientTransactionError},
- * and Spring's transaction manager wraps that in a {@link TransactionSystemException}.
- *
- * <p>The wrapper matters. {@code TransactionSystemException} sits outside Spring's data-access
- * exception hierarchy, and error 112 translates to the non-transient
- * {@code DataIntegrityViolationException} on the operation path, so nothing but the driver's own
- * error label identifies this as retryable.
- */
+/** Commit failures in the shape MongoDB and Spring's transaction manager really produce them. */
 public final class TransientMongoFailure {
 
     private TransientMongoFailure() {
@@ -38,13 +29,6 @@ public final class TransientMongoFailure {
             "TransientTransactionError");
     }
 
-    /**
-     * The other label a commit can come back with, and the one that must <em>not</em> be retried
-     * from the top. {@code UnknownTransactionCommitResult} says the commit may already have
-     * succeeded; MongoDB's contract is to retry {@code commitTransaction} on the same session, and
-     * re-running the method body would repeat work against state the first attempt has already
-     * changed.
-     */
     public static TransactionSystemException unknownCommitResultAtCommit() {
         return new TransactionSystemException("Could not commit Mongo transaction",
             commandFailure(91, "ShutdownInProgress", "The server is shutting down",
@@ -54,8 +38,7 @@ public final class TransientMongoFailure {
     /**
      * A transient failure that is <em>not</em> a {@link MongoCommandException}. The driver labels
      * a commit lost to a network blip {@code TransientTransactionError} too, and it arrives as a
-     * plain {@link MongoException} with no server response to quote — so the interceptor's log
-     * summary has to fall back to the exception's own type and message.
+     * plain {@link MongoException} with no server response to quote.
      */
     public static TransactionSystemException transientNetworkFailureAtCommit() {
         MongoException cause = new MongoException("Connection reset by peer");

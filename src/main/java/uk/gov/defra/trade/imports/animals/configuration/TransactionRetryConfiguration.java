@@ -16,12 +16,6 @@ import org.springframework.transaction.interceptor.TransactionAttributeSource;
 /**
  * Wraps every {@code @Transactional} method in a bounded retry of transient MongoDB failures.
  *
- * <p>The pointcut consults the {@link TransactionAttributeSource} Spring's own advisor uses, so it
- * matches exactly the methods that get a transaction.
- *
- * <p>The order puts this outside the transaction advisor ({@link Ordered#LOWEST_PRECEDENCE}), so a
- * retry starts a fresh transaction rather than re-running inside the failed one.
- *
  * <p>Declared as {@link BeanDefinition#ROLE_INFRASTRUCTURE} exactly as Spring declares
  * {@code ProxyTransactionManagementConfiguration}: the auto-proxy creator fetches advisors before
  * the bean post-processors are ready, and without this every bean declared beside it would be
@@ -38,8 +32,7 @@ public class TransactionRetryConfiguration {
         TransactionAttributeSource transactionAttributeSource,
         @Value("${mongo.transaction.retry.max-attempts}") int maxAttempts,
         @Value("${mongo.transaction.retry.initial-backoff-ms}") long initialBackoffMs,
-        @Value("${mongo.transaction.retry.max-backoff-ms}") long maxBackoffMs,
-        @Value("${mongo.transaction.retry.jitter-ms}") long jitterMs) {
+        @Value("${mongo.transaction.retry.max-backoff-ms}") long maxBackoffMs) {
 
         Pointcut pointcut = new StaticMethodMatcherPointcut() {
             @Override
@@ -49,8 +42,9 @@ public class TransactionRetryConfiguration {
             }
         };
         DefaultPointcutAdvisor advisor = new DefaultPointcutAdvisor(pointcut,
-            new TransientTransactionRetryInterceptor(
-                maxAttempts, initialBackoffMs, maxBackoffMs, jitterMs));
+            new TransientTransactionRetryInterceptor(maxAttempts, initialBackoffMs, maxBackoffMs));
+        // Outside the transaction advisor (Ordered.LOWEST_PRECEDENCE), so a retry starts a fresh
+        // transaction rather than re-running inside the failed one.
         advisor.setOrder(Ordered.LOWEST_PRECEDENCE - 100);
         log.info("Transient Mongo transaction retry enabled: maxAttempts={}", maxAttempts);
         return advisor;

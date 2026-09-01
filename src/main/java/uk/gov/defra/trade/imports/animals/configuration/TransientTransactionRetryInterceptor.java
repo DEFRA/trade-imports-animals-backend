@@ -2,12 +2,14 @@ package uk.gov.defra.trade.imports.animals.configuration;
 
 import com.mongodb.MongoCommandException;
 import com.mongodb.MongoException;
-import java.util.concurrent.ThreadLocalRandom;
 import lombok.extern.slf4j.Slf4j;
-import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
-import org.springframework.aop.ProxyMethodInvocation;
 import org.springframework.core.NestedExceptionUtils;
+import org.springframework.retry.RetryCallback;
+import org.springframework.retry.RetryContext;
+import org.springframework.retry.RetryListener;
+import org.springframework.retry.interceptor.RetryOperationsInterceptor;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
@@ -21,75 +23,34 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * <p>{@code UnknownTransactionCommitResult} is deliberately not matched: it means the commit may
  * have succeeded, so re-running the body would repeat work against changed state. Spring Data's
  * {@code isTransientFailure} conflates the two, hence the cause walk here.
- *
- * <p>Ordered outside the transaction advisor so a retry begins a new transaction. Only the
- * outermost retries — an inner call joins its caller's transaction.
  */
 @Slf4j
-public class TransientTransactionRetryInterceptor implements MethodInterceptor {
+public class TransientTransactionRetryInterceptor extends RetryOperationsInterceptor {
 
-    /** Caps the exponential shift so a mis-set attempt count cannot overflow the backoff. */
-    private static final int MAX_BACKOFF_DOUBLINGS = 16;
-
-    private final int maxAttempts;
-    private final long initialBackoffMs;
-    private final long maxBackoffMs;
-    private final long jitterMs;
+    private static final double BACKOFF_MULTIPLIER = 2.0;
 
     public TransientTransactionRetryInterceptor(int maxAttempts, long initialBackoffMs,
-        long maxBackoffMs, long jitterMs) {
-        if (maxAttempts < 1) {
-            throw new IllegalArgumentException(
-                "mongo.transaction.retry.max-attempts must be at least 1");
-        }
-        this.maxAttempts = maxAttempts;
-        this.initialBackoffMs = Math.max(0, initialBackoffMs);
-        this.maxBackoffMs = Math.max(this.initialBackoffMs, maxBackoffMs);
-        this.jitterMs = Math.max(0, jitterMs);
+        long maxBackoffMs) {
+
+        setRetryOperations(RetryTemplate.builder()
+            .maxAttempts(maxAttempts)
+            .exponentialBackoff(initialBackoffMs, BACKOFF_MULTIPLIER, maxBackoffMs, true)
+            .retryOn(TransientTransactionRetryInterceptor::isTransientTransactionFailure)
+            .withListener(new RetryLogger(maxAttempts))
+            .build());
     }
 
     @Override
     public Object invoke(MethodInvocation invocation) throws Throwable {
-        if (TransactionSynchronizationManager.isActualTransactionActive()
-            || !(invocation instanceof ProxyMethodInvocation proxyInvocation)) {
+        // An inner call has already joined its caller's transaction, so retrying here would re-run
+        // inside the transaction that is failing rather than in a fresh one.
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
             return invocation.proceed();
         }
-
-        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-            try {
-                return attempt(proxyInvocation);
-            } catch (RuntimeException e) {
-                if (!isRetryable(e)) {
-                    throw e;
-                }
-                if (attempt == maxAttempts) {
-                    log.error("Transient Mongo transaction still failing after {} attempts: "
-                        + "method={}", maxAttempts, describe(invocation), e);
-                    throw e;
-                }
-                log.warn("Retrying transient Mongo transaction: method={} attempt={}/{} cause={}",
-                    describe(invocation), attempt, maxAttempts, summarise(e));
-                backOff(attempt, e);
-            }
-        }
-        // Unreachable: the final attempt either returns or rethrows above, and maxAttempts is at
-        // least 1, so the loop always runs at least once.
-        throw new IllegalStateException("Retry loop exited without a result or a failure");
+        return super.invoke(invocation);
     }
 
-    /**
-     * Runs one attempt down the rest of the interceptor chain.
-     *
-     * <p>A {@link MethodInvocation} carries its position in the chain as mutable state, so calling
-     * {@code proceed()} on the same instance twice would skip every interceptor below us — the
-     * transaction interceptor included. Each attempt therefore runs on a fresh clone.
-     */
-    private static Object attempt(ProxyMethodInvocation invocation) throws Throwable {
-        return invocation.invocableClone().proceed();
-    }
-
-    /** Walks the cause chain because the driver's exception arrives wrapped. */
-    private static boolean isRetryable(Throwable failure) {
+    private static boolean isTransientTransactionFailure(Throwable failure) {
         for (Throwable cause = failure; cause != null; cause = nextCause(cause)) {
             if (cause instanceof MongoException mongoException
                 && mongoException.hasErrorLabel(MongoException.TRANSIENT_TRANSACTION_ERROR_LABEL)) {
@@ -103,27 +64,12 @@ public class TransientTransactionRetryInterceptor implements MethodInterceptor {
         return cause.getCause() != cause ? cause.getCause() : null;
     }
 
-    /** Jittered so racing callers do not line up and conflict again. */
-    private void backOff(int attempt, RuntimeException failure) {
-        long doublings = Math.min(attempt - 1L, MAX_BACKOFF_DOUBLINGS);
-        // Clamp: the shift can overflow negative, and Thread.sleep rejects that.
-        long shifted = Math.max(0, initialBackoffMs << doublings);
-        long delay = Math.min(maxBackoffMs, shifted);
-        long jitter = jitterMs > 0 ? ThreadLocalRandom.current().nextLong(jitterMs) : 0;
-        try {
-            Thread.sleep(delay + jitter);
-        } catch (InterruptedException _) {
-            Thread.currentThread().interrupt();
-            throw failure;
-        }
-    }
-
     /**
      * Not the exception's {@code toString()}: for a {@link MongoCommandException} that is the
      * whole server response, {@code $clusterTime} included, and runs to kilobytes per retry.
      */
-    private static String summarise(RuntimeException e) {
-        Throwable cause = NestedExceptionUtils.getMostSpecificCause(e);
+    private static String summarise(Throwable failure) {
+        Throwable cause = NestedExceptionUtils.getMostSpecificCause(failure);
         if (cause instanceof MongoCommandException command) {
             return "code=%d codeName=%s errmsg=%s".formatted(command.getErrorCode(),
                 command.getErrorCodeName(), command.getErrorMessage());
@@ -131,8 +77,26 @@ public class TransientTransactionRetryInterceptor implements MethodInterceptor {
         return cause.getClass().getSimpleName() + ": " + cause.getMessage();
     }
 
-    private static String describe(MethodInvocation invocation) {
-        return invocation.getMethod().getDeclaringClass().getSimpleName()
-            + "." + invocation.getMethod().getName();
+    private record RetryLogger(int maxAttempts) implements RetryListener {
+
+        @Override
+        public <T, E extends Throwable> void onError(RetryContext context,
+            RetryCallback<T, E> callback, Throwable failure) {
+
+            if (context.getRetryCount() < maxAttempts && isTransientTransactionFailure(failure)) {
+                log.warn("Retrying transient Mongo transaction: method={} attempt={}/{} cause={}",
+                    callback.getLabel(), context.getRetryCount(), maxAttempts, summarise(failure));
+            }
+        }
+
+        @Override
+        public <T, E extends Throwable> void close(RetryContext context,
+            RetryCallback<T, E> callback, Throwable failure) {
+
+            if (failure != null && isTransientTransactionFailure(failure)) {
+                log.error("Transient Mongo transaction still failing after {} attempts: method={}",
+                    context.getRetryCount(), callback.getLabel(), failure);
+            }
+        }
     }
 }

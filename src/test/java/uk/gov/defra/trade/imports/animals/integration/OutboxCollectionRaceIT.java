@@ -31,10 +31,8 @@ import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
 
 /**
- * The regression test for EUDPA-356: several callers save at once while the {@code outbox}
- * collection is missing, which is what a database wipe under a running service leaves behind.
- * MongoDB takes an exclusive lock to create a collection, so the transactions racing to be first
- * conflict, and before this fix the loser's request became a 500.
+ * Several callers save at once while the {@code outbox} collection is missing, so their
+ * transactions race on the exclusive lock MongoDB takes to create it.
  *
  * <p>Honest about what it proves: whether the transactions genuinely collide on a given run is up
  * to MongoDB's scheduling, so a green run does not prove the race occurred. It is the closest
@@ -95,8 +93,6 @@ class OutboxCollectionRaceIT extends IntegrationBase {
         ExecutorService writers = Executors.newFixedThreadPool(CONCURRENT_WRITERS);
         try {
             for (int round = 1; round <= ROUNDS; round++) {
-                // Exactly what a mid-life database reseed leaves behind: the service is up, its
-                // collections are not.
                 mongoTemplate.dropCollection("outbox");
 
                 List<HttpStatusCode> statuses = editAllAtOnce(writers, client, references, round);

@@ -161,7 +161,6 @@ mongo:
       max-attempts: ${MONGO_TX_RETRY_MAX_ATTEMPTS:3}
       initial-backoff-ms: ${MONGO_TX_RETRY_INITIAL_BACKOFF_MS:60}
       max-backoff-ms: ${MONGO_TX_RETRY_MAX_BACKOFF_MS:500}
-      jitter-ms: ${MONGO_TX_RETRY_JITTER_MS:40}
 
 # Transactional outbox SNS relay (ADR-EUDP-001)
 outbox:
