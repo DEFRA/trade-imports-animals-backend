@@ -123,6 +123,43 @@ class MongoCollectionInitialiserIT extends IntegrationBase {
     }
 
     /**
+     * The scheduled recovery is the whole reason nothing outside the service has to restart it
+     * after a reseed. This drives the same entry point the timer calls, so the wiring cannot be
+     * dropped without a red test.
+     */
+    @Test
+    @Order(9)
+    void recheckCollectionsAndIndexes_shouldRestoreEverything_afterTheDatabaseIsWipedUnderneath() {
+        mappedCollections().forEach(mongoTemplate::dropCollection);
+        assertThat(mongoTemplate.getCollectionNames()).doesNotContainAnyElementsOf(
+            mappedCollections());
+
+        initialiser.recheckCollectionsAndIndexes();
+
+        assertThat(mongoTemplate.getCollectionNames()).containsAll(mappedCollections());
+        assertThat(indexNames(NOTIFICATION_COLLECTION))
+            .as("the unique reference index is rebuilt without a restart")
+            .contains(REFERENCE_INDEX);
+    }
+
+    /**
+     * A recheck must not take the service down. It runs on a timer against a database that may be
+     * mid-wipe, and a failure there is not a reason to stop serving traffic — unlike at startup,
+     * where the same failure is fatal.
+     */
+    @Test
+    @Order(10)
+    void recheckCollectionsAndIndexes_shouldNotThrow_whenTheSchemaCannotBeBuilt() {
+        givenDuplicateReferenceNumbersAndNoIndexToRejectThem();
+        try {
+            assertThatNoException().isThrownBy(initialiser::recheckCollectionsAndIndexes);
+        } finally {
+            removeTheDuplicates();
+            initialiser.ensureCollectionsAndIndexes();
+        }
+    }
+
+    /**
      * A unique index that will not build has to stop the service starting. The application treats
      * these indexes as the enforcement mechanism — {@code createNotification} and
      * {@code OutboxService.appendEvent} both write and catch the duplicate-key error — so starting

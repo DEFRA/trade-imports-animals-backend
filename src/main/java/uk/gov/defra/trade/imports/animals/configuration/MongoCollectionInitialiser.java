@@ -11,6 +11,7 @@ import org.springframework.data.mongodb.core.index.MongoPersistentEntityIndexRes
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.MongoMappingContext;
 import org.springframework.data.mongodb.core.mapping.MongoPersistentEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
@@ -45,6 +46,20 @@ public class MongoCollectionInitialiser implements InitializingBean {
     public void afterPropertiesSet() {
         int created = ensureCollectionsAndIndexes();
         log.info("Mongo bootstrap complete at startup: {} collection(s) created", created);
+    }
+
+    /**
+     * Rebuilds the schema if it goes missing after startup — a dropped database, a restore, an E2E
+     * reseed. Failures are swallowed and retried; taking the service down would be worse than the
+     * state being recovered from. Startup still treats the same failures as fatal.
+     */
+    @Scheduled(fixedDelayString = "${mongo.schema.recheck-interval-ms:60000}")
+    public void recheckCollectionsAndIndexes() {
+        try {
+            ensureCollectionsAndIndexes();
+        } catch (RuntimeException e) {
+            log.error("Mongo schema recheck failed; retrying on the next interval", e);
+        }
     }
 
     /**
