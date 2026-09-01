@@ -15,7 +15,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Creates every mapped collection and its annotation-declared indexes before the service accepts
- * traffic, replacing {@code spring.data.mongodb.auto-index-creation}.
+ * traffic.
  *
  * <p>Creating a collection takes an exclusive lock, so a first write inside a transaction can lose
  * a {@code WriteConflict} to a concurrent one doing the same. Creating them up front avoids it.
@@ -27,7 +27,6 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class MongoCollectionInitialiser implements InitializingBean {
 
-    /** MongoDB's {@code NamespaceExists} server error — the collection was created concurrently. */
     private static final int NAMESPACE_EXISTS = 48;
 
     private final MongoTemplate mongoTemplate;
@@ -48,8 +47,6 @@ public class MongoCollectionInitialiser implements InitializingBean {
     }
 
     /**
-     * Creates any missing collection and index. Idempotent.
-     *
      * @return the number of collections this call created.
      */
     public int ensureCollectionsAndIndexes() {
@@ -61,7 +58,6 @@ public class MongoCollectionInitialiser implements InitializingBean {
             }
         }
         int indexes = entities.stream().mapToInt(this::createIndexes).sum();
-        // The recheck runs on a timer, so only say something when there was something to do.
         if (created > 0) {
             log.info("Mongo bootstrap: {} of {} collections created, {} indexes ensured, "
                     + "collections={}",
@@ -75,7 +71,7 @@ public class MongoCollectionInitialiser implements InitializingBean {
 
     /**
      * The mapping context also holds nested types reachable from a root, which would each get a
-     * collection named after the class. Only {@link Document} types are top-level collections.
+     * collection named after the class.
      */
     private List<MongoPersistentEntity<?>> mappedEntities() {
         return mappingContext.getPersistentEntities().stream()
@@ -87,8 +83,6 @@ public class MongoCollectionInitialiser implements InitializingBean {
     /**
      * No {@code collectionExists} pre-check: creating and swallowing {@code NamespaceExists} is
      * race-free across instances and needs no {@code listCollections} privilege.
-     *
-     * @return true if this call created the collection.
      */
     private boolean createCollection(String collection) {
         try {
@@ -104,11 +98,7 @@ public class MongoCollectionInitialiser implements InitializingBean {
 
     /**
      * A unique index that will not build is fatal. Callers write "insert and catch the duplicate
-     * key", so a missing unique index silently persists duplicates rather than failing loudly. A
-     * failure here means the collection already holds duplicates that need clearing.
-     *
-     * <p>A non-unique index enforces nothing, so failing to build one costs only query
-     * performance. Logged and skipped.
+     * key", so a missing unique index silently persists duplicates rather than failing loudly.
      */
     private int createIndexes(MongoPersistentEntity<?> entity) {
         int ensured = 0;

@@ -28,10 +28,6 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 /**
  * Covers how the bootstrap reacts to a failing {@code create}, which the integration tests cannot
  * drive: they can only produce the success and already-exists cases against a real server.
- *
- * <p>The distinction matters on every restart. Swallowing {@code NamespaceExists} is what makes
- * the bootstrap idempotent, but swallowing anything else would let the service start with a
- * collection it failed to create and no indication of why.
  */
 class MongoCollectionInitialiserTest {
 
@@ -52,19 +48,13 @@ class MongoCollectionInitialiserTest {
 
         mappingContext = new MongoMappingContext();
         // Without this the context treats Instant as an entity and tries to reflect into its
-        // private constructor, which the module system refuses from an unnamed test module. The
-        // application context gets the same treatment from Spring Boot's own auto-configuration.
+        // private constructor, which the module system refuses from an unnamed test module.
         mappingContext.setSimpleTypeHolder(
             new SimpleTypeHolder(Set.of(Instant.class), MongoSimpleTypes.HOLDER));
         mappingContext.setInitialEntitySet(Set.of(OutboxEvent.class));
         mappingContext.afterPropertiesSet();
     }
 
-    /**
-     * The ordinary second start. Going straight to create and swallowing {@code NamespaceExists}
-     * is race-free when several instances come up together, which a {@code collectionExists}
-     * pre-check would not be.
-     */
     @Test
     void ensureCollectionsAndIndexes_shouldContinue_whenTheCollectionAlreadyExists() {
         givenCreateFailsWith(NAMESPACE_EXISTS, "NamespaceExists",
@@ -73,10 +63,6 @@ class MongoCollectionInitialiserTest {
         assertThatNoException().isThrownBy(initialiser()::ensureCollectionsAndIndexes);
     }
 
-    /**
-     * Anything other than {@code NamespaceExists} means the collection is genuinely not there. A
-     * service that started anyway would write into a collection whose indexes never built.
-     */
     @Test
     void ensureCollectionsAndIndexes_shouldPropagate_whenCreateFailsForAnyOtherReason() {
         givenCreateFailsWith(UNAUTHORIZED, "Unauthorized",

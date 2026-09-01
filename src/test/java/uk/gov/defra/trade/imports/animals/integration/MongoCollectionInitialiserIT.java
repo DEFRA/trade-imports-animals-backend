@@ -23,18 +23,10 @@ import uk.gov.defra.trade.imports.animals.configuration.MongoCollectionInitialis
 
 /**
  * Proves the collections and indexes exist by the time the context is up, that the bootstrap can
- * put them back, and that it refuses to start the service without a unique index. This is the test
- * that would have caught the fault EUDPA-356 reports: before the fix, nothing created the
- * {@code outbox} collection ahead of the first transactional write to it, and nothing rebuilt the
- * indexes after a database wipe.
+ * put them back, and that it refuses to start the service without a unique index.
  *
  * <p>Method order is pinned rather than left to JUnit's default. The assertions about what startup
- * left behind have to run before the tests that deliberately drop and rebuild it, or they would be
- * reading state an earlier test in this class had restored by hand — which is not the same claim
- * at all, and would silently change meaning the next time a method here is renamed. With
- * {@code spring.data.mongodb.auto-index-creation} off, nothing but
- * {@link MongoCollectionInitialiser} creates these indexes, so observing them here is genuinely
- * evidence that the bootstrap ran at startup.
+ * left behind have to run before the tests that deliberately drop and rebuild it.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class MongoCollectionInitialiserIT extends IntegrationBase {
@@ -101,9 +93,8 @@ class MongoCollectionInitialiserIT extends IntegrationBase {
     }
 
     /**
-     * Exactly what a database reseed leaves behind under a running service. Drops only the mapped
-     * collections rather than the whole database: every integration test shares this container, so
-     * dropping the database would reach well beyond the thing under test.
+     * Drops only the mapped collections rather than the whole database: every integration test
+     * shares this container, so dropping the database would reach well beyond the thing under test.
      */
     @Test
     @Order(7)
@@ -122,12 +113,6 @@ class MongoCollectionInitialiserIT extends IntegrationBase {
         }
     }
 
-    /**
-     * A unique index that will not build has to stop the service starting. The application treats
-     * these indexes as the enforcement mechanism — {@code createNotification} and
-     * {@code OutboxService.appendEvent} both write and catch the duplicate-key error — so starting
-     * without one turns a rejected duplicate into a persisted one, silently.
-     */
     @Test
     @Order(8)
     void ensureCollectionsAndIndexes_shouldFail_whenAUniqueIndexCannotBuild() {
@@ -173,10 +158,6 @@ class MongoCollectionInitialiserIT extends IntegrationBase {
         return names;
     }
 
-    /**
-     * The name an index will carry once created — the declared name where the annotation gives
-     * one, otherwise the name MongoDB derives from the keys ({@code field_direction}, joined).
-     */
     private static String indexNameOf(IndexDefinition definition) {
         String declared = definition.getIndexOptions().getString("name");
         if (declared != null) {
