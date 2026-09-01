@@ -97,8 +97,8 @@ public class MongoCollectionInitialiser implements InitializingBean {
     }
 
     /**
-     * A unique index that will not build is fatal. Callers write "insert and catch the duplicate
-     * key", so a missing unique index silently persists duplicates rather than failing loudly.
+     * Any index that will not build is fatal, so a deploy that redefines one is blocked rather than
+     * left serving traffic on the old definition and converging never.
      */
     private int createIndexes(MongoPersistentEntity<?> entity) {
         int ensured = 0;
@@ -108,22 +108,11 @@ public class MongoCollectionInitialiser implements InitializingBean {
                 mongoTemplate.indexOps(collection).createIndex(definition);
                 ensured++;
             } catch (RuntimeException e) {
-                if (isUnique(definition)) {
-                    throw new IllegalStateException(
-                        "Could not create unique index %s on collection %s; the service will not "
-                            .formatted(indexName(definition), collection)
-                            + "start without it because application code relies on it to reject "
-                            + "duplicates", e);
-                }
-                log.error("Could not create index {} on collection {}", indexName(definition),
-                    collection, e);
+                throw new IllegalStateException("Could not create index %s on collection %s"
+                    .formatted(indexName(definition), collection), e);
             }
         }
         return ensured;
-    }
-
-    private static boolean isUnique(IndexDefinition definition) {
-        return definition.getIndexOptions().getBoolean("unique", false);
     }
 
     private static String collectionFor(MongoPersistentEntity<?> entity,

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.mongodb.client.model.IndexOptions;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -23,7 +24,7 @@ import uk.gov.defra.trade.imports.animals.configuration.MongoCollectionInitialis
 
 /**
  * Proves the collections and indexes exist by the time the context is up, that the bootstrap can
- * put them back, and that it refuses to start the service without a unique index.
+ * put them back, and that it refuses to start the service when any declared index will not build.
  *
  * <p>Method order is pinned rather than left to JUnit's default. The assertions about what startup
  * left behind have to run before the tests that deliberately drop and rebuild it.
@@ -34,6 +35,8 @@ class MongoCollectionInitialiserIT extends IntegrationBase {
     private static final String NOTIFICATION_COLLECTION = "notification";
     private static final String REFERENCE_INDEX = "referenceNumber";
     private static final String DUPLICATED_REFERENCE = "EUDPA-356-DUPLICATE";
+    private static final String OUTBOX_COLLECTION = "outbox";
+    private static final String POLL_INDEX = "unpublished_poll";
 
     @Autowired
     private MongoTemplate mongoTemplate;
@@ -120,7 +123,6 @@ class MongoCollectionInitialiserIT extends IntegrationBase {
         try {
             assertThatThrownBy(initialiser::ensureCollectionsAndIndexes)
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("unique index")
                 .hasMessageContaining(REFERENCE_INDEX)
                 .hasMessageContaining(NOTIFICATION_COLLECTION);
         } finally {
@@ -129,6 +131,30 @@ class MongoCollectionInitialiserIT extends IntegrationBase {
 
         assertThatNoException().isThrownBy(initialiser::ensureCollectionsAndIndexes);
         assertThat(indexNames(NOTIFICATION_COLLECTION)).contains(REFERENCE_INDEX);
+    }
+
+    @Test
+    @Order(9)
+    void ensureCollectionsAndIndexes_shouldFail_whenANonUniqueIndexConflictsWithTheOneInPlace() {
+        givenTheOutboxPollIndexRedefinedUnderItsOwnName();
+        try {
+            assertThatThrownBy(initialiser::ensureCollectionsAndIndexes)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining(POLL_INDEX)
+                .hasMessageContaining(OUTBOX_COLLECTION);
+        } finally {
+            mongoTemplate.indexOps(OUTBOX_COLLECTION).dropIndex(POLL_INDEX);
+        }
+
+        assertThatNoException().isThrownBy(initialiser::ensureCollectionsAndIndexes);
+        assertThat(indexNames(OUTBOX_COLLECTION)).contains(POLL_INDEX);
+    }
+
+    private void givenTheOutboxPollIndexRedefinedUnderItsOwnName() {
+        mongoTemplate.indexOps(OUTBOX_COLLECTION).dropIndex(POLL_INDEX);
+        mongoTemplate.getCollection(OUTBOX_COLLECTION).createIndex(
+            new org.bson.Document("eventType", 1),
+            new IndexOptions().name(POLL_INDEX));
     }
 
     private void givenDuplicateReferenceNumbersAndNoIndexToRejectThem() {
