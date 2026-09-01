@@ -13,6 +13,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxPublishService;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 /**
  * End-to-end integration test for the outbox SNS relay against Floci.
@@ -108,9 +109,10 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         assertThat(publishedEvents.get(1).getAggregateVersion()).isEqualTo(2L);
         assertThat(publishedEvents).allMatch(e -> e.getPublishedAt() != null);
 
+        // Arrival order off the queue, not the order they were published in
         List<Message> messages = awaitSqsMessages(2);
-        JsonNode firstEnvelope = snsEnvelopeByAggregateVersion(messages, 1L);
-        JsonNode secondEnvelope = snsEnvelopeByAggregateVersion(messages, 2L);
+        JsonNode firstEnvelope = objectMapper.readTree(messages.get(0).body());
+        JsonNode secondEnvelope = objectMapper.readTree(messages.get(1).body());
         assertThat(firstEnvelope.get("MessageAttributes").get("correlationId").get("Value").asText())
             .isEqualTo("trace-v1");
         assertThat(secondEnvelope.get("MessageAttributes").get("correlationId").get("Value").asText())
@@ -181,15 +183,30 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         assertThat(events).allMatch(e -> e.getPublishedAt() != null);
     }
 
-    private JsonNode snsEnvelopeByAggregateVersion(List<Message> messages, long aggregateVersion)
-        throws Exception {
-        for (Message message : messages) {
-            JsonNode snsEnvelope = objectMapper.readTree(message.body());
-            JsonNode payload = objectMapper.readTree(snsEnvelope.get("Message").asText());
-            if (payload.get("aggregateVersion").asLong() == aggregateVersion) {
-                return snsEnvelope;
-            }
+    @Test
+    void publishUnpublishedEvents_shouldNotSerialiseEventsForDifferentNotifications() throws Exception {
+        // Given — two notifications, so two distinct aggregateIds and two message groups
+        String firstReference = createAndSubmitNotification("trace-group-a");
+        String secondReference = createAndSubmitNotification("trace-group-b");
+        assertThat(firstReference).isNotEqualTo(secondReference);
+
+        // When
+        assertThat(outboxPublishService.publishUnpublishedEvents()).isEqualTo(2);
+
+        // Then — both are in flight at once, which one message group could never be
+        List<Message> inFlight = awaitInFlightMessages(2);
+        try {
+            assertThat(List.of(aggregateIdOf(inFlight.get(0)), aggregateIdOf(inFlight.get(1))))
+                .containsExactlyInAnyOrder(
+                    OutboxService.buildAggregateId(firstReference),
+                    OutboxService.buildAggregateId(secondReference));
+        } finally {
+            inFlight.forEach(this::deleteMessage);
         }
-        throw new AssertionError("No SNS message found for aggregateVersion " + aggregateVersion);
+    }
+
+    private String aggregateIdOf(Message message) throws Exception {
+        return objectMapper.readTree(objectMapper.readTree(message.body()).get("Message").asText())
+            .get("aggregateId").asText();
     }
 }

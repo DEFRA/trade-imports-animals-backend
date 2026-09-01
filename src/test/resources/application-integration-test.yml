@@ -119,7 +119,7 @@ outbox:
     enabled: false
     lock-at-least-for: 0ms
   sns:
-    topic-arn: arn:aws:sns:eu-west-2:000000000000:integration-test-outbox
+    topic-arn: arn:aws:sns:eu-west-2:000000000000:integration-test-outbox.fifo
 
 # Application info (exposed via /info endpoint)
 info:

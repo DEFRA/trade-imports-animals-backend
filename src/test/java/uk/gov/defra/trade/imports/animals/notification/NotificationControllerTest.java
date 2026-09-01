@@ -43,7 +43,8 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 @WebMvcTest(NotificationController.class)
 @TestPropertySource(properties = {
     "admin.secret=test-secret",
-    "app.base-url=http://localhost:8085"
+    "app.base-url=http://localhost:8085",
+    "outbox.sns.topic-arn=arn:aws:sns:eu-west-2:000000000000:unit-test-outbox.fifo"
 })
 class NotificationControllerTest {
 
