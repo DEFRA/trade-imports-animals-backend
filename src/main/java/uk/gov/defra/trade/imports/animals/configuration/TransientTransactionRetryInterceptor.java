@@ -64,19 +64,6 @@ public class TransientTransactionRetryInterceptor extends RetryOperationsInterce
         return cause.getCause() != cause ? cause.getCause() : null;
     }
 
-    /**
-     * Not the exception's {@code toString()}: for a {@link MongoCommandException} that is the
-     * whole server response, {@code $clusterTime} included, and runs to kilobytes per retry.
-     */
-    private static String summarise(Throwable failure) {
-        Throwable cause = NestedExceptionUtils.getMostSpecificCause(failure);
-        if (cause instanceof MongoCommandException command) {
-            return "code=%d codeName=%s errmsg=%s".formatted(command.getErrorCode(),
-                command.getErrorCodeName(), command.getErrorMessage());
-        }
-        return cause.getClass().getSimpleName() + ": " + cause.getMessage();
-    }
-
     private record RetryLogger(int maxAttempts) implements RetryListener {
 
         @Override
@@ -97,6 +84,19 @@ public class TransientTransactionRetryInterceptor extends RetryOperationsInterce
                 log.error("Transient Mongo transaction still failing after {} attempts: method={}",
                     context.getRetryCount(), callback.getLabel(), failure);
             }
+        }
+
+        /**
+         * Not the exception's {@code toString()}: for a {@link MongoCommandException} that is the
+         * whole server response, {@code $clusterTime} included, and runs to kilobytes per retry.
+         */
+        private static String summarise(Throwable failure) {
+            Throwable cause = NestedExceptionUtils.getMostSpecificCause(failure);
+            if (cause instanceof MongoCommandException command) {
+                return "code=%d codeName=%s errmsg=%s".formatted(command.getErrorCode(),
+                    command.getErrorCodeName(), command.getErrorMessage());
+            }
+            return cause.getClass().getSimpleName() + ": " + cause.getMessage();
         }
     }
 }

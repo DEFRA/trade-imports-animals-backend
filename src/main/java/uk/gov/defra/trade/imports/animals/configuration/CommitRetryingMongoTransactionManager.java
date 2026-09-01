@@ -66,7 +66,7 @@ public class CommitRetryingMongoTransactionManager extends MongoTransactionManag
         try {
             Thread.sleep(retryBackoffMs);
             return true;
-        } catch (InterruptedException interrupted) {
+        } catch (InterruptedException _) {
             Thread.currentThread().interrupt();
             return false;
         }
