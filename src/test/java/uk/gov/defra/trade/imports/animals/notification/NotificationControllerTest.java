@@ -356,6 +356,49 @@ class NotificationControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("not copyable"));
         }
+
+        @Test
+        void copy_shouldPassTraceIdAsCorrelationId() throws Exception {
+            NotificationAggregate copied = new NotificationAggregate();
+            copied.setReferenceNumber(REF_2);
+            when(notificationService.copyNotification(REF_1, 0L, "trace-copy-001", null))
+                .thenReturn(copied);
+
+            mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1)
+                    .queryParam("concurrencyToken", "0")
+                    .header(HEADER_TRACE_ID, "trace-copy-001"))
+                .andExpect(status().isOk());
+
+            verify(notificationService).copyNotification(REF_1, 0L, "trace-copy-001", null);
+        }
+
+        @Test
+        void copy_shouldPassActorToService_whenActorBodyProvided() throws Exception {
+            NotificationAggregate copied = new NotificationAggregate();
+            copied.setReferenceNumber(REF_2);
+            when(notificationService.copyNotification(eq(REF_1), eq(0L), any(), any()))
+                .thenReturn(copied);
+
+            String actorBody = """
+                {
+                    "id": "contact-guid-001",
+                    "source": "dynamics-contact",
+                    "userType": "B2C",
+                    "displayName": "Jane Farmer",
+                    "organisationId": "org-001"
+                }
+                """;
+
+            mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1)
+                    .queryParam("concurrencyToken", "0")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(actorBody))
+                .andExpect(status().isOk());
+
+            verify(notificationService).copyNotification(
+                eq(REF_1), eq(0L), anyString(),
+                argThat(a -> a != null && "org-001".equals(a.getOrganisationId())));
+        }
     }
 
     @Nested
@@ -586,6 +629,50 @@ class NotificationControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
                     "Cannot cancel amendment for notification with status: SUBMITTED"));
+        }
+
+        @Test
+        void cancelAmend_shouldPassTraceIdAsCorrelationId() throws Exception {
+            NotificationAggregate restored = new NotificationAggregate();
+            restored.setReferenceNumber(REF_1);
+            restored.setStatus(NotificationStatus.SUBMITTED);
+            when(notificationService.cancelAmendNotification(REF_1, "trace-cancel-001", null))
+                .thenReturn(restored);
+
+            mockMvc.perform(post("/notifications/{referenceNumber}/cancel-amend", REF_1)
+                    .header(HEADER_TRACE_ID, "trace-cancel-001")
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+            verify(notificationService).cancelAmendNotification(REF_1, "trace-cancel-001", null);
+        }
+
+        @Test
+        void cancelAmend_shouldPassActorToService_whenActorBodyProvided() throws Exception {
+            NotificationAggregate restored = new NotificationAggregate();
+            restored.setReferenceNumber(REF_1);
+            restored.setStatus(NotificationStatus.SUBMITTED);
+            when(notificationService.cancelAmendNotification(eq(REF_1), any(), any()))
+                .thenReturn(restored);
+
+            String actorBody = """
+                {
+                    "id": "contact-guid-001",
+                    "source": "dynamics-contact",
+                    "userType": "B2C",
+                    "displayName": "Jane Farmer",
+                    "organisationId": "org-001"
+                }
+                """;
+
+            mockMvc.perform(post("/notifications/{referenceNumber}/cancel-amend", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(actorBody))
+                .andExpect(status().isOk());
+
+            verify(notificationService).cancelAmendNotification(
+                eq(REF_1), anyString(),
+                argThat(a -> a != null && "org-001".equals(a.getOrganisationId())));
         }
     }
 
@@ -992,6 +1079,50 @@ class NotificationControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
                     "Cannot delete notification with status: DELETED"));
+        }
+
+        @Test
+        void softDelete_shouldPassTraceIdAsCorrelationId() throws Exception {
+            NotificationAggregate deleted = new NotificationAggregate();
+            deleted.setReferenceNumber(REF_1);
+            deleted.setStatus(NotificationStatus.DELETED);
+            when(notificationService.softDeleteNotification(REF_1, "trace-delete-001", null))
+                .thenReturn(deleted);
+
+            mockMvc.perform(post("/notifications/{referenceNumber}/soft-delete", REF_1)
+                    .header(HEADER_TRACE_ID, "trace-delete-001")
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk());
+
+            verify(notificationService).softDeleteNotification(REF_1, "trace-delete-001", null);
+        }
+
+        @Test
+        void softDelete_shouldPassActorToService_whenActorBodyProvided() throws Exception {
+            NotificationAggregate deleted = new NotificationAggregate();
+            deleted.setReferenceNumber(REF_1);
+            deleted.setStatus(NotificationStatus.DELETED);
+            when(notificationService.softDeleteNotification(eq(REF_1), any(), any()))
+                .thenReturn(deleted);
+
+            String actorBody = """
+                {
+                    "id": "contact-guid-001",
+                    "source": "dynamics-contact",
+                    "userType": "B2C",
+                    "displayName": "Jane Farmer",
+                    "organisationId": "org-001"
+                }
+                """;
+
+            mockMvc.perform(post("/notifications/{referenceNumber}/soft-delete", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(actorBody))
+                .andExpect(status().isOk());
+
+            verify(notificationService).softDeleteNotification(
+                eq(REF_1), anyString(),
+                argThat(a -> a != null && "org-001".equals(a.getOrganisationId())));
         }
     }
 

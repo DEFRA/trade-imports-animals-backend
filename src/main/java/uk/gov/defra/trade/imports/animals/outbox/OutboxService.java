@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,14 +32,17 @@ public class OutboxService {
     static final String SCHEMA_VERSION = "1";
     static final String AGGREGATE_ID_PREFIX = "Imports.Notification.GBN-AG.";
 
-    // Event types that represent a submission and therefore increment versionId.
-    private static final Set<String> SUBMISSION_EVENT_WIRE_VALUES = Set.of(
-        OutboxEventType.NOTIFICATION_SUBMITTED.value(),
-        OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED.value());
+    // Wire values of submission events — derived from OutboxEventType.SUBMISSION_EVENTS so the two
+    // definitions cannot drift.
+    private static final Set<String> SUBMISSION_EVENT_WIRE_VALUES = OutboxEventType.SUBMISSION_EVENTS
+        .stream().map(OutboxEventType::value).collect(Collectors.toUnmodifiableSet());
 
-    // Event types where versionId is absent from the payload (notification never submitted).
+    // Event types where versionId is absent: notification has never been submitted.
+    // NOTIFICATION_EDITED covers draft/amend saves before a first submission — emitting versionId: 0
+    // there would be a value the schema's semantics ('V1 on first submission') never produce.
     private static final Set<OutboxEventType> NO_VERSION_ID_EVENTS = Set.of(
         OutboxEventType.NOTIFICATION_CREATED,
+        OutboxEventType.NOTIFICATION_EDITED,
         OutboxEventType.NOTIFICATION_DELETED);
 
     private final OutboxEventRepository outboxEventRepository;

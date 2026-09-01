@@ -48,9 +48,7 @@ class ReplayIT extends OutboxIntegrationBase {
         String referenceNumber = createAndSubmitNotification("trace-replay-001");
         outboxPublishService.publishUnpublishedEvents();
 
-        OutboxEvent submittedEvent = outboxEventRepository.findAll().stream()
-            .filter(e -> e.getEventType().endsWith("NotificationSubmitted"))
-            .findFirst().orElseThrow();
+        OutboxEvent submittedEvent = findSubmittedEvent();
         Instant originalPublishedAt = submittedEvent.getPublishedAt();
         assertThat(originalPublishedAt).isNotNull();
 
@@ -78,9 +76,7 @@ class ReplayIT extends OutboxIntegrationBase {
         assertThat(payload.get("aggregateVersion").asLong()).isEqualTo(2L);
 
         // publishedAt on the outbox event is NOT mutated by replay
-        OutboxEvent eventAfterReplay = outboxEventRepository.findAll().stream()
-            .filter(e -> e.getEventType().endsWith("NotificationSubmitted"))
-            .findFirst().orElseThrow();
+        OutboxEvent eventAfterReplay = findSubmittedEvent();
         assertThat(eventAfterReplay.getPublishedAt()).isEqualTo(originalPublishedAt);
     }
 
@@ -173,6 +169,12 @@ class ReplayIT extends OutboxIntegrationBase {
             .expectStatus().isNotFound();
 
         assertThat(auditRepository.findAll()).isEmpty();
+    }
+
+    private OutboxEvent findSubmittedEvent() {
+        return outboxEventRepository.findAll().stream()
+            .filter(e -> e.getEventType().endsWith("NotificationSubmitted"))
+            .findFirst().orElseThrow();
     }
 
     @Test

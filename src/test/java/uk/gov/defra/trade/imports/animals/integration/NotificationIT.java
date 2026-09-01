@@ -974,7 +974,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submit_shouldReturn400_andEmitNothing_whenAReferencedPartyCannotBeResolved() {
+    void submit_shouldReturn400_andEmitNoSubmittedEvent_whenAReferencedPartyCannotBeResolved() {
         // Given — the referenced address has since been deleted. Unlike a read, which would render
         // the role blank, a submit must fail rather than send GBNAG a party with no name.
         stubAddressBook(ADDRESS_BOOK_JSON.replace("\"deleted\": false", "\"deleted\": true"), 200);
@@ -1152,6 +1152,15 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
         assertThat(reloaded.getSubmittedNotificationBaseline()).isNull();
         assertThat(reloaded.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
+
+        // And — the resubmit emits NotificationSubmissionAmended (AMEND -> SUBMITTED), not NotificationSubmitted
+        OutboxEvent resubmitEvent = outboxEventRepository.findAll().stream()
+            .max(java.util.Comparator.comparingLong(OutboxEvent::getAggregateVersion))
+            .orElseThrow();
+        assertThat(resubmitEvent.getEventType())
+            .isEqualTo(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED.value());
+        assertThat(resubmitEvent.getMetadata().getSchemaUrl())
+            .isEqualTo(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED.schemaUrl());
     }
 
     @Test

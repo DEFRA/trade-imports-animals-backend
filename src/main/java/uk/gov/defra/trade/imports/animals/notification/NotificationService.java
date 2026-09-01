@@ -291,8 +291,7 @@ public class NotificationService {
                 notification.setUpdated(LocalDateTime.now());
                 // Only actual submissions mint a new submittedAt; cancel-amend restores to SUBMITTED
                 // but must preserve the timestamp from the original submission.
-                if (eventType == OutboxEventType.NOTIFICATION_SUBMITTED
-                    || eventType == OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED) {
+                if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)) {
                     notification.setSubmittedAt(LocalDateTime.now());
                 }
                 NotificationAggregate saved = notificationRepository.save(notification);
@@ -304,6 +303,12 @@ public class NotificationService {
             });
     }
 
+    // Draft-grade events: notification may not be fully resolved; best-effort resolution is appropriate.
+    private static final Set<OutboxEventType> DRAFT_GRADE_EVENTS = Set.of(
+        OutboxEventType.NOTIFICATION_CREATED,
+        OutboxEventType.NOTIFICATION_EDITED,
+        OutboxEventType.NOTIFICATION_DELETED);
+
     /**
      * The notification as every outbox event should carry it: references filled in, on a copy, so
      * the stored notification keeps the reference alone.
@@ -311,12 +316,6 @@ public class NotificationService {
      * <p>Submit and amend resolve strictly — a GBNAG document cannot carry a nameless party. A
      * draft edit is best-effort, so an address deleted since does not block the save.
      */
-    // Draft-grade events: notification may not be fully resolved; best-effort is appropriate.
-    private static final Set<OutboxEventType> DRAFT_GRADE_EVENTS = Set.of(
-        OutboxEventType.NOTIFICATION_CREATED,
-        OutboxEventType.NOTIFICATION_EDITED,
-        OutboxEventType.NOTIFICATION_DELETED);
-
     private NotificationAggregate resolvedForOutbox(
         NotificationAggregate notificationAggregate, OutboxEventType eventType, Actor actor) {
         String organisationId = actor != null ? actor.getOrganisationId() : null;

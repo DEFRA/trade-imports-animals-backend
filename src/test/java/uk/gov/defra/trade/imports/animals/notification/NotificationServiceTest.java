@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -1958,6 +1959,7 @@ class NotificationServiceTest {
 
             // Then — the new notification emits NOTIFICATION_CREATED; the source produces no event
             verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_CREATED), any(), any());
+            verifyNoMoreInteractions(outboxService);
         }
     }
 
