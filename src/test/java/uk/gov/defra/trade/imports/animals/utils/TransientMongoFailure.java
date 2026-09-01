@@ -31,8 +31,12 @@ public final class TransientMongoFailure {
 
     public static TransactionSystemException unknownCommitResultAtCommit() {
         return new TransactionSystemException("Could not commit Mongo transaction",
-            commandFailure(91, "ShutdownInProgress", "The server is shutting down",
-                "UnknownTransactionCommitResult"));
+            unknownCommitResultOnServerShutdown());
+    }
+
+    public static MongoCommandException unknownCommitResultOnServerShutdown() {
+        return commandFailure(91, "ShutdownInProgress", "The server is shutting down",
+            "UnknownTransactionCommitResult");
     }
 
     /**

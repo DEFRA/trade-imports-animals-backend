@@ -88,8 +88,13 @@ public class MongoConfig {
   }
 
   @Bean
-  MongoTransactionManager transactionManager(MongoDatabaseFactory dbFactory) {
-    return new MongoTransactionManager(dbFactory);
+  MongoTransactionManager transactionManager(
+      MongoDatabaseFactory dbFactory,
+      @Value("${mongo.transaction.commit-retry.timeout-ms}") long commitRetryTimeoutMs,
+      @Value("${mongo.transaction.commit-retry.backoff-ms}") long commitRetryBackoffMs) {
+
+    return new CommitRetryingMongoTransactionManager(
+        dbFactory, commitRetryTimeoutMs, commitRetryBackoffMs);
   }
 
   @Bean

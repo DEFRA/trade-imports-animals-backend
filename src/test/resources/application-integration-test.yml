@@ -122,6 +122,9 @@ mongo:
       max-attempts: 3
       initial-backoff-ms: 5
       max-backoff-ms: 20
+    commit-retry:
+      timeout-ms: 200
+      backoff-ms: 5
 
 outbox:
   poller:
