@@ -11,32 +11,19 @@ import org.springframework.core.NestedExceptionUtils;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
- * Retries a transaction that MongoDB has told us is safe to re-run from the beginning.
+ * Retries a transaction MongoDB has labelled {@code TransientTransactionError}, which Spring's
+ * declarative {@code @Transactional} path ignores — so the failure reaches the caller as a 500.
  *
- * <p>MongoDB labels a failure it considers safe to repeat — {@code WriteConflict} among them —
- * with {@code TransientTransactionError}. Spring's declarative {@code @Transactional} path does
- * not act on that label, so the failure surfaces to the caller as a 500.
+ * <p>The label is the only reliable signal: the failure arrives as a
+ * {@code TransactionSystemException} at commit, outside Spring's data-access hierarchy, and
+ * {@code WriteConflict} otherwise classifies as a non-transient data-integrity violation.
  *
- * <p>The label is the only reliable signal. The failure arrives as a
- * {@code TransactionSystemException} thrown at commit, which is outside Spring's data-access
- * exception hierarchy altogether; and even on the operation path, {@code MongoDbErrorCodes}
- * classifies {@code WriteConflict} as a data-integrity violation, which is not transient. A retry
- * predicate written against Spring's exception types would therefore never fire.
+ * <p>{@code UnknownTransactionCommitResult} is deliberately not matched: it means the commit may
+ * have succeeded, so re-running the body would repeat work against changed state. Spring Data's
+ * {@code isTransientFailure} conflates the two, hence the cause walk here.
  *
- * <p>Only {@code TransientTransactionError} is matched, and deliberately not
- * {@code UnknownTransactionCommitResult}. MongoDB gives the two labels different contracts: the
- * first says the transaction definitely did not commit, so re-running the whole body is correct;
- * the second says the commit may well have <em>succeeded</em> and the correct response is to retry
- * {@code commitTransaction} on the same session. Re-running the body after a commit that landed
- * would re-read state the first attempt already changed, and turn a success into a spurious 4xx —
- * a stale {@code @Version} token, or a status guard that now sees the status it just set. Spring
- * Data's {@code MongoExceptionTranslator#isTransientFailure} conflates the two, so this walks the
- * cause chain itself.
- *
- * <p>Ordered outside the transaction advisor (see {@code TransactionRetryConfiguration}) so a retry
- * begins a genuinely new transaction rather than re-running work inside the doomed one. Only the
- * outermost transaction retries: an inner {@code @Transactional} call joins its caller's
- * transaction, so repeating it in place would achieve nothing.
+ * <p>Ordered outside the transaction advisor so a retry begins a new transaction. Only the
+ * outermost retries — an inner call joins its caller's transaction.
  */
 @Slf4j
 public class TransientTransactionRetryInterceptor implements MethodInterceptor {
@@ -101,11 +88,7 @@ public class TransientTransactionRetryInterceptor implements MethodInterceptor {
         return invocation.invocableClone().proceed();
     }
 
-    /**
-     * Whether MongoDB has told us the transaction definitely did not commit, and so can be re-run
-     * from the start. Walks the cause chain because the driver's exception arrives wrapped, and
-     * matches the one label that carries that meaning.
-     */
+    /** Walks the cause chain because the driver's exception arrives wrapped. */
     private static boolean isRetryable(Throwable failure) {
         for (Throwable cause = failure; cause != null; cause = nextCause(cause)) {
             if (cause instanceof MongoException mongoException
@@ -120,17 +103,10 @@ public class TransientTransactionRetryInterceptor implements MethodInterceptor {
         return cause.getCause() != cause ? cause.getCause() : null;
     }
 
-    /**
-     * Waits before the next attempt, backing off exponentially with jitter so racing callers do
-     * not line up and conflict again.
-     *
-     * <p>An interrupt abandons the retry and rethrows the failure that prompted it, with the
-     * thread's interrupt flag restored.
-     */
+    /** Jittered so racing callers do not line up and conflict again. */
     private void backOff(int attempt, RuntimeException failure) {
         long doublings = Math.min(attempt - 1L, MAX_BACKOFF_DOUBLINGS);
-        // The shift can overflow to a negative for an absurdly large configured backoff, and
-        // Thread.sleep rejects a negative, so clamp before waiting.
+        // Clamp: the shift can overflow negative, and Thread.sleep rejects that.
         long shifted = Math.max(0, initialBackoffMs << doublings);
         long delay = Math.min(maxBackoffMs, shifted);
         long jitter = jitterMs > 0 ? ThreadLocalRandom.current().nextLong(jitterMs) : 0;
@@ -143,12 +119,8 @@ public class TransientTransactionRetryInterceptor implements MethodInterceptor {
     }
 
     /**
-     * The MongoDB error code, its name and the namespace involved — enough to tell a collision
-     * over creating a collection from one over a document.
-     *
-     * <p>Deliberately not the driver exception's own {@code toString()}: for a
-     * {@link MongoCommandException} that is the entire server response, {@code $clusterTime} and
-     * its signature included, which runs to kilobytes on every retry.
+     * Not the exception's {@code toString()}: for a {@link MongoCommandException} that is the
+     * whole server response, {@code $clusterTime} included, and runs to kilobytes per retry.
      */
     private static String summarise(RuntimeException e) {
         Throwable cause = NestedExceptionUtils.getMostSpecificCause(e);

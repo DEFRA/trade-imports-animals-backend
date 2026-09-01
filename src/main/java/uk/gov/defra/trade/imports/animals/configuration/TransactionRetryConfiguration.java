@@ -16,25 +16,16 @@ import org.springframework.transaction.interceptor.TransactionAttributeSource;
 /**
  * Wraps every {@code @Transactional} method in a bounded retry of transient MongoDB failures.
  *
- * <p>The pointcut consults the very {@link TransactionAttributeSource} Spring's own transaction
- * advisor uses, so the retry applies to exactly the set of methods that get a transaction —
- * neither more nor less — however the annotation is expressed.
+ * <p>The pointcut consults the {@link TransactionAttributeSource} Spring's own advisor uses, so it
+ * matches exactly the methods that get a transaction.
  *
- * <p>The order puts this advisor <em>outside</em> the transaction advisor, which defaults to
- * {@link Ordered#LOWEST_PRECEDENCE}. Lower values sit further out, so a retry re-enters the
- * transaction interceptor and starts a fresh transaction. Anything at or inside that boundary
- * would re-run the work in the transaction that has already failed.
+ * <p>The order puts this outside the transaction advisor ({@link Ordered#LOWEST_PRECEDENCE}), so a
+ * retry starts a fresh transaction rather than re-running inside the failed one.
  *
- * <p>This lives in its own {@code @Configuration} rather than alongside the Mongo connection
- * beans, and is declared exactly as Spring declares
- * {@code ProxyTransactionManagementConfiguration}: {@code proxyBeanMethods = false} and
- * {@link BeanDefinition#ROLE_INFRASTRUCTURE} on the class as well as the bean. The auto-proxy
- * creator fetches every {@link org.springframework.aop.Advisor} while the bean post-processors are
- * still being set up, so the declaring class is forced into existence before they are ready.
- * Declaring it as infrastructure says that is intended; leaving an advisor on an ordinary
- * configuration class instead draws a "not eligible for getting processed by all
- * BeanPostProcessors" warning at startup, and would quietly deny post-processing to every other
- * bean declared beside it.
+ * <p>Declared as {@link BeanDefinition#ROLE_INFRASTRUCTURE} exactly as Spring declares
+ * {@code ProxyTransactionManagementConfiguration}: the auto-proxy creator fetches advisors before
+ * the bean post-processors are ready, and without this every bean declared beside it would be
+ * quietly denied post-processing.
  */
 @Configuration(proxyBeanMethods = false)
 @Role(BeanDefinition.ROLE_INFRASTRUCTURE)

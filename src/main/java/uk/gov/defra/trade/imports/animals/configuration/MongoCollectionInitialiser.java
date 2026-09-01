@@ -16,22 +16,13 @@ import org.springframework.stereotype.Component;
 
 /**
  * Creates every mapped collection and its annotation-declared indexes before the service accepts
- * traffic.
+ * traffic, replacing {@code spring.data.mongodb.auto-index-creation}.
  *
- * <p>MongoDB takes an exclusive lock to create a collection, so the first write to a missing
- * collection cannot be made inside a multi-document transaction without risking a
- * {@code WriteConflict} against any concurrent transaction doing the same. Creating the
- * collections up front removes that class of conflict entirely.
+ * <p>Creating a collection takes an exclusive lock, so a first write inside a transaction can lose
+ * a {@code WriteConflict} to a concurrent one doing the same. Creating them up front avoids it.
  *
- * <p>This replaces {@code spring.data.mongodb.auto-index-creation}, which achieved the same thing
- * as an undocumented side effect of constructing {@link MongoTemplate}. The index definitions
- * still live on the entity annotations — this uses the very same {@link IndexResolver} Spring Data
- * uses internally — but the trigger is now a named bean with a log line, an explicit failure
- * policy and an integration test over its result.
- *
- * <p>Runs as {@link InitializingBean} rather than an {@code ApplicationRunner} or a
- * {@code ApplicationReadyEvent} listener: those all fire after the web server has opened its port,
- * which would leave a window in which a request could arrive first.
+ * <p>{@link InitializingBean} rather than {@code ApplicationReadyEvent}: that fires after the port
+ * opens, leaving a window for a request to arrive first.
  */
 @Component
 @Slf4j
@@ -58,17 +49,9 @@ public class MongoCollectionInitialiser implements InitializingBean {
     }
 
     /**
-     * Rebuilds anything that has gone missing since startup.
-     *
-     * <p>The bootstrap runs once, so a database dropped or restored underneath a running service
-     * leaves it with no indexes and with collections that get created lazily on first write inside
-     * a transaction — the WriteConflict this class exists to prevent. An E2E reseed does exactly
-     * that. Recovering is the service's own job: nothing outside it can rebuild its schema without
-     * restarting it.
-     *
-     * <p>Failures are swallowed deliberately. A wipe is not the only reason this can fail, and a
-     * scheduled recovery that killed the service would be worse than the state it is recovering
-     * from. Startup still treats the same failures as fatal.
+     * Rebuilds the schema if it goes missing after startup — a dropped database, a restore, an E2E
+     * reseed. Failures are swallowed and retried; taking the service down would be worse than the
+     * state being recovered from. Startup still treats the same failures as fatal.
      */
     @Scheduled(fixedDelayString = "${mongo.schema.recheck-interval-ms:60000}")
     public void recheckCollectionsAndIndexes() {
@@ -80,8 +63,7 @@ public class MongoCollectionInitialiser implements InitializingBean {
     }
 
     /**
-     * Creates any missing collection and index. Idempotent, so it is safe to call again — the
-     * integration tests do exactly that after dropping the database.
+     * Creates any missing collection and index. Idempotent.
      *
      * @return the number of collections this call created.
      */
@@ -107,11 +89,8 @@ public class MongoCollectionInitialiser implements InitializingBean {
     }
 
     /**
-     * The collections this service owns.
-     *
-     * <p>The mapping context also holds every nested type reachable from a root — {@code Address},
-     * {@code Commodity} and friends — which would otherwise be given a collection named after the
-     * class. Only types carrying {@link Document} are top-level collections.
+     * The mapping context also holds nested types reachable from a root, which would each get a
+     * collection named after the class. Only {@link Document} types are top-level collections.
      */
     private List<MongoPersistentEntity<?>> mappedEntities() {
         return mappingContext.getPersistentEntities().stream()
@@ -121,11 +100,8 @@ public class MongoCollectionInitialiser implements InitializingBean {
     }
 
     /**
-     * Creates one collection, tolerating the case where it already exists.
-     *
-     * <p>Deliberately no {@code collectionExists} pre-check: going straight to create and
-     * swallowing {@code NamespaceExists} is race-free when several instances start together, and
-     * it needs no {@code listCollections} privilege.
+     * No {@code collectionExists} pre-check: creating and swallowing {@code NamespaceExists} is
+     * race-free across instances and needs no {@code listCollections} privilege.
      *
      * @return true if this call created the collection.
      */
@@ -142,19 +118,12 @@ public class MongoCollectionInitialiser implements InitializingBean {
     }
 
     /**
-     * Creates the annotation-declared indexes for one entity.
+     * A unique index that will not build is fatal. Callers write "insert and catch the duplicate
+     * key", so a missing unique index silently persists duplicates rather than failing loudly. A
+     * failure here means the collection already holds duplicates that need clearing.
      *
-     * <p>A unique index that will not build is fatal, because the application relies on those
-     * indexes for correctness rather than for speed: {@code notification.referenceNumber} is what
-     * makes {@code createNotification}'s collision retry work, and {@code outbox}'s
-     * {@code aggregate_version_uq} is what makes {@code OutboxService.appendEvent}'s duplicate
-     * guard work. Both are written as "insert and catch the duplicate key", so a missing index
-     * does not fail loudly — it silently persists the duplicate. Starting without one would trade
-     * a refused deployment for corrupt data, so the service refuses to start instead. A failure
-     * here means the collection holds duplicates that need clearing before the index can build.
-     *
-     * <p>A non-unique index enforces nothing, so a failure to build one costs query performance
-     * and no more. Those are logged and skipped, and the service starts.
+     * <p>A non-unique index enforces nothing, so failing to build one costs only query
+     * performance. Logged and skipped.
      */
     private int createIndexes(MongoPersistentEntity<?> entity) {
         int ensured = 0;

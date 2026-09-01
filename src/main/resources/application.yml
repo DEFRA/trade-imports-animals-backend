@@ -12,9 +12,7 @@ spring:
     mongodb:
       uri: ${MONGO_URI:mongodb://localhost:27017/}
       database: ${MONGO_DATABASE:trade-imports-animals-backend}
-      # Collections and their annotation-declared indexes are created by
-      # MongoCollectionInitialiser before the port opens, so Spring Data's own
-      # index-creation side effect is redundant here.
+      # MongoCollectionInitialiser owns this now.
       auto-index-creation: false
       read-preference: ${MONGO_READ_PREFERENCE:primary}
       write-concern: ${MONGO_WRITE_CONCERN:majority}
@@ -156,17 +154,12 @@ notification:
       lock-at-least-for: 1s
       lock-at-most-for: 30s
 
-# Bounded retry of transactions MongoDB labels TransientTransactionError (WriteConflict among
-# them). Where initial-backoff-ms is below notification.submit.lock-at-least-for, a retry re-enters
-# the outbox ShedLock while the failed attempt's minimum hold is still running, and pays one extra
-# wait inside executeWithOutboxLock before it gets in. That loop sleeps for lock-at-least-for
-# between its own attempts, so it still succeeds; the ordering below just avoids the wasted wait.
 mongo:
-  # The startup bootstrap cannot survive the database being dropped underneath a running service,
-  # which an E2E reseed does on every run. Rechecking is how the service recovers on its own,
-  # rather than something outside it having to restart the container.
+  # Recovers the schema if the database is dropped under a running service.
   schema:
     recheck-interval-ms: ${MONGO_SCHEMA_RECHECK_INTERVAL_MS:60000}
+  # Keep initial-backoff-ms above notification.submit.lock-at-least-for, or a retry pays one
+  # wasted wait re-entering the outbox ShedLock.
   transaction:
     retry:
       max-attempts: ${MONGO_TX_RETRY_MAX_ATTEMPTS:3}
