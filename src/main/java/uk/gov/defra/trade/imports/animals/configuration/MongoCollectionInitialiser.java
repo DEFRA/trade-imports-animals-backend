@@ -11,7 +11,6 @@ import org.springframework.data.mongodb.core.index.MongoPersistentEntityIndexRes
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.MongoMappingContext;
 import org.springframework.data.mongodb.core.mapping.MongoPersistentEntity;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
@@ -52,7 +51,6 @@ public class MongoCollectionInitialiser implements InitializingBean {
      * reseed. Failures are swallowed and retried; taking the service down would be worse than the
      * state being recovered from. Startup still treats the same failures as fatal.
      */
-    @Scheduled(fixedDelayString = "${mongo.schema.recheck-interval-ms:60000}")
     public void recheckCollectionsAndIndexes() {
         try {
             ensureCollectionsAndIndexes();

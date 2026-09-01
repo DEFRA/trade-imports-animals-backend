@@ -154,9 +154,10 @@ notification:
       lock-at-most-for: 30s
 
 mongo:
-  # Recovers the schema if the database is dropped under a running service.
   schema:
-    recheck-interval-ms: ${MONGO_SCHEMA_RECHECK_INTERVAL_MS:60000}
+    recheck:
+      enabled: ${MONGO_SCHEMA_RECHECK_ENABLED:true}
+      interval-ms: ${MONGO_SCHEMA_RECHECK_INTERVAL_MS:60000}
 
 # Transactional outbox SNS relay (ADR-EUDP-001)
 outbox:

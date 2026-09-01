@@ -114,6 +114,13 @@ notification:
       enabled: false
       batch-size: 10
 
+# The schema recheck stays off in ITs; MongoCollectionInitialiserIT calls it directly, and a timer
+# rebuilding indexes mid-test would race the tests that drop them.
+mongo:
+  schema:
+    recheck:
+      enabled: false
+
 outbox:
   poller:
     enabled: false
