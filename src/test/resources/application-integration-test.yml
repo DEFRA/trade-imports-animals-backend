@@ -9,7 +9,7 @@ spring:
     mongodb:
       uri: ${MONGO_URI:mongodb://localhost:27017}
       database: ${MONGO_DATABASE:trade-imports-animals-backend}
-      auto-index-creation: true
+      auto-index-creation: false
       read-preference: primary
       write-concern: ${MONGO_WRITE_CONCERN:majority}
       connection-pool:
