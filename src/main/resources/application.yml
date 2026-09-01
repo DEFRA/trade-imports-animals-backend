@@ -162,6 +162,11 @@ notification:
 # wait inside executeWithOutboxLock before it gets in. That loop sleeps for lock-at-least-for
 # between its own attempts, so it still succeeds; the ordering below just avoids the wasted wait.
 mongo:
+  # The startup bootstrap cannot survive the database being dropped underneath a running service,
+  # which an E2E reseed does on every run. Rechecking is how the service recovers on its own,
+  # rather than something outside it having to restart the container.
+  schema:
+    recheck-interval-ms: ${MONGO_SCHEMA_RECHECK_INTERVAL_MS:60000}
   transaction:
     retry:
       max-attempts: ${MONGO_TX_RETRY_MAX_ATTEMPTS:3}

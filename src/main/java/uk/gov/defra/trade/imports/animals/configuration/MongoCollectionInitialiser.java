@@ -11,6 +11,7 @@ import org.springframework.data.mongodb.core.index.MongoPersistentEntityIndexRes
 import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.MongoMappingContext;
 import org.springframework.data.mongodb.core.mapping.MongoPersistentEntity;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
@@ -52,14 +53,39 @@ public class MongoCollectionInitialiser implements InitializingBean {
 
     @Override
     public void afterPropertiesSet() {
-        ensureCollectionsAndIndexes();
+        int created = ensureCollectionsAndIndexes();
+        log.info("Mongo bootstrap complete at startup: {} collection(s) created", created);
+    }
+
+    /**
+     * Rebuilds anything that has gone missing since startup.
+     *
+     * <p>The bootstrap runs once, so a database dropped or restored underneath a running service
+     * leaves it with no indexes and with collections that get created lazily on first write inside
+     * a transaction — the WriteConflict this class exists to prevent. An E2E reseed does exactly
+     * that. Recovering is the service's own job: nothing outside it can rebuild its schema without
+     * restarting it.
+     *
+     * <p>Failures are swallowed deliberately. A wipe is not the only reason this can fail, and a
+     * scheduled recovery that killed the service would be worse than the state it is recovering
+     * from. Startup still treats the same failures as fatal.
+     */
+    @Scheduled(fixedDelayString = "${mongo.schema.recheck-interval-ms:60000}")
+    public void recheckCollectionsAndIndexes() {
+        try {
+            ensureCollectionsAndIndexes();
+        } catch (RuntimeException e) {
+            log.error("Mongo schema recheck failed; retrying on the next interval", e);
+        }
     }
 
     /**
      * Creates any missing collection and index. Idempotent, so it is safe to call again — the
      * integration tests do exactly that after dropping the database.
+     *
+     * @return the number of collections this call created.
      */
-    public void ensureCollectionsAndIndexes() {
+    public int ensureCollectionsAndIndexes() {
         List<MongoPersistentEntity<?>> entities = mappedEntities();
         int created = 0;
         for (MongoPersistentEntity<?> entity : entities) {
@@ -68,9 +94,16 @@ public class MongoCollectionInitialiser implements InitializingBean {
             }
         }
         int indexes = entities.stream().mapToInt(this::createIndexes).sum();
-        log.info("Mongo bootstrap complete: {} of {} collections created, {} indexes ensured, "
-                + "collections={}",
-            created, entities.size(), indexes, collectionNames(entities));
+        // The recheck runs on a timer, so only say something when there was something to do.
+        if (created > 0) {
+            log.info("Mongo bootstrap: {} of {} collections created, {} indexes ensured, "
+                    + "collections={}",
+                created, entities.size(), indexes, collectionNames(entities));
+        } else {
+            log.debug("Mongo bootstrap: nothing missing, {} indexes ensured, collections={}",
+                indexes, collectionNames(entities));
+        }
+        return created;
     }
 
     /**
