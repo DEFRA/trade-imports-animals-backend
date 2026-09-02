@@ -12,6 +12,10 @@ import java.util.Map;
  * all in one pass. Iteration order is the fixed role order the resolver walks, so the same
  * notification fails the same way every time.
  */
+// Depth comes from java.lang (RuntimeException/Exception/Throwable); only three levels are ours.
+// Re-parenting to shorten it would drop the is-a BadRequestException the handler relies on as its
+// fallback, turning a lost @ExceptionHandler into a 500 rather than a 400.
+@SuppressWarnings("java:S110")
 public class UnresolvableConsignmentPartyException extends BadRequestException {
 
     private final Map<String, String> addressIdByRole;

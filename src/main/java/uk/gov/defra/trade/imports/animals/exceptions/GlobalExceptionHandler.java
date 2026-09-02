@@ -30,6 +30,9 @@ import lombok.extern.slf4j.Slf4j;
 public class GlobalExceptionHandler {
 
     private static final String MDC_TRACE_ID = "trace.id";
+    private static final String PROPERTY_TRACE_ID = "traceId";
+    private static final String PROPERTY_ERRORS = "errors";
+    private static final String TITLE_VALIDATION_ERROR = "Validation Error";
 
     /**
      * Handle validation errors (400 Bad Request).
@@ -45,17 +48,17 @@ public class GlobalExceptionHandler {
         );
 
         problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
-        problemDetail.setTitle("Validation Error");
+        problemDetail.setTitle(TITLE_VALIDATION_ERROR);
 
         if (traceId != null) {
-            problemDetail.setProperty("traceId", traceId);
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
         }
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
             errors.computeIfAbsent(error.getField(), k -> new ArrayList<>()).add(error.getDefaultMessage());
         }
-        problemDetail.setProperty("errors", errors);
+        problemDetail.setProperty(PROPERTY_ERRORS, errors);
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
@@ -77,10 +80,10 @@ public class GlobalExceptionHandler {
         );
 
         problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
-        problemDetail.setTitle("Validation Error");
+        problemDetail.setTitle(TITLE_VALIDATION_ERROR);
 
         if (traceId != null) {
-            problemDetail.setProperty("traceId", traceId);
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
         }
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
@@ -91,7 +94,7 @@ public class GlobalExceptionHandler {
                 : propertyPath;
             errors.computeIfAbsent(field, k -> new ArrayList<>()).add(violation.getMessage());
         }
-        problemDetail.setProperty("errors", errors);
+        problemDetail.setProperty(PROPERTY_ERRORS, errors);
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
@@ -118,16 +121,16 @@ public class GlobalExceptionHandler {
 
         problemDetail.setType(
             URI.create("https://api.cdp.defra.cloud/problems/unresolvable-consignment-party"));
-        problemDetail.setTitle("Validation Error");
+        problemDetail.setTitle(TITLE_VALIDATION_ERROR);
 
         if (traceId != null) {
-            problemDetail.setProperty("traceId", traceId);
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
         }
 
         Map<String, List<String>> errors = new LinkedHashMap<>();
         ex.addressIdByRole().forEach((role, addressId) ->
             errors.put(role, List.of("No address-book record for " + addressId)));
-        problemDetail.setProperty("errors", errors);
+        problemDetail.setProperty(PROPERTY_ERRORS, errors);
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
@@ -151,7 +154,7 @@ public class GlobalExceptionHandler {
         problemDetail.setTitle("Bad Request");
 
         if (traceId != null) {
-            problemDetail.setProperty("traceId", traceId);
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
         }
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -176,7 +179,7 @@ public class GlobalExceptionHandler {
         problemDetail.setTitle("Resource Not Found");
 
         if (traceId != null) {
-            problemDetail.setProperty("traceId", traceId);
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
         }
 
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
@@ -201,7 +204,7 @@ public class GlobalExceptionHandler {
         problemDetail.setTitle("Upstream Service Error");
 
         if (traceId != null) {
-            problemDetail.setProperty("traceId", traceId);
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
         }
 
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
@@ -226,7 +229,7 @@ public class GlobalExceptionHandler {
         problemDetail.setTitle("Resource Conflict");
 
         if (traceId != null) {
-            problemDetail.setProperty("traceId", traceId);
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
         }
 
         return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -252,7 +255,7 @@ public class GlobalExceptionHandler {
         problemDetail.setProperty("code", "STALE_CONCURRENCY_TOKEN");
 
         if (traceId != null) {
-            problemDetail.setProperty("traceId", traceId);
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
         }
 
         return ResponseEntity.status(HttpStatus.CONFLICT)
@@ -277,7 +280,7 @@ public class GlobalExceptionHandler {
         problemDetail.setTitle("Payload Too Large");
 
         if (traceId != null) {
-            problemDetail.setProperty("traceId", traceId);
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
         }
 
         return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
@@ -306,7 +309,7 @@ public class GlobalExceptionHandler {
         problemDetail.setTitle("Internal Server Error");
 
         if (traceId != null) {
-            problemDetail.setProperty("traceId", traceId);
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
         }
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
@@ -336,7 +339,7 @@ public class GlobalExceptionHandler {
         problemDetail.setTitle("Internal Server Error");
 
         if (traceId != null) {
-            problemDetail.setProperty("traceId", traceId);
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
         }
 
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
