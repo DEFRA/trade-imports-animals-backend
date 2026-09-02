@@ -6,7 +6,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 @Component
 public class GbnAgEventDataMapper {
 
-    public GbnAgEventData toGbnAgEventData(NotificationAggregate notificationAggregate) {
-        return GbnAgEventData.from(notificationAggregate);
+    public GbnAgEventData toGbnAgEventData(NotificationAggregate notificationAggregate, Integer versionId) {
+        return GbnAgEventData.from(notificationAggregate, versionId);
     }
 }

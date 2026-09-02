@@ -7,7 +7,9 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +31,19 @@ public class OutboxService {
     static final String SUB_TYPE = "GBN-AG";
     static final String SCHEMA_VERSION = "1";
     static final String AGGREGATE_ID_PREFIX = "Imports.Notification.GBN-AG.";
+
+    // Wire values of submission events — derived from OutboxEventType.SUBMISSION_EVENTS so the two
+    // definitions cannot drift.
+    private static final Set<String> SUBMISSION_EVENT_WIRE_VALUES = OutboxEventType.SUBMISSION_EVENTS
+        .stream().map(OutboxEventType::value).collect(Collectors.toUnmodifiableSet());
+
+    // Event types where versionId is absent: notification has never been submitted.
+    // NOTIFICATION_EDITED covers draft/amend saves before a first submission — emitting versionId: 0
+    // there would be a value the schema's semantics ('V1 on first submission') never produce.
+    private static final Set<OutboxEventType> NO_VERSION_ID_EVENTS = Set.of(
+        OutboxEventType.NOTIFICATION_CREATED,
+        OutboxEventType.NOTIFICATION_EDITED,
+        OutboxEventType.NOTIFICATION_DELETED);
 
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
@@ -63,8 +78,10 @@ public class OutboxService {
             statusChanges = priorChanges;
         }
 
+        Integer versionId = computeVersionId(aggregateId, eventType);
+
         Map<String, Object> data = objectMapper.convertValue(
-            gbnAgEventDataMapper.toGbnAgEventData(notificationAggregate), MAP_TYPE);
+            gbnAgEventDataMapper.toGbnAgEventData(notificationAggregate, versionId), MAP_TYPE);
 
         OutboxEvent event = OutboxEvent.builder()
             .eventId(UUID.randomUUID().toString())
@@ -94,6 +111,18 @@ public class OutboxService {
 
         log.info("Outbox event written: aggregateId={} version={} correlationId={}",
             aggregateId, nextVersion, correlationId);
+    }
+
+    private Integer computeVersionId(String aggregateId, OutboxEventType eventType) {
+        if (NO_VERSION_ID_EVENTS.contains(eventType)) {
+            return null;
+        }
+        long submissionCount = outboxEventRepository
+            .countByAggregateIdAndEventTypeIn(aggregateId, SUBMISSION_EVENT_WIRE_VALUES);
+        // Submission events mint a new version; all others carry the current count forward.
+        return (int) (SUBMISSION_EVENT_WIRE_VALUES.contains(eventType.value())
+            ? submissionCount + 1
+            : submissionCount);
     }
 
     public List<OutboxEvent> findByReferenceNumber(String referenceNumber) {

@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.integration.outbox;
 
 import static org.awaitility.Awaitility.await;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.floci.testcontainers.FlociContainer;
 import java.time.Duration;
@@ -37,13 +38,13 @@ import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
 
 /**
- * Base class for integration tests that publish to SNS and consume from SQS via Floci.
- * Starts a single shared Floci container, creates the outbox SNS topic and a test SQS
- * subscriber queue, and wires them into the Spring context via {@link DynamicPropertySource}.
+ * Base class for integration tests that publish to SNS and consume from SQS via Floci. Starts a
+ * single shared Floci container, creates the outbox SNS topic and a test SQS subscriber queue, and
+ * wires them into the Spring context via {@link DynamicPropertySource}.
  *
  * <p>Subclasses inherit {@link #purgeQueue()}, {@link #awaitSqsMessages(int)}, and
- * {@link #createAndSubmitNotification(String)} so they only need to add test-specific
- * beans and test methods.
+ * {@link #createAndSubmitNotification(String)} so they only need to add test-specific beans and
+ * test methods.
  */
 abstract class OutboxIntegrationBase extends IntegrationBase {
 
@@ -162,7 +163,9 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
         return List.copyOf(collected);
     }
 
-    /** Peeks at the queue without acknowledging, leaving received messages in flight. */
+    /**
+     * Peeks at the queue without acknowledging, leaving received messages in flight.
+     */
     protected List<Message> receiveMessages() {
         List<Message> messages = SQS_CLIENT.receiveMessage(ReceiveMessageRequest.builder()
                 .queueUrl(QUEUE_URL)
@@ -184,15 +187,22 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
         receiveMessages().forEach(this::deleteMessage);
     }
 
+    protected JsonNode snsEnvelopeByAggregateVersion(List<Message> messages, long aggregateVersion)
+        throws Exception {
+        for (Message message : messages) {
+            JsonNode snsEnvelope = objectMapper.readTree(message.body());
+            JsonNode payload = objectMapper.readTree(snsEnvelope.get("Message").asText());
+            if (payload.get("aggregateVersion").asLong() == aggregateVersion) {
+                return snsEnvelope;
+            }
+        }
+        throw new AssertionError("No SNS message found for aggregateVersion " + aggregateVersion);
+    }
+
     // --- NotificationAggregate helpers ---
 
     protected String createAndSubmitNotification(String traceId) {
-        String referenceNumber = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult()
-            .getResponseBody().getReferenceNumber();
+        String referenceNumber = createNewNotification(traceId).getReferenceNumber();
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
@@ -204,12 +214,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     }
 
     protected String createAndSaveNotification(String traceId) {
-        NotificationAggregate created = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult()
-            .getResponseBody();
+        NotificationAggregate created = createNewNotification(traceId);
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
@@ -224,6 +229,16 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
             .expectStatus().isOk();
 
         return created.getReferenceNumber();
+    }
+
+    protected NotificationAggregate createNewNotification(String traceId) {
+        return webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .header(HEADER_TRACE_ID, traceId)
+            .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody();
     }
 
     protected static NotificationDto minimalNotificationDto() {
