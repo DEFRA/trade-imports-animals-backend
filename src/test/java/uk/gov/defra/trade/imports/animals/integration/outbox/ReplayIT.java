@@ -191,12 +191,6 @@ class ReplayIT extends OutboxIntegrationBase {
         assertThat(auditRepository.findAll()).isEmpty();
     }
 
-    private OutboxEvent findSubmittedEvent() {
-        return outboxEventRepository.findAll().stream()
-            .filter(e -> e.getEventType().endsWith("NotificationSubmitted"))
-            .findFirst().orElseThrow();
-    }
-
     @Test
     void replay_shouldReturn401_whenAdminSecretIsMissing() {
         String referenceNumber = createAndSubmitNotification("trace-401");
