@@ -82,16 +82,13 @@ public class OutboxPublishService {
 
     void publishToSns(OutboxEvent event, String topicArn) throws JsonProcessingException {
         String messageBody = objectMapper.writeValueAsString(event);
-        PublishRequest.Builder requestBuilder = PublishRequest.builder()
+        snsClient.publish(PublishRequest.builder()
             .topicArn(topicArn)
             .message(messageBody)
-            .messageAttributes(buildMessageAttributes(event));
-        if (topicArn.endsWith(".fifo")) {
-            requestBuilder
-                .messageGroupId(event.getAggregateId())
-                .messageDeduplicationId(event.getEventId());
-        }
-        snsClient.publish(requestBuilder.build());
+            .messageAttributes(buildMessageAttributes(event))
+            .messageGroupId(event.getAggregateId())
+            .messageDeduplicationId(event.getEventId())
+            .build());
         log.info("Published outbox event eventId={} aggregateId={} version={}",
             event.getEventId(), event.getAggregateId(), event.getAggregateVersion());
     }
