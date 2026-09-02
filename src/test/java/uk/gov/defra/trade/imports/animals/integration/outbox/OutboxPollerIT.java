@@ -13,6 +13,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxPublishService;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 /**
  * End-to-end integration test for the outbox SNS relay against Floci.
@@ -195,4 +196,30 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         assertThat(events).allMatch(e -> e.getPublishedAt() != null);
     }
 
+    @Test
+    void publishUnpublishedEvents_shouldNotSerialiseEventsForDifferentNotifications() throws Exception {
+        // Given — two notifications, so two distinct aggregateIds and two message groups
+        String firstReference = createAndSubmitNotification("trace-group-a");
+        String secondReference = createAndSubmitNotification("trace-group-b");
+        assertThat(firstReference).isNotEqualTo(secondReference);
+
+        // When
+        assertThat(outboxPublishService.publishUnpublishedEvents()).isEqualTo(2);
+
+        // Then — both are in flight at once, which one message group could never be
+        List<Message> inFlight = awaitInFlightMessages(2);
+        try {
+            assertThat(List.of(aggregateIdOf(inFlight.get(0)), aggregateIdOf(inFlight.get(1))))
+                .containsExactlyInAnyOrder(
+                    OutboxService.buildAggregateId(firstReference),
+                    OutboxService.buildAggregateId(secondReference));
+        } finally {
+            inFlight.forEach(this::deleteMessage);
+        }
+    }
+
+    private String aggregateIdOf(Message message) throws Exception {
+        return objectMapper.readTree(objectMapper.readTree(message.body()).get("Message").asText())
+            .get("aggregateId").asText();
+    }
 }

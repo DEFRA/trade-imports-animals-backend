@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.floci.testcontainers.FlociContainer;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -51,8 +52,8 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     protected static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
 
     private static final String AWS_REGION = "eu-west-2";
-    private static final String TOPIC_NAME = "trade-imports-animals-outbox-it";
-    private static final String QUEUE_NAME = "trade-imports-animals-outbox-it-queue";
+    private static final String TOPIC_NAME = "trade-imports-animals-outbox-it.fifo";
+    private static final String QUEUE_NAME = "trade-imports-animals-outbox-it-queue.fifo";
 
     @SuppressWarnings("resource")
     static final FlociContainer FLOCI = new FlociContainer(
@@ -68,12 +69,16 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
         Startables.deepStart(FLOCI).join();
 
         SNS_CLIENT = snsClient();
-        TOPIC_ARN = SNS_CLIENT.createTopic(
-            CreateTopicRequest.builder().name(TOPIC_NAME).build()).topicArn();
+        TOPIC_ARN = SNS_CLIENT.createTopic(CreateTopicRequest.builder()
+            .name(TOPIC_NAME)
+            .attributes(Map.of("FifoTopic", "true"))
+            .build()).topicArn();
 
         SQS_CLIENT = sqsClient();
-        QUEUE_URL = SQS_CLIENT.createQueue(
-            CreateQueueRequest.builder().queueName(QUEUE_NAME).build()).queueUrl();
+        QUEUE_URL = SQS_CLIENT.createQueue(CreateQueueRequest.builder()
+            .queueName(QUEUE_NAME)
+            .attributes(Map.of(QueueAttributeName.FIFO_QUEUE, "true"))
+            .build()).queueUrl();
 
         String queueArn = SQS_CLIENT.getQueueAttributes(GetQueueAttributesRequest.builder()
                 .queueUrl(QUEUE_URL)
@@ -132,12 +137,33 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     }
 
     protected List<Message> awaitSqsMessages(int expectedCount) {
-        return await()
-            .atMost(Duration.ofSeconds(10))
+        List<Message> collected = new ArrayList<>();
+        await()
+            .atMost(Duration.ofSeconds(20))
             .pollInterval(Duration.ofMillis(200))
-            .until(this::receiveMessages, messages -> messages.size() >= expectedCount);
+            .until(() -> {
+                receiveMessages().forEach(message -> {
+                    collected.add(message);
+                    deleteMessage(message);
+                });
+                return collected.size();
+            }, count -> count >= expectedCount);
+        return List.copyOf(collected);
     }
 
+    protected List<Message> awaitInFlightMessages(int expectedCount) {
+        List<Message> collected = new ArrayList<>();
+        await()
+            .atMost(Duration.ofSeconds(20))
+            .pollInterval(Duration.ofMillis(200))
+            .until(() -> {
+                collected.addAll(receiveMessages());
+                return collected.size();
+            }, count -> count >= expectedCount);
+        return List.copyOf(collected);
+    }
+
+    /** Peeks at the queue without acknowledging, leaving received messages in flight. */
     protected List<Message> receiveMessages() {
         List<Message> messages = SQS_CLIENT.receiveMessage(ReceiveMessageRequest.builder()
                 .queueUrl(QUEUE_URL)
@@ -149,10 +175,14 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
         return messages != null ? messages : List.of();
     }
 
-    protected void purgeQueue() {
-        receiveMessages().forEach(message -> SQS_CLIENT.deleteMessage(builder -> builder
+    protected void deleteMessage(Message message) {
+        SQS_CLIENT.deleteMessage(builder -> builder
             .queueUrl(QUEUE_URL)
-            .receiptHandle(message.receiptHandle())));
+            .receiptHandle(message.receiptHandle()));
+    }
+
+    protected void purgeQueue() {
+        receiveMessages().forEach(this::deleteMessage);
     }
 
     protected JsonNode snsEnvelopeByAggregateVersion(List<Message> messages, long aggregateVersion)

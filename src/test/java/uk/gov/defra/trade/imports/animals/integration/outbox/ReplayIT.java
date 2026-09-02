@@ -43,16 +43,11 @@ class ReplayIT extends OutboxIntegrationBase {
     }
 
     @Test
-    void replay_shouldRepublishEventToSns_andNotMutateOutboxPublishedAt() throws Exception {
-        // Given — create + submit (CREATED v1, SUBMITTED v2), then publish both normally
+    void replay_shouldRepublishEventToSns() throws Exception {
+        // Given — an outbox event the poller has not published, so the replay is not a duplicate
         String referenceNumber = createAndSubmitNotification("trace-replay-001");
-        outboxPublishService.publishUnpublishedEvents();
-
-        OutboxEvent submittedEvent = findSubmittedEvent();
-        Instant originalPublishedAt = submittedEvent.getPublishedAt();
-        assertThat(originalPublishedAt).isNotNull();
-
-        purgeQueue();
+        OutboxEvent event = outboxEventRepository.findAll().getFirst();
+        assertThat(event.getPublishedAt()).isNull();
 
         // When — replay all events for this notification (CREATED + SUBMITTED = 2)
         ReplayResponse response = webClient("NoAuth")
@@ -72,11 +67,35 @@ class ReplayIT extends OutboxIntegrationBase {
         List<Message> messages = awaitSqsMessages(2);
         JsonNode snsEnvelope = snsEnvelopeByAggregateVersion(messages, 2L);
         JsonNode payload = objectMapper.readTree(snsEnvelope.get("Message").asText());
-        assertThat(payload.get("eventId").asText()).isEqualTo(submittedEvent.getEventId());
-        assertThat(payload.get("aggregateVersion").asLong()).isEqualTo(2L);
+        assertThat(payload.get("eventId").asText()).isEqualTo(event.getEventId());
+        assertThat(payload.get("aggregateVersion").asLong()).isEqualTo(1L);
+    }
 
-        // publishedAt on the outbox event is NOT mutated by replay
-        OutboxEvent eventAfterReplay = findSubmittedEvent();
+    /**
+     * Delivery is asserted separately in {@link #replay_shouldRepublishEventToSns()}: replaying an
+     * already-published event reuses its eventId as the deduplication id, so SNS FIFO suppresses
+     * the message for five minutes. Only the outbox state is assertable here.
+     */
+    @Test
+    void replay_shouldNotMutateOutboxPublishedAt() {
+        // Given — submit a notification so an outbox event exists, then publish it normally
+        String referenceNumber = createAndSubmitNotification("trace-replay-002");
+        outboxPublishService.publishUnpublishedEvents();
+
+        Instant originalPublishedAt = outboxEventRepository.findAll().getFirst().getPublishedAt();
+        assertThat(originalPublishedAt).isNotNull();
+
+        // When
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/replay", referenceNumber)
+            .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .header(HEADER_TRACE_ID, "trace-replay-002")
+            .header("User-Id", "user-replay-002")
+            .exchange()
+            .expectStatus().isOk();
+
+        // Then — publishedAt on the outbox event is NOT mutated by replay
+        OutboxEvent eventAfterReplay = outboxEventRepository.findAll().getFirst();
         assertThat(eventAfterReplay.getPublishedAt()).isEqualTo(originalPublishedAt);
     }
 
