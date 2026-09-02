@@ -2128,13 +2128,13 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
     }
 
-    /** The address book is scoped by organisation in both the path and the header, and the stub
-     * matches on both — a resolve that sent the wrong organisation would miss this stub rather than
-     * quietly return someone else's address. */
     private void stubAddressBook(String body, int statusCode) {
         stubAddressBookFor(ADDRESS_ID, body, statusCode);
     }
 
+    /** The address book is scoped by organisation in both the path and the header, and the stub
+     * matches on both — a resolve that sent the wrong organisation would miss this stub rather than
+     * quietly return someone else's address. */
     private void stubAddressBookFor(String addressId, String body, int statusCode) {
         usingStub()
             .when(request()
