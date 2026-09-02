@@ -51,7 +51,8 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         JsonNode publishedMessage = objectMapper.readTree(snsEnvelope.get("Message").asText());
         assertThat(publishedMessage.get("aggregateVersion").asLong()).isEqualTo(2L);
         assertThat(publishedMessage.get("eventId").asText()).isEqualTo(submittedEvent.getEventId());
-        assertThat(publishedMessage.get("aggregateId").asText()).isEqualTo(submittedEvent.getAggregateId());
+        assertThat(publishedMessage.get("aggregateId").asText()).isEqualTo(
+            submittedEvent.getAggregateId());
         assertThat(publishedMessage.get("aggregateType").asText()).isEqualTo("Notification");
         assertThat(publishedMessage.get("subType").asText()).isEqualTo("GBN-AG");
         assertThat(publishedMessage.get("eventType").asText())
@@ -60,7 +61,8 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         assertThat(publishedMessage.get("metadata").get("correlationId").asText())
             .isEqualTo(TRACE_PREFIX + "001");
         assertThat(publishedMessage.get("metadata").get("schemaVersion").asText()).isEqualTo("1");
-        assertThat(publishedMessage.get("data").get("exchangedDocument").get("identifier").asText()).isEqualTo(referenceNumber);
+        assertThat(publishedMessage.get("data").get("exchangedDocument").get("identifier")
+            .asText()).isEqualTo(referenceNumber);
         assertThat(publishedMessage.has("publishedAt")).isFalse();
 
         JsonNode attributes = snsEnvelope.get("MessageAttributes");
@@ -88,7 +90,8 @@ class OutboxPollerIT extends OutboxIntegrationBase {
     void publishUnpublishedEvents_shouldPublishAggregateVersionsInOrder() throws Exception {
         // create → NOTIFICATION_CREATED (v1), submit → NOTIFICATION_SUBMITTED (v2)
         String referenceNumber = createAndSubmitNotification("trace-v1");
-        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(
+                referenceNumber)
             .orElseThrow();
         notificationAggregate.setStatus(NotificationStatus.DRAFT);
         notificationRepository.save(notificationAggregate);
@@ -119,17 +122,23 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         List<Message> messages = awaitSqsMessages(3);
         JsonNode firstSubmitEnvelope = snsEnvelopeByAggregateVersion(messages, 2L);
         JsonNode secondSubmitEnvelope = snsEnvelopeByAggregateVersion(messages, 3L);
-        assertThat(firstSubmitEnvelope.get("MessageAttributes").get("correlationId").get("Value").asText())
+        assertThat(
+            firstSubmitEnvelope.get("MessageAttributes").get("correlationId").get("Value").asText())
             .isEqualTo("trace-v1");
-        assertThat(secondSubmitEnvelope.get("MessageAttributes").get("correlationId").get("Value").asText())
+        assertThat(secondSubmitEnvelope.get("MessageAttributes").get("correlationId").get("Value")
+            .asText())
             .isEqualTo("trace-v2");
 
         JsonNode firstPayload = objectMapper.readTree(firstSubmitEnvelope.get("Message").asText());
-        JsonNode secondPayload = objectMapper.readTree(secondSubmitEnvelope.get("Message").asText());
+        JsonNode secondPayload = objectMapper.readTree(
+            secondSubmitEnvelope.get("Message").asText());
         assertThat(firstPayload.get("aggregateVersion").asLong()).isEqualTo(2L);
         assertThat(secondPayload.get("aggregateVersion").asLong()).isEqualTo(3L);
-        assertThat(firstPayload.get("data").get("exchangedDocument").get("identifier").asText()).isEqualTo(referenceNumber);
-        assertThat(secondPayload.get("data").get("exchangedDocument").get("identifier").asText()).isEqualTo(referenceNumber);
+        assertThat(
+            firstPayload.get("data").get("exchangedDocument").get("identifier").asText()).isEqualTo(
+            referenceNumber);
+        assertThat(secondPayload.get("data").get("exchangedDocument").get("identifier")
+            .asText()).isEqualTo(referenceNumber);
         assertThat(firstPayload.has("publishedAt")).isFalse();
         assertThat(secondPayload.has("publishedAt")).isFalse();
     }
@@ -167,7 +176,8 @@ class OutboxPollerIT extends OutboxIntegrationBase {
     }
 
     @Test
-    void publishUnpublishedEvents_shouldIncrementAggregateVersion_acrossPageSaveAndSubmit() throws Exception {
+    void publishUnpublishedEvents_shouldIncrementAggregateVersion_acrossPageSaveAndSubmit()
+        throws Exception {
         // create → NOTIFICATION_CREATED (v1), page save → NOTIFICATION_EDITED (v2),
         // submit → NOTIFICATION_SUBMITTED (v3)
         String referenceNumber = createAndSaveNotification("trace-page-save");
@@ -197,10 +207,11 @@ class OutboxPollerIT extends OutboxIntegrationBase {
     }
 
     @Test
-    void publishUnpublishedEvents_shouldNotSerialiseEventsForDifferentNotifications() throws Exception {
+    void publishUnpublishedEvents_shouldNotSerialiseEventsForDifferentNotifications()
+        throws Exception {
         // Given — two notifications, so two distinct aggregateIds and two message groups
-        String firstReference = createAndSubmitNotification("trace-group-a");
-        String secondReference = createAndSubmitNotification("trace-group-b");
+        String firstReference = createNewNotification("trace-group-a").getReferenceNumber();
+        String secondReference = createNewNotification("trace-group-b").getReferenceNumber();
         assertThat(firstReference).isNotEqualTo(secondReference);
 
         // When
@@ -209,7 +220,8 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         // Then — both are in flight at once, which one message group could never be
         List<Message> inFlight = awaitInFlightMessages(2);
         try {
-            assertThat(List.of(aggregateIdOf(inFlight.get(0)), aggregateIdOf(inFlight.get(1))))
+            assertThat(List.of(aggregateIdOf(inFlight.get(0)),
+                aggregateIdOf(inFlight.get(1))))
                 .containsExactlyInAnyOrder(
                     OutboxService.buildAggregateId(firstReference),
                     OutboxService.buildAggregateId(secondReference));
