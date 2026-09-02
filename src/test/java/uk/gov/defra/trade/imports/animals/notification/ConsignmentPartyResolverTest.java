@@ -153,9 +153,8 @@ class ConsignmentPartyResolverTest {
 
     @Test
     void shouldReportASoftDeletedAddressAsUnresolvableOnSubmission() {
-        when(addressBookClient.findById(ORG, "gone")).thenReturn(Optional.of(
-            new AddressBookRecord("gone", "Gone Ltd", null, null, null, null, null, null, null,
-                null, true)));
+        when(addressBookClient.findById(ORG, "gone"))
+            .thenReturn(Optional.of(deletedAddressRecord("gone", "Gone Ltd")));
         NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .destination(ConsignmentParty.reference("gone"))
             .build());
@@ -168,9 +167,8 @@ class ConsignmentPartyResolverTest {
 
     @Test
     void shouldTreatASoftDeletedAddressAsUnresolvable() {
-        when(addressBookClient.findById(ORG, "gone")).thenReturn(Optional.of(
-            new AddressBookRecord("gone", "Gone Ltd", null, null, null, null, null, null, null,
-                null, true)));
+        when(addressBookClient.findById(ORG, "gone"))
+            .thenReturn(Optional.of(deletedAddressRecord("gone", "Gone Ltd")));
         NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .consignor(ConsignmentParty.reference("gone"))
             .build());
@@ -262,6 +260,11 @@ class ConsignmentPartyResolverTest {
     private static AddressBookRecord addressRecord(String addressId, String name) {
         return new AddressBookRecord(addressId, name, "1 Test Street", null, "London", null,
             "SW1A 1AA", "GB", "01632 960000", "test@example.com", false);
+    }
+
+    private static AddressBookRecord deletedAddressRecord(String addressId, String name) {
+        return new AddressBookRecord(addressId, name, null, null, null, null, null, null, null,
+            null, true);
     }
 
     private static NotificationAggregate aggregateOf(Notification notification) {
