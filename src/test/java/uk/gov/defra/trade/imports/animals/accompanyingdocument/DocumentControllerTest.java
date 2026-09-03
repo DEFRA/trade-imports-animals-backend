@@ -46,7 +46,8 @@ import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException
 @EnableConfigurationProperties(AppConfig.class)
 @TestPropertySource(properties = {
     "cdp.tracing.header-name=x-cdp-request-id",
-    "app.base-url=http://localhost:8085"
+    "app.base-url=http://localhost:8085",
+    "outbox.sns.topic-arn=arn:aws:sns:eu-west-2:000000000000:unit-test-outbox.fifo"
 })
 class DocumentControllerTest {
 
