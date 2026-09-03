@@ -17,6 +17,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sns.model.PublishRequest;
+import software.amazon.awssdk.services.sns.model.PublishResponse;
 import software.amazon.awssdk.services.sns.model.SnsException;
 import uk.gov.defra.trade.imports.animals.configuration.OutboxConfig;
 
@@ -47,7 +49,7 @@ class OutboxPublishServiceTest {
     void setUp() {
         ObjectMapper objectMapper = createObjectMapper();
         OutboxConfig properties = new OutboxConfig(
-            new OutboxConfig.Poller(2000, 10, null, null, true),
+            new OutboxConfig.Poller(2000, 10, 500, null, null, true),
             new OutboxConfig.Sns(TOPIC_ARN));
         outboxPublishService = new OutboxPublishService(
             outboxEventRepository, snsClient, objectMapper, properties);
@@ -207,7 +209,7 @@ class OutboxPublishServiceTest {
             // Given
             ObjectMapper objectMapper = createObjectMapper();
             OutboxConfig noTopic = new OutboxConfig(
-                new OutboxConfig.Poller(2000, 10, null, null, true),
+                new OutboxConfig.Poller(2000, 10, 500, null, null, true),
                 new OutboxConfig.Sns(" "));
             OutboxPublishService service = new OutboxPublishService(
                 outboxEventRepository, snsClient, objectMapper, noTopic);
@@ -283,7 +285,7 @@ class OutboxPublishServiceTest {
             OutboxPublishService service = new OutboxPublishService(
                 outboxEventRepository, snsClient, failingMapper,
                 new OutboxConfig(
-                    new OutboxConfig.Poller(2000, 10, null, null, true),
+                    new OutboxConfig.Poller(2000, 10, 500, null, null, true),
                     new OutboxConfig.Sns(TOPIC_ARN)));
 
             // When
@@ -302,7 +304,7 @@ class OutboxPublishServiceTest {
             OutboxPublishService fifoService = new OutboxPublishService(
                 outboxEventRepository, snsClient, createObjectMapper(),
                 new OutboxConfig(
-                    new OutboxConfig.Poller(2000, 10, null, null, true),
+                    new OutboxConfig.Poller(2000, 10, 500, null, null, true),
                     new OutboxConfig.Sns("arn:aws:sns:eu-west-2:000000000000:no-suffix")));
             OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
             when(outboxEventRepository
@@ -320,6 +322,79 @@ class OutboxPublishServiceTest {
             assertThat(request.messageGroupId()).isEqualTo("agg-a");
             assertThat(request.messageDeduplicationId()).isEqualTo("event-1");
         }
+
+        @Test
+        void shouldDrainBacklogAcrossBatches_inASingleInvocation() {
+            // Given — 25 events waiting against a batch size of 10
+            List<OutboxEvent> backlog = backlogOf(25);
+            stubRepositoryServing(backlog);
+
+            // When
+            int published = outboxPublishService.publishUnpublishedEvents();
+
+            // Then
+            assertThat(published).isEqualTo(25);
+            assertThat(backlog).allMatch(event -> event.getPublishedAt() != null);
+            verify(snsClient, times(25)).publish(any(PublishRequest.class));
+        }
+
+        @Test
+        void shouldStopAtMaxEventsPerRun_leavingRemainderUnpublished() {
+            // Given — 25 events waiting, the run bounded to 15
+            OutboxPublishService boundedService = new OutboxPublishService(
+                outboxEventRepository, snsClient, createObjectMapper(),
+                new OutboxConfig(
+                    new OutboxConfig.Poller(2000, 10, 15, null, null, true),
+                    new OutboxConfig.Sns(TOPIC_ARN)));
+            List<OutboxEvent> backlog = backlogOf(25);
+            stubRepositoryServing(backlog);
+
+            // When
+            int published = boundedService.publishUnpublishedEvents();
+
+            // Then
+            assertThat(published).isEqualTo(15);
+            assertThat(backlog.subList(0, 15)).allMatch(event -> event.getPublishedAt() != null);
+            assertThat(backlog.subList(15, 25)).allMatch(event -> event.getPublishedAt() == null);
+            verify(snsClient, times(15)).publish(any(PublishRequest.class));
+        }
+
+        @Test
+        void shouldStopDraining_whenPublishFailsPartWayThroughABatch() {
+            // Given — 25 events waiting, SNS failing on the third
+            List<OutboxEvent> backlog = backlogOf(25);
+            stubRepositoryServing(backlog);
+            when(snsClient.publish(any(PublishRequest.class)))
+                .thenReturn(PublishResponse.builder().build())
+                .thenReturn(PublishResponse.builder().build())
+                .thenThrow(SnsException.builder().message("SNS unavailable").build());
+
+            // When
+            int published = outboxPublishService.publishUnpublishedEvents();
+
+            // Then
+            assertThat(published).isEqualTo(2);
+            assertThat(backlog.subList(2, 25)).allMatch(event -> event.getPublishedAt() == null);
+            verify(snsClient, times(3)).publish(any(PublishRequest.class));
+            verify(outboxEventRepository, times(2)).save(any());
+        }
+    }
+
+    private void stubRepositoryServing(List<OutboxEvent> backlog) {
+        when(outboxEventRepository
+            .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+            .thenAnswer(invocation -> backlog.stream()
+                .filter(event -> event.getPublishedAt() == null)
+                .limit(invocation.<Pageable>getArgument(0).getPageSize())
+                .toList());
+        when(outboxEventRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    private static List<OutboxEvent> backlogOf(int size) {
+        return IntStream.rangeClosed(1, size)
+            .mapToObj(version ->
+                unpublishedEvent("agg-a", version, "ref-" + version, "trace-" + version))
+            .toList();
     }
 
     private static OutboxEvent unpublishedEvent(

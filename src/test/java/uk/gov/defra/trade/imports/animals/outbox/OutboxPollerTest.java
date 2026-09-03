@@ -49,7 +49,7 @@ class OutboxPollerTest {
         LockingTaskExecutor lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         OutboxConfig properties = new OutboxConfig(
             new OutboxConfig.Poller(
-                2000, 10, Duration.ofSeconds(1), Duration.ofSeconds(30), true),
+                2000, 10, 500, Duration.ofSeconds(1), Duration.ofSeconds(30), true),
             new OutboxConfig.Sns("arn:aws:sns:eu-west-2:000000000000:test-topic"));
         outboxPoller = new OutboxPoller(outboxPublishService, lockingTaskExecutor, properties);
 

@@ -32,7 +32,9 @@ public class OutboxPublishService {
     private final OutboxConfig outboxConfig;
 
     /**
-     * Publishes a batch of unpublished outbox events to SNS in aggregate version order.
+     * Publishes unpublished outbox events to SNS in aggregate version order, taking further
+     * batches until the backlog is drained, a batch stops early, or
+     * {@code outbox.poller.max-events-per-run} is reached.
      *
      * @return number of events successfully published in this run
      */
@@ -44,10 +46,27 @@ public class OutboxPublishService {
         }
 
         int batchSize = outboxConfig.poller().batchSize();
-        List<OutboxEvent> events = outboxEventRepository
-            .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(
-                PageRequest.of(0, batchSize));
+        int maxEventsPerRun = outboxConfig.poller().maxEventsPerRun();
 
+        int published = 0;
+        while (published < maxEventsPerRun) {
+            int pageSize = Math.min(batchSize, maxEventsPerRun - published);
+            List<OutboxEvent> events = outboxEventRepository
+                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(
+                    PageRequest.of(0, pageSize));
+            if (events.isEmpty()) {
+                break;
+            }
+            int publishedFromBatch = publishBatch(events, topicArn);
+            published += publishedFromBatch;
+            if (publishedFromBatch < events.size() || events.size() < pageSize) {
+                break;
+            }
+        }
+        return published;
+    }
+
+    private int publishBatch(List<OutboxEvent> events, String topicArn) {
         int published = 0;
         for (OutboxEvent event : events) {
             if (event.getData() == null) {

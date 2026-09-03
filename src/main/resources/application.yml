@@ -168,6 +168,7 @@ outbox:
   poller:
     interval-ms: 2000
     batch-size: 10
+    max-events-per-run: ${OUTBOX_POLLER_MAX_EVENTS_PER_RUN:500}
     lock-at-least-for: 1s
     lock-at-most-for: 30s
     enabled: true
