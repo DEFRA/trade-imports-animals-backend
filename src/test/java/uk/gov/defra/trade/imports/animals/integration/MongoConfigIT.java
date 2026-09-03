@@ -28,7 +28,7 @@ class MongoConfigIT extends IntegrationBase {
     private MongoTransactionManager transactionManager;
 
     @Test
-    void transactionManager_shouldRetryCommitsWhoseResultIsUnknown() {
+    void transactionManager_shouldBeTheCommitRetryingManager() {
         assertThat(transactionManager).isInstanceOf(CommitRetryingMongoTransactionManager.class);
     }
 

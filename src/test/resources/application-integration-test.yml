@@ -114,8 +114,6 @@ notification:
       enabled: false
       batch-size: 10
 
-# Retry stays on so the advisor wiring is exercised, but the backoff is squeezed — ShedLock's
-# minimum hold is 0ms above, so a retry has nothing to wait for.
 mongo:
   transaction:
     retry:

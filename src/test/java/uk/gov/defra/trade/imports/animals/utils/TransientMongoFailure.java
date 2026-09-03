@@ -39,11 +39,7 @@ public final class TransientMongoFailure {
             "UnknownTransactionCommitResult");
     }
 
-    /**
-     * A transient failure that is <em>not</em> a {@link MongoCommandException}. The driver labels
-     * a commit lost to a network blip {@code TransientTransactionError} too, and it arrives as a
-     * plain {@link MongoException} with no server response to quote.
-     */
+    /** A transient failure that is not a {@link MongoCommandException}. */
     public static TransactionSystemException transientNetworkFailureAtCommit() {
         MongoException cause = new MongoException("Connection reset by peer");
         cause.addLabel("TransientTransactionError");

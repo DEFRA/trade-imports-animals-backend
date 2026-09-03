@@ -12,18 +12,7 @@ import org.springframework.retry.interceptor.RetryOperationsInterceptor;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-/**
- * Retries a transaction MongoDB has labelled {@code TransientTransactionError}, which Spring's
- * declarative {@code @Transactional} path ignores — so the failure reaches the caller as a 500.
- *
- * <p>The label is the only reliable signal: the failure arrives as a
- * {@code TransactionSystemException} at commit, outside Spring's data-access hierarchy, and
- * {@code WriteConflict} otherwise classifies as a non-transient data-integrity violation.
- *
- * <p>{@code UnknownTransactionCommitResult} is deliberately not matched: it means the commit may
- * have succeeded, so re-running the body would repeat work against changed state. Spring Data's
- * {@code isTransientFailure} conflates the two, hence the cause walk here.
- */
+/** Retries a transaction MongoDB has labelled {@code TransientTransactionError}. */
 @Slf4j
 public class TransientTransactionRetryInterceptor extends RetryOperationsInterceptor {
 
@@ -42,8 +31,6 @@ public class TransientTransactionRetryInterceptor extends RetryOperationsInterce
 
     @Override
     public Object invoke(MethodInvocation invocation) throws Throwable {
-        // An inner call has already joined its caller's transaction, so retrying here would re-run
-        // inside the transaction that is failing rather than in a fresh one.
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             return invocation.proceed();
         }
@@ -86,10 +73,6 @@ public class TransientTransactionRetryInterceptor extends RetryOperationsInterce
             }
         }
 
-        /**
-         * Not the exception's {@code toString()}: for a {@link MongoCommandException} that is the
-         * whole server response, {@code $clusterTime} included, and runs to kilobytes per retry.
-         */
         private static String summarise(Throwable failure) {
             Throwable cause = NestedExceptionUtils.getMostSpecificCause(failure);
             if (cause instanceof MongoCommandException command) {

@@ -154,14 +154,11 @@ notification:
       lock-at-most-for: 30s
 
 mongo:
-  # Keep initial-backoff-ms above notification.submit.lock-at-least-for, or a retry pays one
-  # wasted wait re-entering the outbox ShedLock.
   transaction:
     retry:
       max-attempts: ${MONGO_TX_RETRY_MAX_ATTEMPTS:3}
       initial-backoff-ms: ${MONGO_TX_RETRY_INITIAL_BACKOFF_MS:60}
       max-backoff-ms: ${MONGO_TX_RETRY_MAX_BACKOFF_MS:500}
-    # timeout-ms matches the MongoDB driver's own MAX_RETRY_TIME_LIMIT_MS.
     commit-retry:
       timeout-ms: ${MONGO_TX_COMMIT_RETRY_TIMEOUT_MS:120000}
       backoff-ms: ${MONGO_TX_COMMIT_RETRY_BACKOFF_MS:100}

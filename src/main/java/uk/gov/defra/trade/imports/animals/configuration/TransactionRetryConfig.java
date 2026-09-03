@@ -13,18 +13,11 @@ import org.springframework.context.annotation.Role;
 import org.springframework.core.Ordered;
 import org.springframework.transaction.interceptor.TransactionAttributeSource;
 
-/**
- * Wraps every {@code @Transactional} method in a bounded retry of transient MongoDB failures.
- *
- * <p>Declared as {@link BeanDefinition#ROLE_INFRASTRUCTURE} exactly as Spring declares
- * {@code ProxyTransactionManagementConfiguration}: the auto-proxy creator fetches advisors before
- * the bean post-processors are ready, and without this every bean declared beside it would be
- * quietly denied post-processing.
- */
+/** Wraps every {@code @Transactional} method in a bounded retry of transient MongoDB failures. */
 @Configuration(proxyBeanMethods = false)
 @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
 @Slf4j
-public class TransactionRetryConfiguration {
+public class TransactionRetryConfig {
 
     @Bean
     @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
@@ -43,8 +36,6 @@ public class TransactionRetryConfiguration {
         };
         DefaultPointcutAdvisor advisor = new DefaultPointcutAdvisor(pointcut,
             new TransientTransactionRetryInterceptor(maxAttempts, initialBackoffMs, maxBackoffMs));
-        // Outside the transaction advisor (Ordered.LOWEST_PRECEDENCE), so a retry starts a fresh
-        // transaction rather than re-running inside the failed one.
         advisor.setOrder(Ordered.LOWEST_PRECEDENCE - 100);
         log.info("Transient Mongo transaction retry enabled: maxAttempts={}", maxAttempts);
         return advisor;

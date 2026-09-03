@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.groups.Tuple.tuple;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.writeConflictAtCommit;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.writeConflictOnOutboxCreation;
 
@@ -20,6 +21,16 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.transaction.TransactionSystemException;
 import org.springframework.transaction.annotation.Transactional;
+import uk.gov.defra.trade.imports.animals.notification.Commodity;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
+import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.Origin;
+import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 
 /**
  * Proves the retry advisor is actually applied to {@code @Transactional} beans in the real
@@ -29,9 +40,16 @@ import org.springframework.transaction.annotation.Transactional;
 class TransactionRetryAdvisorIT extends IntegrationBase {
 
     private static final String COLLECTION = "transaction_retry_probe";
+    private static final String NOTIFICATION_ENDPOINT = "/notifications";
 
     @Autowired
     private MongoTemplate mongoTemplate;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
+
+    @Autowired
+    private OutboxEventRepository outboxEventRepository;
 
     @Autowired
     private FlakyTransactionalService flakyTransactionalService;
@@ -41,12 +59,12 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
 
     @BeforeEach
     void setUp() {
-        // Created outside any transaction: creating a collection inside one is the very fault
-        // EUDPA-356 is about, and this probe should exercise the retry, not reproduce the cause.
         if (!mongoTemplate.collectionExists(COLLECTION)) {
             mongoTemplate.createCollection(COLLECTION);
         }
         mongoTemplate.remove(new Query(), COLLECTION);
+        notificationRepository.deleteAll();
+        outboxEventRepository.deleteAll();
         flakyTransactionalService.reset();
         transactionManager.failNextCommits(0);
     }
@@ -78,7 +96,6 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
         assertThatThrownBy(() -> flakyTransactionalService.recordAttempt("probe"))
             .isInstanceOf(TransactionSystemException.class);
 
-        // max-attempts is 3 in application-integration-test.yml.
         assertThat(flakyTransactionalService.attempts()).isEqualTo(3);
         assertThat(mongoTemplate.findAll(Document.class, COLLECTION)).isEmpty();
     }
@@ -93,6 +110,50 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
         assertThat(mongoTemplate.findAll(Document.class, COLLECTION))
             .singleElement()
             .satisfies(stored -> assertThat(stored.getInteger("attempt")).isEqualTo(2));
+    }
+
+    @Test
+    void put_shouldSucceedAndWriteOneOutboxEvent_whenTheCommitFailsTransientlyOnce() {
+        NotificationAggregate draft = createDraft();
+        String referenceNumber = draft.getReferenceNumber();
+        NotificationDto edit = NotificationDto.builder()
+            .referenceNumber(referenceNumber)
+            .origin(new Origin("GB", "no", "EDITED"))
+            .commodity(Commodity.builder().name("Live cattle").build())
+            .concurrencyToken(draft.getConcurrencyToken())
+            .build();
+        transactionManager.failNextCommits(1);
+
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
+            .bodyValue(SaveNotificationDto.of(edit))
+            .exchange()
+            .expectStatus().isOk();
+
+        assertThat(outboxEventRepository.findAll())
+            .extracting(OutboxEvent::getAggregateId, OutboxEvent::getEventType)
+            .containsExactlyInAnyOrder(
+                tuple(OutboxService.buildAggregateId(referenceNumber),
+                    OutboxEventType.NOTIFICATION_CREATED.value()),
+                tuple(OutboxService.buildAggregateId(referenceNumber),
+                    OutboxEventType.NOTIFICATION_EDITED.value()));
+    }
+
+    private NotificationAggregate createDraft() {
+        Origin origin = new Origin();
+        origin.setCountryCode("GB");
+        NotificationDto dto = NotificationDto.builder()
+            .origin(origin)
+            .commodity(Commodity.builder().name("Live cattle").build())
+            .build();
+
+        return webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(dto))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationAggregate.class)
+            .returnResult().getResponseBody();
     }
 
     @TestConfiguration
@@ -111,11 +172,6 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
         }
     }
 
-    /**
-     * Fails the commit itself, the way a WriteConflict raised at commit time reaches Spring. The
-     * base class turns anything thrown here into the {@link TransactionSystemException} the
-     * application sees in production.
-     */
     static class CommitFailingTransactionManager extends MongoTransactionManager {
 
         private final AtomicInteger commitFailuresRemaining = new AtomicInteger();
