@@ -980,14 +980,52 @@ class NotificationIT extends IntegrationBase {
         stubAddressBook(ADDRESS_BOOK_JSON.replace("\"deleted\": false", "\"deleted\": true"), 200);
         String referenceNumber = createNotificationWithReferencedConsignor();
 
-        // When & Then
+        // When & Then — the rejection names the role, so the caller knows which one to correct,
+        // and carries the address id so the cause is diagnosable.
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
             .bodyValue(Map.of("organisationId", ORG_ID))
             .exchange()
             .expectStatus().isBadRequest()
             .expectBody()
-            .jsonPath("$.detail").value(Matchers.containsString(ADDRESS_ID));
+            .jsonPath("$.detail").value(Matchers.containsString("consignor"))
+            .jsonPath("$.errors.consignor[0]").value(Matchers.containsString(ADDRESS_ID));
+
+        // The draft's own NotificationCreated event stays; only the submission must not be emitted.
+        assertThat(outboxEventRepository.findAll())
+            .noneMatch(e -> e.getEventType().equals(OutboxEventType.NOTIFICATION_SUBMITTED.value()));
+        assertThat(notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow()
+            .getStatus()).isEqualTo(NotificationStatus.DRAFT);
+    }
+
+    @Test
+    void submit_shouldName_everyRole_whenSeveralReferencedAddressesAreDeleted() {
+        // Given — two roles reference addresses that have both since been deleted. Reporting only
+        // the first would send the submitter round the loop once per bad reference.
+        String secondAddressId = "665f1c2ab3e4d51a2c9d0e88";
+        String deleted = ADDRESS_BOOK_JSON.replace("\"deleted\": false", "\"deleted\": true");
+        stubAddressBookFor(ADDRESS_ID, deleted, 200);
+        stubAddressBookFor(secondAddressId, deleted.replace(ADDRESS_ID, secondAddressId), 200);
+
+        NotificationDto dto = createNotificationDto("CH", "Live cattle");
+        dto.setConsignor(ConsignmentParty.reference(ADDRESS_ID));
+        dto.setImporter(ConsignmentParty.reference(secondAddressId));
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(dto))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        // When & Then — both roles come back, each with the address it refers to.
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .bodyValue(Map.of("organisationId", ORG_ID))
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.errors.consignor[0]").value(Matchers.containsString(ADDRESS_ID))
+            .jsonPath("$.errors.importer[0]").value(Matchers.containsString(secondAddressId));
 
         // NOTIFICATION_CREATED was written when the draft was created; no NOTIFICATION_SUBMITTED
         // because the submit failed before the outbox write.
@@ -2288,14 +2326,18 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
     }
 
+    private void stubAddressBook(String body, int statusCode) {
+        stubAddressBookFor(ADDRESS_ID, body, statusCode);
+    }
+
     /** The address book is scoped by organisation in both the path and the header, and the stub
      * matches on both — a resolve that sent the wrong organisation would miss this stub rather than
      * quietly return someone else's address. */
-    private void stubAddressBook(String body, int statusCode) {
+    private void stubAddressBookFor(String addressId, String body, int statusCode) {
         usingStub()
             .when(request()
                 .withMethod("GET")
-                .withPath("/organisation/" + ORG_ID + "/addresses/" + ADDRESS_ID)
+                .withPath("/organisation/" + ORG_ID + "/addresses/" + addressId)
                 .withHeader("Trade-Imports-Organisation-Id", ORG_ID))
             .respond(response()
                 .withStatusCode(statusCode)

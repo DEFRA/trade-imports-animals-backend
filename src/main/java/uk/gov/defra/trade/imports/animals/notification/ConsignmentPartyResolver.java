@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import uk.gov.defra.trade.imports.animals.addressbook.AddressBookClient;
 import uk.gov.defra.trade.imports.animals.addressbook.AddressBookRecord;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
+import uk.gov.defra.trade.imports.animals.exceptions.UnresolvableConsignmentPartyException;
 
 /**
  * Fills in the details of parties held as address-book references, on the one path that has to
@@ -33,19 +34,28 @@ import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
  *
  * <p>A miss depends on the event: {@link #resolveForSubmission} fails, because a GBNAG document
  * must not carry a nameless party; {@link #resolveForDraft} leaves the role blank, so a deleted
- * address does not block a draft save.
+ * address does not block a draft save. A failing submit reports every role that could not be
+ * resolved, not just the first, so the caller can correct them in one pass.
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class ConsignmentPartyResolver {
 
+    // The four roles that can hold a reference, named as the notification exposes them, so a
+    // rejected submit points at the field the caller sent.
+    private static final String CONSIGNOR = "consignor";
+    private static final String CONSIGNEE = "consignee";
+    private static final String IMPORTER = "importer";
+    private static final String DESTINATION = "destination";
+
     private final AddressBookClient addressBookClient;
 
     /**
      * Resolves address-book references for a <b>submission</b> — the event that puts the party on a
      * GBNAG document. Every reference must resolve: a miss fails the submit rather than transmitting
-     * {@code name=null} / {@code postalAddress=null}, and {@code organisationId} is required.
+     * {@code name=null} / {@code postalAddress=null}, and {@code organisationId} is required. The
+     * failure names every unresolved role, in role order.
      *
      * <p>Mutates the given instance, so pass a copy — what is stored must keep the reference alone.
      */
@@ -81,16 +91,21 @@ public class ConsignmentPartyResolver {
                 "Cannot resolve address-book parties for outbox transmission: organisation id is required");
         }
         Map<String, Optional<ConsignmentParty>> lookups = lookUpAll(addressIds, organisationId);
-        // Assigned in a fixed role order, so the reference a failed submit names is the same one
-        // every time regardless of which lookup finished first.
+        // Assigned in a fixed role order, so a failed submit names the same roles in the same
+        // order every time regardless of which lookup finished first.
+        Map<String, String> unresolved = new LinkedHashMap<>();
         notification.setConsignor(
-            resolveIfReference(notification.getConsignor(), failOnMiss, lookups));
+            resolveIfReference(CONSIGNOR, notification.getConsignor(), lookups, unresolved));
         notification.setConsignee(
-            resolveIfReference(notification.getConsignee(), failOnMiss, lookups));
+            resolveIfReference(CONSIGNEE, notification.getConsignee(), lookups, unresolved));
         notification.setImporter(
-            resolveIfReference(notification.getImporter(), failOnMiss, lookups));
+            resolveIfReference(IMPORTER, notification.getImporter(), lookups, unresolved));
         notification.setDestination(
-            resolveIfReference(notification.getDestination(), failOnMiss, lookups));
+            resolveIfReference(DESTINATION, notification.getDestination(), lookups, unresolved));
+        if (failOnMiss && !unresolved.isEmpty()) {
+            // Not logged here: the exception handler logs the rejected submit at WARN.
+            throw new UnresolvableConsignmentPartyException(unresolved);
+        }
         return notificationAggregate;
     }
 
@@ -139,21 +154,18 @@ public class ConsignmentPartyResolver {
     }
 
     private ConsignmentParty resolveIfReference(
+        String role,
         ConsignmentParty party,
-        boolean failOnMiss,
-        Map<String, Optional<ConsignmentParty>> lookups) {
+        Map<String, Optional<ConsignmentParty>> lookups,
+        Map<String, String> unresolved) {
         if (party == null || party.getAddressId() == null) {
             return party;
         }
         String addressId = party.getAddressId();
         Optional<ConsignmentParty> resolved =
             lookups.getOrDefault(addressId, Optional.empty());
-        if (resolved.isEmpty() && failOnMiss) {
-            log.error(
-                "Address-book party could not be resolved for outbox (addressId={})", addressId);
-            throw new BadRequestException(
-                "Cannot submit notification: address-book party could not be resolved (addressId="
-                    + addressId + ")");
+        if (resolved.isEmpty()) {
+            unresolved.put(role, addressId);
         }
         return resolved.orElse(null);
     }
