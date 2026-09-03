@@ -16,7 +16,7 @@ import org.springframework.retry.support.RetryTemplate;
 @Slf4j
 public class CommitRetryingMongoTransactionManager extends MongoTransactionManager {
 
-    private final RetryTemplate commitRetry;
+    private final transient RetryTemplate commitRetry;
 
     public CommitRetryingMongoTransactionManager(MongoDatabaseFactory databaseFactory,
         long retryTimeoutMs, long retryBackoffMs) {
