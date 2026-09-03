@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.outbox;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
@@ -14,4 +15,6 @@ public interface OutboxEventRepository extends MongoRepository<OutboxEvent, Stri
     List<OutboxEvent> findAllByAggregateIdOrderByAggregateVersionAsc(String aggregateId);
 
     List<OutboxEvent> findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(Pageable pageable);
+
+    long countByAggregateIdAndEventTypeIn(String aggregateId, Collection<String> eventTypes);
 }

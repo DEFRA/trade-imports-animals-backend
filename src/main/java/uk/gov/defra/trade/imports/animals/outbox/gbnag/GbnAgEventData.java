@@ -13,14 +13,14 @@ public record GbnAgEventData(
     public static final String MODEL_VALUE = "defra/certificate-internal/1";
     public static final String TYPE_VALUE = "gbn-ag";
 
-    public static GbnAgEventData from(NotificationAggregate notificationAggregate) {
+    public static GbnAgEventData from(NotificationAggregate notificationAggregate, Integer versionId) {
         if (notificationAggregate == null) {
             return null;
         }
         return new GbnAgEventData(
             MODEL_VALUE,
             TYPE_VALUE,
-            ExchangedDocument.from(notificationAggregate),
+            ExchangedDocument.from(notificationAggregate, versionId),
             SpecifiedConsignment.from(notificationAggregate.requireNotification()));
     }
 }

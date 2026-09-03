@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.outbox;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -434,6 +435,85 @@ class OutboxServiceTest {
                     assertThat(owe.getAggregateVersion()).isEqualTo(1L);
                     assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
                 });
+        }
+    }
+
+    @Nested
+    @SuppressWarnings("unchecked")
+    class VersionId {
+
+        private static final String AGG_ID = "Imports.Notification.GBN-AG.GBN-AG-26-VID001";
+        private static final String REF = "GBN-AG-26-VID001";
+
+        private void givenSubmissionCount(long count) {
+            when(outboxEventRepository.countByAggregateIdAndEventTypeIn(eq(AGG_ID), any()))
+                .thenReturn(count);
+        }
+
+        private Map<String, Object> exchangedDocumentFor(OutboxEventType eventType, NotificationStatus status) {
+            NotificationAggregate aggregate = NotificationAggregate.builder()
+                .referenceNumber(REF)
+                .status(status)
+                .notification(Notification.builder().build())
+                .build();
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(AGG_ID))
+                .thenReturn(Optional.empty());
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            outboxService.appendEvent(aggregate, eventType, "trace", null);
+
+            ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+            verify(outboxEventRepository).save(captor.capture());
+            return (Map<String, Object>) captor.getValue().getData().get("exchangedDocument");
+        }
+
+        @Test
+        void versionId_shouldBeNull_forNotificationCreated() {
+            // No count query needed — NOTIFICATION_CREATED is pre-submission, versionId always absent
+            Map<String, Object> doc = exchangedDocumentFor(OutboxEventType.NOTIFICATION_CREATED, NotificationStatus.DRAFT);
+            assertThat(doc).doesNotContainKey("versionId");
+        }
+
+        @Test
+        void versionId_shouldBeNull_forNotificationDeleted() {
+            // No count query needed — NOTIFICATION_DELETED is from DRAFT, versionId always absent
+            Map<String, Object> doc = exchangedDocumentFor(OutboxEventType.NOTIFICATION_DELETED, NotificationStatus.DELETED);
+            assertThat(doc).doesNotContainKey("versionId");
+        }
+
+        @Test
+        void versionId_shouldBeOne_forFirstNotificationSubmitted() {
+            givenSubmissionCount(0);
+            Map<String, Object> doc = exchangedDocumentFor(OutboxEventType.NOTIFICATION_SUBMITTED, NotificationStatus.SUBMITTED);
+            assertThat(doc.get("versionId")).isEqualTo(1);
+        }
+
+        @Test
+        void versionId_shouldIncrementForNotificationSubmissionAmended() {
+            givenSubmissionCount(1); // one prior NOTIFICATION_SUBMITTED
+            Map<String, Object> doc = exchangedDocumentFor(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, NotificationStatus.SUBMITTED);
+            assertThat(doc.get("versionId")).isEqualTo(2);
+        }
+
+        @Test
+        void versionId_shouldCarryForward_forNotificationAmendmentRequested() {
+            givenSubmissionCount(1); // one prior NOTIFICATION_SUBMITTED
+            Map<String, Object> doc = exchangedDocumentFor(OutboxEventType.NOTIFICATION_AMENDMENT_REQUESTED, NotificationStatus.AMEND);
+            assertThat(doc.get("versionId")).isEqualTo(1);
+        }
+
+        @Test
+        void versionId_shouldCarryForward_forNotificationAmendmentCancelled() {
+            givenSubmissionCount(1);
+            Map<String, Object> doc = exchangedDocumentFor(OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED, NotificationStatus.SUBMITTED);
+            assertThat(doc.get("versionId")).isEqualTo(1);
+        }
+
+        @Test
+        void versionId_shouldCarryForward_forNotificationSubmissionDeleted() {
+            givenSubmissionCount(2); // two prior submissions
+            Map<String, Object> doc = exchangedDocumentFor(OutboxEventType.NOTIFICATION_SUBMISSION_DELETED, NotificationStatus.DELETED);
+            assertThat(doc.get("versionId")).isEqualTo(2);
         }
     }
 

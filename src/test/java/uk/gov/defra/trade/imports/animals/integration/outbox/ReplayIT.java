@@ -43,18 +43,13 @@ class ReplayIT extends OutboxIntegrationBase {
     }
 
     @Test
-    void replay_shouldRepublishEventToSns_andNotMutateOutboxPublishedAt() throws Exception {
-        // Given — submit a notification so an outbox event exists, then publish it normally
-        String referenceNumber = createAndSubmitNotification("trace-replay-001");
-        outboxPublishService.publishUnpublishedEvents();
+    void replay_shouldRepublishEventToSns() throws Exception {
+        // Given — an outbox event the poller has not published, so the replay is not a duplicate
+        String referenceNumber = createNewNotification("trace-replay-001").getReferenceNumber();
+        OutboxEvent event = outboxEventRepository.findAll().getFirst();
+        assertThat(event.getPublishedAt()).isNull();
 
-        OutboxEvent eventAfterNormalPublish = outboxEventRepository.findAll().getFirst();
-        Instant originalPublishedAt = eventAfterNormalPublish.getPublishedAt();
-        assertThat(originalPublishedAt).isNotNull();
-
-        purgeQueue();
-
-        // When
+        // When — replay all events for this notification (CREATED)
         ReplayResponse response = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/replay", referenceNumber)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
@@ -65,26 +60,51 @@ class ReplayIT extends OutboxIntegrationBase {
             .expectBody(ReplayResponse.class)
             .returnResult().getResponseBody();
 
-        // Then — 1 event replayed, delivered to SQS
+        // Then — 1 events replayed, delivered to SQS
         assertThat(response).isNotNull();
         assertThat(response.eventsReplayed()).isEqualTo(1);
 
-        Message sqsMessage = awaitSqsMessage();
-        JsonNode snsEnvelope = objectMapper.readTree(sqsMessage.body());
+        List<Message> messages = awaitSqsMessages(1);
+        JsonNode snsEnvelope = snsEnvelopeByAggregateVersion(messages, 1L);
         JsonNode payload = objectMapper.readTree(snsEnvelope.get("Message").asText());
-        assertThat(payload.get("eventId").asText()).isEqualTo(eventAfterNormalPublish.getEventId());
+        assertThat(payload.get("eventId").asText()).isEqualTo(event.getEventId());
         assertThat(payload.get("aggregateVersion").asLong()).isEqualTo(1L);
+    }
 
-        // publishedAt on the outbox event is NOT mutated by replay
+    /**
+     * Delivery is asserted separately in {@link #replay_shouldRepublishEventToSns()}: replaying an
+     * already-published event reuses its eventId as the deduplication id, so SNS FIFO suppresses
+     * the message for five minutes. Only the outbox state is assertable here.
+     */
+    @Test
+    void replay_shouldNotMutateOutboxPublishedAt() {
+        // Given — submit a notification so an outbox event exists, then publish it normally
+        String referenceNumber = createAndSubmitNotification("trace-replay-002");
+        outboxPublishService.publishUnpublishedEvents();
+
+        Instant originalPublishedAt = outboxEventRepository.findAll().getFirst().getPublishedAt();
+        assertThat(originalPublishedAt).isNotNull();
+
+        // When
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/replay", referenceNumber)
+            .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
+            .header(HEADER_TRACE_ID, "trace-replay-002")
+            .header("User-Id", "user-replay-002")
+            .exchange()
+            .expectStatus().isOk();
+
+        // Then — publishedAt on the outbox event is NOT mutated by replay
         OutboxEvent eventAfterReplay = outboxEventRepository.findAll().getFirst();
         assertThat(eventAfterReplay.getPublishedAt()).isEqualTo(originalPublishedAt);
     }
 
     @Test
     void replay_shouldRepublishMultipleEventsInVersionOrder() throws Exception {
-        // Given — two outbox events (submit, reset to DRAFT, submit again)
+        // Given — create (v1), submit (v2), direct DRAFT reset, submit again (v3)
         String referenceNumber = createAndSubmitNotification("trace-v1");
-        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(
+            referenceNumber).orElseThrow();
         notificationAggregate.setStatus(NotificationStatus.DRAFT);
         notificationRepository.save(notificationAggregate);
 
@@ -93,7 +113,7 @@ class ReplayIT extends OutboxIntegrationBase {
             .header(HEADER_TRACE_ID, "trace-v2")
             .exchange().expectStatus().isOk();
 
-        assertThat(outboxEventRepository.count()).isEqualTo(2);
+        assertThat(outboxEventRepository.count()).isEqualTo(3);
 
         // When
         ReplayResponse response = webClient("NoAuth")
@@ -106,12 +126,12 @@ class ReplayIT extends OutboxIntegrationBase {
             .expectBody(ReplayResponse.class)
             .returnResult().getResponseBody();
 
-        // Then — both events delivered to SQS
+        // Then — all 3 events replayed and delivered to SQS
         assertThat(response).isNotNull();
-        assertThat(response.eventsReplayed()).isEqualTo(2);
+        assertThat(response.eventsReplayed()).isEqualTo(3);
 
-        List<Message> messages = awaitSqsMessages(2);
-        assertThat(messages).hasSize(2);
+        List<Message> messages = awaitSqsMessages(3);
+        assertThat(messages).hasSize(3);
         for (Message message : messages) {
             JsonNode payload = objectMapper.readTree(
                 objectMapper.readTree(message.body()).get("Message").asText());
@@ -122,6 +142,7 @@ class ReplayIT extends OutboxIntegrationBase {
 
     @Test
     void replay_shouldWriteAuditRecord() {
+        // create → NOTIFICATION_CREATED (v1), submit → NOTIFICATION_SUBMITTED (v2)
         String referenceNumber = createAndSubmitNotification("trace-audit");
 
         webClient("NoAuth")
@@ -139,7 +160,7 @@ class ReplayIT extends OutboxIntegrationBase {
         assertThat(audit.getResult()).isEqualTo(Result.SUCCESS);
         assertThat(audit.getNotificationReferenceNumbers()).containsExactly(referenceNumber);
         assertThat(audit.getNumberOfNotifications()).isEqualTo(1);
-        assertThat(audit.getNumberOfEvents()).isEqualTo(1);
+        assertThat(audit.getNumberOfEvents()).isEqualTo(2);
         assertThat(audit.getTraceId()).isEqualTo("trace-audit");
         assertThat(audit.getUserId()).isEqualTo("user-audit-001");
         assertThat(audit.getTimestamp()).isNotNull();
@@ -147,7 +168,7 @@ class ReplayIT extends OutboxIntegrationBase {
 
     @Test
     void replay_shouldReturn404_whenNoOutboxEventsExist() {
-        // Given — notification exists but was never submitted (no outbox events)
+        // Given — notification exists but outbox events have been cleared (no events to replay)
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
@@ -155,6 +176,8 @@ class ReplayIT extends OutboxIntegrationBase {
             .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
+        // Clear the NOTIFICATION_CREATED event so the replay endpoint has nothing to replay
+        outboxEventRepository.deleteAll();
         assertThat(outboxEventRepository.count()).isZero();
 
         webClient("NoAuth")

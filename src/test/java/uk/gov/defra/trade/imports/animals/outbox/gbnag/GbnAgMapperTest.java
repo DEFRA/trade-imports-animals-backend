@@ -32,7 +32,7 @@ class GbnAgMapperTest {
     @Nested
     class HappyPath {
 
-        private final GbnAgEventData result = mapper.toGbnAgEventData(fullyPopulatedNotification());
+        private final GbnAgEventData result = mapper.toGbnAgEventData(fullyPopulatedNotification(), 1);
 
         @Test
         void shouldSetConstantModelAndType() {
@@ -229,7 +229,7 @@ class GbnAgMapperTest {
                 .referenceNumber("GBN-AG-26-MIN001")
                 .status(NotificationStatus.DRAFT)
                 .notification(Notification.builder().build())
-                .build());
+                .build(), null);
 
         @Test
         void shouldStillSetConstantsAndIdentifier() {
@@ -237,7 +237,7 @@ class GbnAgMapperTest {
             assertThat(result.type()).isEqualTo("gbn-ag");
             assertThat(result.exchangedDocument().identifier()).isEqualTo("GBN-AG-26-MIN001");
             assertThat(result.exchangedDocument().notificationStatusCode()).isEqualTo("DRAFT");
-            assertThat(result.exchangedDocument().versionId()).isEqualTo(1);
+            assertThat(result.exchangedDocument().versionId()).isNull();
         }
 
         @Test
@@ -274,7 +274,7 @@ class GbnAgMapperTest {
 
     @Test
     void toGbnAgEventData_shouldReturnNull_whenNotificationNull() {
-        assertThat(mapper.toGbnAgEventData(null)).isNull();
+        assertThat(mapper.toGbnAgEventData(null, null)).isNull();
     }
 
     @ParameterizedTest
@@ -287,7 +287,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        Integer modeCode = mapper.toGbnAgEventData(notificationAggregate)
+        Integer modeCode = mapper.toGbnAgEventData(notificationAggregate, 1)
             .specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst().modeCode();
 
         assertThat(modeCode).isEqualTo(expectedCode);
@@ -307,7 +307,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate)
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
 
@@ -328,7 +328,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate)
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
 
@@ -401,7 +401,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate)
+        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1)
             .specifiedConsignment().consignorParty();
 
         assertThat(consignor.name()).isNull();
@@ -427,7 +427,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate)
+        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1)
             .specifiedConsignment().consignorParty();
 
         assertThat(consignor.name()).isEqualTo("Astra Rosales");
@@ -451,7 +451,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate)
+        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1)
             .specifiedConsignment().consignorParty();
 
         assertThat(consignor.definedContact()).singleElement().satisfies(contact -> {
@@ -475,7 +475,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate)
+        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1)
             .specifiedConsignment().consignorParty();
 
         assertThat(consignor.definedContact()).singleElement().satisfies(contact -> {

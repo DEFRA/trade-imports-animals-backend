@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -168,7 +169,7 @@ class NotificationServiceTest {
             assertThat(result.getNotification().getOrigin()).isEqualTo(origin);
             verify(referenceNumberGenerator).generate();
             verify(notificationRepository, times(1)).save(any(NotificationAggregate.class));
-            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
+            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_CREATED), any(), any());
         }
 
         @Test
@@ -916,6 +917,8 @@ class NotificationServiceTest {
 
         @BeforeEach
         void stubCreate() {
+            lenient().when(lockProvider.lock(any()))
+                .thenReturn(Optional.of(mock(SimpleLock.class)));
             when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-TTL001");
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -1265,7 +1268,7 @@ class NotificationServiceTest {
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notificationAggregate);
-            verify(outboxService).appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-002", null);
+            verify(outboxService).appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-002", null);
         }
 
         @Test
@@ -1353,7 +1356,7 @@ class NotificationServiceTest {
             assertThat(result.getUpdated()).isNotNull();
             assertThat(result.getSubmittedNotificationBaseline()).isNotNull();
             verify(notificationRepository).save(notificationAggregate);
-            verify(outboxService).appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-1", null);
+            verify(outboxService).appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_AMENDMENT_REQUESTED, "trace-amd-1", null);
         }
 
         @Test
@@ -1406,7 +1409,7 @@ class NotificationServiceTest {
             // Then — save must happen before the outbox event is written
             InOrder inOrder = inOrder(notificationRepository, outboxService);
             inOrder.verify(notificationRepository).save(notificationAggregate);
-            inOrder.verify(outboxService).appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-amd-2", null);
+            inOrder.verify(outboxService).appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_AMENDMENT_REQUESTED, "trace-amd-2", null);
         }
 
         @Test
@@ -1535,6 +1538,12 @@ class NotificationServiceTest {
     @Nested
     class CancelAmendNotification {
 
+        @BeforeEach
+        void setUp() {
+            lenient().when(lockProvider.lock(any()))
+                .thenReturn(Optional.of(mock(SimpleLock.class)));
+        }
+
         @Test
         void cancelAmendNotification_shouldRestoreBaselineAndSetSubmitted() {
             // Given
@@ -1558,7 +1567,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            NotificationAggregate result = notificationService.cancelAmendNotification(referenceNumber);
+            NotificationAggregate result = notificationService.cancelAmendNotification(referenceNumber, "trace", null);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
@@ -1566,7 +1575,7 @@ class NotificationServiceTest {
             assertThat(result.getNotification().getOrigin().getInternalReference()).isEqualTo("ORIGINAL-REF");
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notificationAggregate);
-            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
+            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED), any(), any());
         }
 
         @Test
@@ -1583,7 +1592,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notificationAggregate));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.cancelAmendNotification(referenceNumber))
+            assertThatThrownBy(() -> notificationService.cancelAmendNotification(referenceNumber, "trace", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("SUBMITTED");
 
@@ -1605,7 +1614,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(notificationAggregate));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.cancelAmendNotification(referenceNumber))
+            assertThatThrownBy(() -> notificationService.cancelAmendNotification(referenceNumber, "trace", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("baseline");
 
@@ -1620,7 +1629,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.cancelAmendNotification("GBN-AG-26-ABSENT"))
+                () -> notificationService.cancelAmendNotification("GBN-AG-26-ABSENT", "trace", null))
                 .isInstanceOf(NotFoundException.class);
 
             verify(notificationRepository, never()).save(any());
@@ -1629,6 +1638,12 @@ class NotificationServiceTest {
 
     @Nested
     class CopyNotification {
+
+        @BeforeEach
+        void setUp() {
+            lenient().when(lockProvider.lock(any()))
+                .thenReturn(Optional.of(mock(SimpleLock.class)));
+        }
 
         @Test
         void copyNotification_shouldCreateNewDraftWithNewReferenceNumber() {
@@ -1657,7 +1672,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(NotificationAggregate.class))).thenReturn(created);
 
             // When
-            NotificationAggregate result = notificationService.copyNotification(sourceRef, 0L);
+            NotificationAggregate result = notificationService.copyNotification(sourceRef, 0L, "trace", null);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
@@ -1691,7 +1706,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(NotificationAggregate.class))).thenReturn(created);
 
             // When
-            NotificationAggregate result = notificationService.copyNotification(sourceRef, 0L);
+            NotificationAggregate result = notificationService.copyNotification(sourceRef, 0L, "trace", null);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
@@ -1740,7 +1755,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef, 0L);
+            notificationService.copyNotification(sourceRef, 0L, "trace", null);
 
             // Then — capture what was saved and assert retained fields
             ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
@@ -1792,7 +1807,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef, 0L);
+            notificationService.copyNotification(sourceRef, 0L, "trace", null);
 
             // Then — excluded fields must be null on the saved copy
             ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
@@ -1838,7 +1853,7 @@ class NotificationServiceTest {
             when(referenceNumberGenerator.generate()).thenReturn(newRef);
             when(notificationRepository.save(any(NotificationAggregate.class))).thenReturn(created);
 
-            NotificationAggregate result = notificationService.copyNotification(sourceRef, 0L);
+            NotificationAggregate result = notificationService.copyNotification(sourceRef, 0L, "trace", null);
 
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
             assertThat(result.getStatus()).isEqualTo(DRAFT);
@@ -1852,7 +1867,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, 0L))
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, 0L, "trace", null))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(sourceRef);
 
@@ -1872,7 +1887,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(deleted));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, 0L))
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, 0L, "trace", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DELETED");
 
@@ -1895,7 +1910,7 @@ class NotificationServiceTest {
             // When / Then — a null expectedVersion is a caller-programming error; Spring
             // rejects it at the HTTP boundary (@RequestParam Long is required), and the
             // service defends the same invariant.
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, null))
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, null, "trace", null))
                 .isInstanceOf(IllegalStateException.class);
 
             verify(notificationRepository, never()).save(any());
@@ -1915,10 +1930,36 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(source));
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, 0L))
+            assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, 0L, "trace", null))
                 .isInstanceOf(IllegalStateException.class);
 
             verify(notificationRepository, never()).save(any());
+        }
+
+        @Test
+        void copyNotification_shouldEmitNotificationCreated_forNewNotification() {
+            // Given
+            String sourceRef = "GBN-AG-26-CPY-SRC";
+            String newRef = "GBN-AG-26-CPY-NEW";
+            NotificationAggregate source = NotificationAggregate.builder()
+                .referenceNumber(sourceRef)
+                .status(NotificationStatus.DRAFT)
+                .notification(Notification.builder().build())
+                .concurrencyToken(0L)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+            when(referenceNumberGenerator.generate()).thenReturn(newRef);
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.copyNotification(sourceRef, 0L, "trace", null);
+
+            // Then — the new notification emits NOTIFICATION_CREATED; the source produces no event
+            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_CREATED), any(), any());
+            verifyNoMoreInteractions(outboxService);
         }
     }
 
@@ -2194,7 +2235,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            NotificationAggregate result = notificationService.cancelAmendNotification(ref);
+            NotificationAggregate result = notificationService.cancelAmendNotification(ref, "trace", null);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
@@ -2318,7 +2359,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(alreadyDeleted));
 
             // When
-            NotificationAggregate result = notificationService.softDeleteNotification(ref);
+            NotificationAggregate result = notificationService.softDeleteNotification(ref, "trace", null);
 
             // Then — returns the existing notification unchanged, no save.
             assertThat(result).isSameAs(alreadyDeleted);
@@ -2352,7 +2393,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.copyNotification(sourceRef, 0L);
+            notificationService.copyNotification(sourceRef, 0L, "trace", null);
 
             // Then — the saved (new) notification carries the source fulfilments.
             NotificationAggregate saved = captor.getValue();
@@ -2366,6 +2407,12 @@ class NotificationServiceTest {
 
     @Nested
     class SoftDeleteNotification {
+
+        @BeforeEach
+        void setUp() {
+            lenient().when(lockProvider.lock(any()))
+                .thenReturn(Optional.of(mock(SimpleLock.class)));
+        }
 
         @Test
         void softDeleteNotification_shouldSetStatusToDeletedAndSave_whenDraft() {
@@ -2384,7 +2431,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            NotificationAggregate result = notificationService.softDeleteNotification(referenceNumber);
+            NotificationAggregate result = notificationService.softDeleteNotification(referenceNumber, "trace", null);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
@@ -2409,7 +2456,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            NotificationAggregate result = notificationService.softDeleteNotification(referenceNumber);
+            NotificationAggregate result = notificationService.softDeleteNotification(referenceNumber, "trace", null);
 
             // Then
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
@@ -2435,11 +2482,80 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-            NotificationAggregate result = notificationService.softDeleteNotification(referenceNumber);
+            NotificationAggregate result = notificationService.softDeleteNotification(referenceNumber, "trace", null);
 
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notificationAggregate);
+        }
+
+        @Test
+        void softDeleteNotification_shouldEmitNotificationDeleted_whenDraft() {
+            // Given
+            String referenceNumber = "GBN-AG-26-DEL-DRAFT";
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .id("notif-id-del-draft")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .notification(Notification.builder().build())
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notificationAggregate));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.softDeleteNotification(referenceNumber, "trace", null);
+
+            // Then — DRAFT → DELETED emits NOTIFICATION_DELETED (no prior submission)
+            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_DELETED), any(), any());
+        }
+
+        @Test
+        void softDeleteNotification_shouldEmitNotificationSubmissionDeleted_whenSubmitted() {
+            // Given
+            String referenceNumber = "GBN-AG-26-DEL-SUB";
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .id("notif-id-del-sub")
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .notification(Notification.builder().build())
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notificationAggregate));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.softDeleteNotification(referenceNumber, "trace", null);
+
+            // Then — SUBMITTED → DELETED emits NOTIFICATION_SUBMISSION_DELETED
+            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_SUBMISSION_DELETED), any(), any());
+        }
+
+        @Test
+        void softDeleteNotification_shouldEmitNotificationSubmissionDeleted_whenAmend() {
+            // Given
+            String referenceNumber = "GBN-AG-26-DEL-AMD";
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .id("notif-id-del-amd")
+                .referenceNumber(referenceNumber)
+                .status(AMEND)
+                .notification(Notification.builder().build())
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notificationAggregate));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            notificationService.softDeleteNotification(referenceNumber, "trace", null);
+
+            // Then — AMEND → DELETED also emits NOTIFICATION_SUBMISSION_DELETED
+            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_SUBMISSION_DELETED), any(), any());
         }
 
         // NB: soft-delete on an already-DELETED notification is idempotent — returns the existing
@@ -2453,7 +2569,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber))
+            assertThatThrownBy(() -> notificationService.softDeleteNotification(referenceNumber, "trace", null))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(referenceNumber);
 

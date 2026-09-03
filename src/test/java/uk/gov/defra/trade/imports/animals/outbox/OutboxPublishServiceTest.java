@@ -33,10 +33,8 @@ import uk.gov.defra.trade.imports.animals.configuration.OutboxConfig;
 @ExtendWith(MockitoExtension.class)
 class OutboxPublishServiceTest {
 
-    private static final String TOPIC_ARN = "arn:aws:sns:eu-west-2:000000000000:test-topic";
-    private static final String FIFO_TOPIC_ARN =
-        "arn:aws:sns:eu-west-2:000000000000:test-topic.fifo";
-    
+    private static final String TOPIC_ARN = "arn:aws:sns:eu-west-2:000000000000:test-topic.fifo";
+
     @Mock
     private OutboxEventRepository outboxEventRepository;
 
@@ -78,6 +76,8 @@ class OutboxPublishServiceTest {
             verify(snsClient).publish(captor.capture());
             PublishRequest request = captor.getValue();
             assertThat(request.topicArn()).isEqualTo(TOPIC_ARN);
+            assertThat(request.messageGroupId()).isEqualTo("agg-a");
+            assertThat(request.messageDeduplicationId()).isEqualTo("event-1");
             assertPublishedEnvelope(request.message(), event);
             assertThat(request.messageAttributes().get(OutboxPublishService.ATTR_EVENT_TYPE).stringValue())
                 .isEqualTo(OutboxEventType.NOTIFICATION_SUBMITTED.value());
@@ -297,14 +297,13 @@ class OutboxPublishServiceTest {
         }
 
         @Test
-        void shouldSetFifoFields_whenTopicIsFifo() {
-            // Given
-            ObjectMapper objectMapper = createObjectMapper();
+        void shouldSetFifoFields_evenWhenTopicArnHasNoFifoSuffix() {
+            // Given — transport semantics must not be inferred from the ARN
             OutboxPublishService fifoService = new OutboxPublishService(
-                outboxEventRepository, snsClient, objectMapper,
+                outboxEventRepository, snsClient, createObjectMapper(),
                 new OutboxConfig(
                     new OutboxConfig.Poller(2000, 10, null, null, true),
-                    new OutboxConfig.Sns(FIFO_TOPIC_ARN)));
+                    new OutboxConfig.Sns("arn:aws:sns:eu-west-2:000000000000:no-suffix")));
             OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
             when(outboxEventRepository
                 .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))

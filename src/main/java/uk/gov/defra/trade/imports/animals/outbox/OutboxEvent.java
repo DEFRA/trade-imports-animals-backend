@@ -20,6 +20,8 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @CompoundIndex(name = "unpublished_poll",
     def = "{'publishedAt': 1, 'aggregateId': 1, 'aggregateVersion': 1}",
     partialFilter = "{'publishedAt': null}")
+@CompoundIndex(name = "aggregate_event_type",
+    def = "{'aggregateId': 1, 'eventType': 1}")
 @Data
 @Builder
 @NoArgsConstructor
