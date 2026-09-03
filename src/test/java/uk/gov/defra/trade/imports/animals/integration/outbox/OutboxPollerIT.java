@@ -3,11 +3,14 @@ package uk.gov.defra.trade.imports.animals.integration.outbox;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.PageRequest;
 import software.amazon.awssdk.services.sqs.model.Message;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
@@ -144,6 +147,23 @@ class OutboxPollerIT extends OutboxIntegrationBase {
     }
 
     @Test
+    void unpublishedEvents_shouldQueueOldestFirst_whenAggregateIdsSortAgainstWriteOrder() {
+        // Given — the older event belongs to the higher-sorting aggregate id
+        outboxEventRepository.save(
+            unpublishedEvent("zzz-aggregate", "event-older", Instant.parse("2026-01-15T10:00:00Z")));
+        outboxEventRepository.save(
+            unpublishedEvent("aaa-aggregate", "event-newer", Instant.parse("2026-01-15T10:00:05Z")));
+
+        // When
+        List<OutboxEvent> queued = outboxEventRepository
+            .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(PageRequest.of(0, 10));
+
+        // Then
+        assertThat(queued).extracting(OutboxEvent::getEventId)
+            .containsExactly("event-older", "event-newer");
+    }
+
+    @Test
     void publishUnpublishedEvents_shouldDeliverNotificationEditedToSns() throws Exception {
         // create → NOTIFICATION_CREATED (v1), page save → NOTIFICATION_EDITED (v2)
         String referenceNumber = createAndSaveNotification(TRACE_PREFIX + "edited-001");
@@ -228,6 +248,20 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         } finally {
             inFlight.forEach(this::deleteMessage);
         }
+    }
+
+    private static OutboxEvent unpublishedEvent(
+        String aggregateId, String eventId, Instant timestamp) {
+        return OutboxEvent.builder()
+            .eventId(eventId)
+            .aggregateId(aggregateId)
+            .aggregateType("Notification")
+            .subType("GBN-AG")
+            .aggregateVersion(1L)
+            .eventType("uk.gov.defra.imports.notification.NotificationCreated")
+            .timestamp(timestamp)
+            .data(Map.of("referenceNumber", eventId))
+            .build();
     }
 
     private String aggregateIdOf(Message message) throws Exception {

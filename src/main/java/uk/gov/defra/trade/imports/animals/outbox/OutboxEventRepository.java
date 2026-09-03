@@ -14,7 +14,7 @@ public interface OutboxEventRepository extends MongoRepository<OutboxEvent, Stri
 
     List<OutboxEvent> findAllByAggregateIdOrderByAggregateVersionAsc(String aggregateId);
 
-    List<OutboxEvent> findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(Pageable pageable);
+    List<OutboxEvent> findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(Pageable pageable);
 
     long countByAggregateIdAndEventTypeIn(String aggregateId, Collection<String> eventTypes);
 }

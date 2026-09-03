@@ -63,7 +63,7 @@ class OutboxPublishServiceTest {
             // Given
             OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
             when(outboxEventRepository
-                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
                 .thenReturn(List.of(event));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -95,7 +95,7 @@ class OutboxPublishServiceTest {
             // Given
             OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
             when(outboxEventRepository
-                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
                 .thenReturn(List.of(event));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -116,7 +116,7 @@ class OutboxPublishServiceTest {
             // Given
             OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
             when(outboxEventRepository
-                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
                 .thenReturn(List.of(event));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -132,7 +132,7 @@ class OutboxPublishServiceTest {
             // Given
             OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
             when(outboxEventRepository
-                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
                 .thenReturn(List.of(event));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -149,7 +149,7 @@ class OutboxPublishServiceTest {
         void shouldNotRepublish_whenAlreadyPublished() {
             // Given
             when(outboxEventRepository
-                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
                 .thenReturn(List.of());
 
             // When
@@ -166,7 +166,7 @@ class OutboxPublishServiceTest {
             OutboxEvent v1 = unpublishedEvent("agg-a", 1L, "ref-a", "trace-a");
             OutboxEvent v2 = unpublishedEvent("agg-a", 2L, "ref-a", "trace-b");
             when(outboxEventRepository
-                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
                 .thenReturn(List.of(v1, v2));
             when(snsClient.publish(any(PublishRequest.class)))
                 .thenThrow(SnsException.builder().message("SNS unavailable").build());
@@ -188,7 +188,7 @@ class OutboxPublishServiceTest {
             OutboxEvent v1 = unpublishedEvent("agg-a", 1L, "ref-a", "trace-a");
             OutboxEvent v2 = unpublishedEvent("agg-a", 2L, "ref-a", "trace-b");
             when(outboxEventRepository
-                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
                 .thenReturn(List.of(v1, v2));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -220,7 +220,7 @@ class OutboxPublishServiceTest {
             // Then
             assertThat(published).isZero();
             verify(outboxEventRepository, never())
-                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class));
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class));
         }
 
         @Test
@@ -229,7 +229,7 @@ class OutboxPublishServiceTest {
             OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
             event.setData(null);
             when(outboxEventRepository
-                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
                 .thenReturn(List.of(event));
 
             // When
@@ -253,7 +253,7 @@ class OutboxPublishServiceTest {
                 .metadata(null)
                 .build();
             when(outboxEventRepository
-                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
                 .thenReturn(List.of(event));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -277,7 +277,7 @@ class OutboxPublishServiceTest {
             // Given
             OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
             when(outboxEventRepository
-                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
                 .thenReturn(List.of(event));
             ObjectMapper failingMapper = mock(ObjectMapper.class);
             when(failingMapper.writeValueAsString(any()))
@@ -308,7 +308,7 @@ class OutboxPublishServiceTest {
                     new OutboxConfig.Sns("arn:aws:sns:eu-west-2:000000000000:no-suffix")));
             OutboxEvent event = unpublishedEvent("agg-a", 1L, "ref-001", "trace-001");
             when(outboxEventRepository
-                .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
                 .thenReturn(List.of(event));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -378,11 +378,57 @@ class OutboxPublishServiceTest {
             verify(snsClient, times(3)).publish(any(PublishRequest.class));
             verify(outboxEventRepository, times(2)).save(any());
         }
+
+        @Test
+        void shouldPublishOldestFirst_whenAggregateIdsSortAgainstWriteOrder() {
+            // Given — the older event belongs to the higher-sorting aggregate id
+            OutboxEvent older = unpublishedEvent("agg-z", 1L, "ref-z", "trace-z");
+            older.setEventId("event-older");
+            older.setTimestamp(Instant.parse("2026-01-15T10:00:00Z"));
+            OutboxEvent newer = unpublishedEvent("agg-a", 1L, "ref-a", "trace-a");
+            newer.setEventId("event-newer");
+            newer.setTimestamp(Instant.parse("2026-01-15T10:00:05Z"));
+            when(outboxEventRepository
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
+                .thenReturn(List.of(older, newer));
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            // When
+            int published = outboxPublishService.publishUnpublishedEvents();
+
+            // Then
+            assertThat(published).isEqualTo(2);
+            ArgumentCaptor<PublishRequest> captor = ArgumentCaptor.forClass(PublishRequest.class);
+            verify(snsClient, times(2)).publish(captor.capture());
+            assertThat(captor.getAllValues())
+                .extracting(PublishRequest::messageDeduplicationId)
+                .containsExactly("event-older", "event-newer");
+            assertThat(captor.getAllValues())
+                .extracting(PublishRequest::messageGroupId)
+                .containsExactly("agg-z", "agg-a");
+        }
+
+        @Test
+        void shouldKeepDrainingPastANullPayload_leavingOnlyThatEventUnpublished() {
+            // Given — 25 events waiting, the first of them with no payload
+            List<OutboxEvent> backlog = backlogOf(25);
+            backlog.getFirst().setData(null);
+            stubRepositoryServing(backlog);
+
+            // When
+            int published = outboxPublishService.publishUnpublishedEvents();
+
+            // Then
+            assertThat(published).isEqualTo(24);
+            assertThat(backlog.getFirst().getPublishedAt()).isNull();
+            assertThat(backlog.subList(1, 25)).allMatch(event -> event.getPublishedAt() != null);
+            verify(snsClient, times(24)).publish(any(PublishRequest.class));
+        }
     }
 
     private void stubRepositoryServing(List<OutboxEvent> backlog) {
         when(outboxEventRepository
-            .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(any(Pageable.class)))
+            .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(any(Pageable.class)))
             .thenAnswer(invocation -> backlog.stream()
                 .filter(event -> event.getPublishedAt() == null)
                 .limit(invocation.<Pageable>getArgument(0).getPageSize())
