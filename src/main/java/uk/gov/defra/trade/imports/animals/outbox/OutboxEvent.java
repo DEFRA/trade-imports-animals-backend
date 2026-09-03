@@ -17,8 +17,8 @@ import org.springframework.data.mongodb.core.mapping.Document;
 @CompoundIndex(name = "aggregate_version_uq",
     def = "{'aggregateId': 1, 'aggregateVersion': 1}",
     unique = true)
-@CompoundIndex(name = "unpublished_poll",
-    def = "{'publishedAt': 1, 'aggregateId': 1, 'aggregateVersion': 1}",
+@CompoundIndex(name = "unpublished_poll_order",
+    def = "{'publishedAt': 1, 'timestamp': 1, 'aggregateVersion': 1}",
     partialFilter = "{'publishedAt': null}")
 @CompoundIndex(name = "aggregate_event_type",
     def = "{'aggregateId': 1, 'eventType': 1}")

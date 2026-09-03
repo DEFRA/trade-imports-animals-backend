@@ -51,7 +51,7 @@ class OutboxReplayServiceTest {
     @BeforeEach
     void setUp() {
         OutboxConfig config = new OutboxConfig(
-            new OutboxConfig.Poller(2000, 10, null, null, true),
+            new OutboxConfig.Poller(2000, 10, 500, null, null, true),
             new OutboxConfig.Sns(TOPIC_ARN));
         outboxReplayService = new OutboxReplayService(
             outboxService, outboxPublishService, auditRepository, config);
