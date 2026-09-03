@@ -6,7 +6,9 @@ import com.mongodb.client.MongoClient;
 import com.mongodb.connection.ClusterDescription;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.MongoTransactionManager;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import uk.gov.defra.trade.imports.animals.configuration.CommitRetryingMongoTransactionManager;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -21,6 +23,14 @@ class MongoConfigIT extends IntegrationBase {
 
     @Autowired
     private MongoClient mongoClient;
+
+    @Autowired
+    private MongoTransactionManager transactionManager;
+
+    @Test
+    void transactionManager_shouldBeTheCommitRetryingManager() {
+        assertThat(transactionManager).isInstanceOf(CommitRetryingMongoTransactionManager.class);
+    }
 
     @Test
     void mongoTemplate_shouldBeConfigured() {

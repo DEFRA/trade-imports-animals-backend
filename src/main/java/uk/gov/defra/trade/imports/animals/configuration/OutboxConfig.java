@@ -11,7 +11,7 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Configuration for the transactional outbox SNS relay.
  *
- * <p>poll every 2 seconds, batch size 10.
+ * <p>poll every 2 seconds, batch size 10, at most 500 events published per poll.
  */
 @Validated
 @ConfigurationProperties(prefix = "outbox")
@@ -22,6 +22,7 @@ public record OutboxConfig(
     public record Poller(
         @Positive long intervalMs,
         @Positive int batchSize,
+        @Positive int maxEventsPerRun,
         Duration lockAtLeastFor,
         Duration lockAtMostFor,
         boolean enabled) {
@@ -32,6 +33,9 @@ public record OutboxConfig(
             }
             if (batchSize <= 0) {
                 batchSize = 10;
+            }
+            if (maxEventsPerRun <= 0) {
+                maxEventsPerRun = 500;
             }
             if (lockAtLeastFor == null) {
                 lockAtLeastFor = Duration.ofSeconds(1);

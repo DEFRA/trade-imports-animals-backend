@@ -32,7 +32,9 @@ public class OutboxPublishService {
     private final OutboxConfig outboxConfig;
 
     /**
-     * Publishes a batch of unpublished outbox events to SNS in aggregate version order.
+     * Publishes unpublished outbox events to SNS in the order they were written, taking further
+     * batches until the backlog is drained, a publish fails, or
+     * {@code outbox.poller.max-events-per-run} is reached.
      *
      * @return number of events successfully published in this run
      */
@@ -44,16 +46,38 @@ public class OutboxPublishService {
         }
 
         int batchSize = outboxConfig.poller().batchSize();
-        List<OutboxEvent> events = outboxEventRepository
-            .findByPublishedAtIsNullOrderByAggregateIdAscAggregateVersionAsc(
-                PageRequest.of(0, batchSize));
+        int maxEventsPerRun = outboxConfig.poller().maxEventsPerRun();
 
         int published = 0;
+        int handled = 0;
+        while (handled < maxEventsPerRun) {
+            int pageSize = Math.min(batchSize, maxEventsPerRun - handled);
+            List<OutboxEvent> events = outboxEventRepository
+                .findByPublishedAtIsNullOrderByTimestampAscAggregateVersionAsc(
+                    PageRequest.of(0, pageSize));
+            if (events.isEmpty()) {
+                break;
+            }
+            BatchOutcome outcome = publishBatch(events, topicArn);
+            published += outcome.published();
+            handled += outcome.published() + outcome.skipped();
+            if (outcome.stoppedOnError() || events.size() < pageSize) {
+                break;
+            }
+        }
+        return published;
+    }
+
+    private BatchOutcome publishBatch(List<OutboxEvent> events, String topicArn) {
+        int published = 0;
+        int skipped = 0;
+        boolean stoppedOnError = false;
         for (OutboxEvent event : events) {
             if (event.getData() == null) {
                 log.error(
                     "Skipping outbox event with null payload: eventId={} aggregateId={} version={}",
                     event.getEventId(), event.getAggregateId(), event.getAggregateVersion());
+                skipped++;
                 continue;
             }
             try {
@@ -68,17 +92,21 @@ public class OutboxPublishService {
                     "Outbox event payload is not serializable; manual investigation required: "
                         + "eventId={} aggregateId={} version={}",
                     event.getEventId(), event.getAggregateId(), event.getAggregateVersion(), e);
+                stoppedOnError = true;
                 break;
             } catch (SnsException e) {
                 event.setPublishedAt(null);
                 log.error("Failed to publish outbox event eventId={} aggregateId={} version={}: {}",
                     event.getEventId(), event.getAggregateId(), event.getAggregateVersion(),
                     e.getMessage(), e);
+                stoppedOnError = true;
                 break;
             }
         }
-        return published;
+        return new BatchOutcome(published, skipped, stoppedOnError);
     }
+
+    private record BatchOutcome(int published, int skipped, boolean stoppedOnError) {}
 
     void publishToSns(OutboxEvent event, String topicArn) throws JsonProcessingException {
         String messageBody = objectMapper.writeValueAsString(event);

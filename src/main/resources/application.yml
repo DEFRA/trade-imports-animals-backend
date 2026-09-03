@@ -153,11 +153,22 @@ notification:
       lock-at-least-for: 1s
       lock-at-most-for: 30s
 
+mongo:
+  transaction:
+    retry:
+      max-attempts: ${MONGO_TX_RETRY_MAX_ATTEMPTS:3}
+      initial-backoff-ms: ${MONGO_TX_RETRY_INITIAL_BACKOFF_MS:60}
+      max-backoff-ms: ${MONGO_TX_RETRY_MAX_BACKOFF_MS:500}
+    commit-retry:
+      timeout-ms: ${MONGO_TX_COMMIT_RETRY_TIMEOUT_MS:120000}
+      backoff-ms: ${MONGO_TX_COMMIT_RETRY_BACKOFF_MS:100}
+
 # Transactional outbox SNS relay (ADR-EUDP-001)
 outbox:
   poller:
     interval-ms: 2000
     batch-size: 10
+    max-events-per-run: ${OUTBOX_POLLER_MAX_EVENTS_PER_RUN:500}
     lock-at-least-for: 1s
     lock-at-most-for: 30s
     enabled: true
