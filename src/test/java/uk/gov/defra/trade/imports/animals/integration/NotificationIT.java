@@ -991,7 +991,9 @@ class NotificationIT extends IntegrationBase {
             .jsonPath("$.detail").value(Matchers.containsString("consignor"))
             .jsonPath("$.errors.consignor[0]").value(Matchers.containsString(ADDRESS_ID));
 
-        assertThat(outboxEventRepository.findAll()).isEmpty();
+        // The draft's own NotificationCreated event stays; only the submission must not be emitted.
+        assertThat(outboxEventRepository.findAll())
+            .noneMatch(e -> e.getEventType().equals(OutboxEventType.NOTIFICATION_SUBMITTED.value()));
         assertThat(notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow()
             .getStatus()).isEqualTo(NotificationStatus.DRAFT);
     }
