@@ -7,9 +7,12 @@ import static org.mockito.Mockito.mock;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.unknownCommitResultOnServerShutdown;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.writeConflictOnOutboxCreation;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import com.mongodb.MongoException;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 
 class CommitRetryingMongoTransactionManagerTest {
@@ -49,13 +52,23 @@ class CommitRetryingMongoTransactionManagerTest {
 
     @Test
     void doCommit_shouldRethrowTheFailure_whenTheRetryDeadlinePasses() {
-        MongoException failure = unknownCommitResultOnServerShutdown();
-        CommitProbe probe = new CommitProbe(TIMEOUT_MS);
-        probe.failNextCommits(Integer.MAX_VALUE, failure);
+        // The manager logs ERROR when the deadline passes. That is production-correct, but the
+        // fixture is a synthetic ShutdownInProgress on 127.0.0.1:27017 — leaving the logger on
+        // makes the suite look as if Mongo itself died. Mute only this case.
+        Logger logger = (Logger) LoggerFactory.getLogger(CommitRetryingMongoTransactionManager.class);
+        Level previous = logger.getLevel();
+        logger.setLevel(Level.OFF);
+        try {
+            MongoException failure = unknownCommitResultOnServerShutdown();
+            CommitProbe probe = new CommitProbe(TIMEOUT_MS);
+            probe.failNextCommits(Integer.MAX_VALUE, failure);
 
-        assertThatThrownBy(probe::commit).isSameAs(failure);
+            assertThatThrownBy(probe::commit).isSameAs(failure);
 
-        assertThat(probe.commits()).isGreaterThan(1);
+            assertThat(probe.commits()).isGreaterThan(1);
+        } finally {
+            logger.setLevel(previous);
+        }
     }
 
     private static final class CommitProbe extends CommitRetryingMongoTransactionManager {

@@ -1077,8 +1077,12 @@ class NotificationServiceTest {
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getUpdated()).isNotNull();
+            assertThat(result.getSubmittedNotificationBaseline()).isNotNull();
             verify(notificationRepository).save(notificationAggregate);
-            verify(outboxService).appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
+            // The outbox payload is a resolved copy, not the stored aggregate (which now also
+            // holds the submit freeze). Match on type rather than instance equality.
+            verify(outboxService).appendEvent(any(NotificationAggregate.class),
+                eq(OutboxEventType.NOTIFICATION_SUBMITTED), eq("trace-001"), eq(null));
         }
 
         @Test
@@ -1204,7 +1208,8 @@ class NotificationServiceTest {
             // Then — save must happen before the outbox event is written
             InOrder inOrder = inOrder(notificationRepository, outboxService);
             inOrder.verify(notificationRepository).save(notificationAggregate);
-            inOrder.verify(outboxService).appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
+            inOrder.verify(outboxService).appendEvent(any(NotificationAggregate.class),
+                eq(OutboxEventType.NOTIFICATION_SUBMITTED), eq("trace-001"), eq(null));
         }
 
         @Test
@@ -1306,7 +1311,8 @@ class NotificationServiceTest {
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notificationAggregate);
-            verify(outboxService).appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, "trace-002", null);
+            verify(outboxService).appendEvent(any(NotificationAggregate.class),
+                eq(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED), eq("trace-002"), eq(null));
         }
 
         @Test
@@ -1392,22 +1398,24 @@ class NotificationServiceTest {
             // Then
             assertThat(result.getStatus()).isEqualTo(AMEND);
             assertThat(result.getUpdated()).isNotNull();
-            assertThat(result.getSubmittedNotificationBaseline()).isNotNull();
+            // Amend does not capture a freeze — that happened at submit. This fixture never
+            // submitted through writeWithOutbox, so the baseline stays null.
+            assertThat(result.getSubmittedNotificationBaseline()).isNull();
             verify(notificationRepository).save(notificationAggregate);
             verify(outboxService).appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_AMENDMENT_REQUESTED, "trace-amd-1", null);
         }
 
         @Test
-        void amendNotification_shouldCaptureSubmittedBaseline_beforeStatusChange() {
-            // Given
+        void amendNotification_shouldNotCaptureAFreezeFromLiveContent() {
+            // Given — a submitted notification with no freeze (legacy row) and live content that
+            // has since diverged. Amend must not snapshot today's origin as if it were submitted.
             String referenceNumber = "GBN-AG-26-AMD008";
-            Origin originalOrigin = new Origin("GB", "true", "BASELINE-REF");
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("notif-id-amd-8")
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
                 .notification(Notification.builder()
-                    .origin(originalOrigin)
+                    .origin(new Origin("GB", "true", "LIVE-REF"))
                     .build())
                 .build();
 
@@ -1420,9 +1428,7 @@ class NotificationServiceTest {
             notificationService.amendNotification(referenceNumber, "trace-amd-8", null);
 
             // Then
-            assertThat(notificationAggregate.getSubmittedNotificationBaseline()).isNotNull();
-            assertThat(notificationAggregate.getSubmittedNotificationBaseline().getOrigin().getInternalReference())
-                .isEqualTo("BASELINE-REF");
+            assertThat(notificationAggregate.getSubmittedNotificationBaseline()).isNull();
         }
 
         @Test
