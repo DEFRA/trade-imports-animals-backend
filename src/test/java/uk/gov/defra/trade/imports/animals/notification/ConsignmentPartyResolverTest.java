@@ -62,20 +62,32 @@ class ConsignmentPartyResolverTest {
     }
 
     @Test
-    void shouldNeverResolvePlaceOfOriginOrTheConsignmentContact() {
-        // D24 and D26: both are held as copies. Storage strips any addressId before it gets here
-        // (ConsignmentParty.inlineOnly), but the resolver does not read them either way.
+    void shouldResolvePlaceOfOriginAndTheConsignmentContact() {
+        stub("origin", "Origin Farm");
+        stub("contact", "Contact Ltd");
+        NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
+            .placeOfOrigin(ConsignmentParty.reference("origin"))
+            .consignment(ConsignmentParty.reference("contact"))
+            .build());
+
+        NotificationAggregate resolved = resolver.resolveForSubmission(notificationAggregate, ORG);
+
+        assertThat(resolved.getNotification().getPlaceOfOrigin().getName()).isEqualTo("Origin Farm");
+        assertThat(resolved.getNotification().getConsignment().getName()).isEqualTo("Contact Ltd");
+        verify(addressBookClient).findById(ORG, "origin");
+        verify(addressBookClient).findById(ORG, "contact");
+    }
+
+    @Test
+    void shouldPassACopyWithNoAddressIdThroughUnchanged() {
         ConsignmentParty origin = ConsignmentParty.builder().name("Origin Farm").build();
-        ConsignmentParty contact = ConsignmentParty.builder().name("Contact Ltd").build();
         NotificationAggregate notificationAggregate = aggregateOf(Notification.builder()
             .placeOfOrigin(origin)
-            .consignment(contact)
             .build());
 
         NotificationAggregate resolved = resolver.resolveForSubmission(notificationAggregate, ORG);
 
         assertThat(resolved.getNotification().getPlaceOfOrigin()).isSameAs(origin);
-        assertThat(resolved.getNotification().getConsignment()).isSameAs(contact);
         verify(addressBookClient, never()).findById(any(), any());
     }
 

@@ -221,7 +221,10 @@ public class NotificationService {
                 "Cannot amend notification with status: " + notificationAggregate.getStatus());
         }
 
-        notificationAggregate.setSubmittedNotificationBaseline(notificationContentMapper.deepClone(notificationAggregate.getNotification()));
+        // The content baseline is NOT captured here. It was frozen at submit from the resolved
+        // copy and is retained across the amendment, so a cancel restores what was actually
+        // submitted. Capturing it now would snapshot references that re-resolve to today's
+        // addresses — a state that was never submitted.
         List<Document> currentFulfilments = notificationAggregate.getFulfilments();
         notificationAggregate.setSubmittedFulfilmentsBaseline(
             currentFulfilments == null ? null : deepCopyFulfilments(currentFulfilments));
@@ -251,7 +254,18 @@ public class NotificationService {
         }
 
         notificationAggregate.setNotification(notificationContentMapper.deepClone(notificationAggregate.getSubmittedNotificationBaseline()));
-        notificationAggregate.setSubmittedNotificationBaseline(null);
+        // The baseline is deliberately NOT cleared: it is the read source for a submitted
+        // notification, so it has to outlive the cancel that returns us to SUBMITTED.
+        // The restored content carries the frozen parties, which hold addressId *and* details.
+        // Normalise every role back to the reference alone so storage never grows a copy beside
+        // the link; the frozen details live in the baseline and nowhere else.
+        Notification restored = notificationAggregate.requireNotification();
+        restored.setPlaceOfOrigin(ConsignmentParty.forStorage(restored.getPlaceOfOrigin()));
+        restored.setConsignor(ConsignmentParty.forStorage(restored.getConsignor()));
+        restored.setConsignee(ConsignmentParty.forStorage(restored.getConsignee()));
+        restored.setImporter(ConsignmentParty.forStorage(restored.getImporter()));
+        restored.setDestination(ConsignmentParty.forStorage(restored.getDestination()));
+        restored.setConsignment(ConsignmentParty.forStorage(restored.getConsignment()));
         List<Document> priorFulfilments = notificationAggregate.getSubmittedFulfilmentsBaseline();
         notificationAggregate.setFulfilments(
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
@@ -282,10 +296,17 @@ public class NotificationService {
 
         return executeWithOutboxLock(
             OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
-                if (targetStatus == NotificationStatus.SUBMITTED
-                    && notification.getStatus() == NotificationStatus.AMEND) {
-                    notification.setSubmittedNotificationBaseline(null);
-                    notification.setSubmittedFulfilmentsBaseline(null);
+                if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)) {
+                    // Freeze the content as submitted. forOutbox is the fully-resolved copy, so the
+                    // baseline holds the address details as they stood at submit, while the stored
+                    // role fields keep their addressId alone — the live link an amendment
+                    // re-resolves. Captured here, inside the lock and before the save, so the
+                    // freeze and the status change land in the same write.
+                    notification.setSubmittedNotificationBaseline(
+                        notificationContentMapper.deepClone(forOutbox.getNotification()));
+                    if (notification.getStatus() == NotificationStatus.AMEND) {
+                        notification.setSubmittedFulfilmentsBaseline(null);
+                    }
                 }
                 notification.setStatus(targetStatus);
                 notification.setUpdated(LocalDateTime.now());
@@ -314,12 +335,24 @@ public class NotificationService {
      * the stored notification keeps the reference alone.
      *
      * <p>Submit and amend resolve strictly — a GBNAG document cannot carry a nameless party. A
-     * draft edit is best-effort, so an address deleted since does not block the save.
+     * draft edit is best-effort, so an address deleted since does not block the save. Cancelling an
+     * amendment is a restore of the submit freeze, not a new lookup: live-resolving would put
+     * today's address-book names on an event that means "back to what was submitted", and would
+     * also reject the cancel when the caller sent no organisation (the UI confirm page).
      */
     private NotificationAggregate resolvedForOutbox(
         NotificationAggregate notificationAggregate, OutboxEventType eventType, Actor actor) {
-        String organisationId = actor != null ? actor.getOrganisationId() : null;
         NotificationAggregate copy = notificationAggregate.toBuilder().build();
+        if (eventType == OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED) {
+            Notification freeze = notificationAggregate.getSubmittedNotificationBaseline();
+            if (freeze != null) {
+                copy.setNotification(notificationContentMapper.deepClone(freeze));
+            } else if (copy.getNotification() != null) {
+                copy.setNotification(notificationContentMapper.deepClone(copy.getNotification()));
+            }
+            return copy;
+        }
+        String organisationId = actor != null ? actor.getOrganisationId() : null;
         // toBuilder is shallow; deep-clone the notification so the resolver's party mutations
         // don't leak back into the persisted aggregate.
         if (copy.getNotification() != null) {
@@ -533,16 +566,14 @@ public class NotificationService {
         notification.setCommodity(dto.getCommodity());
         notification.setReasonForImport(dto.getReasonForImport());
         notification.setAdditionalDetails(dto.getAdditionalDetails());
-        // Place of origin and the consignment contact are held as copies, so they are
-        // stored as they arrive. The other four keep the reference alone.
-        notification.setPlaceOfOrigin(ConsignmentParty.inlineOnly(dto.getPlaceOfOrigin()));
+        notification.setPlaceOfOrigin(ConsignmentParty.forStorage(dto.getPlaceOfOrigin()));
         notification.setConsignor(ConsignmentParty.forStorage(dto.getConsignor()));
         notification.setConsignee(ConsignmentParty.forStorage(dto.getConsignee()));
         notification.setImporter(ConsignmentParty.forStorage(dto.getImporter()));
         notification.setDestination(ConsignmentParty.forStorage(dto.getDestination()));
         notification.setCphNumber(dto.getCphNumber());
         notification.setTransport(dto.getTransport());
-        notification.setConsignment(ConsignmentParty.inlineOnly(dto.getConsignment()));
+        notification.setConsignment(ConsignmentParty.forStorage(dto.getConsignment()));
         notificationAggregate.setFulfilments(dto.getFulfilments());
         notificationAggregate.setUpdated(LocalDateTime.now());
     }
