@@ -335,12 +335,24 @@ public class NotificationService {
      * the stored notification keeps the reference alone.
      *
      * <p>Submit and amend resolve strictly — a GBNAG document cannot carry a nameless party. A
-     * draft edit is best-effort, so an address deleted since does not block the save.
+     * draft edit is best-effort, so an address deleted since does not block the save. Cancelling an
+     * amendment is a restore of the submit freeze, not a new lookup: live-resolving would put
+     * today's address-book names on an event that means "back to what was submitted", and would
+     * also reject the cancel when the caller sent no organisation (the UI confirm page).
      */
     private NotificationAggregate resolvedForOutbox(
         NotificationAggregate notificationAggregate, OutboxEventType eventType, Actor actor) {
-        String organisationId = actor != null ? actor.getOrganisationId() : null;
         NotificationAggregate copy = notificationAggregate.toBuilder().build();
+        if (eventType == OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED) {
+            Notification freeze = notificationAggregate.getSubmittedNotificationBaseline();
+            if (freeze != null) {
+                copy.setNotification(notificationContentMapper.deepClone(freeze));
+            } else if (copy.getNotification() != null) {
+                copy.setNotification(notificationContentMapper.deepClone(copy.getNotification()));
+            }
+            return copy;
+        }
+        String organisationId = actor != null ? actor.getOrganisationId() : null;
         // toBuilder is shallow; deep-clone the notification so the resolver's party mutations
         // don't leak back into the persisted aggregate.
         if (copy.getNotification() != null) {

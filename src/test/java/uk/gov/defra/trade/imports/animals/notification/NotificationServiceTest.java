@@ -1623,6 +1623,45 @@ class NotificationServiceTest {
         }
 
         @Test
+        void cancelAmend_shouldPutTheSubmitFreezeOnTheOutboxEvent_notLiveResolve() {
+            // Given — live roles are references (and would fail resolveForSubmission without an
+            // organisation). The freeze already holds the submitted names. Cancel must restore
+            // without an address-book round trip.
+            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+            Notification freeze = Notification.builder()
+                .placeOfOrigin(ConsignmentParty.builder()
+                    .addressId(addressId)
+                    .name("Frozen Origin")
+                    .build())
+                .build();
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .id("notif-id-can-freeze")
+                .referenceNumber("GBN-AG-26-CANF01")
+                .status(AMEND)
+                .notification(Notification.builder()
+                    .placeOfOrigin(ConsignmentParty.reference(addressId))
+                    .build())
+                .submittedNotificationBaseline(freeze)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber("GBN-AG-26-CANF01"))
+                .thenReturn(Optional.of(notificationAggregate));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            // When — no actor, as the UI confirm page currently sends none
+            notificationService.cancelAmendNotification("GBN-AG-26-CANF01", "trace", null);
+
+            // Then
+            ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
+            verify(outboxService).appendEvent(
+                captor.capture(), eq(OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED), eq("trace"), eq(null));
+            assertThat(captor.getValue().getNotification().getPlaceOfOrigin().getName())
+                .isEqualTo("Frozen Origin");
+            verify(addressBookClient, never()).findById(any(), any());
+        }
+
+        @Test
         void cancelAmendNotification_shouldThrowBadRequest_whenNotAmend() {
             // Given
             String referenceNumber = "GBN-AG-26-CAN002";
