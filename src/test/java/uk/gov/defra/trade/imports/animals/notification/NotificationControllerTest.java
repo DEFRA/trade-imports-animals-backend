@@ -174,6 +174,8 @@ class NotificationControllerTest {
                     "UK01234567890"))
                 .andExpect(jsonPath("$.notification.commodity.commodityComplement[0].species[0].passport").value(
                     "UK0123456700999"))
+                .andExpect(jsonPath("$.notification.commodity.commodityComplement[0].species[0].microchip").value(
+                    "900123456789012"))
                 .andExpect(jsonPath("$.notification.reasonForImport").value("PERMANENT"))
                 .andExpect(jsonPath("$.notification.consignor.name").value(consignors().getFirst().getName()))
                 .andExpect(jsonPath("$.notification.consignor.address").value(consignors().getFirst().getAddress()))

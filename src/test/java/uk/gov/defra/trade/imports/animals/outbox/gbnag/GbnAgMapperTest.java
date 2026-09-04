@@ -181,7 +181,7 @@ class GbnAgMapperTest {
         }
 
         @Test
-        void shouldReshapeSpeciesEarTagAndPassportIntoOneProductInstance() {
+        void shouldReshapeSpeciesEarTagPassportAndMicrochipIntoOneProductInstance() {
             TradeLineItem line = result.specifiedConsignment()
                 .includedConsignmentItem().getFirst().includedTradeLineItem().getFirst();
             List<TradeProductInstance> instances = line.individualTradeProductInstance();
@@ -194,6 +194,10 @@ class GbnAgMapperTest {
                 passport -> {
                     assertThat(passport.typeCode()).isEqualTo("PASSPORT");
                     assertThat(passport.content()).isEqualTo("UK0123456700999");
+                },
+                microchip -> {
+                    assertThat(microchip.typeCode()).isEqualTo("MICROCHIP");
+                    assertThat(microchip.content()).isEqualTo("900123456789012");
                 });
             assertThat(instances.getFirst().name()).isNull();              // gap G20
             assertThat(instances.getFirst().permanentLocation()).isNull(); // gap G20
@@ -335,6 +339,57 @@ class GbnAgMapperTest {
         assertThat(line.individualTradeProductInstance()).isNull();
     }
 
+    @Test
+    void shouldMapIdentifiersToNull_whenSpeciesCarriesNoEarTagPassportOrMicrochip() {
+        NotificationAggregate notificationAggregate = speciesNotification("GBN-AG-26-SPC002",
+            Species.builder().value("BOV").text("Cattle").build());
+
+        List<TradeProductInstance> instances = firstLineOf(notificationAggregate)
+            .individualTradeProductInstance();
+
+        assertThat(instances).singleElement().satisfies(instance -> {
+            assertThat(instance.identifier()).isNull();
+            assertThat(instance.name()).isNull();
+            assertThat(instance.permanentLocation()).isNull();
+        });
+    }
+
+    @Test
+    void shouldMapMicrochipOnly_whenSpeciesCarriesNoEarTagOrPassport() {
+        NotificationAggregate notificationAggregate = speciesNotification("GBN-AG-26-SPC003",
+            Species.builder().value("CAN").text("Dogs").microchip("900123456789012").build());
+
+        List<TradeProductInstance> instances = firstLineOf(notificationAggregate)
+            .individualTradeProductInstance();
+
+        assertThat(instances).singleElement().satisfies(instance ->
+            assertThat(instance.identifier()).singleElement().satisfies(microchip -> {
+                assertThat(microchip.typeCode()).isEqualTo("MICROCHIP");
+                assertThat(microchip.content()).isEqualTo("900123456789012");
+                assertThat(microchip.urlId()).isNull();
+            }));
+    }
+
+    private static NotificationAggregate speciesNotification(String reference, Species species) {
+        return NotificationAggregate.builder()
+            .referenceNumber(reference)
+            .notification(Notification.builder()
+                .commodity(Commodity.builder()
+                    .commodityComplement(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("01020000")
+                        .species(List.of(species))
+                        .build()))
+                    .build())
+                .build())
+            .build();
+    }
+
+    private TradeLineItem firstLineOf(NotificationAggregate notificationAggregate) {
+        return mapper.toGbnAgEventData(notificationAggregate, 1)
+            .specifiedConsignment().includedConsignmentItem().getFirst()
+            .includedTradeLineItem().getFirst();
+    }
+
     private static NotificationAggregate fullyPopulatedNotification() {
         return NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-7K8M2P")
@@ -370,6 +425,7 @@ class GbnAgMapperTest {
                             .text("Cattle")
                             .earTag("UK01234567890")
                             .passport("UK0123456700999")
+                            .microchip("900123456789012")
                             .build()))
                         .build()))
                     .build())

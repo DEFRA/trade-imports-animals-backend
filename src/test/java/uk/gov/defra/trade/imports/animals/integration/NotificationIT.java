@@ -558,7 +558,15 @@ class NotificationIT extends IntegrationBase {
     @Test
     void post_shouldUpdateAllFieldsOnExistingNotification() {
         // Given — create a notification with initial values for all fields
-        Species initialSpecies = new Species("OVI", "Ovine", 5, 2, "UK09876543210", "UK0987654300888");
+        Species initialSpecies = Species.builder()
+            .value("OVI")
+            .text("Ovine")
+            .noOfAnimals(5)
+            .noOfPackages(2)
+            .earTag("UK09876543210")
+            .passport("UK0987654300888")
+            .microchip("900987654321098")
+            .build();
         CommodityComplement initialComplement = new CommodityComplement("LIVE", 5, 2, List.of(initialSpecies));
         NotificationDto initial = NotificationDto.builder()
             .origin(new Origin("IE", "false", "REF-initial"))
@@ -1847,8 +1855,10 @@ class NotificationIT extends IntegrationBase {
                 Species::getNoOfAnimals,
                 Species::getNoOfPackages,
                 Species::getEarTag,
-                Species::getPassport)
-            .containsExactly("BOV", "Bovine", 10, 5, "UK01234567890", "UK0123456700999");
+                Species::getPassport,
+                Species::getMicrochip)
+            .containsExactly(
+                "BOV", "Bovine", 10, 5, "UK01234567890", "UK0123456700999", "900123456789012");
 
         assertThat(notificationAggregate.getNotification())
             .extracting(Notification::getReasonForImport, Notification::getCphNumber)

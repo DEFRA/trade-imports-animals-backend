@@ -17,5 +17,6 @@ public class Species {
     private Integer noOfPackages;
     private String earTag;
     private String passport;
+    private String microchip;
 
 }
