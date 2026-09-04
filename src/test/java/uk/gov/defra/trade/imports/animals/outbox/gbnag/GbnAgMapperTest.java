@@ -339,6 +339,57 @@ class GbnAgMapperTest {
         assertThat(line.individualTradeProductInstance()).isNull();
     }
 
+    @Test
+    void shouldMapIdentifiersToNull_whenSpeciesCarriesNoEarTagPassportOrMicrochip() {
+        NotificationAggregate notificationAggregate = speciesNotification("GBN-AG-26-SPC002",
+            Species.builder().value("BOV").text("Cattle").build());
+
+        List<TradeProductInstance> instances = firstLineOf(notificationAggregate)
+            .individualTradeProductInstance();
+
+        assertThat(instances).singleElement().satisfies(instance -> {
+            assertThat(instance.identifier()).isNull();
+            assertThat(instance.name()).isNull();
+            assertThat(instance.permanentLocation()).isNull();
+        });
+    }
+
+    @Test
+    void shouldMapMicrochipOnly_whenSpeciesCarriesNoEarTagOrPassport() {
+        NotificationAggregate notificationAggregate = speciesNotification("GBN-AG-26-SPC003",
+            Species.builder().value("CAN").text("Dogs").microchip("900123456789012").build());
+
+        List<TradeProductInstance> instances = firstLineOf(notificationAggregate)
+            .individualTradeProductInstance();
+
+        assertThat(instances).singleElement().satisfies(instance ->
+            assertThat(instance.identifier()).singleElement().satisfies(microchip -> {
+                assertThat(microchip.typeCode()).isEqualTo("MICROCHIP");
+                assertThat(microchip.content()).isEqualTo("900123456789012");
+                assertThat(microchip.urlId()).isNull();
+            }));
+    }
+
+    private static NotificationAggregate speciesNotification(String reference, Species species) {
+        return NotificationAggregate.builder()
+            .referenceNumber(reference)
+            .notification(Notification.builder()
+                .commodity(Commodity.builder()
+                    .commodityComplement(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("01020000")
+                        .species(List.of(species))
+                        .build()))
+                    .build())
+                .build())
+            .build();
+    }
+
+    private TradeLineItem firstLineOf(NotificationAggregate notificationAggregate) {
+        return mapper.toGbnAgEventData(notificationAggregate, 1)
+            .specifiedConsignment().includedConsignmentItem().getFirst()
+            .includedTradeLineItem().getFirst();
+    }
+
     private static NotificationAggregate fullyPopulatedNotification() {
         return NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-7K8M2P")
