@@ -181,7 +181,7 @@ class GbnAgMapperTest {
         }
 
         @Test
-        void shouldReshapeSpeciesEarTagAndPassportIntoOneProductInstance() {
+        void shouldReshapeSpeciesEarTagPassportAndMicrochipIntoOneProductInstance() {
             TradeLineItem line = result.specifiedConsignment()
                 .includedConsignmentItem().getFirst().includedTradeLineItem().getFirst();
             List<TradeProductInstance> instances = line.individualTradeProductInstance();
@@ -194,6 +194,10 @@ class GbnAgMapperTest {
                 passport -> {
                     assertThat(passport.typeCode()).isEqualTo("PASSPORT");
                     assertThat(passport.content()).isEqualTo("UK0123456700999");
+                },
+                microchip -> {
+                    assertThat(microchip.typeCode()).isEqualTo("MICROCHIP");
+                    assertThat(microchip.content()).isEqualTo("900123456789012");
                 });
             assertThat(instances.getFirst().name()).isNull();              // gap G20
             assertThat(instances.getFirst().permanentLocation()).isNull(); // gap G20
@@ -370,6 +374,7 @@ class GbnAgMapperTest {
                             .text("Cattle")
                             .earTag("UK01234567890")
                             .passport("UK0123456700999")
+                            .microchip("900123456789012")
                             .build()))
                         .build()))
                     .build())

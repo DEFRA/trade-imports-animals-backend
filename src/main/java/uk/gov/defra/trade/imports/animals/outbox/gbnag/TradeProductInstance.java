@@ -16,6 +16,7 @@ public record TradeProductInstance(
 
     private static final String EAR_TAG = "EAR_TAG";
     private static final String PASSPORT = "PASSPORT";
+    private static final String MICROCHIP = "MICROCHIP";
 
     public record AnimalIdentifier(String typeCode, String content, String urlId) {}
 
@@ -34,6 +35,9 @@ public record TradeProductInstance(
         }
         if (species.getPassport() != null) {
             identifiers.add(new AnimalIdentifier(PASSPORT, species.getPassport(), null));
+        }
+        if (species.getMicrochip() != null) {
+            identifiers.add(new AnimalIdentifier(MICROCHIP, species.getMicrochip(), null));
         }
         return new TradeProductInstance(null, identifiers.isEmpty() ? null : identifiers, null);
     }

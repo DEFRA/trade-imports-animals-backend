@@ -18,6 +18,7 @@ public final class NotificationTestData {
             .noOfPackages(5)
             .earTag("UK01234567890")
             .passport("UK0123456700999")
+            .microchip("900123456789012")
             .build();
     }
 
