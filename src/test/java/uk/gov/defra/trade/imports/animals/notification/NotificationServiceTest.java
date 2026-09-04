@@ -297,6 +297,42 @@ class NotificationServiceTest {
         }
 
         @Test
+        void saveNotification_shouldPersistPlaceOfOriginAndConsignmentAsReferences() {
+            String originId = "665f1c2ab3e4d51a2c9d0e78";
+            String contactId = "665f1c2ab3e4d51a2c9d0e79";
+            String referenceNumber = "GBN-AG-26-ORIG01";
+            NotificationAggregate existing = NotificationAggregate.builder()
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .notification(Notification.builder().build())
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(referenceNumber)
+                .concurrencyToken(0L)
+                .placeOfOrigin(ConsignmentParty.builder()
+                    .addressId(originId)
+                    .name("Stale Origin")
+                    .build())
+                .consignment(ConsignmentParty.builder()
+                    .addressId(contactId)
+                    .name("Stale Contact")
+                    .build())
+                .build();
+
+            NotificationAggregate saved = notificationService.saveNotification(dto, "trace-orig-001", null);
+
+            assertThat(saved.getNotification().getPlaceOfOrigin())
+                .isEqualTo(ConsignmentParty.reference(originId));
+            assertThat(saved.getNotification().getConsignment())
+                .isEqualTo(ConsignmentParty.reference(contactId));
+        }
+
+        @Test
         void saveNotification_shouldStillSave_whenAReferencedAddressHasBeenDeleted() {
             // Given — a draft whose consignor points at an address the trader has since deleted.
             // UCD's ruling is that a deleted address behaves as if it were never selected, so this
@@ -1104,6 +1140,8 @@ class NotificationServiceTest {
 
             // Then
             assertThat(returned.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
+            assertThat(returned.getSubmittedNotificationBaseline().getConsignor().getName())
+                .isEqualTo("Astra Rosales");
             ArgumentCaptor<NotificationAggregate> saved = ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(notificationRepository).save(saved.capture());
             assertThat(saved.getValue().getNotification().getConsignor())
@@ -1571,7 +1609,7 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
-            assertThat(result.getSubmittedNotificationBaseline()).isNull();
+            assertThat(result.getSubmittedNotificationBaseline()).isSameAs(baseline);
             assertThat(result.getNotification().getOrigin().getInternalReference()).isEqualTo("ORIGINAL-REF");
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notificationAggregate);
@@ -2158,19 +2196,27 @@ class NotificationServiceTest {
         }
 
         @Test
-        void amend_shouldSnapshotNotificationContentIntoBaseline_withMutationIndependence() {
-            // Given — a submitted notification with content that will be snapshotted on amend.
+        void amend_shouldRetainTheSubmitFreeze_notRecaptureToday() {
+            // Given — freeze already taken at submit. Amend must not replace it with a clone of
+            // today's (possibly edited) role fields.
             String ref = "GBN-AG-26-AMD002";
+            Notification freeze = Notification.builder()
+                .origin(new Origin("GB", "no", "FROZEN"))
+                .commodity(Commodity.builder().name("Cattle").build())
+                .reasonForImport("PERMANENT")
+                .cphNumber("12/345/6789")
+                .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("db-id-b")
                 .referenceNumber(ref)
                 .status(SUBMITTED)
                 .notification(Notification.builder()
-                    .origin(new Origin("GB", "no", "ORIGINAL"))
+                    .origin(new Origin("GB", "no", "LIVE-REF"))
                     .commodity(Commodity.builder().name("Cattle").build())
                     .reasonForImport("PERMANENT")
                     .cphNumber("12/345/6789")
                     .build())
+                .submittedNotificationBaseline(freeze)
                 .build();
 
             when(notificationRepository.findByReferenceNumber(ref))
@@ -2181,10 +2227,10 @@ class NotificationServiceTest {
             // When
             NotificationAggregate result = notificationService.amendNotification(ref, "trace", null);
 
-            // Then — baseline captured the pre-amend content.
-            assertThat(result.getSubmittedNotificationBaseline()).isNotNull();
+            // Then — the submit freeze is still the baseline.
+            assertThat(result.getSubmittedNotificationBaseline()).isSameAs(freeze);
             assertThat(result.getSubmittedNotificationBaseline().getOrigin().getInternalReference())
-                .isEqualTo("ORIGINAL");
+                .isEqualTo("FROZEN");
             assertThat(result.getSubmittedNotificationBaseline().getCommodity().getName())
                 .isEqualTo("Cattle");
 
@@ -2196,7 +2242,7 @@ class NotificationServiceTest {
             result.getNotification().setCphNumber("99/999/9999");
 
             assertThat(result.getSubmittedNotificationBaseline().getOrigin().getInternalReference())
-                .isEqualTo("ORIGINAL");
+                .isEqualTo("FROZEN");
             assertThat(result.getSubmittedNotificationBaseline().getCommodity().getName())
                 .isEqualTo("Cattle");
             assertThat(result.getSubmittedNotificationBaseline().getReasonForImport())
@@ -2239,7 +2285,7 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
-            assertThat(result.getSubmittedNotificationBaseline()).isNull();
+            assertThat(result.getSubmittedNotificationBaseline()).isSameAs(baseline);
             assertThat(result.getSubmittedFulfilmentsBaseline()).isNull();
             assertThat(result.getFulfilments()).isEqualTo(priorFulfilments);
             assertThat(result.getSubmittedAt()).isEqualTo(originalSubmittedAt);
@@ -2314,15 +2360,20 @@ class NotificationServiceTest {
         }
 
         @Test
-        void submit_shouldSetSubmittedAt_andClearBothBaselines_whenSubmittingFromAmend() {
+        void submit_shouldReplaceTheContentFreeze_andClearFulfilmentsBaseline_whenSubmittingFromAmend() {
             // Given
             String ref = "GBN-AG-26-SBM001";
+            Notification priorFreeze = Notification.builder()
+                .origin(new Origin("GB", "no", "PRIOR"))
+                .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("db-id-s")
                 .referenceNumber(ref)
                 .status(AMEND)
-                .notification(Notification.builder().build())
-                .submittedNotificationBaseline(Notification.builder().build())
+                .notification(Notification.builder()
+                    .origin(new Origin("FR", "yes", "AMENDED"))
+                    .build())
+                .submittedNotificationBaseline(priorFreeze)
                 .submittedFulfilmentsBaseline(new ArrayList<>(
                     List.of(new Document("obligationId", "prior"))))
                 .fulfilments(List.of(new Document("obligationId", "current")))
@@ -2336,10 +2387,14 @@ class NotificationServiceTest {
             // When
             NotificationAggregate result = notificationService.submitNotification(ref, "trace", null);
 
-            // Then
+            // Then — the content freeze is replaced with this submit, not cleared. The
+            // fulfilments scratchpad is spent.
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getSubmittedAt()).isNotNull();
-            assertThat(result.getSubmittedNotificationBaseline()).isNull();
+            assertThat(result.getSubmittedNotificationBaseline()).isNotNull();
+            assertThat(result.getSubmittedNotificationBaseline()).isNotSameAs(priorFreeze);
+            assertThat(result.getSubmittedNotificationBaseline().getOrigin().getInternalReference())
+                .isEqualTo("AMENDED");
             assertThat(result.getSubmittedFulfilmentsBaseline()).isNull();
             // Fulfilments are the in-flight edit, NOT the baseline (submit-from-amend accepts the edit).
             assertThat(result.getFulfilments()).extracting("obligationId").containsExactly("current");
@@ -2605,7 +2660,7 @@ class NotificationServiceTest {
         NotificationView build() {
             return new NotificationView.Data(
                 referenceNumber, 0L, status, created,
-                origin, commodity, consignor, consignee, transport);
+                origin, commodity, consignor, consignee, transport, null);
         }
     }
 }

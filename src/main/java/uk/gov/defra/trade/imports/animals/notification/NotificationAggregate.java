@@ -66,11 +66,27 @@ public class NotificationAggregate {
     /** Opaque obligation-fulfilment payload — persisted byte-faithfully; never interpreted by the backend. */
     private List<Document> fulfilments;
 
-    /** Pre-amend snapshot of {@link #notification}. Non-null iff status is AMEND; restored by cancelAmend, cleared by submit-from-amend. */
+    /**
+     * The notification content as it was submitted, frozen at submit from the address-resolved
+     * copy. A submitted notification is part of the legal record, so it reads its addresses from
+     * here rather than resolving its references live — editing or deleting the address afterwards
+     * cannot change what it shows.
+     *
+     * <p>Set on every submit (from DRAFT or from AMEND, replacing any previous freeze) and
+     * <em>retained</em> thereafter: through an amendment, so a cancel can restore what was really
+     * submitted, and past that cancel, because it is still the read source. Null only for a
+     * notification that has never been submitted.
+     *
+     * <p>The role fields keep their {@code addressId} alongside this snapshot — the snapshot is
+     * additive.
+     */
     @JsonIgnore
     private Notification submittedNotificationBaseline;
 
-    /** Pre-amend snapshot of {@link #fulfilments}. Non-null iff status is AMEND; restored by cancelAmend, cleared by submit-from-amend. */
+    /**
+     * Pre-amend snapshot of {@link #fulfilments}. Amend-only scratchpad: restored by cancel-amend
+     * and cleared when the amendment is submitted. Independent of the content freeze.
+     */
     @JsonIgnore
     private List<Document> submittedFulfilmentsBaseline;
 

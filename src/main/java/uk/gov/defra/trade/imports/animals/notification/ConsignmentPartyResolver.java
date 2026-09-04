@@ -25,9 +25,7 @@ import uk.gov.defra.trade.imports.animals.exceptions.UnresolvableConsignmentPart
  * have them: GBNAG transmission. Nothing is written back to storage, so an address edited in the
  * address book shows through on the next send without the notification being touched.
  *
- * <p>A party held inline carries no {@code addressId} and passes through unchanged. Two roles are
- * always inline and so are never resolved here: {@code placeOfOrigin} and {@code consignment},
- * the consignment contact, which is per-notification and reset on copy.
+ * <p>A party held inline carries no {@code addressId} and passes through unchanged.
  *
  * <p>Reads do not resolve — the frontend fills in party names for display, so the backend hands
  * out what it stores.
@@ -42,12 +40,14 @@ import uk.gov.defra.trade.imports.animals.exceptions.UnresolvableConsignmentPart
 @Slf4j
 public class ConsignmentPartyResolver {
 
-    // The four roles that can hold a reference, named as the notification exposes them, so a
-    // rejected submit points at the field the caller sent.
+    // Each role that can hold a reference, named as the notification exposes it, so a rejected
+    // submit points at the field the caller sent.
+    private static final String PLACE_OF_ORIGIN = "placeOfOrigin";
     private static final String CONSIGNOR = "consignor";
     private static final String CONSIGNEE = "consignee";
     private static final String IMPORTER = "importer";
     private static final String DESTINATION = "destination";
+    private static final String CONSIGNMENT = "consignment";
 
     private final AddressBookClient addressBookClient;
 
@@ -94,6 +94,8 @@ public class ConsignmentPartyResolver {
         // Assigned in a fixed role order, so a failed submit names the same roles in the same
         // order every time regardless of which lookup finished first.
         Map<String, String> unresolved = new LinkedHashMap<>();
+        notification.setPlaceOfOrigin(
+            resolveIfReference(PLACE_OF_ORIGIN, notification.getPlaceOfOrigin(), lookups, unresolved));
         notification.setConsignor(
             resolveIfReference(CONSIGNOR, notification.getConsignor(), lookups, unresolved));
         notification.setConsignee(
@@ -102,6 +104,8 @@ public class ConsignmentPartyResolver {
             resolveIfReference(IMPORTER, notification.getImporter(), lookups, unresolved));
         notification.setDestination(
             resolveIfReference(DESTINATION, notification.getDestination(), lookups, unresolved));
+        notification.setConsignment(
+            resolveIfReference(CONSIGNMENT, notification.getConsignment(), lookups, unresolved));
         if (failOnMiss && !unresolved.isEmpty()) {
             // Not logged here: the exception handler logs the rejected submit at WARN.
             throw new UnresolvableConsignmentPartyException(unresolved);
@@ -172,17 +176,15 @@ public class ConsignmentPartyResolver {
 
     /**
      * Each distinct address referenced by a party, in role order. Empty when none is.
-     *
-     * <p>The four roles that can hold a reference. {@code placeOfOrigin} and {@code consignment}
-     * are always inline, so they are not read here even if one arrives carrying an
-     * {@code addressId}.
      */
     private static List<String> referencedAddressIds(Notification notification) {
         return Stream.of(
+                notification.getPlaceOfOrigin(),
                 notification.getConsignor(),
                 notification.getConsignee(),
                 notification.getImporter(),
-                notification.getDestination())
+                notification.getDestination(),
+                notification.getConsignment())
             .filter(Objects::nonNull)
             .map(ConsignmentParty::getAddressId)
             .filter(Objects::nonNull)

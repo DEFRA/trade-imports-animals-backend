@@ -740,7 +740,7 @@ class NotificationControllerTest {
         private NotificationView testView(String ref, NotificationStatus status, Origin origin,
                 Commodity commodity, ConsignmentParty consignor, Transport transport) {
             return new NotificationView.Data(
-                ref, 0L, status, null, origin, commodity, consignor, null, transport);
+                ref, 0L, status, null, origin, commodity, consignor, null, transport, null);
         }
 
         @Test
@@ -896,6 +896,16 @@ class NotificationControllerTest {
         void findFulfilments_shouldReturn200WithProjection() throws Exception {
             // Given — a hand-rolled fulfilment view (Mockito mocks trip up Jackson via their
             // bytecode fields; the real Spring Data proxy serializes cleanly in production and E2E).
+            NotificationFulfilmentsView.FrozenParties freeze = new NotificationFulfilmentsView.FrozenParties() {
+                @Override public ConsignmentParty getPlaceOfOrigin() { return null; }
+                @Override public ConsignmentParty getConsignor() {
+                    return ConsignmentParty.builder().name("Frozen Consignor").build();
+                }
+                @Override public ConsignmentParty getConsignee() { return null; }
+                @Override public ConsignmentParty getImporter() { return null; }
+                @Override public ConsignmentParty getDestination() { return null; }
+                @Override public ConsignmentParty getConsignment() { return null; }
+            };
             NotificationFulfilmentsView view = new NotificationFulfilmentsView() {
                 @Override public String getReferenceNumber() { return REF_1; }
                 @Override public Long getConcurrencyToken() { return 0L; }
@@ -905,6 +915,7 @@ class NotificationControllerTest {
                 @Override public java.util.List<org.bson.Document> getFulfilments() {
                     return java.util.List.of(new org.bson.Document("obligationId", "abc"));
                 }
+                @Override public FrozenParties getSubmittedNotificationBaseline() { return freeze; }
             };
             when(notificationService.findFulfilmentsView(REF_1)).thenReturn(view);
 
@@ -914,7 +925,9 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.status").value("SUBMITTED"))
-                .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"));
+                .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"))
+                .andExpect(jsonPath("$.submittedNotificationBaseline.consignor.name")
+                    .value("Frozen Consignor"));
         }
 
         @Test
