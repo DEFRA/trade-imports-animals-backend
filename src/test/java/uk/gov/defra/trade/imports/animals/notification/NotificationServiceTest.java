@@ -298,6 +298,7 @@ class NotificationServiceTest {
 
         @Test
         void saveNotification_shouldPersistPlaceOfOriginAndConsignmentAsReferences() {
+            // Given
             String originId = "665f1c2ab3e4d51a2c9d0e78";
             String contactId = "665f1c2ab3e4d51a2c9d0e79";
             String referenceNumber = "GBN-AG-26-ORIG01";
@@ -324,8 +325,10 @@ class NotificationServiceTest {
                     .build())
                 .build();
 
+            // When
             NotificationAggregate saved = notificationService.saveNotification(dto, "trace-orig-001", null);
 
+            // Then
             assertThat(saved.getNotification().getPlaceOfOrigin())
                 .isEqualTo(ConsignmentParty.reference(originId));
             assertThat(saved.getNotification().getConsignment())
@@ -1649,10 +1652,17 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-            // When — no actor, as the UI confirm page currently sends none
-            notificationService.cancelAmendNotification("GBN-AG-26-CANF01", "trace", null);
+            // When
+            NotificationAggregate result =
+                notificationService.cancelAmendNotification("GBN-AG-26-CANF01", "trace", null);
 
             // Then
+            assertThat(result.getNotification().getPlaceOfOrigin())
+                .isEqualTo(ConsignmentParty.reference(addressId));
+            assertThat(result.getSubmittedNotificationBaseline().getPlaceOfOrigin().getName())
+                .isEqualTo("Frozen Origin");
+            assertThat(result.getSubmittedNotificationBaseline().getPlaceOfOrigin().getAddressId())
+                .isEqualTo(addressId);
             ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(outboxService).appendEvent(
                 captor.capture(), eq(OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED), eq("trace"), eq(null));

@@ -1108,8 +1108,9 @@ class NotificationIT extends IntegrationBase {
             .orElseThrow();
         assertThat(restoredInMongo.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(restoredInMongo.getSubmittedNotificationBaseline()).isNotNull();
-        assertThat(restoredInMongo.getSubmittedNotificationBaseline().getOrigin().getInternalReference())
-            .isEqualTo(submittedInMongo.getNotification().getOrigin().getInternalReference());
+        assertAmendableContentMatches(
+            inAmendInMongo.getSubmittedNotificationBaseline(),
+            restoredInMongo.getSubmittedNotificationBaseline());
         assertAmendableContentMatches(submittedInMongo.getNotification(), restoredInMongo.getNotification());
     }
 
@@ -1164,7 +1165,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submitFromAmend_shouldClearSubmittedBaseline() {
+    void submitFromAmend_shouldReplaceSubmittedBaselineWithThisSubmit() {
         // Given — notification amended with edited content
         String referenceNumber = createAndSubmitNotificationWithFullContent();
 
