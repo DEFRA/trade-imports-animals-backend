@@ -338,10 +338,8 @@ class NotificationServiceTest {
 
         @Test
         void saveNotification_shouldStillSave_whenAReferencedAddressHasBeenDeleted() {
-            // Given — a draft whose consignor points at an address the trader has since deleted.
-            // UCD's ruling is that a deleted address behaves as if it were never selected, so this
-            // must not block them from saving the rest of the draft; only a submit has to be
-            // complete.
+            // Given — a draft whose consignor still references an address the trader has since
+            // deleted. Saving must not call the address book or block the write; submit validates.
             String addressId = "665f1c2ab3e4d51a2c9d0e77";
             String referenceNumber = "GBN-AG-26-EDIT01";
             NotificationAggregate existing = NotificationAggregate.builder()
@@ -353,8 +351,6 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(existing));
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
-            when(addressBookClient.findById(ORG_ID, addressId))
-                .thenReturn(Optional.of(addressBookRecord(addressId, true)));
 
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
