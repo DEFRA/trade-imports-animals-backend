@@ -176,6 +176,16 @@ public class ConsignmentPartyResolver {
 
     /**
      * Each distinct address referenced by a party, in role order. Empty when none is.
+     *
+     * <p>{@code null} parties are expected — an unfilled role on a draft is simply absent. They
+     * are skipped rather than treated as an error because this method serves both {@link
+     * #resolveForDraft} (partial saves) and {@link #resolveForSubmission} (where missing required
+     * roles surface later as unresolved references or upstream validation).
+     *
+     * <p>{@code null} {@code addressId} on a non-null party means an inline party ({@link
+     * ConsignmentParty}); those are also skipped because there is nothing to look up. A submit
+     * that must not go out with a nameless referenced role is rejected by {@link
+     * #resolveIfReference} via {@link UnresolvableConsignmentPartyException}, not here.
      */
     private static List<String> referencedAddressIds(Notification notification) {
         return Stream.of(

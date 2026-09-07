@@ -1387,6 +1387,7 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
                 .notification(Notification.builder().build())
+                .fulfilments(List.of(new Document("obligationId", "amd-1")))
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1420,6 +1421,7 @@ class NotificationServiceTest {
                 .notification(Notification.builder()
                     .origin(new Origin("GB", "true", "LIVE-REF"))
                     .build())
+                .fulfilments(List.of(new Document("obligationId", "amd-8")))
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1443,6 +1445,7 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
                 .notification(Notification.builder().build())
+                .fulfilments(List.of(new Document("obligationId", "amd-2")))
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1457,6 +1460,30 @@ class NotificationServiceTest {
             InOrder inOrder = inOrder(notificationRepository, outboxService);
             inOrder.verify(notificationRepository).save(notificationAggregate);
             inOrder.verify(outboxService).appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_AMENDMENT_REQUESTED, "trace-amd-2", null);
+        }
+
+        @Test
+        void amendNotification_shouldThrowBadRequest_whenFulfilmentsMissing() {
+            // Given — a submitted row with no fulfilments payload is corrupt, not amendable.
+            String referenceNumber = "GBN-AG-26-AMD009";
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .id("notif-id-amd-9")
+                .referenceNumber(referenceNumber)
+                .status(SUBMITTED)
+                .notification(Notification.builder().build())
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notificationAggregate));
+
+            // When / Then
+            assertThatThrownBy(
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-9", null))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("fulfilments payload is missing");
+
+            verify(notificationRepository, never()).save(any());
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
         }
 
         @Test
@@ -1535,6 +1562,7 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
                 .notification(Notification.builder().build())
+                .fulfilments(List.of(new Document("obligationId", "amd-6")))
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -1566,6 +1594,7 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
                 .notification(Notification.builder().build())
+                .fulfilments(List.of(new Document("obligationId", "amd-7")))
                 .build();
 
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -2272,6 +2301,7 @@ class NotificationServiceTest {
                     .cphNumber("12/345/6789")
                     .build())
                 .submittedNotificationBaseline(freeze)
+                .fulfilments(List.of(new Document("obligationId", "amd-freeze")))
                 .build();
 
             when(notificationRepository.findByReferenceNumber(ref))
@@ -2390,6 +2420,7 @@ class NotificationServiceTest {
                 .referenceNumber(ref)
                 .status(DRAFT)
                 .notification(Notification.builder().build())
+                .fulfilments(List.of(new Document("obligationId", "cycle")))
                 .build();
 
             when(notificationRepository.findByReferenceNumber(ref))

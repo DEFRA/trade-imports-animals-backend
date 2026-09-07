@@ -11,9 +11,11 @@ import org.bson.Document;
  * aren't loaded on read.
  *
  * <p>{@code submittedNotificationBaseline} <em>is</em> exposed, narrowed to its parties by
- * {@link FrozenParties}. A submitted notification reads its addresses from the freeze rather
- * than resolving live, so the parties have to travel with the read. Only the parties — the
- * snapshot's other content is not needed here and stays behind.
+ * {@link FrozenParties}. That looks out of pattern next to the opaque {@code fulfilments}
+ * blob, but the frontend rehydrates a journey through this endpoint alone ({@code GET
+ * /notifications/{ref}/fulfilments}) and needs the submit freeze to render a submitted
+ * notification without live address-book lookups. Only the six party fields travel — the rest
+ * of the snapshot stays server-side, same as {@code submittedFulfilmentsBaseline}.
  */
 public interface NotificationFulfilmentsView {
 

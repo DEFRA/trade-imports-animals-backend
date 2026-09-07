@@ -226,8 +226,11 @@ public class NotificationService {
         // submitted. Capturing it now would snapshot references that re-resolve to today's
         // addresses — a state that was never submitted.
         List<Document> currentFulfilments = notificationAggregate.getFulfilments();
-        notificationAggregate.setSubmittedFulfilmentsBaseline(
-            currentFulfilments == null ? null : deepCopyFulfilments(currentFulfilments));
+        if (currentFulfilments == null) {
+            throw new BadRequestException(
+                "Cannot amend notification: fulfilments payload is missing");
+        }
+        notificationAggregate.setSubmittedFulfilmentsBaseline(deepCopyFulfilments(currentFulfilments));
 
         return writeWithOutbox(
             notificationAggregate,
