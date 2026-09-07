@@ -69,7 +69,7 @@ public class NotificationAggregate {
     /**
      * Pre-amend snapshot of {@link #notification}. Amend-only scratchpad: captured when an
      * amendment starts, restored by cancel-amend, and cleared when the amendment is submitted.
-     * Independent of {@link #submittedFulfilmentsBaseline}; carries inline party details as they
+     * Independent of {@link #preAmendFulfilments}; carries inline party details as they
      * stood when the trader opened the amendment.
      */
     @JsonIgnore
@@ -80,7 +80,7 @@ public class NotificationAggregate {
      * and cleared when the amendment is submitted. Independent of the content freeze.
      */
     @JsonIgnore
-    private List<Document> submittedFulfilmentsBaseline;
+    private List<Document> preAmendFulfilments;
 
     /** Returns the notification sub-object, failing fast if absent. Use at seams that require content. */
     public Notification requireNotification() {

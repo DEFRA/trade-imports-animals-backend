@@ -1476,8 +1476,8 @@ class NotificationServiceTest {
         }
 
         @Test
-        void amendNotification_shouldThrowBadRequest_whenFulfilmentsMissing() {
-            // Given — a submitted row with no fulfilments payload is corrupt, not amendable.
+        void amendNotification_shouldThrow_whenFulfilmentsMissing() {
+            // Given — a submitted row with no fulfilments payload is corrupt server state.
             String referenceNumber = "GBN-AG-26-AMD009";
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("notif-id-amd-9")
@@ -1492,7 +1492,7 @@ class NotificationServiceTest {
             // When / Then
             assertThatThrownBy(
                 () -> notificationService.amendNotification(referenceNumber, "trace-amd-9", null))
-                .isInstanceOf(BadRequestException.class)
+                .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("fulfilments payload is missing");
 
             verify(notificationRepository, never()).save(any());
@@ -2285,10 +2285,10 @@ class NotificationServiceTest {
 
             // Then
             assertThat(result.getStatus()).isEqualTo(AMEND);
-            assertThat(result.getSubmittedFulfilmentsBaseline()).isEqualTo(fulfilments);
+            assertThat(result.getPreAmendFulfilments()).isEqualTo(fulfilments);
             // Defensive copy — mutating source after snapshot must not affect baseline.
             fulfilments.add(new Document("obligationId", "post-snapshot"));
-            assertThat(result.getSubmittedFulfilmentsBaseline()).hasSize(1);
+            assertThat(result.getPreAmendFulfilments()).hasSize(1);
         }
 
         @Test
@@ -2359,7 +2359,7 @@ class NotificationServiceTest {
                     .origin(new Origin("FR", "yes", "EDITED"))
                     .build())
                 .preAmendNotification(baseline)
-                .submittedFulfilmentsBaseline(new ArrayList<>(priorFulfilments))
+                .preAmendFulfilments(new ArrayList<>(priorFulfilments))
                 .fulfilments(List.of(new Document("obligationId", "in-flight-edit")))
                 .submittedAt(originalSubmittedAt)
                 .build();
@@ -2375,7 +2375,7 @@ class NotificationServiceTest {
             // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getPreAmendNotification()).isNull();
-            assertThat(result.getSubmittedFulfilmentsBaseline()).isNull();
+            assertThat(result.getPreAmendFulfilments()).isNull();
             assertThat(result.getFulfilments()).isEqualTo(priorFulfilments);
             assertThat(result.getSubmittedAt()).isEqualTo(originalSubmittedAt);
             assertThat(result.getNotification().getOrigin().getInternalReference()).isEqualTo("ORIGINAL");
@@ -2464,7 +2464,7 @@ class NotificationServiceTest {
                     .origin(new Origin("FR", "yes", "AMENDED"))
                     .build())
                 .preAmendNotification(priorFreeze)
-                .submittedFulfilmentsBaseline(new ArrayList<>(
+                .preAmendFulfilments(new ArrayList<>(
                     List.of(new Document("obligationId", "prior"))))
                 .fulfilments(List.of(new Document("obligationId", "current")))
                 .build();
@@ -2481,7 +2481,7 @@ class NotificationServiceTest {
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getSubmittedAt()).isNotNull();
             assertThat(result.getPreAmendNotification()).isNull();
-            assertThat(result.getSubmittedFulfilmentsBaseline()).isNull();
+            assertThat(result.getPreAmendFulfilments()).isNull();
             // Fulfilments are the in-flight edit, NOT the baseline (submit-from-amend accepts the edit).
             assertThat(result.getFulfilments()).extracting("obligationId").containsExactly("current");
         }

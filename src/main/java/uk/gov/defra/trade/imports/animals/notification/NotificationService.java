@@ -228,10 +228,10 @@ public class NotificationService {
             notificationContentMapper.deepClone(notificationAggregate.getNotification()));
         List<Document> currentFulfilments = notificationAggregate.getFulfilments();
         if (currentFulfilments == null) {
-            throw new BadRequestException(
+            throw new IllegalStateException(
                 "Cannot amend notification: fulfilments payload is missing");
         }
-        notificationAggregate.setSubmittedFulfilmentsBaseline(deepCopyFulfilments(currentFulfilments));
+        notificationAggregate.setPreAmendFulfilments(deepCopyFulfilments(currentFulfilments));
 
         return writeWithOutbox(
             notificationAggregate,
@@ -259,10 +259,10 @@ public class NotificationService {
 
         notificationAggregate.setNotification(
             notificationContentMapper.deepClone(notificationAggregate.getPreAmendNotification()));
-        List<Document> priorFulfilments = notificationAggregate.getSubmittedFulfilmentsBaseline();
+        List<Document> priorFulfilments = notificationAggregate.getPreAmendFulfilments();
         notificationAggregate.setFulfilments(
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
-        notificationAggregate.setSubmittedFulfilmentsBaseline(null);
+        notificationAggregate.setPreAmendFulfilments(null);
         notificationAggregate.setPreAmendNotification(null);
         // submittedAt is deliberately NOT reset — reverting to the previously-submitted state
         // preserves the original submission timestamp.
@@ -292,7 +292,7 @@ public class NotificationService {
             OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
                 if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)
                     && notification.getStatus() == NotificationStatus.AMEND) {
-                    notification.setSubmittedFulfilmentsBaseline(null);
+                    notification.setPreAmendFulfilments(null);
                     notification.setPreAmendNotification(null);
                 }
                 notification.setStatus(targetStatus);
@@ -576,7 +576,7 @@ public class NotificationService {
 
     /**
      * BSON round-trip deep clone of a fulfilments list. Callers need independence from the source
-     * because amend snapshots the pre-amend fulfilments into {@code submittedFulfilmentsBaseline}
+     * because amend snapshots the pre-amend fulfilments into {@code preAmendFulfilments}
      * and cancel-amend restores from it; a shared reference at any nesting depth would let a
      * later in-memory mutation on one list surface on the other before the notification is persisted.
      * Callers are responsible for the {@code null} case — the helper always returns a fresh list.
