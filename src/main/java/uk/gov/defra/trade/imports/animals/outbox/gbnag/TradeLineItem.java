@@ -15,14 +15,14 @@ public record TradeLineItem(
     List<TradeProductInstance> individualTradeProductInstance
 ) {
 
-    static TradeLineItem from(CommodityComplement complement) {
+    static TradeLineItem from(String commodityName, CommodityComplement complement) {
         ApplicableClassification cn = ApplicableClassification.cn(complement.getTypeOfCommodity());
 
         return new TradeLineItem(
             cn != null ? List.of(cn) : null,
             null,
             null,
-            null,
+            commodityName,
             null,
             null,
             LineTradeDelivery.headCount(complement.getTotalNoOfAnimals()),

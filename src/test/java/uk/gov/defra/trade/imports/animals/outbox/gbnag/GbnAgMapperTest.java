@@ -160,10 +160,8 @@ class GbnAgMapperTest {
             assertThat(items).hasSize(1);
             TradeLineItem line = items.getFirst().includedTradeLineItem().getFirst();
 
-            // description is a required gbnAgTradeLineItem field; commodity.name -> description
-            // deferred/unmapped pending the A3 team decision (schema anomaly A3)
+            assertThat(line.commonName()).isEqualTo("Live bovine animals"); // commodity.name -> commonName
             assertThat(line.description()).isNull();
-            assertThat(line.commonName()).isNull();
             assertThat(line.scientificName()).isNull(); // gap G18
             assertThat(line.typeCode()).isNull();
             assertThat(line.urlId()).isNull();
@@ -337,6 +335,26 @@ class GbnAgMapperTest {
             .includedTradeLineItem().getFirst();
 
         assertThat(line.individualTradeProductInstance()).isNull();
+    }
+
+    @Test
+    void shouldMapCommonNameToNull_whenCommodityNameAbsent() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-CMD001")
+            .notification(Notification.builder()
+                .commodity(Commodity.builder()
+                    .commodityComplement(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("01020000")
+                        .build()))
+                    .build())
+                .build())
+            .build();
+
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
+            .specifiedConsignment().includedConsignmentItem().getFirst()
+            .includedTradeLineItem().getFirst();
+
+        assertThat(line.commonName()).isNull();
     }
 
     @Test
