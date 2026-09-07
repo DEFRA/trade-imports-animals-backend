@@ -1,6 +1,5 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import java.time.LocalDateTime;
 import org.springframework.beans.factory.annotation.Value;
@@ -44,14 +43,6 @@ public interface NotificationView {
     Transport getTransport();
 
     /**
-     * Pre-amend snapshot of the notification content. Server-only — the raw material for
-     * {@link #forDashboard()} when an amendment is cancelled, never serialized. Free to load:
-     * the projection is already open.
-     */
-    @JsonIgnore
-    Notification getPreAmendNotification();
-
-    /**
      * This row as the dashboard should read it.
      *
      * <p>A submitted notification is part of the legal record, so its parties come from the
@@ -71,8 +62,7 @@ public interface NotificationView {
             getCommodity(),
             submitted ? ConsignmentParty.inlineOnly(getConsignor()) : getConsignor(),
             submitted ? ConsignmentParty.inlineOnly(getConsignee()) : getConsignee(),
-            getTransport(),
-            null);
+            getTransport());
     }
 
     /** Jackson deserialization target — flat, matches the on-wire JSON produced by the projection. */
@@ -89,7 +79,5 @@ public interface NotificationView {
         private ConsignmentParty consignor;
         private ConsignmentParty consignee;
         private Transport transport;
-        @JsonIgnore
-        private Notification preAmendNotification;
     }
 }

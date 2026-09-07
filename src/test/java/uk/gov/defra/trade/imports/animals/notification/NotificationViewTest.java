@@ -28,7 +28,6 @@ class NotificationViewTest {
             null,
             consignor,
             consignee,
-            null,
             null);
 
         // When
@@ -39,15 +38,11 @@ class NotificationViewTest {
         assertThat(dashboard.getConsignor().getAddressId()).isNull();
         assertThat(dashboard.getConsignee().getName()).isEqualTo("Frozen Consignee");
         assertThat(dashboard.getConsignee().getAddressId()).isNull();
-        assertThat(dashboard.getPreAmendNotification()).isNull();
     }
 
     @Test
     void forDashboard_shouldKeepLiveReferences_whenDraftOrAmend() {
         // Given
-        Notification freeze = Notification.builder()
-            .consignor(ConsignmentParty.builder().name("Frozen Consignor").build())
-            .build();
         ConsignmentParty liveReference = ConsignmentParty.reference(ADDRESS_ID);
         NotificationView draft = new NotificationView.Data(
             "GBN-AG-26-DRF001",
@@ -58,8 +53,7 @@ class NotificationViewTest {
             null,
             liveReference,
             liveReference,
-            null,
-            freeze);
+            null);
         NotificationView amend = new NotificationView.Data(
             "GBN-AG-26-AMD001",
             2L,
@@ -69,12 +63,10 @@ class NotificationViewTest {
             null,
             liveReference,
             liveReference,
-            null,
-            freeze);
+            null);
 
         // When / Then
         assertThat(draft.forDashboard().getConsignor()).isSameAs(liveReference);
         assertThat(amend.forDashboard().getConsignor()).isSameAs(liveReference);
-        assertThat(draft.forDashboard().getPreAmendNotification()).isNull();
     }
 }

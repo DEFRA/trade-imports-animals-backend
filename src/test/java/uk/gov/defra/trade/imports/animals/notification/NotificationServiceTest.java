@@ -2746,7 +2746,7 @@ class NotificationServiceTest {
         NotificationView build() {
             return new NotificationView.Data(
                 referenceNumber, 0L, status, created,
-                origin, commodity, consignor, consignee, transport, null);
+                origin, commodity, consignor, consignee, transport);
         }
     }
 }
