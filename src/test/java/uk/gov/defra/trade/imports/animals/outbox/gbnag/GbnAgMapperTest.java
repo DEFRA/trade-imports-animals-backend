@@ -162,7 +162,7 @@ class GbnAgMapperTest {
 
             assertThat(line.commonName()).isEqualTo("Live bovine animals"); // commodity.name -> commonName
             assertThat(line.description()).isNull();
-            assertThat(line.scientificName()).isNull(); // gap G18
+            assertThat(line.scientificName()).isEqualTo("Cattle"); // species.text -> scientificName
             assertThat(line.typeCode()).isNull();
             assertThat(line.urlId()).isNull();
             assertThat(line.applicableClassification()).singleElement().satisfies(c -> {
@@ -335,6 +335,7 @@ class GbnAgMapperTest {
             .includedTradeLineItem().getFirst();
 
         assertThat(line.individualTradeProductInstance()).isNull();
+        assertThat(line.scientificName()).isNull();
     }
 
     @Test
@@ -355,6 +356,29 @@ class GbnAgMapperTest {
             .includedTradeLineItem().getFirst();
 
         assertThat(line.commonName()).isNull();
+    }
+
+    @Test
+    void shouldMapScientificNameFromFirstSpecies_whenComplementCarriesMultiple() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-SCI001")
+            .notification(Notification.builder()
+                .commodity(Commodity.builder()
+                    .commodityComplement(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("01020000")
+                        .species(List.of(
+                            Species.builder().value("BOV").text("Bos taurus").build(),
+                            Species.builder().value("BOV").text("Bos taurus").build()))
+                        .build()))
+                    .build())
+                .build())
+            .build();
+
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
+            .specifiedConsignment().includedConsignmentItem().getFirst()
+            .includedTradeLineItem().getFirst();
+
+        assertThat(line.scientificName()).isEqualTo("Bos taurus");
     }
 
     @Test
