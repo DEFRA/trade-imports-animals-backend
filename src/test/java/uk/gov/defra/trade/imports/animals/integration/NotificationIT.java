@@ -1312,10 +1312,12 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void submitThenAmend_shouldAccumulateStatusChanges() {
-        // Given — create and submit
+        // Given — create and submit (amend requires fulfilments on the stored notification)
+        NotificationDto dto = createNotificationDto("GB", "Live cattle");
+        dto.setFulfilments(sampleFulfilments());
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .bodyValue(SaveNotificationDto.of(dto))
             .exchange().expectStatus().isOk()
             .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
@@ -2380,6 +2382,10 @@ class NotificationIT extends IntegrationBase {
             .build();
     }
 
+    private List<Document> sampleFulfilments() {
+        return List.of(new Document("obligationId", "it-obligation").append("value", "1"));
+    }
+
     private NotificationDto sourceNotificationWithAllOperators() {
         CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
             List.of(NotificationTestData.species()));
@@ -2402,6 +2408,7 @@ class NotificationIT extends IntegrationBase {
                 .portOfEntry("GBDVR")
                 .arrivalDate(LocalDate.of(2026, Month.JUNE, 1))
                 .build())
+            .fulfilments(sampleFulfilments())
             .build();
     }
 
