@@ -28,6 +28,7 @@ import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
+import uk.gov.defra.trade.imports.animals.notification.Address;
 import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
 import uk.gov.defra.trade.imports.animals.notification.MeansOfTransport;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
@@ -885,7 +886,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void amend_shouldPersistSubmittedBaselineInMongo() {
+    void amend_shouldPersistPreAmendSnapshotInMongo() {
         // Given — submitted notification with identifiable content
         String referenceNumber = createAndSubmitNotificationWithFullContent();
         NotificationAggregate beforeAmend = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
@@ -896,14 +897,14 @@ class NotificationIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk();
 
-        // Then — baseline captured in Mongo, separate from live content
+        // Then — pre-amend snapshot captured in Mongo at amend start
         NotificationAggregate reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(NotificationStatus.AMEND);
-        assertThat(reloaded.getSubmittedNotificationBaseline()).isNotNull();
-        assertThat(reloaded.getSubmittedNotificationBaseline().getOrigin().getInternalReference())
+        assertThat(reloaded.getPreAmendNotification()).isNotNull();
+        assertThat(reloaded.getPreAmendNotification().getOrigin().getInternalReference())
             .isEqualTo("INTERNAL-DO-NOT-COPY");
-        assertThat(reloaded.getSubmittedNotificationBaseline().getOrigin()).isNotSameAs(reloaded.getNotification().getOrigin());
-        assertThat(reloaded.getSubmittedNotificationBaseline().getCommodity().getName())
+        assertThat(reloaded.getPreAmendNotification().getOrigin()).isNotSameAs(reloaded.getNotification().getOrigin());
+        assertThat(reloaded.getPreAmendNotification().getCommodity().getName())
             .isEqualTo(beforeAmend.getNotification().getCommodity().getName());
     }
 
@@ -951,26 +952,27 @@ class NotificationIT extends IntegrationBase {
      */
 
     @Test
-    void submit_shouldResolveReferencedParty_intoTheOutboxEvent_withoutRewritingWhatIsStored() {
-        // Given — a notification whose consignor is held as an address-book reference
+    void submit_shouldCarryInlinePartyDetails_onTheOutboxEvent_fromWhatIsStored() {
+        // Given — a notification whose consignor carries inline details (as the frontend persists
+        // after pick and re-inflates before submit)
         stubAddressBook(ADDRESS_BOOK_JSON, 200);
-        String referenceNumber = createNotificationWithReferencedConsignor();
+        String referenceNumber = createNotificationWithInflatedConsignor();
 
         // When
         submitAs(referenceNumber, ORG_ID);
 
-        // Then — GBNAG carries the resolved details
+        // Then — GBNAG carries the stored inline details
         Map<String, Object> consignor = outboxConsignorParty(submittedOutboxEvent());
         assertThat(consignor).containsEntry("name", "Astra Rosales");
         assertThat((Map<String, Object>) consignor.get("postalAddress"))
             .containsEntry("postcodeCode", "30055")
             .containsEntry("cityName", "Vernier");
 
-        // And — storage still holds only the reference. Resolving for transmission must not grow a
-        // stale copy of the address beside the reference that exists to avoid exactly that.
+        // And — storage keeps the inline shape the frontend supplied
         NotificationAggregate stored = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
-        assertThat(stored.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(ADDRESS_ID));
+        assertThat(stored.getNotification().getConsignor().getName()).isEqualTo("Astra Rosales");
+        assertThat(stored.getNotification().getConsignor().getAddressId()).isEqualTo(ADDRESS_ID);
     }
 
     @Test
@@ -1082,8 +1084,8 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate inAmendInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertThat(inAmendInMongo.getStatus()).isEqualTo(NotificationStatus.AMEND);
-        assertThat(inAmendInMongo.getSubmittedNotificationBaseline()).isNotNull();
-        assertAmendableContentMatches(submittedInMongo.getNotification(), inAmendInMongo.getSubmittedNotificationBaseline());
+        assertThat(inAmendInMongo.getPreAmendNotification()).isNotNull();
+        assertAmendableContentMatches(submittedInMongo.getNotification(), inAmendInMongo.getPreAmendNotification());
 
         // Simulate trader edits persisted to Mongo during AMEND
         inAmendInMongo.getNotification().getOrigin().setInternalReference("EDITED-REF");
@@ -1096,21 +1098,18 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate editedInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertThat(editedInMongo.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-REF");
-        assertThat(editedInMongo.getSubmittedNotificationBaseline()).isNotNull();
+        assertThat(editedInMongo.getPreAmendNotification()).isNotNull();
 
         // When — cancel amendment via API
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/cancel-amend", referenceNumber)
             .exchange().expectStatus().isOk();
 
-        // Then — reload from Mongo: status reverted, content freeze retained, all amendable fields restored
+        // Then — status reverted, pre-amend snapshot cleared, amendable fields restored
         NotificationAggregate restoredInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
         assertThat(restoredInMongo.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(restoredInMongo.getSubmittedNotificationBaseline()).isNotNull();
-        assertAmendableContentMatches(
-            inAmendInMongo.getSubmittedNotificationBaseline(),
-            restoredInMongo.getSubmittedNotificationBaseline());
+        assertThat(restoredInMongo.getPreAmendNotification()).isNull();
         assertAmendableContentMatches(submittedInMongo.getNotification(), restoredInMongo.getNotification());
     }
 
@@ -1165,7 +1164,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submitFromAmend_shouldReplaceSubmittedBaselineWithThisSubmit() {
+    void submitFromAmend_shouldClearPreAmendSnapshot_andKeepEditedContent() {
         // Given — notification amended with edited content
         String referenceNumber = createAndSubmitNotificationWithFullContent();
 
@@ -1176,7 +1175,7 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate inAmend = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
         inAmend.getNotification().getOrigin().setInternalReference("EDITED-AND-KEPT");
         notificationRepository.save(inAmend);
-        assertThat(inAmend.getSubmittedNotificationBaseline()).isNotNull();
+        assertThat(inAmend.getPreAmendNotification()).isNotNull();
 
         // When — resubmit amended notification
         NotificationAggregate resubmitted = webClient("NoAuth")
@@ -1186,14 +1185,12 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody();
 
-        // Then — edited content kept, freeze replaced with this submit
+        // Then — edited content kept, pre-amend snapshot cleared
         assertThat(resubmitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(resubmitted.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
 
         NotificationAggregate reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
-        assertThat(reloaded.getSubmittedNotificationBaseline()).isNotNull();
-        assertThat(reloaded.getSubmittedNotificationBaseline().getOrigin().getInternalReference())
-            .isEqualTo("EDITED-AND-KEPT");
+        assertThat(reloaded.getPreAmendNotification()).isNull();
         assertThat(reloaded.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
 
         // And — the resubmit emits NotificationSubmissionAmended (AMEND -> SUBMITTED), not NotificationSubmitted
@@ -2313,6 +2310,28 @@ class NotificationIT extends IntegrationBase {
             .origin(origin)
             .commodity(Commodity.builder().name(commodity).build())
             .build();
+    }
+
+    private String createNotificationWithInflatedConsignor() {
+        NotificationDto dto = createNotificationDto("CH", "Live cattle");
+        dto.setConsignor(ConsignmentParty.builder()
+            .addressId(ADDRESS_ID)
+            .name("Astra Rosales")
+            .phone("+41 22 000 0000")
+            .email("astra@example.com")
+            .address(Address.builder()
+                .addressLine1("43 East Hague Extension")
+                .townOrCity("Vernier")
+                .postcode("30055")
+                .countryCode("CH")
+                .build())
+            .build());
+        return webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(dto))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
     }
 
     private String createNotificationWithReferencedConsignor() {

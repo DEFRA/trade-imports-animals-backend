@@ -44,27 +44,24 @@ public interface NotificationView {
     Transport getTransport();
 
     /**
-     * The content frozen at submit. Server-only — the raw material for {@link #forDashboard()},
-     * never serialized. Free to load: the projection is already open.
+     * Pre-amend snapshot of the notification content. Server-only — the raw material for
+     * {@link #forDashboard()} when an amendment is cancelled, never serialized. Free to load:
+     * the projection is already open.
      */
     @JsonIgnore
-    Notification getSubmittedNotificationBaseline();
+    Notification getPreAmendNotification();
 
     /**
      * This row as the dashboard should read it.
      *
      * <p>A submitted notification is part of the legal record, so its parties come from the
-     * snapshot frozen at submit rather than from a reference the caller would resolve against
-     * today's address book. They are handed over <em>inline</em> — details without an
-     * {@code addressId} — so a consumer that resolves references simply reads the frozen name and
-     * makes no lookup at all. Drafts and in-flight amendments keep their reference, which is the
-     * whole point of the reference: they are meant to reflect edits.
-     *
-     * <p>The baseline itself is dropped on the way out either way.
+     * inline details stored on the notification at submit. They are handed over <em>inline</em>
+     * — details without an {@code addressId} — so a consumer that resolves references simply reads
+     * the frozen name and makes no lookup at all. Drafts and in-flight amendments keep their
+     * reference, which is meant to reflect edits via live address-book resolution on the client.
      */
     default NotificationView forDashboard() {
-        Notification frozen = getSubmittedNotificationBaseline();
-        boolean useFrozen = getStatus() == NotificationStatus.SUBMITTED && frozen != null;
+        boolean submitted = getStatus() == NotificationStatus.SUBMITTED;
         return new Data(
             getReferenceNumber(),
             getConcurrencyToken(),
@@ -72,8 +69,8 @@ public interface NotificationView {
             getCreated(),
             getOrigin(),
             getCommodity(),
-            useFrozen ? ConsignmentParty.inlineOnly(frozen.getConsignor()) : getConsignor(),
-            useFrozen ? ConsignmentParty.inlineOnly(frozen.getConsignee()) : getConsignee(),
+            submitted ? ConsignmentParty.inlineOnly(getConsignor()) : getConsignor(),
+            submitted ? ConsignmentParty.inlineOnly(getConsignee()) : getConsignee(),
             getTransport(),
             null);
     }
@@ -93,6 +90,6 @@ public interface NotificationView {
         private ConsignmentParty consignee;
         private Transport transport;
         @JsonIgnore
-        private Notification submittedNotificationBaseline;
+        private Notification preAmendNotification;
     }
 }

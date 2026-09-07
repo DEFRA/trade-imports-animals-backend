@@ -393,7 +393,7 @@ class GbnAgMapperTest {
     @Test
     void shouldEmitNullNameAndPostalAddress_whenConsignorIsUnresolvedReference() {
         // TradeParty.from does not resolve address-book references; NotificationService must call
-        // ConsignmentPartyResolver.resolveForSubmission before appendEvent, or GBNAG receives nulls.
+        // ConsignmentPartyResolver.validatePartiesAtSubmit before appendEvent, or GBNAG receives nulls.
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-REFMAP")
             .notification(Notification.builder()

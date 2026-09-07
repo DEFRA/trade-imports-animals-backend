@@ -9,17 +9,15 @@ class NotificationViewTest {
     private static final String ADDRESS_ID = "665f1c2ab3e4d51a2c9d0e77";
 
     @Test
-    void forDashboard_shouldInlineFrozenPartiesWithoutAddressId_whenSubmitted() {
-        // Given
-        Notification freeze = Notification.builder()
-            .consignor(ConsignmentParty.builder()
-                .addressId(ADDRESS_ID)
-                .name("Frozen Consignor")
-                .build())
-            .consignee(ConsignmentParty.builder()
-                .addressId(ADDRESS_ID)
-                .name("Frozen Consignee")
-                .build())
+    void forDashboard_shouldInlineStoredPartiesWithoutAddressId_whenSubmitted() {
+        // Given — inline details on the notification fields (frozen at submit)
+        ConsignmentParty consignor = ConsignmentParty.builder()
+            .addressId(ADDRESS_ID)
+            .name("Frozen Consignor")
+            .build();
+        ConsignmentParty consignee = ConsignmentParty.builder()
+            .addressId(ADDRESS_ID)
+            .name("Frozen Consignee")
             .build();
         NotificationView view = new NotificationView.Data(
             "GBN-AG-26-FRZ001",
@@ -28,10 +26,10 @@ class NotificationViewTest {
             null,
             null,
             null,
-            ConsignmentParty.reference(ADDRESS_ID),
-            ConsignmentParty.reference(ADDRESS_ID),
+            consignor,
+            consignee,
             null,
-            freeze);
+            null);
 
         // When
         NotificationView dashboard = view.forDashboard();
@@ -41,7 +39,7 @@ class NotificationViewTest {
         assertThat(dashboard.getConsignor().getAddressId()).isNull();
         assertThat(dashboard.getConsignee().getName()).isEqualTo("Frozen Consignee");
         assertThat(dashboard.getConsignee().getAddressId()).isNull();
-        assertThat(dashboard.getSubmittedNotificationBaseline()).isNull();
+        assertThat(dashboard.getPreAmendNotification()).isNull();
     }
 
     @Test
@@ -77,6 +75,6 @@ class NotificationViewTest {
         // When / Then
         assertThat(draft.forDashboard().getConsignor()).isSameAs(liveReference);
         assertThat(amend.forDashboard().getConsignor()).isSameAs(liveReference);
-        assertThat(draft.forDashboard().getSubmittedNotificationBaseline()).isNull();
+        assertThat(draft.forDashboard().getPreAmendNotification()).isNull();
     }
 }
