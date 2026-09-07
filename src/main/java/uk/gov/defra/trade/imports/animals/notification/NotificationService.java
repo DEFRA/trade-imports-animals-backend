@@ -290,11 +290,10 @@ public class NotificationService {
 
         return executeWithOutboxLock(
             OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
-                if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)) {
-                    if (notification.getStatus() == NotificationStatus.AMEND) {
-                        notification.setSubmittedFulfilmentsBaseline(null);
-                        notification.setPreAmendNotification(null);
-                    }
+                if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)
+                    && notification.getStatus() == NotificationStatus.AMEND) {
+                    notification.setSubmittedFulfilmentsBaseline(null);
+                    notification.setPreAmendNotification(null);
                 }
                 notification.setStatus(targetStatus);
                 notification.setUpdated(LocalDateTime.now());

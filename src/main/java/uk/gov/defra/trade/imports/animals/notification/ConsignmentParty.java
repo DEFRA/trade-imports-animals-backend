@@ -42,23 +42,8 @@ public class ConsignmentParty {
     }
 
     /**
-     * Normalises a party for persistence: when {@code addressId} is set, drop inline details so a
-     * resolved (or stale) copy is never stored beside the reference. Inline parties pass through.
-     *
-     * @deprecated Retained for {@link NotificationView#forDashboard()} until the dashboard endpoint
-     *     retires. Ingest no longer strips inline details.
-     */
-    @Deprecated
-    public static ConsignmentParty forStorage(ConsignmentParty party) {
-        if (party == null || party.getAddressId() == null) {
-            return party;
-        }
-        return reference(party.getAddressId());
-    }
-
-    /**
      * Drops {@code addressId} from a frozen party so a dashboard row is read as details, not as a
-     * live address-book reference. Persistence uses {@link #forStorage} instead.
+     * live address-book reference.
      */
     public static ConsignmentParty inlineOnly(ConsignmentParty party) {
         if (party == null || party.getAddressId() == null) {
