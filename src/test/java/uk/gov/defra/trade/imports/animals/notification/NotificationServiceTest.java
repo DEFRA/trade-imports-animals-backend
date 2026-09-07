@@ -297,8 +297,9 @@ class NotificationServiceTest {
         }
 
         @Test
-        void saveNotification_shouldPersistPlaceOfOriginAndConsignmentAsReferences() {
-            // Given
+        void saveNotification_shouldPersistInlinePartyDetailsFromTheDto_byteFaithfully() {
+            // Given — the frontend sends inline details alongside the address-book id; ingest
+            // stores the payload byte-faithfully rather than stripping back to a reference.
             String originId = "665f1c2ab3e4d51a2c9d0e78";
             String contactId = "665f1c2ab3e4d51a2c9d0e79";
             String referenceNumber = "GBN-AG-26-ORIG01";
@@ -312,27 +313,27 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
+            ConsignmentParty originParty = ConsignmentParty.builder()
+                .addressId(originId)
+                .name("Stale Origin")
+                .build();
+            ConsignmentParty contactParty = ConsignmentParty.builder()
+                .addressId(contactId)
+                .name("Stale Contact")
+                .build();
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
                 .concurrencyToken(0L)
-                .placeOfOrigin(ConsignmentParty.builder()
-                    .addressId(originId)
-                    .name("Stale Origin")
-                    .build())
-                .consignment(ConsignmentParty.builder()
-                    .addressId(contactId)
-                    .name("Stale Contact")
-                    .build())
+                .placeOfOrigin(originParty)
+                .consignment(contactParty)
                 .build();
 
             // When
             NotificationAggregate saved = notificationService.saveNotification(dto, "trace-orig-001", null);
 
             // Then
-            assertThat(saved.getNotification().getPlaceOfOrigin())
-                .isEqualTo(ConsignmentParty.reference(originId));
-            assertThat(saved.getNotification().getConsignment())
-                .isEqualTo(ConsignmentParty.reference(contactId));
+            assertThat(saved.getNotification().getPlaceOfOrigin()).isEqualTo(originParty);
+            assertThat(saved.getNotification().getConsignment()).isEqualTo(contactParty);
         }
 
         @Test
@@ -368,12 +369,13 @@ class NotificationServiceTest {
             // Then — the draft is saved, still holding the reference
             assertThat(saved.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
 
-            // And the event carries the role blank rather than failing the write
+            // Draft edit events carry whatever was persisted — address-book resolution is submit-only
             ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(outboxService).appendEvent(
                 captor.capture(), eq(OutboxEventType.NOTIFICATION_EDITED), eq("trace-edit-001"),
                 any());
-            assertThat(captor.getValue().getNotification().getConsignor()).isNull();
+            assertThat(captor.getValue().getNotification().getConsignor())
+                .isEqualTo(ConsignmentParty.reference(addressId));
         }
 
         @Test
@@ -1171,9 +1173,8 @@ class NotificationServiceTest {
 
         @Test
         void submitNotification_shouldFetchASharedAddressOnce_whenTwoRolesReferenceIt() {
-            // Given — the same saved address used as both consignor and consignee. Every lookup
-            // runs against a 2s timeout budget, so the roles share one call rather than each
-            // paying for their own.
+            // Given — the same saved address used as both consignor and consignee. Submit
+            // validation deduplicates the lookup; the outbox event carries stored refs as-is.
             String addressId = "665f1c2ab3e4d51a2c9d0e77";
             String referenceNumber = "GBN-AG-26-REF013";
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
@@ -1197,10 +1198,11 @@ class NotificationServiceTest {
                 referenceNumber, "trace-shared-001", Actor.builder().organisationId(ORG_ID).build());
 
             // Then
+            verify(addressBookClient, times(1)).findById(ORG_ID, addressId);
             ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(outboxService).appendEvent(captor.capture(), any(), any(), any());
-            assertThat(captor.getValue().getNotification().getConsignee().getName()).isEqualTo("Astra Rosales");
-            verify(addressBookClient, times(1)).findById(ORG_ID, addressId);
+            assertThat(captor.getValue().getNotification().getConsignee().getAddressId()).isEqualTo(addressId);
+            assertThat(captor.getValue().getNotification().getConsignee().getName()).isNull();
         }
 
         @Test
