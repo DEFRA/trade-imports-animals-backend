@@ -339,6 +339,47 @@ class GbnAgMapperTest {
     }
 
     @Test
+    void shouldMapApplicableClassificationToNull_whenTypeOfCommodityAbsent() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-CN001")
+            .notification(Notification.builder()
+                .commodity(Commodity.builder()
+                    .commodityComplement(List.of(CommodityComplement.builder()
+                        .typeOfCommodity(null)
+                        .build()))
+                    .build())
+                .build())
+            .build();
+
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
+            .specifiedConsignment().includedConsignmentItem().getFirst()
+            .includedTradeLineItem().getFirst();
+
+        assertThat(line.applicableClassification()).isNull();
+    }
+
+    @Test
+    void shouldMapScientificNameToNull_whenSpeciesEmpty() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-SPC004")
+            .notification(Notification.builder()
+                .commodity(Commodity.builder()
+                    .commodityComplement(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("01020000")
+                        .species(List.of())
+                        .build()))
+                    .build())
+                .build())
+            .build();
+
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
+            .specifiedConsignment().includedConsignmentItem().getFirst()
+            .includedTradeLineItem().getFirst();
+
+        assertThat(line.scientificName()).isNull();
+    }
+
+    @Test
     void shouldMapCommonNameToNull_whenCommodityNameAbsent() {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-CMD001")
