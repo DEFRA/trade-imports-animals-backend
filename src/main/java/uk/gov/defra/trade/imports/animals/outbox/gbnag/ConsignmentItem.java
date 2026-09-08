@@ -11,7 +11,7 @@ public record ConsignmentItem(List<TradeLineItem> includedTradeLineItem) {
             return null;
         }
         List<TradeLineItem> lines = commodity.getCommodityComplement().stream()
-            .map(TradeLineItem::from)
+            .map(c -> TradeLineItem.from(commodity.getName(), c))
             .toList();
         return List.of(new ConsignmentItem(lines));
     }
