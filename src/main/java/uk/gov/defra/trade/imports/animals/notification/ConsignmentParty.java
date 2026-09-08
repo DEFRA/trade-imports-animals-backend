@@ -42,21 +42,8 @@ public class ConsignmentParty {
     }
 
     /**
-     * Normalises a party for persistence: when {@code addressId} is set, drop inline details so a
-     * resolved (or stale) copy is never stored beside the reference. Inline parties pass through.
-     */
-    public static ConsignmentParty forStorage(ConsignmentParty party) {
-        if (party == null || party.getAddressId() == null) {
-            return party;
-        }
-        return reference(party.getAddressId());
-    }
-
-    /**
-     * Normalises a party that is never a reference — {@code placeOfOrigin} and
-     * {@code consignment}, the consignment contact. The details are what is kept; any
-     * {@code addressId} is dropped, because for these roles it only ever records which address the
-     * copy was taken from and must not become something the outbox tries to resolve.
+     * Drops {@code addressId} from a frozen party so a dashboard row is read as details, not as a
+     * live address-book reference.
      */
     public static ConsignmentParty inlineOnly(ConsignmentParty party) {
         if (party == null || party.getAddressId() == null) {

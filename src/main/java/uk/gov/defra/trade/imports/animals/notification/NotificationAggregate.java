@@ -66,13 +66,21 @@ public class NotificationAggregate {
     /** Opaque obligation-fulfilment payload — persisted byte-faithfully; never interpreted by the backend. */
     private List<Document> fulfilments;
 
-    /** Pre-amend snapshot of {@link #notification}. Non-null iff status is AMEND; restored by cancelAmend, cleared by submit-from-amend. */
+    /**
+     * Pre-amend snapshot of {@link #notification}. Amend-only scratchpad: captured when an
+     * amendment starts, restored by cancel-amend, and cleared when the amendment is submitted.
+     * Independent of {@link #preAmendFulfilments}; carries inline party details as they
+     * stood when the trader opened the amendment.
+     */
     @JsonIgnore
-    private Notification submittedNotificationBaseline;
+    private Notification preAmendNotification;
 
-    /** Pre-amend snapshot of {@link #fulfilments}. Non-null iff status is AMEND; restored by cancelAmend, cleared by submit-from-amend. */
+    /**
+     * Pre-amend snapshot of {@link #fulfilments}. Amend-only scratchpad: restored by cancel-amend
+     * and cleared when the amendment is submitted. Independent of the content freeze.
+     */
     @JsonIgnore
-    private List<Document> submittedFulfilmentsBaseline;
+    private List<Document> preAmendFulfilments;
 
     /** Returns the notification sub-object, failing fast if absent. Use at seams that require content. */
     public Notification requireNotification() {

@@ -221,10 +221,17 @@ public class NotificationService {
                 "Cannot amend notification with status: " + notificationAggregate.getStatus());
         }
 
-        notificationAggregate.setSubmittedNotificationBaseline(notificationContentMapper.deepClone(notificationAggregate.getNotification()));
+        // The content baseline is captured here alongside fulfilments: a deep-clone of the
+        // notification as it stood when the trader opened the amendment, so cancel-amend can
+        // restore what was really submitted without re-resolving today's address book.
+        notificationAggregate.setPreAmendNotification(
+            notificationContentMapper.deepClone(notificationAggregate.getNotification()));
         List<Document> currentFulfilments = notificationAggregate.getFulfilments();
-        notificationAggregate.setSubmittedFulfilmentsBaseline(
-            currentFulfilments == null ? null : deepCopyFulfilments(currentFulfilments));
+        if (currentFulfilments == null) {
+            throw new IllegalStateException(
+                "Cannot amend notification: fulfilments payload is missing");
+        }
+        notificationAggregate.setPreAmendFulfilments(deepCopyFulfilments(currentFulfilments));
 
         return writeWithOutbox(
             notificationAggregate,
@@ -245,17 +252,18 @@ public class NotificationService {
             throw new BadRequestException(
                 "Cannot cancel amendment for notification with status: " + notificationAggregate.getStatus());
         }
-        if (notificationAggregate.getSubmittedNotificationBaseline() == null) {
+        if (notificationAggregate.getPreAmendNotification() == null) {
             throw new BadRequestException(
-                "Cannot cancel amendment: no submitted baseline stored for notification");
+                "Cannot cancel amendment: no pre-amend snapshot stored for notification");
         }
 
-        notificationAggregate.setNotification(notificationContentMapper.deepClone(notificationAggregate.getSubmittedNotificationBaseline()));
-        notificationAggregate.setSubmittedNotificationBaseline(null);
-        List<Document> priorFulfilments = notificationAggregate.getSubmittedFulfilmentsBaseline();
+        notificationAggregate.setNotification(
+            notificationContentMapper.deepClone(notificationAggregate.getPreAmendNotification()));
+        List<Document> priorFulfilments = notificationAggregate.getPreAmendFulfilments();
         notificationAggregate.setFulfilments(
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
-        notificationAggregate.setSubmittedFulfilmentsBaseline(null);
+        notificationAggregate.setPreAmendFulfilments(null);
+        notificationAggregate.setPreAmendNotification(null);
         // submittedAt is deliberately NOT reset — reverting to the previously-submitted state
         // preserves the original submission timestamp.
         return writeWithOutbox(
@@ -282,10 +290,10 @@ public class NotificationService {
 
         return executeWithOutboxLock(
             OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
-                if (targetStatus == NotificationStatus.SUBMITTED
+                if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)
                     && notification.getStatus() == NotificationStatus.AMEND) {
-                    notification.setSubmittedNotificationBaseline(null);
-                    notification.setSubmittedFulfilmentsBaseline(null);
+                    notification.setPreAmendFulfilments(null);
+                    notification.setPreAmendNotification(null);
                 }
                 notification.setStatus(targetStatus);
                 notification.setUpdated(LocalDateTime.now());
@@ -303,31 +311,37 @@ public class NotificationService {
             });
     }
 
-    // Draft-grade events: notification may not be fully resolved; best-effort resolution is appropriate.
+    // Draft-grade events carry whatever inline details the frontend already persisted on the
+    // notification fields; no address-book resolution is needed for the event body.
     private static final Set<OutboxEventType> DRAFT_GRADE_EVENTS = Set.of(
         OutboxEventType.NOTIFICATION_CREATED,
         OutboxEventType.NOTIFICATION_EDITED,
         OutboxEventType.NOTIFICATION_DELETED);
 
     /**
-     * The notification as every outbox event should carry it: references filled in, on a copy, so
-     * the stored notification keeps the reference alone.
-     *
-     * <p>Submit and amend resolve strictly — a GBNAG document cannot carry a nameless party. A
-     * draft edit is best-effort, so an address deleted since does not block the save.
+     * The notification as every outbox event should carry it. Submit events validate that
+     * referenced parties still resolve; cancel-amend restores from the pre-amend snapshot.
      */
     private NotificationAggregate resolvedForOutbox(
         NotificationAggregate notificationAggregate, OutboxEventType eventType, Actor actor) {
-        String organisationId = actor != null ? actor.getOrganisationId() : null;
         NotificationAggregate copy = notificationAggregate.toBuilder().build();
-        // toBuilder is shallow; deep-clone the notification so the resolver's party mutations
-        // don't leak back into the persisted aggregate.
+        if (eventType == OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED) {
+            Notification snapshot = notificationAggregate.getPreAmendNotification();
+            if (snapshot != null) {
+                copy.setNotification(notificationContentMapper.deepClone(snapshot));
+            } else if (copy.getNotification() != null) {
+                copy.setNotification(notificationContentMapper.deepClone(copy.getNotification()));
+            }
+            return copy;
+        }
+        String organisationId = actor != null ? actor.getOrganisationId() : null;
         if (copy.getNotification() != null) {
             copy.setNotification(notificationContentMapper.deepClone(copy.getNotification()));
         }
-        return DRAFT_GRADE_EVENTS.contains(eventType)
-            ? consignmentPartyResolver.resolveForDraft(copy, organisationId)
-            : consignmentPartyResolver.resolveForSubmission(copy, organisationId);
+        if (!DRAFT_GRADE_EVENTS.contains(eventType)) {
+            consignmentPartyResolver.validatePartiesAtSubmit(copy, organisationId);
+        }
+        return copy;
     }
 
     private <T> T executeWithOutboxLock(
@@ -533,16 +547,14 @@ public class NotificationService {
         notification.setCommodity(dto.getCommodity());
         notification.setReasonForImport(dto.getReasonForImport());
         notification.setAdditionalDetails(dto.getAdditionalDetails());
-        // Place of origin and the consignment contact are held as copies, so they are
-        // stored as they arrive. The other four keep the reference alone.
-        notification.setPlaceOfOrigin(ConsignmentParty.inlineOnly(dto.getPlaceOfOrigin()));
-        notification.setConsignor(ConsignmentParty.forStorage(dto.getConsignor()));
-        notification.setConsignee(ConsignmentParty.forStorage(dto.getConsignee()));
-        notification.setImporter(ConsignmentParty.forStorage(dto.getImporter()));
-        notification.setDestination(ConsignmentParty.forStorage(dto.getDestination()));
+        notification.setPlaceOfOrigin(dto.getPlaceOfOrigin());
+        notification.setConsignor(dto.getConsignor());
+        notification.setConsignee(dto.getConsignee());
+        notification.setImporter(dto.getImporter());
+        notification.setDestination(dto.getDestination());
         notification.setCphNumber(dto.getCphNumber());
         notification.setTransport(dto.getTransport());
-        notification.setConsignment(ConsignmentParty.inlineOnly(dto.getConsignment()));
+        notification.setConsignment(dto.getConsignment());
         notificationAggregate.setFulfilments(dto.getFulfilments());
         notificationAggregate.setUpdated(LocalDateTime.now());
     }
@@ -564,7 +576,7 @@ public class NotificationService {
 
     /**
      * BSON round-trip deep clone of a fulfilments list. Callers need independence from the source
-     * because amend snapshots the pre-amend fulfilments into {@code submittedFulfilmentsBaseline}
+     * because amend snapshots the pre-amend fulfilments into {@code preAmendFulfilments}
      * and cancel-amend restores from it; a shared reference at any nesting depth would let a
      * later in-memory mutation on one list surface on the other before the notification is persisted.
      * Callers are responsible for the {@code null} case — the helper always returns a fresh list.
