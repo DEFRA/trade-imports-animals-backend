@@ -222,7 +222,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
             .bodyValue(SaveNotificationDto.of(NotificationDto.builder()
                 .referenceNumber(created.getReferenceNumber())
                 .concurrencyToken(created.getConcurrencyToken())
-                .origin(new Origin("GB", "true", "REF123"))
+                .origin(new Origin("GB", "true", "REF123", null))
                 .commodity(Commodity.builder().name("Live cattle").build())
                 .build()))
             .exchange()
@@ -243,7 +243,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
 
     protected static NotificationDto minimalNotificationDto() {
         return NotificationDto.builder()
-            .origin(new Origin("GB", "true", "REF123"))
+            .origin(new Origin("GB", "true", "REF123", null))
             .commodity(Commodity.builder().name("Live cattle").build())
             .build();
     }

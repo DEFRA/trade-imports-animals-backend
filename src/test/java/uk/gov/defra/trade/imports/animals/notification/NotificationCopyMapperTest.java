@@ -31,7 +31,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldRetainCountryOfOriginAndRequiresRegionCode() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .origin(new Origin("DE", "yes", "INTERNAL-REF"))
+                .origin(new Origin("DE", "yes", "INTERNAL-REF", null))
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
@@ -162,6 +162,50 @@ class NotificationCopyMapperTest {
         }
 
         @Test
+        void toCopyDto_shouldRetainRegionOfOriginCode() {
+            NotificationAggregate source = aggregateOf(Notification.builder()
+                .origin(new Origin("FR", "yes", "INTERNAL-REF", "FR-75"))
+                .build());
+
+            NotificationDto result = mapper.toCopyDto(source);
+
+            assertThat(result.getOrigin().getRegionOfOriginCode()).isEqualTo("FR-75");
+        }
+
+        @Test
+        void toCopyDto_shouldRetainPurposeInInternalMarket() {
+            NotificationAggregate source = aggregateOf(Notification.builder()
+                .purposeInInternalMarket("Breeding")
+                .build());
+
+            NotificationDto result = mapper.toCopyDto(source);
+
+            assertThat(result.getPurposeInInternalMarket()).isEqualTo("Breeding");
+        }
+
+        @Test
+        void toCopyDto_shouldRetainDestinationCountry() {
+            NotificationAggregate source = aggregateOf(Notification.builder()
+                .destinationCountry("DE")
+                .build());
+
+            NotificationDto result = mapper.toCopyDto(source);
+
+            assertThat(result.getDestinationCountry()).isEqualTo("DE");
+        }
+
+        @Test
+        void toCopyDto_shouldRetainPortOfExit() {
+            NotificationAggregate source = aggregateOf(Notification.builder()
+                .portOfExit("GB DVR")
+                .build());
+
+            NotificationDto result = mapper.toCopyDto(source);
+
+            assertThat(result.getPortOfExit()).isEqualTo("GB DVR");
+        }
+
+        @Test
         void toCopyDto_shouldRetainFulfilments() {
             List<org.bson.Document> fulfilments = List.of(
                 new org.bson.Document("obligationId", "abc"),
@@ -183,7 +227,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldOmitInternalReference() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .origin(new Origin("FR", "no", "DO-NOT-COPY"))
+                .origin(new Origin("FR", "no", "DO-NOT-COPY", null))
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
@@ -261,6 +305,36 @@ class NotificationCopyMapperTest {
             NotificationDto result = mapper.toCopyDto(source);
 
             assertThat(result.getConsignment()).isNull();
+        }
+
+        @Test
+        void toCopyDto_shouldOmitExitDate() {
+            NotificationAggregate source = aggregateOf(Notification.builder()
+                .exitDate(LocalDate.of(2026, 12, 20))
+                .build());
+
+            NotificationDto result = mapper.toCopyDto(source);
+
+            assertThat(result.getExitDate()).isNull();
+        }
+
+        @Test
+        void toCopyDto_shouldOmitAnimalIdentifiers_becauseSpeciesIsResetOnCopy() {
+            AnimalIdentifier unit = AnimalIdentifier.builder().earTag("UK123456789012").build();
+            Species speciesWithIdentifiers = Species.builder()
+                .value("BOV")
+                .text("Bovine")
+                .animalIdentifiers(List.of(unit))
+                .build();
+            CommodityComplement complement =
+                new CommodityComplement("LIVE", 10, 5, List.of(speciesWithIdentifiers));
+            NotificationAggregate source = aggregateOf(Notification.builder()
+                .commodity(Commodity.builder().commodityComplement(List.of(complement)).build())
+                .build());
+
+            NotificationDto result = mapper.toCopyDto(source);
+
+            assertThat(result.getCommodity().getCommodityComplement().getFirst().getSpecies()).isNull();
         }
     }
 

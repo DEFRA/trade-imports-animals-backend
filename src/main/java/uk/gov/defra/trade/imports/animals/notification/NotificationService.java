@@ -555,6 +555,10 @@ public class NotificationService {
         notification.setCphNumber(dto.getCphNumber());
         notification.setTransport(dto.getTransport());
         notification.setConsignment(dto.getConsignment());
+        notification.setPurposeInInternalMarket(dto.getPurposeInInternalMarket());
+        notification.setDestinationCountry(dto.getDestinationCountry());
+        notification.setPortOfExit(dto.getPortOfExit());
+        notification.setExitDate(dto.getExitDate());
         notificationAggregate.setFulfilments(dto.getFulfilments());
         notificationAggregate.setUpdated(LocalDateTime.now());
     }

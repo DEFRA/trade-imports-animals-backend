@@ -118,7 +118,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
         String referenceNumber = draft.getReferenceNumber();
         NotificationDto edit = NotificationDto.builder()
             .referenceNumber(referenceNumber)
-            .origin(new Origin("GB", "no", "EDITED"))
+            .origin(new Origin("GB", "no", "EDITED", null))
             .commodity(Commodity.builder().name("Live cattle").build())
             .concurrencyToken(draft.getConcurrencyToken())
             .build();

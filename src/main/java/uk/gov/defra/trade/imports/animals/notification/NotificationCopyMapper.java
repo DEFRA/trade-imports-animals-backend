@@ -32,9 +32,16 @@ public class NotificationCopyMapper {
             .importer(mapConsignmentParty(source.getImporter()))
             .destination(mapConsignmentParty(source.getDestination()))
             .cphNumber(source.getCphNumber())
+            .purposeInInternalMarket(source.getPurposeInInternalMarket())
+            .destinationCountry(source.getDestinationCountry())
+            // portOfExit retained — pairs with portOfEntry, which is a logistical field reset
+            // via the whole transport block; kept here for consistency with the other
+            // reasonForImport-conditional fields above rather than resetting to match transport
+            .portOfExit(source.getPortOfExit())
             .fulfilments(notificationAggregate.getFulfilments() == null ? null : new ArrayList<>(notificationAggregate.getFulfilments()))
             // transport intentionally omitted — logistical fields (portOfEntry, arrivalDate, transporter) are reset on copy
             // consignment intentionally omitted — contact address is reset on copy
+            // exitDate intentionally omitted — time-bound logistical value is reset on copy, like arrivalDate
             .build();
     }
 
@@ -60,6 +67,7 @@ public class NotificationCopyMapper {
         return Origin.builder()
             .countryCode(source.getCountryCode())
             .requiresRegionCode(source.getRequiresRegionCode())
+            .regionOfOriginCode(source.getRegionOfOriginCode())
             // internalReference intentionally omitted — per-consignment reference is reset on copy
             .build();
     }
