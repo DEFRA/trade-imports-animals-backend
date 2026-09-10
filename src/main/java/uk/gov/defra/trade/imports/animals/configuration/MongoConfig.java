@@ -7,6 +7,7 @@ import com.mongodb.WriteConcern;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.connection.ConnectionPoolSettings;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import javax.net.ssl.SSLContext;
 import lombok.extern.slf4j.Slf4j;
@@ -20,6 +21,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.MongoTransactionManager;
 import org.springframework.data.mongodb.config.EnableMongoAuditing;
+import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import uk.gov.defra.trade.imports.animals.configuration.tls.TrustStoreConfiguration;
 
@@ -79,6 +81,18 @@ public class MongoConfig {
       log.info("MongoDB client configuration complete");
       
     return builder.build();
+  }
+
+  /**
+   * Registers the UTC-scoped {@code LocalDate} converters ahead of Spring Data's built-in
+   * JSR-310 pair, so date-only fields persist as UTC start-of-day rather than start-of-day in
+   * the JVM's default timezone. See {@link UtcLocalDateConverters} for the rationale.
+   */
+  @Bean
+  MongoCustomConversions mongoCustomConversions() {
+    return new MongoCustomConversions(List.of(
+        UtcLocalDateConverters.LocalDateToDateConverter.INSTANCE,
+        UtcLocalDateConverters.DateToLocalDateConverter.INSTANCE));
   }
 
   @Bean

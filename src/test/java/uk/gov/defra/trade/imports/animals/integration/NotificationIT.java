@@ -8,14 +8,17 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Month;
 import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
 import java.util.stream.Stream;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockserver.model.MediaType;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.HttpMethod;
 import org.bson.Document;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
@@ -89,6 +92,10 @@ class NotificationIT extends IntegrationBase {
 
     @Autowired
     private OutboxEventRepository outboxEventRepository;
+
+    /** Used for raw-BSON assertions that must bypass the Java object mapper. */
+    @Autowired
+    private MongoTemplate mongoTemplate;
 
     @BeforeEach
     void setUp() {
@@ -407,6 +414,48 @@ class NotificationIT extends IntegrationBase {
         assertThat(page1.content())
             .extracting(this::extractArrivalDate)
             .containsOnlyNulls();
+    }
+
+    @Test
+    void post_shouldPersistArrivalDateAsUtcStartOfDay_whenJvmDefaultZoneIsBst() {
+        // Given — the JVM default zone is Europe/London in July (BST, UTC+01:00): the exact
+        // condition under which Spring Data's default JSR-310 converter stored the previous
+        // calendar day (EUDPA-282). Overridden here rather than relying on the host's zone so
+        // the regression is reproduced on a UTC CI container too. TimeZone.setDefault is
+        // JVM-wide, hence the try/finally restore.
+        TimeZone originalTimeZone = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("Europe/London"));
+        try {
+            LocalDate arrivalDate = LocalDate.of(2026, Month.JULY, 21);
+
+            // When
+            String referenceNumber = webClient("NoAuth")
+                .post()
+                .uri(NOTIFICATION_ENDPOINT)
+                .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("GB", arrivalDate)))
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(NotificationAggregate.class).returnResult()
+                .getResponseBody()
+                .getReferenceNumber();
+
+            // Then — assert on the raw BSON, bypassing the object mapper. A repository round trip
+            // decodes with the same zone that encoded it, cancelling the drift out and hiding
+            // the bug; only the stored instant itself shows it.
+            Document stored = mongoTemplate.getCollection("notification")
+                .find(new Document("referenceNumber", referenceNumber))
+                .first();
+            Date persistedArrivalDate = stored
+                .get("notification", Document.class)
+                .get("transport", Document.class)
+                .get("arrivalDate", Date.class);
+
+            assertThat(persistedArrivalDate.toInstant()).hasToString("2026-07-21T00:00:00Z");
+            // The ticket's worked example: UTC midnight, not 1784588400000 (2026-07-20T23:00:00Z).
+            assertThat(persistedArrivalDate.getTime()).isEqualTo(1_784_592_000_000L);
+        } finally {
+            TimeZone.setDefault(originalTimeZone);
+        }
     }
 
     @Test
