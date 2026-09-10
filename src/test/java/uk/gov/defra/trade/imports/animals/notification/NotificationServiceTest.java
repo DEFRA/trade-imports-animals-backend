@@ -224,56 +224,34 @@ class NotificationServiceTest {
 
         @Test
         void saveNotification_shouldUpdateNotificationFieldsAndWriteEditedEvent_whenDraft() {
-            // Given
+            // Given - a draft holding stale content
             String existingId = "507f191e810c19729de860ea";
             String referenceNumber = "GBN-AG-26-507F19";
+            NotificationAggregate existing = NotificationAggregate.builder()
+                .id(existingId)
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .notification(Notification.builder()
+                    .origin(new Origin("GB", "true", "STALE", null))
+                    .build())
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
             Origin origin = new Origin("FR", "false", "REF456", null);
-            AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
-            Species species = species();
-            CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species));
             Commodity commodity = Commodity.builder()
                 .name("Fish")
-                .commodityComplement(List.of(complement))
+                .commodityComplement(List.of(new CommodityComplement("LIVE", 5, null, List.of(species()))))
                 .build();
-            String cphNumber = "123456789";
+            AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()
                 .portOfEntry("ABERDEEN")
                 .arrivalDate(LocalDate.of(2026, Month.JANUARY, 1))
                 .transporter(transporters().getFirst())
                 .build();
-
-            NotificationAggregate existingNotification = new NotificationAggregate();
-            existingNotification.setNotification(new Notification());
-            existingNotification.setId(existingId);
-            existingNotification.setReferenceNumber(referenceNumber);
-            existingNotification.setStatus(DRAFT);
-            existingNotification.getNotification().setOrigin(origin);
-
-            NotificationAggregate updatedNotification = NotificationAggregate.builder()
-                .id(existingId)
-                .referenceNumber(referenceNumber)
-                .concurrencyToken(0L)
-                .status(DRAFT)
-                .notification(Notification.builder()
-                    .origin(origin)
-                    .commodity(commodity)
-                    .consignor(consignors().getFirst())
-                    .destination(destinations().getFirst())
-                    .additionalDetails(additionalDetails)
-                    .reasonForImport("PERMANENT")
-                    .cphNumber(cphNumber)
-                    .transport(transport)
-                    .consignment(consignments().getFirst())
-                    .purposeInInternalMarket("Breeding")
-                    .destinationCountry("DE")
-                    .portOfExit("GB DVR")
-                    .exitDate(LocalDate.of(2026, Month.JANUARY, 15))
-                    .build())
-                .build();
-
-            when(notificationRepository.findByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.of(existingNotification));
-            when(notificationRepository.save(any(NotificationAggregate.class))).thenReturn(updatedNotification);
+            LocalDate exitDate = LocalDate.of(2026, Month.JANUARY, 15);
 
             NotificationDto updateDto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
@@ -284,24 +262,44 @@ class NotificationServiceTest {
                 .destination(destinations().getFirst())
                 .additionalDetails(additionalDetails)
                 .reasonForImport("PERMANENT")
-                .cphNumber(cphNumber)
+                .cphNumber("123456789")
                 .transport(transport)
                 .consignment(consignments().getFirst())
                 .purposeInInternalMarket("Breeding")
                 .destinationCountry("DE")
                 .portOfExit("GB DVR")
-                .exitDate(LocalDate.of(2026, Month.JANUARY, 15))
+                .exitDate(exitDate)
+                .build();
+
+            Notification expectedNotification = Notification.builder()
+                .origin(origin)
+                .commodity(commodity)
+                .consignor(consignors().getFirst())
+                .destination(destinations().getFirst())
+                .additionalDetails(additionalDetails)
+                .reasonForImport("PERMANENT")
+                .cphNumber("123456789")
+                .transport(transport)
+                .consignment(consignments().getFirst())
+                .purposeInInternalMarket("Breeding")
+                .destinationCountry("DE")
+                .portOfExit("GB DVR")
+                .exitDate(exitDate)
                 .build();
 
             // When
             NotificationAggregate result = notificationService.saveNotification(updateDto, "trace-upd-001", null);
 
             // Then
-            assertThat(result)
+            assertThat(result.getNotification())
                 .usingRecursiveComparison()
-                .isEqualTo(updatedNotification);
-            verify(notificationRepository, times(1)).save(any(NotificationAggregate.class));
-            verify(outboxService).appendEvent(updatedNotification, OutboxEventType.NOTIFICATION_EDITED, "trace-upd-001", null);
+                .isEqualTo(expectedNotification);
+            assertThat(result)
+                .extracting(NotificationAggregate::getId, NotificationAggregate::getReferenceNumber,
+                    NotificationAggregate::getStatus, NotificationAggregate::getConcurrencyToken)
+                .containsExactly(existingId, referenceNumber, DRAFT, 0L);
+            verify(notificationRepository).save(result);
+            verify(outboxService).appendEvent(result, OutboxEventType.NOTIFICATION_EDITED, "trace-upd-001", null);
         }
 
         @Test
