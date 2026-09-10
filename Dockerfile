@@ -37,6 +37,9 @@ FROM amazoncorretto:25-alpine AS development
 
 WORKDIR /app
 
+# UTC container clock — the JVM inherits it as ZoneId.systemDefault() (EUDPA-282)
+ENV TZ=UTC
+
 # Install curl and bash for development
 RUN apk add --no-cache curl bash
 
@@ -67,6 +70,9 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 FROM amazoncorretto:25-alpine AS dev-run
 
 WORKDIR /app
+
+# UTC container clock — the JVM inherits it as ZoneId.systemDefault() (EUDPA-282)
+ENV TZ=UTC
 
 # Maven + curl for healthcheck; bash for the dev-run entrypoint
 RUN apk add --no-cache maven curl bash
@@ -99,6 +105,9 @@ CMD ["dev-run.sh"]
 FROM amazoncorretto:25-alpine AS production
 
 WORKDIR /app
+
+# UTC container clock — the JVM inherits it as ZoneId.systemDefault() (EUDPA-282)
+ENV TZ=UTC
 
 # CDP PLATFORM REQUIREMENTS:
 # - curl: Required for ECS healthcheck (curl -f http://localhost:8085/health || exit 1)
