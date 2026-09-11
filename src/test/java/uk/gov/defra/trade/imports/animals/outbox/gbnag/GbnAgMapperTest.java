@@ -12,6 +12,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Address;
+import uk.gov.defra.trade.imports.animals.notification.AnimalIdentifier;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.MeansOfTransport;
@@ -53,6 +54,8 @@ class GbnAgMapperTest {
         @Test
         void shouldMapNotYetCapturedExchangedDocumentFieldsToNull() {
             ExchangedDocument doc = result.exchangedDocument();
+            // The fixture sets a consignment contact, but where it belongs on the event is still
+            // an open question, so it is deliberately not mapped to issuer yet.
             assertThat(doc.issuer()).isNull();            // gap G1
             assertThat(doc.referenceDocument()).isNull(); // gap G3
         }
@@ -125,10 +128,43 @@ class GbnAgMapperTest {
         }
 
         @Test
-        void shouldMapOriginCountryWithoutRegion() {
+        void shouldMapRegionOfOriginToOriginCountrySubDivision() {
             TradeCountry originCountry = result.specifiedConsignment().originCountry();
             assertThat(originCountry.code().value()).isEqualTo("FR");
-            assertThat(originCountry.subordinateTradeCountrySubDivision()).isNull(); // gap G10
+            assertThat(originCountry.subordinateTradeCountrySubDivision()).satisfies(region -> {
+                assertThat(region.identifier()).isEqualTo("FR-75");
+                assertThat(region.functionTypeCode().content()).isEqualTo("106"); // region of origin
+                assertThat(region.urlId()).isNull();
+            });
+        }
+
+        @Test
+        void shouldMapCphNumberToFinalDestinationLocation() {
+            LogisticsLocation destination = result.specifiedConsignment().finalDestinationLocation();
+            assertThat(destination.identifier()).isEqualTo("CPH19876");
+            assertThat(destination.urlId()).isEqualTo("https://refdata.tbc.defra.gov.uk/cph_number");
+            // Nothing collected says which address belongs to the holding, so none is sent.
+            assertThat(destination.name()).isNull();
+            assertThat(destination.postalAddress()).isNull();
+        }
+
+        @Test
+        void shouldMapTransitedCountriesToTransitTradeCountry() {
+            assertThat(result.specifiedConsignment().transitTradeCountry()).satisfiesExactly(
+                belgium -> assertThat(belgium.code().value()).isEqualTo("BE"),
+                germany -> assertThat(germany.code().value()).isEqualTo("DE"));
+        }
+
+        @Test
+        void shouldMapTransportDocumentReferenceWithTypeInferredFromMeansOfTransport() {
+            LogisticsTransportMovement movement =
+                result.specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst();
+            assertThat(movement.transportContractRelatedReferencedDocument()).singleElement().satisfies(doc -> {
+                assertThat(doc.identifier()).isEqualTo("CMR-2026-884721");
+                assertThat(doc.typeCode()).isEqualTo("730"); // road consignment note, as ROAD_VEHICLE
+                assertThat(doc.relationshipTypeCode()).isNull();
+                assertThat(doc.issueDateTime()).isNull();
+            });
         }
 
         @Test
@@ -160,9 +196,9 @@ class GbnAgMapperTest {
             assertThat(items).hasSize(1);
             TradeLineItem line = items.getFirst().includedTradeLineItem().getFirst();
 
-            assertThat(line.commonName()).isEqualTo("Live bovine animals"); // commodity.name -> commonName
-            assertThat(line.description()).isNull();
-            assertThat(line.scientificName()).isEqualTo("Cattle"); // species.text -> scientificName
+            assertThat(line.description()).containsExactly("Cow"); // commodity.name -> description
+            assertThat(line.commonName()).isEqualTo("Cow"); // commodity.name -> commonName
+            assertThat(line.scientificName()).isEqualTo("Bos taurus"); // species.text -> scientificName
             assertThat(line.typeCode()).isNull();
             assertThat(line.urlId()).isNull();
             assertThat(line.applicableClassification()).singleElement().satisfies(c -> {
@@ -179,11 +215,11 @@ class GbnAgMapperTest {
         }
 
         @Test
-        void shouldReshapeSpeciesEarTagPassportAndMicrochipIntoOneProductInstance() {
+        void shouldReshapeEachAnimalsEarTagAndPassportIntoItsOwnProductInstance() {
             TradeLineItem line = result.specifiedConsignment()
                 .includedConsignmentItem().getFirst().includedTradeLineItem().getFirst();
             List<TradeProductInstance> instances = line.individualTradeProductInstance();
-            assertThat(instances).hasSize(1); // gap G19 — one per species line, not per animal
+            assertThat(instances).hasSize(2); // one per animal
             assertThat(instances.getFirst().identifier()).satisfiesExactly(
                 earTag -> {
                     assertThat(earTag.typeCode()).isEqualTo("EAR_TAG");
@@ -192,34 +228,18 @@ class GbnAgMapperTest {
                 passport -> {
                     assertThat(passport.typeCode()).isEqualTo("PASSPORT");
                     assertThat(passport.content()).isEqualTo("UK0123456700999");
-                },
-                microchip -> {
-                    assertThat(microchip.typeCode()).isEqualTo("MICROCHIP");
-                    assertThat(microchip.content()).isEqualTo("900123456789012");
                 });
-            assertThat(instances.getFirst().name()).isNull();              // gap G20
-            assertThat(instances.getFirst().permanentLocation()).isNull(); // gap G20
-        }
-
-        @Test
-        void shouldNotYetSurfaceSourceFieldsLackingAGbnAgSlot() {
-            // fullyPopulatedNotification() sets transport.transportDocumentReference, cphNumber
-            // and consignment, but none has a live GBN-AG output slot yet. Kept visible here so
-            // these assertions flip when the mappings land.
-
-            // transport.transportDocumentReference -> mainCarriage movement's
-            // transportContractRelatedReferencedDocument, currently dropped (candidate anomaly B1).
-            LogisticsTransportMovement movement =
-                result.specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst();
-            assertThat(movement.transportContractRelatedReferencedDocument()).isNull();
-
-            // cphNumber -> finalDestinationLocation.identifier (candidate anomaly B4): the
-            // finalDestinationLocation slot is absent from SpecifiedConsignment, so cphNumber is
-            // dropped entirely — no reachable output field carries it today.
-
-            // consignment (competent-authority Operator): no GBN-AG party slot exists, so it is
-            // dropped entirely; its nearest observable output, exchangedDocument().issuer(), is
-            // already asserted null as gap G1.
+            assertThat(instances.getLast().identifier()).satisfiesExactly(
+                earTag -> {
+                    assertThat(earTag.typeCode()).isEqualTo("EAR_TAG");
+                    assertThat(earTag.content()).isEqualTo("UK01234567891");
+                },
+                passport -> {
+                    assertThat(passport.typeCode()).isEqualTo("PASSPORT");
+                    assertThat(passport.content()).isEqualTo("UK0123456700998");
+                });
+            assertThat(instances.getFirst().name()).isNull();              // a cow has no name
+            assertThat(instances.getFirst().permanentLocation()).isNull(); // or permanent address
         }
     }
 
@@ -259,6 +279,7 @@ class GbnAgMapperTest {
             assertThat(consignment.carrier()).isNull();
             assertThat(consignment.originCountry()).isNull();
             assertThat(consignment.unloadingBaseportLocation()).isNull();
+            assertThat(consignment.finalDestinationLocation()).isNull();
             assertThat(consignment.mainCarriageLogisticsTransportMovement()).isNull();
             assertThat(consignment.transitTradeCountry()).isNull();
             assertThat(consignment.isOrHasUnweanedAnimals()).isNull();
@@ -397,29 +418,224 @@ class GbnAgMapperTest {
             .includedTradeLineItem().getFirst();
 
         assertThat(line.commonName()).isNull();
+        assertThat(line.description()).isNull();
     }
 
     @Test
-    void shouldMapScientificNameFromFirstSpecies_whenComplementCarriesMultiple() {
+    void shouldMapEachSpeciesToItsOwnTradeLineWithItsOwnCounts() {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-SCI001")
             .notification(Notification.builder()
                 .commodity(Commodity.builder()
+                    .name("Cow")
                     .commodityComplement(List.of(CommodityComplement.builder()
-                        .typeOfCommodity("01020000")
+                        .typeOfCommodity("Domestic")
+                        .totalNoOfAnimals(15)
+                        .totalNoOfPackages(3)
                         .species(List.of(
-                            Species.builder().value("BOV").text("Bos taurus").build(),
-                            Species.builder().value("BOV").text("Bos taurus").build()))
+                            Species.builder().value("1148346").text("Bos taurus")
+                                .noOfAnimals(12).noOfPackages(1).build(),
+                            Species.builder().value("749313").text("Bubalus bubalis")
+                                .noOfAnimals(3).noOfPackages(2).build()))
                         .build()))
                     .build())
                 .build())
             .build();
 
-        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
-            .specifiedConsignment().includedConsignmentItem().getFirst()
-            .includedTradeLineItem().getFirst();
+        List<TradeLineItem> lines = mapper.toGbnAgEventData(notificationAggregate, 1)
+            .specifiedConsignment().includedConsignmentItem().getFirst().includedTradeLineItem();
 
-        assertThat(line.scientificName()).isEqualTo("Bos taurus");
+        assertThat(lines).satisfiesExactly(
+            cattle -> {
+                assertThat(cattle.scientificName()).isEqualTo("Bos taurus");
+                assertThat(cattle.specifiedLineTradeDelivery().getFirst().productUnitQuantity().content()).isEqualTo(12);
+                assertThat(cattle.physicalReferencedLogisticsPackage().getFirst().itemQuantity()).isEqualTo(1);
+            },
+            buffalo -> {
+                assertThat(buffalo.scientificName()).isEqualTo("Bubalus bubalis");
+                assertThat(buffalo.specifiedLineTradeDelivery().getFirst().productUnitQuantity().content()).isEqualTo(3);
+                assertThat(buffalo.physicalReferencedLogisticsPackage().getFirst().itemQuantity()).isEqualTo(2);
+            });
+        assertThat(lines).allSatisfy(line -> {
+            assertThat(line.applicableClassification()).singleElement()
+                .satisfies(c -> assertThat(c.classCode().value()).isEqualTo("Domestic"));
+            assertThat(line.commonName()).isEqualTo("Cow");
+            assertThat(line.description()).containsExactly("Cow");
+        });
+    }
+
+    @Test
+    void shouldMapHorseNameAndIdentifiersForEachHorse() {
+        NotificationAggregate notificationAggregate = speciesNotification("GBN-AG-26-HRS001",
+            Species.builder().value("822332").text("Equus caballus")
+                .animalIdentifiers(List.of(
+                    AnimalIdentifier.builder()
+                        .microchip("826003200123456").passport("GBR-826-0012345").horseName("Starlight").build(),
+                    AnimalIdentifier.builder()
+                        .microchip("826003200654321").passport("GBR-826-0054321").horseName("Moonbeam").build()))
+                .build());
+
+        TradeLineItem line = firstLineOf(notificationAggregate);
+
+        assertThat(line.scientificName()).isEqualTo("Equus caballus");
+        assertThat(line.individualTradeProductInstance()).satisfiesExactly(
+            starlight -> {
+                assertThat(starlight.name()).isEqualTo("Starlight");
+                assertThat(starlight.identifier()).satisfiesExactly(
+                    passport -> {
+                        assertThat(passport.typeCode()).isEqualTo("PASSPORT");
+                        assertThat(passport.content()).isEqualTo("GBR-826-0012345");
+                    },
+                    microchip -> {
+                        assertThat(microchip.typeCode()).isEqualTo("MICROCHIP");
+                        assertThat(microchip.content()).isEqualTo("826003200123456");
+                    });
+            },
+            moonbeam -> {
+                assertThat(moonbeam.name()).isEqualTo("Moonbeam");
+                assertThat(moonbeam.identifier()).satisfiesExactly(
+                    passport -> {
+                        assertThat(passport.typeCode()).isEqualTo("PASSPORT");
+                        assertThat(passport.content()).isEqualTo("GBR-826-0054321");
+                    },
+                    microchip -> {
+                        assertThat(microchip.typeCode()).isEqualTo("MICROCHIP");
+                        assertThat(microchip.content()).isEqualTo("826003200654321");
+                    });
+            });
+    }
+
+    @Test
+    void shouldMapTattooAndPermanentAddressForEachDog() {
+        NotificationAggregate notificationAggregate = speciesNotification("GBN-AG-26-DOG001",
+            Species.builder().value("923502").text("Canis lupus familiaris")
+                .animalIdentifiers(List.of(AnimalIdentifier.builder()
+                    .microchip("900123456789012")
+                    .tattoo("TT-4471")
+                    .permanentAddress(ConsignmentParty.builder()
+                        .name("Brighton home")
+                        .phone("01273 555017")
+                        .email("owner@example.co.uk")
+                        .address(Address.builder()
+                            .addressLine1("182 Ditchling Road")
+                            .townOrCity("Brighton")
+                            .postcode("BN1 7JE")
+                            .countryCode("GB")
+                            .build())
+                        .build())
+                    .build()))
+                .build());
+
+        TradeLineItem line = firstLineOf(notificationAggregate);
+        TradeProductInstance dog = line.individualTradeProductInstance().getFirst();
+
+        assertThat(line.scientificName()).isEqualTo("Canis lupus familiaris");
+        assertThat(dog.name()).isNull(); // only horses are named
+        assertThat(dog.identifier()).satisfiesExactly(
+            microchip -> {
+                assertThat(microchip.typeCode()).isEqualTo("MICROCHIP");
+                assertThat(microchip.content()).isEqualTo("900123456789012");
+            },
+            tattoo -> {
+                assertThat(tattoo.typeCode()).isEqualTo("TATTOO");
+                assertThat(tattoo.content()).isEqualTo("TT-4471");
+            });
+        assertThat(dog.permanentLocation()).satisfies(home -> {
+            assertThat(home.name()).isEqualTo("Brighton home");
+            assertThat(home.postalAddress().lineOne()).isEqualTo("182 Ditchling Road");
+            assertThat(home.postalAddress().cityName()).isEqualTo("Brighton");
+            assertThat(home.postalAddress().postcodeCode()).isEqualTo("BN1 7JE");
+            assertThat(home.definedContact()).singleElement().satisfies(contact -> {
+                assertThat(contact.telephoneUniversalCommunication()).isEqualTo("01273 555017");
+                assertThat(contact.emailURIUniversalCommunication()).isEqualTo("owner@example.co.uk");
+            });
+        });
+    }
+
+    @Test
+    void shouldSkipIdentifierLeftUnanswered_asTheJourneySavesItAsAnEmptyString() {
+        NotificationAggregate notificationAggregate = speciesNotification("GBN-AG-26-BLK002",
+            Species.builder().value("1148346").text("Bos taurus")
+                .earTag("UK123456789012").passport("")
+                .animalIdentifiers(List.of(AnimalIdentifier.builder()
+                    .earTag("UK123456789012").passport("").build()))
+                .build());
+
+        List<TradeProductInstance> instances = firstLineOf(notificationAggregate).individualTradeProductInstance();
+
+        assertThat(instances).singleElement().satisfies(cow ->
+            assertThat(cow.identifier()).singleElement().satisfies(earTag -> {
+                assertThat(earTag.typeCode()).isEqualTo("EAR_TAG");
+                assertThat(earTag.content()).isEqualTo("UK123456789012");
+            }));
+    }
+
+    @ParameterizedTest
+    @CsvSource({"VESSEL,705", "RAILWAY,720", "ROAD_VEHICLE,730", "AIRPLANE,740"})
+    void shouldInferTransportDocumentTypeFromMeansOfTransport(MeansOfTransport means, String expectedTypeCode) {
+        List<ReferencedDocument> documents = transportDocumentsFor(
+            Transport.builder().meansOfTransport(means).transportDocumentReference("DOC-1").build());
+
+        assertThat(documents).singleElement().satisfies(doc -> {
+            assertThat(doc.typeCode()).isEqualTo(expectedTypeCode);
+            assertThat(doc.identifier()).isEqualTo("DOC-1");
+        });
+    }
+
+    @Test
+    void shouldLeaveTransportDocumentTypeUnset_whenMeansOfTransportUnknown() {
+        List<ReferencedDocument> documents = transportDocumentsFor(
+            Transport.builder().transportDocumentReference("DOC-1").build());
+
+        assertThat(documents).singleElement().satisfies(doc -> {
+            assertThat(doc.typeCode()).isNull();
+            assertThat(doc.identifier()).isEqualTo("DOC-1");
+        });
+    }
+
+    @Test
+    void shouldOmitTransportDocument_whenReferenceBlank() {
+        assertThat(transportDocumentsFor(Transport.builder()
+            .meansOfTransport(MeansOfTransport.VESSEL).transportDocumentReference(" ").build())).isNull();
+    }
+
+    @Test
+    void shouldOmitTransitTradeCountry_whenNoCountriesTransited() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-TRN001")
+            .notification(Notification.builder()
+                .transport(Transport.builder().transitedCountries(List.of()).build())
+                .build())
+            .build();
+
+        assertThat(mapper.toGbnAgEventData(notificationAggregate, 1)
+            .specifiedConsignment().transitTradeCountry()).isNull();
+    }
+
+    @Test
+    void shouldOmitFinalDestinationLocationAndRegion_whenBlank() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-BLK001")
+            .notification(Notification.builder()
+                .origin(new Origin("FR", "false", "Imports456_GB", " "))
+                .cphNumber(" ")
+                .build())
+            .build();
+
+        SpecifiedConsignment consignment = mapper.toGbnAgEventData(notificationAggregate, 1).specifiedConsignment();
+
+        assertThat(consignment.finalDestinationLocation()).isNull();
+        assertThat(consignment.originCountry().subordinateTradeCountrySubDivision()).isNull();
+    }
+
+    private List<ReferencedDocument> transportDocumentsFor(Transport transport) {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-DOC001")
+            .notification(Notification.builder().transport(transport).build())
+            .build();
+        return mapper.toGbnAgEventData(notificationAggregate, 1)
+            .specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst()
+            .transportContractRelatedReferencedDocument();
     }
 
     @Test
@@ -479,7 +695,7 @@ class GbnAgMapperTest {
             .status(NotificationStatus.SUBMITTED)
             .updated(LocalDateTime.of(2026, Month.MAY, 21, 10, 15, 0))
             .notification(Notification.builder()
-                .origin(new Origin("FR", "true", "Imports456_GB", null))
+                .origin(new Origin("FR", "true", "Imports456_GB", "FR-75"))
                 .reasonForImport("INTERNAL_MARKET")
                 .additionalDetails(new AdditionalDetails("BREEDING_AND_PRODUCTION", "true"))
                 .consignor(party("Astra Rosales",
@@ -498,17 +714,24 @@ class GbnAgMapperTest {
                 .consignment(party("Animal and Plant Health Agency", simpleAddress("Woodham Lane", "GB")))
                 .cphNumber("CPH19876")
                 .commodity(Commodity.builder()
-                    .name("Live bovine animals")
+                    .name("Cow")
                     .commodityComplement(List.of(CommodityComplement.builder()
                         .typeOfCommodity("01020000")
                         .totalNoOfAnimals(20)
                         .totalNoOfPackages(1)
                         .species(List.of(Species.builder()
-                            .value("BOV")
-                            .text("Cattle")
+                            .value("1148346")
+                            .text("Bos taurus")
+                            .noOfAnimals(20)
+                            .noOfPackages(1)
+                            // The scalars repeat the first animal, as the frontend sends them.
                             .earTag("UK01234567890")
                             .passport("UK0123456700999")
-                            .microchip("900123456789012")
+                            .animalIdentifiers(List.of(
+                                AnimalIdentifier.builder()
+                                    .earTag("UK01234567890").passport("UK0123456700999").build(),
+                                AnimalIdentifier.builder()
+                                    .earTag("UK01234567891").passport("UK0123456700998").build()))
                             .build()))
                         .build()))
                     .build())
@@ -517,7 +740,8 @@ class GbnAgMapperTest {
                     .arrivalDate(LocalDate.of(2026, Month.MAY, 6))
                     .meansOfTransport(MeansOfTransport.ROAD_VEHICLE)
                     .transportIdentification("AB-1234")
-                    .transportDocumentReference("BOL-2026-884721")
+                    .transportDocumentReference("CMR-2026-884721")
+                    .transitedCountries(List.of("BE", "DE"))
                     .transporter(Transporter.builder()
                         .name("Acme Transport Ltd")
                         .address(simpleAddress("1 Haulage Way", "GB"))
