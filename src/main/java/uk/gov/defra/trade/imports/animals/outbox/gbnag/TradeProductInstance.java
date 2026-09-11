@@ -17,28 +17,45 @@ public record TradeProductInstance(
     private static final String EAR_TAG = "EAR_TAG";
     private static final String PASSPORT = "PASSPORT";
     private static final String MICROCHIP = "MICROCHIP";
+    private static final String TATTOO = "TATTOO";
 
     public record AnimalIdentifier(String typeCode, String content, String urlId) {}
 
-    @SuppressWarnings("java:S1168")
-    static List<TradeProductInstance> instancesFrom(List<Species> species) {
-        if (species == null) {
-            return null;
+    /**
+     * One instance per animal on the species line. Species saved before the per-animal list existed
+     * only carry the first animal's identifiers as scalars, so those still produce one instance.
+     */
+    static List<TradeProductInstance> instancesFrom(Species species) {
+        var animals = species.getAnimalIdentifiers();
+        if (animals == null || animals.isEmpty()) {
+            return List.of(new TradeProductInstance(
+                null,
+                identifiersOf(species.getEarTag(), species.getPassport(), species.getMicrochip(), null),
+                null));
         }
-        return species.stream().map(TradeProductInstance::fromSpecies).toList();
+        return animals.stream()
+            .map(animal -> new TradeProductInstance(
+                animal.getHorseName(),
+                identifiersOf(animal.getEarTag(), animal.getPassport(), animal.getMicrochip(), animal.getTattoo()),
+                TradeParty.from(animal.getPermanentAddress())))
+            .toList();
     }
 
-    private static TradeProductInstance fromSpecies(Species species) {
+    @SuppressWarnings("java:S1168")
+    private static List<AnimalIdentifier> identifiersOf(
+        String earTag, String passport, String microchip, String tattoo) {
         List<AnimalIdentifier> identifiers = new ArrayList<>();
-        if (species.getEarTag() != null) {
-            identifiers.add(new AnimalIdentifier(EAR_TAG, species.getEarTag(), null));
+        addIfPresent(identifiers, EAR_TAG, earTag);
+        addIfPresent(identifiers, PASSPORT, passport);
+        addIfPresent(identifiers, MICROCHIP, microchip);
+        addIfPresent(identifiers, TATTOO, tattoo);
+        return identifiers.isEmpty() ? null : identifiers;
+    }
+
+    // The journey saves an unanswered identifier as an empty string, not an absent one.
+    private static void addIfPresent(List<AnimalIdentifier> identifiers, String typeCode, String content) {
+        if (content != null && !content.isBlank()) {
+            identifiers.add(new AnimalIdentifier(typeCode, content, null));
         }
-        if (species.getPassport() != null) {
-            identifiers.add(new AnimalIdentifier(PASSPORT, species.getPassport(), null));
-        }
-        if (species.getMicrochip() != null) {
-            identifiers.add(new AnimalIdentifier(MICROCHIP, species.getMicrochip(), null));
-        }
-        return new TradeProductInstance(null, identifiers.isEmpty() ? null : identifiers, null);
     }
 }
