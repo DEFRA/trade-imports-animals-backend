@@ -240,7 +240,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-            Origin origin = new Origin("FR", "false", "REF456", null);
+            Origin origin = new Origin("FR", "false", "REF456", "FR-75");
             Commodity commodity = Commodity.builder()
                 .name("Fish")
                 .commodityComplement(List.of(new CommodityComplement("LIVE", 5, null, List.of(species()))))

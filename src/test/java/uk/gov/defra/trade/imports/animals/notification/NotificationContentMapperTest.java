@@ -65,7 +65,7 @@ class NotificationContentMapperTest {
     @Test
     void deepClone_shouldRoundTripContentFields() {
         Notification source = Notification.builder()
-            .origin(new Origin("GB", "true", "REF-1", null))
+            .origin(new Origin("GB", "true", "REF-1", "GB-ENG"))
             .reasonForImport("PERMANENT")
             .additionalDetails(new AdditionalDetails("HUMAN_CONSUMPTION", "true"))
             .cphNumber("12/345/6789")

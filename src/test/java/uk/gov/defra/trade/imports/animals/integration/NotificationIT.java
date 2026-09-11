@@ -123,7 +123,7 @@ class NotificationIT extends IntegrationBase {
             .transitedCountries(List.of("FR", "DE"))
             .build();
         NotificationDto notificationDto = NotificationDto.builder()
-            .origin(new Origin("GB", "true", "REF-001", null))
+            .origin(new Origin("GB", "true", "REF-001", "GB-ENG"))
             .commodity(commodity)
             .reasonForImport("PERMANENT")
             .additionalDetails(new AdditionalDetails("HUMAN_CONSUMPTION", "true"))
@@ -146,12 +146,14 @@ class NotificationIT extends IntegrationBase {
         assertThat(created.getId()).isNotNull();
         assertThat(created.getReferenceNumber()).matches(REF_FORMAT_REGEX);
         assertNotificationMappedFields(created);
+        assertThat(created.getNotification().getOrigin().getRegionOfOriginCode()).isEqualTo("GB-ENG");
 
         // Verify persisted — reload via API
         NotificationAggregate persisted = notificationRepository.findByReferenceNumber(created.getReferenceNumber())
             .orElseThrow();
         assertThat(persisted.getId()).isEqualTo(created.getId());
         assertNotificationMappedFields(persisted);
+        assertThat(persisted.getNotification().getOrigin().getRegionOfOriginCode()).isEqualTo("GB-ENG");
     }
 
     @Test
