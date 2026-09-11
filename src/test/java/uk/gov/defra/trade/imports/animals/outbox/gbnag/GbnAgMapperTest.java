@@ -479,7 +479,7 @@ class GbnAgMapperTest {
             .status(NotificationStatus.SUBMITTED)
             .updated(LocalDateTime.of(2026, Month.MAY, 21, 10, 15, 0))
             .notification(Notification.builder()
-                .origin(new Origin("FR", "true", "Imports456_GB"))
+                .origin(new Origin("FR", "true", "Imports456_GB", null))
                 .reasonForImport("INTERNAL_MARKET")
                 .additionalDetails(new AdditionalDetails("BREEDING_AND_PRODUCTION", "true"))
                 .consignor(party("Astra Rosales",

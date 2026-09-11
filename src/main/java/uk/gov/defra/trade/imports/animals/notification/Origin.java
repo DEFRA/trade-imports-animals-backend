@@ -14,5 +14,6 @@ public class Origin {
     private String countryCode;
     private String requiresRegionCode;
     private String internalReference;
+    private String regionOfOriginCode;
     
 }

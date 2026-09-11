@@ -24,6 +24,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.spec
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
@@ -125,7 +126,7 @@ class NotificationControllerTest {
         @Test
         void post_shouldCreateNotificationAndReturnReferenceNumber() throws Exception {
             // Given
-            Origin origin = new Origin("GB", "true", "CUSTOMER-REF-123");
+            Origin origin = new Origin("GB", "true", "CUSTOMER-REF-123", null);
             Species species = species();
             CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species));
             Commodity commodity = Commodity.builder()
@@ -196,7 +197,7 @@ class NotificationControllerTest {
         @Test
         void post_shouldAcceptNotificationWithAllOriginFields() throws Exception {
             // Given
-            Origin origin = new Origin("FR", "false", "INTERNAL-456");
+            Origin origin = new Origin("FR", "false", "INTERNAL-456", null);
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(origin)
                 .build();
@@ -223,10 +224,96 @@ class NotificationControllerTest {
         }
 
         @Test
+        void post_shouldAcceptNotificationWithRegionOfOriginCodeAndPerUnitAnimalIdentifiers() throws Exception {
+            // Given
+            Origin origin = new Origin("FR", "yes", "INTERNAL-789", "FR-75");
+            AnimalIdentifier firstUnit = AnimalIdentifier.builder()
+                .earTag("UK123456789012")
+                .passport("UK123456789")
+                .tattoo("AB1234")
+                .build();
+            AnimalIdentifier secondUnit = AnimalIdentifier.builder()
+                .horseName("Silver")
+                .microchip("900123456789012")
+                .permanentAddress(ConsignmentParty.builder()
+                    .name("Owner")
+                    .address(Address.builder().addressLine1("8 Stable Close").countryCode("GB").build())
+                    .build())
+                .build();
+            Species species = Species.builder()
+                .value("BOV")
+                .text("Bovine")
+                .earTag("UK123456789012")
+                .passport("UK123456789")
+                .animalIdentifiers(List.of(firstUnit, secondUnit))
+                .build();
+            CommodityComplement complement = new CommodityComplement("LIVE", 2, 1, List.of(species));
+            Commodity commodity = Commodity.builder()
+                .name("Cow")
+                .commodityComplement(List.of(complement))
+                .build();
+            NotificationDto notificationDto = NotificationDto.builder()
+                .origin(origin)
+                .commodity(commodity)
+                .purposeInInternalMarket("Breeding")
+                .destinationCountry("DE")
+                .portOfExit("GB DVR")
+                .exitDate(LocalDate.of(2026, 12, 20))
+                .build();
+
+            NotificationAggregate savedNotification = new NotificationAggregate();
+            savedNotification.setNotification(new Notification());
+            savedNotification.setId("507f1f77bcf86cd799439099");
+            savedNotification.setReferenceNumber(REF_3);
+            savedNotification.getNotification().setOrigin(origin);
+            savedNotification.getNotification().setCommodity(commodity);
+            savedNotification.getNotification().setPurposeInInternalMarket("Breeding");
+            savedNotification.getNotification().setDestinationCountry("DE");
+            savedNotification.getNotification().setPortOfExit("GB DVR");
+            savedNotification.getNotification().setExitDate(LocalDate.of(2026, 12, 20));
+
+            when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
+                .thenReturn(savedNotification);
+
+            // When & Then
+            mockMvc.perform(post("/notifications")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(
+                        SaveNotificationDto.builder().notification(notificationDto).build())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notification.origin.regionOfOriginCode").value("FR-75"))
+                .andExpect(jsonPath("$.notification.purposeInInternalMarket").value("Breeding"))
+                .andExpect(jsonPath("$.notification.destinationCountry").value("DE"))
+                .andExpect(jsonPath("$.notification.portOfExit").value("GB DVR"))
+                .andExpect(jsonPath("$.notification.exitDate").value("2026-12-20"))
+                .andExpect(jsonPath(
+                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[0].earTag")
+                    .value("UK123456789012"))
+                .andExpect(jsonPath(
+                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[0].passport")
+                    .value("UK123456789"))
+                .andExpect(jsonPath(
+                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[0].tattoo")
+                    .value("AB1234"))
+                .andExpect(jsonPath(
+                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[1].horseName")
+                    .value("Silver"))
+                .andExpect(jsonPath(
+                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[1].microchip")
+                    .value("900123456789012"))
+                .andExpect(jsonPath(
+                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[1].permanentAddress.name")
+                    .value("Owner"))
+                .andExpect(jsonPath(
+                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[1].permanentAddress.address.addressLine1")
+                    .value("8 Stable Close"));
+        }
+
+        @Test
         void post_shouldAcceptNotificationWithExistingId() throws Exception {
             // Given
             String existingId = "507f1f77bcf86cd799439011";
-            Origin origin = new Origin("DE", "true", "UPDATE-REF");
+            Origin origin = new Origin("DE", "true", "UPDATE-REF", null);
             NotificationDto notificationDto = NotificationDto.builder()
                 .referenceNumber(REF_3)
                 .origin(origin)
@@ -257,7 +344,7 @@ class NotificationControllerTest {
         void post_shouldForwardTraceIdHeader_toSaveNotification() throws Exception {
             // Given
             NotificationDto notificationDto = NotificationDto.builder()
-                .origin(new Origin("GB", "true", "REF"))
+                .origin(new Origin("GB", "true", "REF", null))
                 .build();
             NotificationAggregate saved = new NotificationAggregate();
             saved.setReferenceNumber(REF_1);
@@ -279,7 +366,7 @@ class NotificationControllerTest {
         void post_shouldPassActorToService_whenActorProvided() throws Exception {
             NotificationDto notificationDto = NotificationDto.builder()
                 .referenceNumber(REF_1)
-                .origin(new Origin("GB", "true", "REF"))
+                .origin(new Origin("GB", "true", "REF", null))
                 .build();
             NotificationAggregate saved = new NotificationAggregate();
             saved.setReferenceNumber(REF_1);
@@ -705,13 +792,13 @@ class NotificationControllerTest {
         void findAll_shouldReturnPageOfNotifications() throws Exception {
             // Given
             NotificationView notification1 = testView(REF_1, NotificationStatus.DRAFT,
-                new Origin("GB", "true", "REF-GB-001"),
+                new Origin("GB", "true", "REF-GB-001", null),
                 Commodity.builder().name("Live cattle").build(),
                 consignors().getFirst(),
                 Transport.builder().transporter(transporters().getFirst()).build());
 
             NotificationView notification2 = testView(REF_2, NotificationStatus.SUBMITTED,
-                new Origin("FR", "false", "REF-FR-002"),
+                new Origin("FR", "false", "REF-FR-002", null),
                 Commodity.builder().name("Live sheep").build(),
                 consignors().getLast(),
                 Transport.builder().transporter(transporters().getLast()).build());

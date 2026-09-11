@@ -120,7 +120,7 @@ class OutboxServiceTest {
         @SuppressWarnings("unchecked")
         void appendEvent_shouldStoreGbnAgPayloadInDataField() {
             // Given
-            Origin origin = new Origin("GB", "true", "REF123");
+            Origin origin = new Origin("GB", "true", "REF123", null);
             Commodity commodity = Commodity.builder().name("Live bovine animals").build();
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()

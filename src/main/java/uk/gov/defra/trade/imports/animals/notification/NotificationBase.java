@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import java.time.LocalDate;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -33,4 +34,12 @@ public abstract class NotificationBase {
     private String cphNumber;
 
     private Transport transport;
+
+    private String purposeInInternalMarket;
+
+    private String destinationCountry;
+
+    private String portOfExit;
+
+    private LocalDate exitDate;
 }
