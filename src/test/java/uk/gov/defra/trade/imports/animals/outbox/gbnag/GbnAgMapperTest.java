@@ -401,6 +401,30 @@ class GbnAgMapperTest {
     }
 
     @Test
+    void shouldMapCommodityNameOntoTheComplementTotalsLine_whenSpeciesEmpty() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-SPC005")
+            .notification(Notification.builder()
+                .commodity(Commodity.builder()
+                    .name("Cow")
+                    .commodityComplement(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("01020000")
+                        .species(List.of())
+                        .build()))
+                    .build())
+                .build())
+            .build();
+
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
+            .specifiedConsignment().includedConsignmentItem().getFirst()
+            .includedTradeLineItem().getFirst();
+
+        assertThat(line.description()).containsExactly("Cow");
+        assertThat(line.commonName()).isEqualTo("Cow");
+        assertThat(line.scientificName()).isNull();
+    }
+
+    @Test
     void shouldMapCommonNameToNull_whenCommodityNameAbsent() {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-CMD001")
