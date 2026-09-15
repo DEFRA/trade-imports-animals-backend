@@ -30,7 +30,8 @@ public record LogisticsTransportMovement(
             null,
             modeCode(transport.getMeansOfTransport()),
             LogisticsTransportMeans.from(transport.getTransportIdentification()),
-            null,
+            ReferencedDocument.transportDocument(
+                transport.getTransportDocumentReference(), transport.getMeansOfTransport()),
             TransportEvent.from(transport)));
     }
 

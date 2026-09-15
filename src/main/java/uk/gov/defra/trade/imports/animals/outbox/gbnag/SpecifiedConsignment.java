@@ -14,6 +14,7 @@ public record SpecifiedConsignment(
     TradeParty carrier,
     TradeCountry originCountry,
     LogisticsLocation unloadingBaseportLocation,
+    LogisticsLocation finalDestinationLocation,
     List<LogisticsTransportMovement> mainCarriageLogisticsTransportMovement,
     List<TradeCountry> transitTradeCountry,
     Boolean isOrHasUnweanedAnimals,
@@ -37,8 +38,9 @@ public record SpecifiedConsignment(
             TradeParty.from(transport != null ? transport.getTransporter() : null),
             TradeCountry.from(notification.getOrigin()),
             LogisticsLocation.from(transport != null ? transport.getPortOfEntry() : null),
+            LogisticsLocation.cph(notification.getCphNumber()),
             LogisticsTransportMovement.from(transport),
-            null,
+            TradeCountry.fromCountryCodes(transport != null ? transport.getTransitedCountries() : null),
             isOrHasUnweanedAnimals,
             ConsignmentItem.from(notification.getCommodity()));
     }
