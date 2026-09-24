@@ -2265,6 +2265,7 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void copy_shouldInflateConsignorOnCreatedOutbox_whenSourceIsSubmittedWithReferencedParty() {
+        // Given — submitted notification whose consignor is an address-book reference alone
         stubAddressBook(ADDRESS_BOOK_JSON, 200);
         String sourceRef = createNotificationWithReferencedConsignor();
         submitAs(sourceRef, ORG_ID);
@@ -2272,6 +2273,7 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate source = notificationRepository.findByReferenceNumber(sourceRef).orElseThrow();
         Long version = source.getConcurrencyToken();
 
+        // When — copy it with the submitting organisation so the outbox can inflate parties
         NotificationAggregate copy = webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
@@ -2283,6 +2285,7 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody();
 
+        // Then — stored draft stays reference-only; Created outbox carries inflated party details
         assertThat(copy).isNotNull();
         NotificationAggregate stored = notificationRepository.findByReferenceNumber(copy.getReferenceNumber())
             .orElseThrow();
