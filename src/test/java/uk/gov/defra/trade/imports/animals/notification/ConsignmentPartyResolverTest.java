@@ -250,6 +250,76 @@ class ConsignmentPartyResolverTest {
         assertThat(notification.getConsignor()).isEqualTo(ConsignmentParty.reference("gone"));
     }
 
+    @Test
+    void inflateReferencedParties_shouldNoOpWhenNotificationIsNull() {
+        assertThatCode(() -> resolver.inflateReferencedParties(null, ORG))
+            .doesNotThrowAnyException();
+        verify(addressBookClient, never()).findById(any(), any());
+    }
+
+    @Test
+    void inflateReferencedParties_shouldNoOpWhenOrganisationIdIsBlank() {
+        Notification notification = Notification.builder()
+            .consignor(ConsignmentParty.reference("a"))
+            .build();
+
+        resolver.inflateReferencedParties(notification, "  ");
+
+        assertThat(notification.getConsignor().getName()).isNull();
+        verify(addressBookClient, never()).findById(any(), any());
+    }
+
+    @Test
+    void inflateReferencedParties_shouldNoOpWhenNoPartyReferencesExist() {
+        Notification notification = Notification.builder()
+            .consignor(ConsignmentParty.builder().name("Inline Ltd").build())
+            .build();
+
+        resolver.inflateReferencedParties(notification, ORG);
+
+        verify(addressBookClient, never()).findById(any(), any());
+    }
+
+    @Test
+    void inflateReferencedParties_shouldInflateEveryReferenceableRole() {
+        stub("origin", "Origin Farm");
+        stub("consignor", "Consignor Ltd");
+        stub("consignee", "Consignee Ltd");
+        stub("importer", "Importer Ltd");
+        stub("destination", "Destination Ltd");
+        stub("contact", "Contact Ltd");
+        Notification notification = Notification.builder()
+            .placeOfOrigin(ConsignmentParty.reference("origin"))
+            .consignor(ConsignmentParty.reference("consignor"))
+            .consignee(ConsignmentParty.reference("consignee"))
+            .importer(ConsignmentParty.reference("importer"))
+            .destination(ConsignmentParty.reference("destination"))
+            .consignment(ConsignmentParty.reference("contact"))
+            .build();
+
+        resolver.inflateReferencedParties(notification, ORG);
+
+        assertThat(notification.getPlaceOfOrigin().getName()).isEqualTo("Origin Farm");
+        assertThat(notification.getConsignor().getName()).isEqualTo("Consignor Ltd");
+        assertThat(notification.getConsignee().getName()).isEqualTo("Consignee Ltd");
+        assertThat(notification.getImporter().getName()).isEqualTo("Importer Ltd");
+        assertThat(notification.getDestination().getName()).isEqualTo("Destination Ltd");
+        assertThat(notification.getConsignment().getName()).isEqualTo("Contact Ltd");
+    }
+
+    @Test
+    void inflateReferencedParties_shouldLeaveReferenceOnlyPartyWhenAddressIsSoftDeleted() {
+        when(addressBookClient.findById(ORG, "gone"))
+            .thenReturn(Optional.of(deletedAddressRecord("gone", "Gone Ltd")));
+        Notification notification = Notification.builder()
+            .destination(ConsignmentParty.reference("gone"))
+            .build();
+
+        resolver.inflateReferencedParties(notification, ORG);
+
+        assertThat(notification.getDestination()).isEqualTo(ConsignmentParty.reference("gone"));
+    }
+
     private void stub(String addressId, String name) {
         when(addressBookClient.findById(ORG, addressId))
             .thenReturn(Optional.of(addressRecord(addressId, name)));

@@ -173,6 +173,34 @@ class NotificationServiceTest {
         }
 
         @Test
+        void saveNotification_shouldInflateReferencedConsignorInCreatedOutbox_whenActorHasOrganisationId() {
+            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+            String expectedRef = "GBN-AG-26-NEW-REF";
+            NotificationDto notificationDto = NotificationDto.builder()
+                .consignor(ConsignmentParty.reference(addressId))
+                .build();
+
+            when(referenceNumberGenerator.generate()).thenReturn(expectedRef);
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            when(addressBookClient.findById(ORG_ID, addressId))
+                .thenReturn(Optional.of(addressBookRecord(addressId, false)));
+
+            Actor actor = Actor.builder().organisationId(ORG_ID).build();
+
+            NotificationAggregate saved = notificationService.saveNotification(notificationDto, "trace-new", actor);
+
+            assertThat(saved.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
+
+            ArgumentCaptor<NotificationAggregate> outboxCaptor =
+                ArgumentCaptor.forClass(NotificationAggregate.class);
+            verify(outboxService).appendEvent(
+                outboxCaptor.capture(), eq(OutboxEventType.NOTIFICATION_CREATED), eq("trace-new"), eq(actor));
+            assertThat(outboxCaptor.getValue().getNotification().getConsignor().getName())
+                .isEqualTo("Astra Rosales");
+        }
+
+        @Test
         void saveNotification_shouldRetryPersistence_whenDuplicateKeyExceptionOnFirstAttempt() {
             // Given — first persistence attempt collides, second succeeds
             Origin origin = new Origin("GB", "true", "REF123", null);
