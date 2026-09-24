@@ -2101,6 +2101,48 @@ class NotificationServiceTest {
             verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_CREATED), any(), any());
             verifyNoMoreInteractions(outboxService);
         }
+
+        @Test
+        void copyNotification_shouldPersistReferenceOnlyConsignor_butInflateConsignorInCreatedOutbox() {
+            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+            String sourceRef = "GBN-AG-26-CPY-REF";
+            String newRef = "GBN-AG-26-CPY-OUT";
+            NotificationAggregate source = NotificationAggregate.builder()
+                .referenceNumber(sourceRef)
+                .status(SUBMITTED)
+                .notification(Notification.builder()
+                    .consignor(ConsignmentParty.reference(addressId))
+                    .build())
+                .concurrencyToken(0L)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+            when(referenceNumberGenerator.generate()).thenReturn(newRef);
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            when(addressBookClient.findById(ORG_ID, addressId))
+                .thenReturn(Optional.of(addressBookRecord(addressId, false)));
+
+            Actor actor = Actor.builder().organisationId(ORG_ID).build();
+
+            notificationService.copyNotification(sourceRef, 0L, "trace", actor);
+
+            ArgumentCaptor<NotificationAggregate> savedCaptor =
+                ArgumentCaptor.forClass(NotificationAggregate.class);
+            verify(notificationRepository).save(savedCaptor.capture());
+            assertThat(savedCaptor.getValue().getNotification().getConsignor())
+                .isEqualTo(ConsignmentParty.reference(addressId));
+
+            ArgumentCaptor<NotificationAggregate> outboxCaptor =
+                ArgumentCaptor.forClass(NotificationAggregate.class);
+            verify(outboxService).appendEvent(
+                outboxCaptor.capture(), eq(OutboxEventType.NOTIFICATION_CREATED), eq("trace"), eq(actor));
+            assertThat(outboxCaptor.getValue().getNotification().getConsignor().getName())
+                .isEqualTo("Astra Rosales");
+            assertThat(outboxCaptor.getValue().getNotification().getConsignor().getAddress().getPostcode())
+                .isEqualTo("30055");
+        }
     }
 
     // Fulfilments handling. Covers the PUT/replace path, the amend/cancelAmend/submit snapshot

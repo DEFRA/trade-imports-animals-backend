@@ -58,6 +58,37 @@ public class ConsignmentPartyResolver {
         validateParties(notificationAggregate, organisationId, true);
     }
 
+    /**
+     * Resolves address-book references into inline name and address on a notification for outbox
+     * transmission. Unlike {@link #validatePartiesAtSubmit}, a miss leaves the reference-only party
+     * unchanged and never throws — copy must still succeed when the address book is empty or the
+     * actor carries no organisation id.
+     */
+    public void inflateReferencedParties(Notification notification, String organisationId) {
+        if (notification == null || organisationId == null || organisationId.isBlank()) {
+            return;
+        }
+        List<String> addressIds = referencedAddressIds(notification);
+        if (addressIds.isEmpty()) {
+            return;
+        }
+        Map<String, Optional<ConsignmentParty>> lookups = lookUpAll(addressIds, organisationId);
+        notification.setPlaceOfOrigin(inflateParty(notification.getPlaceOfOrigin(), lookups));
+        notification.setConsignor(inflateParty(notification.getConsignor(), lookups));
+        notification.setConsignee(inflateParty(notification.getConsignee(), lookups));
+        notification.setImporter(inflateParty(notification.getImporter(), lookups));
+        notification.setDestination(inflateParty(notification.getDestination(), lookups));
+        notification.setConsignment(inflateParty(notification.getConsignment(), lookups));
+    }
+
+    private static ConsignmentParty inflateParty(
+        ConsignmentParty party, Map<String, Optional<ConsignmentParty>> lookups) {
+        if (party == null || party.getAddressId() == null || party.getName() != null) {
+            return party;
+        }
+        return lookups.getOrDefault(party.getAddressId(), Optional.empty()).orElse(party);
+    }
+
     private void validateParties(
         NotificationAggregate notificationAggregate, String organisationId, boolean failOnMiss) {
         Notification notification = notificationAggregate.requireNotification();
