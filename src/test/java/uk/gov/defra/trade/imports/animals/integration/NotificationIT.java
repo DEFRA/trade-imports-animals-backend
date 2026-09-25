@@ -2264,6 +2264,46 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void copy_shouldInflateConsignorOnCreatedOutbox_whenSourceIsSubmittedWithReferencedParty() {
+        // Given — submitted notification whose consignor is an address-book reference alone
+        stubAddressBook(ADDRESS_BOOK_JSON, 200);
+        String sourceRef = createNotificationWithReferencedConsignor();
+        submitAs(sourceRef, ORG_ID);
+
+        NotificationAggregate source = notificationRepository.findByReferenceNumber(sourceRef).orElseThrow();
+        Long version = source.getConcurrencyToken();
+
+        // When — copy it with the submitting organisation so the outbox can inflate parties
+        NotificationAggregate copy = webClient("NoAuth")
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", version)
+                .build(sourceRef))
+            .bodyValue(Map.of("organisationId", ORG_ID))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody();
+
+        // Then — stored draft stays reference-only; Created outbox carries inflated party details
+        assertThat(copy).isNotNull();
+        NotificationAggregate stored = notificationRepository.findByReferenceNumber(copy.getReferenceNumber())
+            .orElseThrow();
+        assertThat(stored.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(ADDRESS_ID));
+
+        OutboxEvent created = outboxEventRepository.findAll().stream()
+            .filter(e -> e.getAggregateId().equals(OutboxService.buildAggregateId(copy.getReferenceNumber())))
+            .filter(e -> e.getEventType().endsWith("NotificationCreated"))
+            .findFirst()
+            .orElseThrow();
+        Map<String, Object> consignor = outboxConsignorParty(created);
+        assertThat(consignor).containsEntry("name", "Astra Rosales");
+        assertThat((Map<String, Object>) consignor.get("postalAddress"))
+            .containsEntry("postcodeCode", "30055")
+            .containsEntry("cityName", "Vernier");
+    }
+
+    @Test
     void findFulfilments_shouldReturnFulfilmentView_forExistingNotification() {
         // Given — create a notification carrying a fulfilments payload
         Document fulfilment = new Document("obligationId", "abc").append("value", "42");

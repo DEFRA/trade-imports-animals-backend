@@ -312,7 +312,8 @@ public class NotificationService {
     }
 
     // Draft-grade events carry whatever inline details the frontend already persisted on the
-    // notification fields; no address-book resolution is needed for the event body.
+    // notification fields. Copy is the exception for NOTIFICATION_CREATED: parties are stored as
+    // address-book references alone, so the Created outbox event inflates them before transmission.
     private static final Set<OutboxEventType> DRAFT_GRADE_EVENTS = Set.of(
         OutboxEventType.NOTIFICATION_CREATED,
         OutboxEventType.NOTIFICATION_EDITED,
@@ -337,6 +338,9 @@ public class NotificationService {
         String organisationId = actor != null ? actor.getOrganisationId() : null;
         if (copy.getNotification() != null) {
             copy.setNotification(notificationContentMapper.deepClone(copy.getNotification()));
+        }
+        if (eventType == OutboxEventType.NOTIFICATION_CREATED && copy.getNotification() != null) {
+            consignmentPartyResolver.inflateReferencedParties(copy.getNotification(), organisationId);
         }
         if (!DRAFT_GRADE_EVENTS.contains(eventType)) {
             consignmentPartyResolver.validatePartiesAtSubmit(copy, organisationId);
