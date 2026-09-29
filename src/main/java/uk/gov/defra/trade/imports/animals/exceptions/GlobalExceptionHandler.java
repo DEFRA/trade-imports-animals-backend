@@ -34,6 +34,9 @@ public class GlobalExceptionHandler {
     private static final String PROPERTY_TRACE_ID = "traceId";
     private static final String PROPERTY_ERRORS = "errors";
     private static final String TITLE_VALIDATION_ERROR = "Validation Error";
+    /** RFC 7807 {@code type} for every 400 this handler produces, whatever made the body invalid. */
+    private static final URI TYPE_VALIDATION_ERROR =
+        URI.create("https://api.cdp.defra.cloud/problems/validation-error");
 
     /**
      * Handle validation errors (400 Bad Request).
@@ -48,7 +51,7 @@ public class GlobalExceptionHandler {
             "Validation failed for one or more fields"
         );
 
-        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
+        problemDetail.setType(TYPE_VALIDATION_ERROR);
         problemDetail.setTitle(TITLE_VALIDATION_ERROR);
 
         if (traceId != null) {
@@ -90,7 +93,7 @@ public class GlobalExceptionHandler {
                 + "an RFC 3339 instant, for example 2026-12-12T00:00:00Z"
         );
 
-        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
+        problemDetail.setType(TYPE_VALIDATION_ERROR);
         problemDetail.setTitle(TITLE_VALIDATION_ERROR);
 
         if (traceId != null) {
@@ -116,7 +119,7 @@ public class GlobalExceptionHandler {
             "Validation failed for one or more fields"
         );
 
-        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
+        problemDetail.setType(TYPE_VALIDATION_ERROR);
         problemDetail.setTitle(TITLE_VALIDATION_ERROR);
 
         if (traceId != null) {
