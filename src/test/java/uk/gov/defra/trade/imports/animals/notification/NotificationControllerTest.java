@@ -224,6 +224,37 @@ class NotificationControllerTest {
         }
 
         @Test
+        void post_shouldAcceptNotificationWithCountrySubdivisionCode() throws Exception {
+            Origin origin = Origin.builder()
+                .countryCode("ES")
+                .countrySubdivisionCode("ES-CN")
+                .requiresRegionCode("no")
+                .internalReference("INTERNAL-CN")
+                .build();
+            NotificationDto notificationDto = NotificationDto.builder()
+                .origin(origin)
+                .build();
+
+            NotificationAggregate savedNotification = new NotificationAggregate();
+            savedNotification.setNotification(new Notification());
+            savedNotification.setId("507f1f77bcf86cd799439088");
+            savedNotification.setReferenceNumber(REF_2);
+            savedNotification.getNotification().setOrigin(origin);
+
+            when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
+                .thenReturn(savedNotification);
+
+            mockMvc.perform(post("/notifications")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(
+                        SaveNotificationDto.builder().notification(notificationDto).build())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notification.origin.countryCode").value("ES"))
+                .andExpect(jsonPath("$.notification.origin.countrySubdivisionCode").value("ES-CN"))
+                .andExpect(jsonPath("$.notification.origin.internalReference").value("INTERNAL-CN"));
+        }
+
+        @Test
         void post_shouldAcceptNotificationWithRegionOfOriginCodeAndPerUnitAnimalIdentifiers() throws Exception {
             // Given
             Origin origin = new Origin("FR", "yes", "INTERNAL-789", "FR-75");

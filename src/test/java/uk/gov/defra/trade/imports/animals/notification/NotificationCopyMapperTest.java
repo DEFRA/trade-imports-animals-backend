@@ -173,6 +173,23 @@ class NotificationCopyMapperTest {
         }
 
         @Test
+        void toCopyDto_shouldRetainCountrySubdivisionCode() {
+            NotificationAggregate source = aggregateOf(Notification.builder()
+                .origin(Origin.builder()
+                    .countryCode("ES")
+                    .countrySubdivisionCode("ES-CN")
+                    .requiresRegionCode("no")
+                    .build())
+                .build());
+
+            NotificationDto result = mapper.toCopyDto(source);
+
+            assertThat(result.getOrigin().getCountryCode()).isEqualTo("ES");
+            assertThat(result.getOrigin().getCountrySubdivisionCode()).isEqualTo("ES-CN");
+            assertThat(result.getOrigin().getInternalReference()).isNull();
+        }
+
+        @Test
         void toCopyDto_shouldRetainPurposeInInternalMarket() {
             NotificationAggregate source = aggregateOf(Notification.builder()
                 .purposeInInternalMarket("Breeding")
