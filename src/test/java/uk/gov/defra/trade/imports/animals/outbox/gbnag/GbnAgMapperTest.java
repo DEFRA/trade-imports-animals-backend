@@ -2,9 +2,7 @@ package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -717,7 +715,7 @@ class GbnAgMapperTest {
         return NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-7K8M2P")
             .status(NotificationStatus.SUBMITTED)
-            .updated(LocalDateTime.of(2026, Month.MAY, 21, 10, 15, 0))
+            .updated(Instant.parse("2026-05-21T10:15:00Z"))
             .notification(Notification.builder()
                 .origin(new Origin("FR", "true", "Imports456_GB", "FR-75"))
                 .reasonForImport("INTERNAL_MARKET")
@@ -761,7 +759,7 @@ class GbnAgMapperTest {
                     .build())
                 .transport(Transport.builder()
                     .portOfEntry("GBDVR")
-                    .arrivalDate(LocalDate.of(2026, Month.MAY, 6))
+                    .arrivalDate(Instant.parse("2026-05-06T00:00:00Z"))
                     .meansOfTransport(MeansOfTransport.ROAD_VEHICLE)
                     .transportIdentification("AB-1234")
                     .transportDocumentReference("CMR-2026-884721")

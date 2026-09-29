@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -16,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Nested;
@@ -69,7 +70,7 @@ class DocumentControllerTest {
     @Test
     void shouldReturn201WithLocationHeader() throws Exception {
       String ref = "GBN-AG-26-000001";
-      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
+      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", Instant.parse("2026-01-15T00:00:00Z"));
       DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
 
       when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class)))
@@ -93,14 +94,14 @@ class DocumentControllerTest {
         throws Exception {
       String ref = "GBN-AG-26-000001";
       DocumentUploadRequest expectedRequest = new DocumentUploadRequest(
-          documentType, "UKGB2026001", LocalDate.of(2026, 1, 15));
+          documentType, "UKGB2026001", Instant.parse("2026-01-15T00:00:00Z"));
       DocumentUploadResponse serviceResponse = new DocumentUploadResponse(
           "upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
       String body = """
           {
             "documentType":"%s",
             "documentReference":"UKGB2026001",
-            "dateOfIssue":"2026-01-15"
+            "dateOfIssue":"2026-01-15T00:00:00Z"
           }
           """.formatted(documentType.name());
 
@@ -117,7 +118,7 @@ class DocumentControllerTest {
     @Test
     void shouldReturn400_whenDocumentReferenceIsBlank() throws Exception {
       String body = """
-          {"documentType":"ITAHC","documentReference":"","dateOfIssue":"2026-01-15"}
+          {"documentType":"ITAHC","documentReference":"","dateOfIssue":"2026-01-15T00:00:00Z"}
           """;
 
       mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
@@ -131,7 +132,7 @@ class DocumentControllerTest {
     void shouldReturn400_whenDocumentReferenceExceeds100Chars() throws Exception {
       String longRef = "A".repeat(101);
       String body = String.format(
-          "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
+          "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15T00:00:00Z\"}",
           longRef);
 
       mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
@@ -144,7 +145,7 @@ class DocumentControllerTest {
     @Test
     void shouldReturn400_whenDocumentTypeIsNull() throws Exception {
       String body = """
-          {"documentReference":"UKGB2026001","dateOfIssue":"2026-01-15"}
+          {"documentReference":"UKGB2026001","dateOfIssue":"2026-01-15T00:00:00Z"}
           """;
 
       mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
@@ -152,6 +153,41 @@ class DocumentControllerTest {
               .content(body))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.errors.documentType").exists());
+    }
+
+    /**
+     * EUDPA-565 — every date on this API is an {@code Instant}, so a date-only value no longer
+     * binds. Jackson's {@code InstantDeserializer} does the enforcing; what this pins is that the
+     * caller is told 400 rather than 500, which is what happens when
+     * {@code HttpMessageNotReadableException} reaches the {@code RuntimeException} catch-all.
+     */
+    @Test
+    void shouldReturn400_whenDateOfIssueIsDateOnly() throws Exception {
+      String body = """
+          {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15"}
+          """;
+
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isBadRequest());
+
+      verify(documentService, never()).initiate(any(), any());
+    }
+
+    /** The offset is what makes the value an instant — without it there is no moment to store. */
+    @Test
+    void shouldReturn400_whenDateOfIssueHasNoOffset() throws Exception {
+      String body = """
+          {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15T00:00:00"}
+          """;
+
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isBadRequest());
+
+      verify(documentService, never()).initiate(any(), any());
     }
 
     @Test
@@ -171,7 +207,7 @@ class DocumentControllerTest {
     void shouldIgnoreUnknownFieldsLikeRedirectUrl() throws Exception {
       String ref = "GBN-AG-26-000001";
       String body = """
-          {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"/anything"}
+          {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15T00:00:00Z","redirectUrl":"/anything"}
           """;
       DocumentUploadResponse serviceResponse = new DocumentUploadResponse(
           "upload-abc-123", "https://cdp-uploader.example/upload/abc");
@@ -190,7 +226,7 @@ class DocumentControllerTest {
       DocumentUploadRequest captured = requestCaptor.getValue();
       assertThat(captured.documentType()).isEqualTo(DocumentType.ITAHC);
       assertThat(captured.documentReference()).isEqualTo("UKGB2026001");
-      assertThat(captured.dateOfIssue()).isEqualTo(LocalDate.of(2026, 1, 15));
+      assertThat(captured.dateOfIssue()).isEqualTo(Instant.parse("2026-01-15T00:00:00Z"));
     }
   }
 

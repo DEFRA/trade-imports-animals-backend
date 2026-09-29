@@ -25,6 +25,13 @@ import org.springframework.data.convert.WritingConverter;
  * rather than a date should use {@link java.time.Instant} directly, as
  * {@code AccompanyingDocument.dateOfIssue} does; {@code Instant} needs no custom converter.
  *
+ * <p><strong>No field currently uses these converters.</strong> EUDPA-565 moved every persisted
+ * date and date-time — including the last three {@code LocalDate} fields, {@code arrivalDate},
+ * {@code exitDate} and {@code dateOfIssue} — to {@code Instant}, so nothing on the wire or in the
+ * database is zone-less any more. They are kept deliberately: they cost nothing at runtime, and
+ * they keep the guarantee structural should an internal, non-wire {@code LocalDate} field ever be
+ * a better fit than an instant. A new field on the API should be an {@code Instant}.
+ *
  * @see MongoConfig#mongoCustomConversions()
  */
 public final class UtcLocalDateConverters {

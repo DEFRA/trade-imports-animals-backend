@@ -1,8 +1,7 @@
 package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
+import java.time.Instant;
 import java.util.List;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
@@ -34,7 +33,12 @@ public record ExchangedDocument(
             null);
     }
 
-    private static String toUtcDateTime(LocalDateTime dateTime) {
-        return dateTime != null ? dateTime.toInstant(ZoneOffset.UTC).toString() : null;
+    /**
+     * {@code Instant.toString()} is ISO-8601 UTC, which is byte-identical to what the previous
+     * {@code LocalDateTime.toInstant(ZoneOffset.UTC).toString()} produced for the same moment.
+     * Sub-millisecond digits are deliberately preserved — PIMS receives the value unchanged.
+     */
+    private static String toUtcDateTime(Instant dateTime) {
+        return dateTime != null ? dateTime.toString() : null;
     }
 }

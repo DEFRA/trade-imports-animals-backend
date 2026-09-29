@@ -10,8 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -86,7 +84,7 @@ class DocumentServiceTest {
       String notificationRef = "GBN-AG-26-ABC123";
 
       DocumentUploadRequest request = new DocumentUploadRequest(
-          DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
+          DocumentType.ITAHC, "UKGB2026001", Instant.parse("2026-01-15T00:00:00Z"));
 
       stubCdpConfig();
 
@@ -125,7 +123,7 @@ class DocumentServiceTest {
       AccompanyingDocument saved = captor.getValue();
       assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.PENDING);
       assertThat(saved.getNotificationReferenceNumber()).isEqualTo(notificationRef);
-      Instant expectedDateOfIssue = LocalDate.of(2026, 1, 15).atStartOfDay(ZoneOffset.UTC).toInstant();
+      Instant expectedDateOfIssue = Instant.parse("2026-01-15T00:00:00Z");
       assertThat(saved.getDateOfIssue()).isEqualTo(expectedDateOfIssue);
 
       // Then — the same correlationId is on the saved doc and is a valid UUID
@@ -138,7 +136,7 @@ class DocumentServiceTest {
       // Given — production code catches DuplicateKeyException and re-throws ConflictException (→ 409)
       String notificationRef = "GBN-AG-26-CNCR00";
 
-      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
+      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", Instant.parse("2026-01-15T00:00:00Z"));
 
       stubCdpConfig();
 

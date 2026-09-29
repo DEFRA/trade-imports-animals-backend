@@ -1,7 +1,7 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import org.springframework.beans.factory.annotation.Value;
 
 /**
@@ -25,7 +25,7 @@ public interface NotificationView {
 
     NotificationStatus getStatus();
 
-    LocalDateTime getCreated();
+    Instant getCreated();
 
     @Value("#{target.notification?.origin}")
     Origin getOrigin();
@@ -73,7 +73,7 @@ public interface NotificationView {
         private String referenceNumber;
         private Long concurrencyToken;
         private NotificationStatus status;
-        private LocalDateTime created;
+        private Instant created;
         private Origin origin;
         private Commodity commodity;
         private ConsignmentParty consignor;

@@ -3,7 +3,7 @@ package uk.gov.defra.trade.imports.animals.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,7 +26,7 @@ class OptimisticLockingIT extends IntegrationBase {
     void save_shouldThrowOptimisticLockingFailure_whenSavingWithStaleConcurrencyToken() {
         // Arrange — persist a notification and load two in-memory copies of it (simulating
         // two tabs / two pods that each read before either wrote).
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
 
         NotificationAggregate seed = new NotificationAggregate();
         seed.setReferenceNumber("GBN-AG-26-VER001");

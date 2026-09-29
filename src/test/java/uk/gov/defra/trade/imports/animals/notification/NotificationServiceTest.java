@@ -25,9 +25,8 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.spec
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
 import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -276,10 +275,10 @@ class NotificationServiceTest {
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()
                 .portOfEntry("ABERDEEN")
-                .arrivalDate(LocalDate.of(2026, Month.JANUARY, 1))
+                .arrivalDate(Instant.parse("2026-01-01T00:00:00Z"))
                 .transporter(transporters().getFirst())
                 .build();
-            LocalDate exitDate = LocalDate.of(2026, Month.JANUARY, 15);
+            Instant exitDate = Instant.parse("2026-01-15T00:00:00Z");
 
             NotificationDto updateDto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
@@ -1005,7 +1004,7 @@ class NotificationServiceTest {
         void createNotification_stampsExpireAt_whenDaysConfiguredAndNotProd() {
             NotificationAggregate result = create(new NotificationTtlConfig(7, "dev", sweep(false)));
 
-            assertThat(result.getExpireAt()).isEqualTo(result.getCreated().plusDays(7));
+            assertThat(result.getExpireAt()).isEqualTo(result.getCreated().plus(7, ChronoUnit.DAYS));
         }
 
         @Test
@@ -1040,7 +1039,7 @@ class NotificationServiceTest {
             String ref1 = "GBN-AG-26-EXP001";
             String ref2 = "GBN-AG-26-EXP002";
             when(notificationRepository.findExpired(
-                any(LocalDateTime.class), any(Pageable.class)))
+                any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(() -> ref1, () -> ref2));
 
             int deleted = notificationService.deleteExpired(10);
@@ -1056,7 +1055,7 @@ class NotificationServiceTest {
         @Test
         void deleteExpired_returnsZeroAndSkipsDeletion_whenNothingDue() {
             when(notificationRepository.findExpired(
-                any(LocalDateTime.class), any(Pageable.class)))
+                any(Instant.class), any(Pageable.class)))
                 .thenReturn(Collections.emptyList());
 
             assertThat(notificationService.deleteExpired(10)).isZero();
@@ -1069,7 +1068,7 @@ class NotificationServiceTest {
         void deleteExpired_queriesFirstPageBoundedByBatchSize() {
             ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
             when(notificationRepository.findExpired(
-                any(LocalDateTime.class), pageableCaptor.capture()))
+                any(Instant.class), pageableCaptor.capture()))
                 .thenReturn(Collections.emptyList());
 
             notificationService.deleteExpired(5);
@@ -1909,7 +1908,7 @@ class NotificationServiceTest {
                     .cphNumber("12/345/6789")
                     .transport(Transport.builder()
                         .portOfEntry("GBDVR")
-                        .arrivalDate(LocalDate.of(2026, Month.MAY, 1))
+                        .arrivalDate(Instant.parse("2026-05-01T00:00:00Z"))
                         .transporter(transporters().getFirst())
                         .build())
                     .consignment(consignments().getFirst())
@@ -1962,7 +1961,7 @@ class NotificationServiceTest {
                     .additionalDetails(new AdditionalDetails("Slaughter", "no"))
                     .transport(Transport.builder()
                         .portOfEntry("GBFXT")
-                        .arrivalDate(LocalDate.of(2026, Month.JUNE, 1))
+                        .arrivalDate(Instant.parse("2026-06-01T00:00:00Z"))
                         .build())
                     .consignment(consignments().getFirst())
                     .build())
@@ -2422,7 +2421,7 @@ class NotificationServiceTest {
             // does not touch it on the SUBMITTED -> AMEND transition), so cancel-amend must
             // return that same timestamp untouched.
             String ref = "GBN-AG-26-CAN001";
-            LocalDateTime originalSubmittedAt = LocalDateTime.of(2026, Month.APRIL, 15, 10, 0);
+            Instant originalSubmittedAt = Instant.parse("2026-04-15T10:00:00Z");
             List<Document> priorFulfilments = List.of(new Document("obligationId", "prior"));
             Notification baseline = Notification.builder()
                 .origin(new Origin("GB", "no", "ORIGINAL", null))
@@ -2510,7 +2509,7 @@ class NotificationServiceTest {
 
             // When — DRAFT -> SUBMITTED (first submit)
             NotificationAggregate afterFirstSubmit = notificationService.submitNotification(ref, "t1", null);
-            LocalDateTime firstSubmittedAt = afterFirstSubmit.getSubmittedAt();
+            Instant firstSubmittedAt = afterFirstSubmit.getSubmittedAt();
             assertThat(firstSubmittedAt).isNotNull();
 
             // And — SUBMITTED -> AMEND (submittedAt preserved through the transition)
@@ -2803,7 +2802,7 @@ class NotificationServiceTest {
     private static final class NotificationViewBuilder {
         private String referenceNumber;
         private NotificationStatus status;
-        private LocalDateTime created;
+        private Instant created;
         private Origin origin;
         private Commodity commodity;
         private ConsignmentParty consignor;
@@ -2812,7 +2811,7 @@ class NotificationServiceTest {
 
         NotificationViewBuilder referenceNumber(String v) { this.referenceNumber = v; return this; }
         NotificationViewBuilder status(NotificationStatus v) { this.status = v; return this; }
-        NotificationViewBuilder created(LocalDateTime v) { this.created = v; return this; }
+        NotificationViewBuilder created(Instant v) { this.created = v; return this; }
         NotificationViewBuilder origin(Origin v) { this.origin = v; return this; }
         NotificationViewBuilder commodity(Commodity v) { this.commodity = v; return this; }
         NotificationViewBuilder consignor(ConsignmentParty v) { this.consignor = v; return this; }

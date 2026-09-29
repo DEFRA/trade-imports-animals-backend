@@ -24,11 +24,13 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.spec
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.LocalDate;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -258,7 +260,7 @@ class NotificationControllerTest {
                 .purposeInInternalMarket("Breeding")
                 .destinationCountry("DE")
                 .portOfExit("GB DVR")
-                .exitDate(LocalDate.of(2026, 12, 20))
+                .exitDate(Instant.parse("2026-12-20T00:00:00Z"))
                 .build();
 
             NotificationAggregate savedNotification = new NotificationAggregate();
@@ -270,7 +272,7 @@ class NotificationControllerTest {
             savedNotification.getNotification().setPurposeInInternalMarket("Breeding");
             savedNotification.getNotification().setDestinationCountry("DE");
             savedNotification.getNotification().setPortOfExit("GB DVR");
-            savedNotification.getNotification().setExitDate(LocalDate.of(2026, 12, 20));
+            savedNotification.getNotification().setExitDate(Instant.parse("2026-12-20T00:00:00Z"));
 
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(savedNotification);
@@ -285,7 +287,7 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.notification.purposeInInternalMarket").value("Breeding"))
                 .andExpect(jsonPath("$.notification.destinationCountry").value("DE"))
                 .andExpect(jsonPath("$.notification.portOfExit").value("GB DVR"))
-                .andExpect(jsonPath("$.notification.exitDate").value("2026-12-20"))
+                .andExpect(jsonPath("$.notification.exitDate").value("2026-12-20T00:00:00Z"))
                 .andExpect(jsonPath(
                     "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[0].earTag")
                     .value("UK123456789012"))
@@ -338,6 +340,45 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.referenceNumber").value(REF_3))
                 .andExpect(jsonPath("$.notification.origin.countryCode").value("DE"))
                 .andExpect(jsonPath("$.notification.origin.internalReference").value("UPDATE-REF"));
+        }
+
+        /**
+         * EUDPA-565 — {@code arrivalDate} and {@code exitDate} are instants on the wire, so the
+         * date-only form the API used to take no longer binds. Jackson does the enforcing; what
+         * is pinned here is that the caller gets 400 rather than the 500 the
+         * {@code RuntimeException} catch-all would otherwise produce, and that nothing is saved.
+         */
+        @ParameterizedTest
+        @ValueSource(strings = {
+            "{\"notification\":{\"transport\":{\"arrivalDate\":\"2026-12-12\"}}}",
+            "{\"notification\":{\"transport\":{\"arrivalDate\":\"2026-12-12T00:00:00\"}}}",
+            "{\"notification\":{\"exitDate\":\"2026-12-12\"}}",
+            "{\"notification\":{\"exitDate\":\"2026-12-12T00:00:00\"}}"
+        })
+        void post_shouldReturn400_whenADateIsNotAnInstant(String body) throws Exception {
+            mockMvc.perform(post("/notifications")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+                .andExpect(status().isBadRequest());
+
+            verify(notificationService, never()).saveNotification(any(), any(), any());
+        }
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+            "{\"notification\":{\"transport\":{\"arrivalDate\":\"2026-12-12T00:00:00Z\"}}}",
+            "{\"notification\":{\"exitDate\":\"2026-12-12T00:00:00Z\"}}"
+        })
+        void post_shouldAccept_whenADateIsAnInstant(String body) throws Exception {
+            NotificationAggregate saved = new NotificationAggregate();
+            saved.setReferenceNumber(REF_1);
+            when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
+                .thenReturn(saved);
+
+            mockMvc.perform(post("/notifications")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+                .andExpect(status().isOk());
         }
 
         @Test
@@ -989,8 +1030,8 @@ class NotificationControllerTest {
                 @Override public String getReferenceNumber() { return REF_1; }
                 @Override public Long getConcurrencyToken() { return 0L; }
                 @Override public NotificationStatus getStatus() { return NotificationStatus.SUBMITTED; }
-                @Override public java.time.LocalDateTime getCreated() { return null; }
-                @Override public java.time.LocalDateTime getSubmittedAt() { return null; }
+                @Override public java.time.Instant getCreated() { return null; }
+                @Override public java.time.Instant getSubmittedAt() { return null; }
                 @Override public java.util.List<org.bson.Document> getFulfilments() {
                     return java.util.List.of(new org.bson.Document("obligationId", "abc"));
                 }

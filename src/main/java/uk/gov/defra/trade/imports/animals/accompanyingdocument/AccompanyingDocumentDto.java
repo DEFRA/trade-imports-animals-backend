@@ -1,8 +1,6 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Objects;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
@@ -22,8 +20,8 @@ public record AccompanyingDocumentDto(
     Instant dateOfIssue,
     ScanStatus scanStatus,
     List<UploadedFileDto> files,
-    LocalDateTime created,
-    LocalDateTime updated) {
+    Instant created,
+    Instant updated) {
 
   /**
    * Maps an {@link AccompanyingDocument} entity to a DTO.
@@ -42,7 +40,7 @@ public record AccompanyingDocumentDto(
         entity.getDateOfIssue(),
         entity.getScanStatus(),
         entity.getFiles().stream().map(UploadedFileDto::from).toList(),
-        entity.getCreated() != null ? LocalDateTime.ofInstant(entity.getCreated(), ZoneOffset.UTC) : null,
-        entity.getUpdated() != null ? LocalDateTime.ofInstant(entity.getUpdated(), ZoneOffset.UTC) : null);
+        entity.getCreated(),
+        entity.getUpdated());
   }
 }

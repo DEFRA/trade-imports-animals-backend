@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -45,16 +43,21 @@ class AccompanyingDocumentDtoTest {
       assertThat(dto.documentReference()).isEqualTo("ITAHC/2026/001");
       assertThat(dto.dateOfIssue()).isEqualTo(dateOfIssue);
       assertThat(dto.scanStatus()).isEqualTo(ScanStatus.COMPLETE);
-      assertThat(dto.created()).isEqualTo(LocalDateTime.ofInstant(created, ZoneOffset.UTC));
-      assertThat(dto.updated()).isEqualTo(LocalDateTime.ofInstant(updated, ZoneOffset.UTC));
+      assertThat(dto.created()).isEqualTo(created);
+      assertThat(dto.updated()).isEqualTo(updated);
     }
   }
 
+  /**
+   * The DTO carries the entity's instants through untouched. It used to convert them to a
+   * zone-less {@code LocalDateTime} at {@code ZoneOffset.UTC} for the wire; EUDPA-565 made the
+   * wire type an {@code Instant} too, so there is no conversion left to get wrong.
+   */
   @Nested
-  class InstantConversion {
+  class InstantPassThrough {
 
     @Test
-    void from_shouldConvertCreatedInstantToUtcLocalDateTime() {
+    void from_shouldCarryCreatedInstantThroughUnchanged() {
       Instant created = Instant.parse("2026-06-15T13:30:00Z");
 
       AccompanyingDocument entity = AccompanyingDocument.builder()
@@ -64,11 +67,11 @@ class AccompanyingDocumentDtoTest {
 
       AccompanyingDocumentDto dto = AccompanyingDocumentDto.from(entity);
 
-      assertThat(dto.created()).isEqualTo(LocalDateTime.of(2026, 6, 15, 13, 30, 0));
+      assertThat(dto.created()).isEqualTo(Instant.parse("2026-06-15T13:30:00Z"));
     }
 
     @Test
-    void from_shouldConvertUpdatedInstantToUtcLocalDateTime() {
+    void from_shouldCarryUpdatedInstantThroughUnchanged() {
       Instant updated = Instant.parse("2026-07-20T08:00:00Z");
 
       AccompanyingDocument entity = AccompanyingDocument.builder()
@@ -78,7 +81,7 @@ class AccompanyingDocumentDtoTest {
 
       AccompanyingDocumentDto dto = AccompanyingDocumentDto.from(entity);
 
-      assertThat(dto.updated()).isEqualTo(LocalDateTime.of(2026, 7, 20, 8, 0, 0));
+      assertThat(dto.updated()).isEqualTo(Instant.parse("2026-07-20T08:00:00Z"));
     }
 
     @Test

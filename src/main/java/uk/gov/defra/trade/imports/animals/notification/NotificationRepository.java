@@ -1,6 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Page;
@@ -31,7 +31,7 @@ public interface NotificationRepository extends MongoRepository<NotificationAggr
      * field, which Spring Data's derived-query builder rejects.
      */
     @Query("{ 'expireAt': { $ne: null, $lte: ?0 } }")
-    List<NotificationReferenceOnly> findExpired(LocalDateTime now, Pageable pageable);
+    List<NotificationReferenceOnly> findExpired(Instant now, Pageable pageable);
 
     Page<NotificationReferenceOnly> findAllProjectedBy(Pageable pageable);
 

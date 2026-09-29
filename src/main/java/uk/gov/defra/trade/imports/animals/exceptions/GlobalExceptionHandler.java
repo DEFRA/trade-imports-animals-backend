@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -59,6 +60,42 @@ public class GlobalExceptionHandler {
             errors.computeIfAbsent(error.getField(), k -> new ArrayList<>()).add(error.getDefaultMessage());
         }
         problemDetail.setProperty(PROPERTY_ERRORS, errors);
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
+     * Handle an unparseable request body (400 Bad Request) — malformed JSON, or a value that does
+     * not fit the field's type.
+     *
+     * <p>Without this the exception reaches the {@code RuntimeException} catch-all and the caller
+     * is told 500, blaming the server for the caller's payload. EUDPA-565 made that reachable in
+     * an ordinary way: every date on this API is now an {@code Instant}, so a date-only
+     * {@code "2026-12-12"} where {@code "2026-12-12T00:00:00Z"} is required lands here rather
+     * than binding.
+     *
+     * <p>The parser message is logged but deliberately not returned — it quotes the submitted
+     * value and names internal types.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ProblemDetail> handleUnreadableRequestBody(HttpMessageNotReadableException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Unreadable request body (trace: {}): {}", traceId, ex.getMessage());
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST,
+            "Request body could not be read. Check the JSON is well-formed and that each date is "
+                + "an RFC 3339 instant, for example 2026-12-12T00:00:00Z"
+        );
+
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
+        problemDetail.setTitle(TITLE_VALIDATION_ERROR);
+
+        if (traceId != null) {
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
+        }
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)

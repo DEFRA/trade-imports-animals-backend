@@ -1,6 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -20,9 +20,9 @@ public class NotificationDto extends NotificationBase {
 
     private NotificationStatus status;
 
-    private LocalDateTime created;
+    private Instant created;
 
-    private LocalDateTime updated;
+    private Instant updated;
 
     private Long concurrencyToken;
 

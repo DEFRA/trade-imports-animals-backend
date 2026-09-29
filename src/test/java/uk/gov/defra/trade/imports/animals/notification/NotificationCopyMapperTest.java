@@ -10,7 +10,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.plac
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.reference;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
-import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -287,7 +287,7 @@ class NotificationCopyMapperTest {
             NotificationAggregate source = aggregateOf(Notification.builder()
                 .transport(Transport.builder()
                     .portOfEntry("GBDVR")
-                    .arrivalDate(LocalDate.of(2026, 6, 1))
+                    .arrivalDate(Instant.parse("2026-06-01T00:00:00Z"))
                     .build())
                 .build());
 
@@ -310,7 +310,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldOmitExitDate() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .exitDate(LocalDate.of(2026, 12, 20))
+                .exitDate(Instant.parse("2026-12-20T00:00:00Z"))
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);

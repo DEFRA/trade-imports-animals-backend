@@ -2,7 +2,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -296,11 +296,11 @@ public class NotificationService {
                     notification.setPreAmendNotification(null);
                 }
                 notification.setStatus(targetStatus);
-                notification.setUpdated(LocalDateTime.now());
+                notification.setUpdated(Instant.now());
                 // Only actual submissions mint a new submittedAt; cancel-amend restores to SUBMITTED
                 // but must preserve the timestamp from the original submission.
                 if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)) {
-                    notification.setSubmittedAt(LocalDateTime.now());
+                    notification.setSubmittedAt(Instant.now());
                 }
                 NotificationAggregate saved = notificationRepository.save(notification);
                 forOutbox.setStatus(saved.getStatus());
@@ -460,7 +460,7 @@ public class NotificationService {
     @Transactional
     public int deleteExpired(int batchSize) {
         List<NotificationReferenceOnly> due =
-            notificationRepository.findExpired(LocalDateTime.now(), PageRequest.of(0, batchSize));
+            notificationRepository.findExpired(Instant.now(), PageRequest.of(0, batchSize));
         if (due.isEmpty()) {
             return 0;
         }
@@ -493,12 +493,12 @@ public class NotificationService {
         if (days == null || ttlConfig.isProd()) {
             return;
         }
-        notificationAggregate.setExpireAt(notificationAggregate.getCreated().plusDays(days));
+        notificationAggregate.setExpireAt(notificationAggregate.getCreated().plus(days, ChronoUnit.DAYS));
     }
 
     private NotificationAggregate createNotification(NotificationDto dto, String correlationId, Actor actor) {
         NotificationAggregate notificationAggregate = new NotificationAggregate();
-        notificationAggregate.setCreated(LocalDateTime.now());
+        notificationAggregate.setCreated(Instant.now());
         notificationAggregate.setStatus(NotificationStatus.DRAFT);
         stampExpiry(notificationAggregate);
         setNotificationDetails(dto, notificationAggregate);
@@ -564,7 +564,7 @@ public class NotificationService {
         notification.setPortOfExit(dto.getPortOfExit());
         notification.setExitDate(dto.getExitDate());
         notificationAggregate.setFulfilments(dto.getFulfilments());
-        notificationAggregate.setUpdated(LocalDateTime.now());
+        notificationAggregate.setUpdated(Instant.now());
     }
 
     private void createNotificationAuditRecord(
@@ -576,7 +576,7 @@ public class NotificationService {
             .numberOfNotifications(referenceNumbers.size())
             .traceId(auditContext.traceId())
             .userId(auditContext.userId())
-            .timestamp(LocalDateTime.now())
+            .timestamp(Instant.now())
             .build();
 
         auditRepository.save(auditRecord);

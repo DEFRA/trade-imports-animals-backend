@@ -1,6 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
-import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,7 +14,8 @@ import lombok.NoArgsConstructor;
 public class Transport {
     
     private String portOfEntry;
-    private LocalDate arrivalDate;
+    /** The chosen arrival day, labelled as UTC midnight by the producer. See {@link NotificationBase#exitDate}. */
+    private Instant arrivalDate;
     private MeansOfTransport meansOfTransport;
     private String transportIdentification;
     private String transportDocumentReference;
