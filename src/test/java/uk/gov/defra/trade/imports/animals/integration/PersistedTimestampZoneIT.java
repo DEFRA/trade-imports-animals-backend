@@ -15,9 +15,11 @@ import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
+import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
+import uk.gov.defra.trade.imports.animals.notification.Transport;
 
 /**
  * EUDPA-565 — the five persisted timestamps are stored as the instant they name, whatever the
@@ -40,6 +42,10 @@ class PersistedTimestampZoneIT extends IntegrationBase {
     private static final Instant SUBMITTED_AT = Instant.parse("2026-07-22T23:45:10Z");
     private static final Instant EXPIRE_AT = Instant.parse("2026-08-21T00:30:00Z");
     private static final Instant AUDIT_TIMESTAMP = Instant.parse("2026-07-23T00:15:00Z");
+
+    /** Calendar dates: the day the user chose, labelled UTC midnight by the frontend. */
+    private static final Instant ARRIVAL_DATE = Instant.parse("2026-07-21T00:00:00Z");
+    private static final Instant EXIT_DATE = Instant.parse("2026-07-28T00:00:00Z");
 
     private static final String REF = "GBN-AG-26-TZ0001";
 
@@ -89,6 +95,45 @@ class PersistedTimestampZoneIT extends IntegrationBase {
         // the way in. That is storage, not zone drift — the millisecond value is exact.
         assertThat(stored.get("updated", Date.class).toInstant())
             .isEqualTo(Instant.parse("2026-07-22T23:45:10.123Z"));
+    }
+
+    /**
+     * The two calendar dates, asserted at exactly UTC midnight in the raw BSON. This is the half
+     * of the zone guarantee that keeps {@code TransportEvent.scheduledOccurrenceDateTime}
+     * byte-identical — the emitted string is the stored instant, so if either date drifted an
+     * hour the GB-NAG event would name the previous day to every UTC reader, PIMS included.
+     *
+     * <p>{@code NotificationIT.post_shouldPersistArrivalDateAsUtcStartOfDay_whenJvmDefaultZoneIsBst}
+     * covers {@code arrivalDate} through the API; this covers both through the repository, so
+     * neither field is left resting on a single test in one layer.
+     */
+    @Test
+    void calendarDates_areStoredAtExactlyUtcMidnight_whenJvmDefaultZoneIsBst() {
+        notificationRepository.save(NotificationAggregate.builder()
+            .referenceNumber(REF)
+            .status(NotificationStatus.DRAFT)
+            .created(CREATED)
+            .notification(Notification.builder()
+                .transport(Transport.builder()
+                    .portOfEntry("GBDVR")
+                    .arrivalDate(ARRIVAL_DATE)
+                    .build())
+                .exitDate(EXIT_DATE)
+                .build())
+            .build());
+
+        Document stored = mongoTemplate.getCollection("notification")
+            .find(new Document("referenceNumber", REF))
+            .first();
+
+        assertThat(stored).isNotNull();
+        Document notification = stored.get("notification", Document.class);
+        assertThat(notification.get("transport", Document.class).get("arrivalDate", Date.class).toInstant())
+            .isEqualTo(ARRIVAL_DATE)
+            .hasToString("2026-07-21T00:00:00Z");
+        assertThat(notification.get("exitDate", Date.class).toInstant())
+            .isEqualTo(EXIT_DATE)
+            .hasToString("2026-07-28T00:00:00Z");
     }
 
     @Test
