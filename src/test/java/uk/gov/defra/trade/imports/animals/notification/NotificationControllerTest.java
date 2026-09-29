@@ -869,7 +869,7 @@ class NotificationControllerTest {
 
         private NotificationView testView(String ref, NotificationStatus status, Origin origin,
                 Commodity commodity, ConsignmentParty consignor, Transport transport) {
-            return new NotificationView.Data(
+            return new NotificationViewData(
                 ref, 0L, status, null, origin, commodity, consignor, null, transport);
         }
 

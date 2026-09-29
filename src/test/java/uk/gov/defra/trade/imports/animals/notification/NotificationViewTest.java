@@ -19,7 +19,7 @@ class NotificationViewTest {
             .addressId(ADDRESS_ID)
             .name("Frozen Consignee")
             .build();
-        NotificationView view = new NotificationView.Data(
+        NotificationView view = new NotificationViewData(
             "GBN-AG-26-FRZ001",
             1L,
             NotificationStatus.SUBMITTED,
@@ -44,7 +44,7 @@ class NotificationViewTest {
     void forDashboard_shouldKeepLiveReferences_whenDraftOrAmend() {
         // Given
         ConsignmentParty liveReference = ConsignmentParty.reference(ADDRESS_ID);
-        NotificationView draft = new NotificationView.Data(
+        NotificationView draft = new NotificationViewData(
             "GBN-AG-26-DRF001",
             0L,
             NotificationStatus.DRAFT,
@@ -54,7 +54,7 @@ class NotificationViewTest {
             liveReference,
             liveReference,
             null);
-        NotificationView amend = new NotificationView.Data(
+        NotificationView amend = new NotificationViewData(
             "GBN-AG-26-AMD001",
             2L,
             NotificationStatus.AMEND,

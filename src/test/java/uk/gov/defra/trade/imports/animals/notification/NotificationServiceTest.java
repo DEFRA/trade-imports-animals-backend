@@ -2819,7 +2819,7 @@ class NotificationServiceTest {
         NotificationViewBuilder transport(Transport v) { this.transport = v; return this; }
 
         NotificationView build() {
-            return new NotificationView.Data(
+            return new NotificationViewData(
                 referenceNumber, 0L, status, created,
                 origin, commodity, consignor, consignee, transport);
         }
