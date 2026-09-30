@@ -370,6 +370,40 @@ class NotificationServiceTest {
         }
 
         @Test
+        void saveNotification_shouldTruncateArrivalDateToTheStartOfItsUtcDay() {
+            // Guards the PIMS off-by-a-day. LocalDate made a time of day impossible to represent
+            // and Instant does not, so a caller can post one; the stored value must still be the
+            // calendar day the trader chose. 23:30Z discriminates twice over — a passthrough keeps
+            // the 23:30, and a truncation that used the JVM's local zone rather than UTC would,
+            // under Europe/London in July, round to 2026-07-21T23:00:00Z rather than midnight.
+            String referenceNumber = "GBN-AG-26-ARRV01";
+            NotificationAggregate existing = NotificationAggregate.builder()
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .notification(Notification.builder().build())
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(referenceNumber)
+                .concurrencyToken(0L)
+                .transport(Transport.builder()
+                    .arrivalDate(Instant.parse("2026-07-21T23:30:00Z"))
+                    .build())
+                .build();
+
+            // When
+            NotificationAggregate saved = notificationService.saveNotification(dto, "trace-arrival-001", null);
+
+            // Then
+            assertThat(saved.getNotification().getTransport().getArrivalDate())
+                .isEqualTo(Instant.parse("2026-07-21T00:00:00Z"));
+        }
+
+        @Test
         void saveNotification_shouldStillSave_whenAReferencedAddressHasBeenDeleted() {
             // Given — a draft whose consignor still references an address the trader has since
             // deleted. Saving must not call the address book or block the write; submit validates.

@@ -298,6 +298,45 @@ class GbnAgMapperTest {
         assertThat(mapper.toGbnAgEventData(null, null)).isNull();
     }
 
+    @Test
+    void shouldEmitIssueDateTimeWithItsSubMillisecondDigitsIntact() {
+        // PIMS reads issueDateTime as the string this emits, so rounding the instant anywhere on
+        // the path — a truncatedTo(MILLIS), say — silently changes the value it receives. The
+        // whole-second fixture the happy path uses cannot tell a rounding implementation from a
+        // faithful one, because both produce the same string; this fixture can.
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-NANO01")
+            .status(NotificationStatus.SUBMITTED)
+            .updated(Instant.parse("2026-05-21T10:15:00.123456789Z"))
+            .notification(Notification.builder().build())
+            .build();
+
+        assertThat(mapper.toGbnAgEventData(notificationAggregate, 1).exchangedDocument().issueDateTime())
+            .isEqualTo("2026-05-21T10:15:00.123456789Z");
+    }
+
+    @Test
+    void shouldEmitArrivalDateVerbatim_asNormalisingItIsTheServicesJobNotTheMappers() {
+        // NotificationService truncates arrivalDate to UTC midnight on save; TransportEvent emits
+        // whatever Instant it is handed. Pinning a genuinely non-midnight time of day here holds
+        // the mapper to its half of that division — were truncation to migrate back into the
+        // mapper, or be applied in both places, this would go red.
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-ARV001")
+            .notification(Notification.builder()
+                .transport(Transport.builder()
+                    .arrivalDate(Instant.parse("2026-07-21T23:30:00Z"))
+                    .build())
+                .build())
+            .build();
+
+        TransportEvent arrival = mapper.toGbnAgEventData(notificationAggregate, 1)
+            .specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst()
+            .arrivalEvent().getFirst();
+
+        assertThat(arrival.scheduledOccurrenceDateTime()).isEqualTo("2026-07-21T23:30:00Z");
+    }
+
     @ParameterizedTest
     @CsvSource({"VESSEL,1", "RAILWAY,2", "ROAD_VEHICLE,3", "AIRPLANE,4"})
     void shouldMapMeansOfTransportToUnRec19ModeCode(MeansOfTransport means, int expectedCode) {
