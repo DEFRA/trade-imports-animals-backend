@@ -2,11 +2,15 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 class NotificationViewTest {
 
     private static final String ADDRESS_ID = "665f1c2ab3e4d51a2c9d0e77";
+
+    /** Late-evening and sub-second, so a dropped or day-truncated {@code created} cannot pass. */
+    private static final Instant CREATED = Instant.parse("2026-09-10T23:35:39.455Z");
 
     @Test
     void forDashboard_shouldInlineStoredPartiesWithoutAddressId_whenSubmitted() {
@@ -23,7 +27,7 @@ class NotificationViewTest {
             "GBN-AG-26-FRZ001",
             1L,
             NotificationStatus.SUBMITTED,
-            null,
+            CREATED,
             null,
             null,
             consignor,
@@ -34,6 +38,7 @@ class NotificationViewTest {
         NotificationView dashboard = view.forDashboard();
 
         // Then
+        assertThat(dashboard.getCreated()).isEqualTo(CREATED);
         assertThat(dashboard.getConsignor().getName()).isEqualTo("Frozen Consignor");
         assertThat(dashboard.getConsignor().getAddressId()).isNull();
         assertThat(dashboard.getConsignee().getName()).isEqualTo("Frozen Consignee");

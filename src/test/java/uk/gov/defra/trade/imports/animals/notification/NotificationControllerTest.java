@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -375,12 +377,19 @@ class NotificationControllerTest {
             verify(notificationService, never()).saveNotification(any(), any(), any());
         }
 
-        @ParameterizedTest
-        @ValueSource(strings = {
-            "{\"notification\":{\"transport\":{\"arrivalDate\":\"2026-12-12T00:00:00Z\"}}}",
-            "{\"notification\":{\"exitDate\":\"2026-12-12T00:00:00Z\"}}"
-        })
-        void post_shouldAccept_whenADateIsAnInstant(String body) throws Exception {
+        /**
+         * EUDPA-565 — the point of the instant wire type is that the moment the caller sent is the
+         * moment that binds. Both values carry a non-zero time of day and sub-second precision and
+         * they differ from one another, so an hour shift, a truncation to the day, and a
+         * transposition of the two fields each surface as a failure rather than pass unnoticed.
+         *
+         * <p>{@code notificationService} is a mock here, so the save-time {@code arrivalDate}
+         * truncation does not run — the captor sees exactly what the controller bound from the JSON.
+         */
+        @Test
+        void post_shouldBindTheExactInstant_whenADateIsAnInstant() throws Exception {
+            Instant arrivalDate = Instant.parse("2026-12-12T07:41:23.456Z");
+            Instant exitDate = Instant.parse("2026-12-13T19:04:57.891Z");
             NotificationAggregate saved = new NotificationAggregate();
             saved.setReferenceNumber(REF_1);
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
@@ -388,8 +397,14 @@ class NotificationControllerTest {
 
             mockMvc.perform(post("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
-                    .content(body))
+                    .content("{\"notification\":{\"transport\":{\"arrivalDate\":\"" + arrivalDate
+                        + "\"},\"exitDate\":\"" + exitDate + "\"}}"))
                 .andExpect(status().isOk());
+
+            ArgumentCaptor<NotificationDto> captor = ArgumentCaptor.forClass(NotificationDto.class);
+            verify(notificationService).saveNotification(captor.capture(), any(), any());
+            assertThat(captor.getValue().getTransport().getArrivalDate()).isEqualTo(arrivalDate);
+            assertThat(captor.getValue().getExitDate()).isEqualTo(exitDate);
         }
 
         @Test
