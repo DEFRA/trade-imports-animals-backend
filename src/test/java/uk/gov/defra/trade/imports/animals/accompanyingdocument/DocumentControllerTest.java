@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -20,10 +21,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -156,36 +159,30 @@ class DocumentControllerTest {
     }
 
     /**
-     * EUDPA-565 — every date on this API is an {@code Instant}, so a date-only value no longer
-     * binds. Jackson's {@code InstantDeserializer} does the enforcing; what this pins is that the
-     * caller is told 400 rather than 500, which is what happens when
-     * {@code HttpMessageNotReadableException} reaches the {@code RuntimeException} catch-all.
+     * EUDPA-565 — every date on this API is an {@code Instant}, so neither the date-only form the
+     * API used to take nor a local date-time without an offset binds any longer. Jackson's
+     * {@code InstantDeserializer} does the enforcing; what this pins is the contract the caller
+     * sees — 400 rather than the 500 {@code HttpMessageNotReadableException} draws from the
+     * {@code RuntimeException} catch-all, a problem+json body carrying the malformed-request
+     * type, and a detail naming the form the caller must send. Nothing is saved.
      */
-    @Test
-    void shouldReturn400_whenDateOfIssueIsDateOnly() throws Exception {
+    @ParameterizedTest
+    @ValueSource(strings = {"2026-01-15", "2026-01-15T00:00:00"})
+    void post_shouldReturn400_whenDateOfIssueIsNotAnInstant(String dateOfIssue) throws Exception {
       String body = """
-          {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15"}
-          """;
+          {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"%s"}
+          """.formatted(dateOfIssue);
 
       mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
-          .andExpect(status().isBadRequest());
-
-      verify(documentService, never()).initiate(any(), any());
-    }
-
-    /** The offset is what makes the value an instant — without it there is no moment to store. */
-    @Test
-    void shouldReturn400_whenDateOfIssueHasNoOffset() throws Exception {
-      String body = """
-          {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15T00:00:00"}
-          """;
-
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
-              .contentType(MediaType.APPLICATION_JSON)
-              .content(body))
-          .andExpect(status().isBadRequest());
+          .andExpect(status().isBadRequest())
+          .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+          .andExpect(jsonPath("$.type")
+              .value("https://api.cdp.defra.cloud/problems/malformed-request"))
+          .andExpect(jsonPath("$.title").value("Malformed Request"))
+          .andExpect(jsonPath("$.detail")
+              .value(Matchers.containsString("RFC 3339 instant, for example 2026-12-12T00:00:00Z")));
 
       verify(documentService, never()).initiate(any(), any());
     }
