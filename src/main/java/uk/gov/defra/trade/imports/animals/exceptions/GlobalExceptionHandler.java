@@ -34,9 +34,19 @@ public class GlobalExceptionHandler {
     private static final String PROPERTY_TRACE_ID = "traceId";
     private static final String PROPERTY_ERRORS = "errors";
     private static final String TITLE_VALIDATION_ERROR = "Validation Error";
-    /** RFC 7807 {@code type} for every 400 this handler produces, whatever made the body invalid. */
+    /**
+     * RFC 7807 {@code type} for the field-validation 400s — {@link #handleValidationException} and
+     * {@link #handleConstraintViolationException} — each of which carries an {@code errors} map
+     * naming the offending fields.
+     */
     private static final URI TYPE_VALIDATION_ERROR =
         URI.create("https://api.cdp.defra.cloud/problems/validation-error");
+    /**
+     * RFC 7807 {@code type} for a body the parser could not read at all. A problem type of its own,
+     * not field validation: nothing bound, so there is no {@code errors} map to name fields in.
+     */
+    private static final URI TYPE_MALFORMED_REQUEST =
+        URI.create("https://api.cdp.defra.cloud/problems/malformed-request");
 
     /**
      * Handle validation errors (400 Bad Request).
@@ -93,8 +103,8 @@ public class GlobalExceptionHandler {
                 + "an RFC 3339 instant, for example 2026-12-12T00:00:00Z"
         );
 
-        problemDetail.setType(TYPE_VALIDATION_ERROR);
-        problemDetail.setTitle(TITLE_VALIDATION_ERROR);
+        problemDetail.setType(TYPE_MALFORMED_REQUEST);
+        problemDetail.setTitle("Malformed Request");
 
         if (traceId != null) {
             problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);

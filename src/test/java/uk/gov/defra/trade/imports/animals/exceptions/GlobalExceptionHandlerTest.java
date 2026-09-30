@@ -160,13 +160,17 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-        assertThat(problemDetail.getTitle()).isEqualTo("Validation Error");
+        assertThat(problemDetail.getTitle()).isEqualTo("Malformed Request");
         assertThat(problemDetail.getType())
-            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/malformed-request"));
         assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
         assertThat(problemDetail.getDetail())
             .isEqualTo("Request body could not be read. Check the JSON is well-formed and that each "
                 + "date is an RFC 3339 instant, for example 2026-12-12T00:00:00Z");
+
+        // An unreadable body is its own problem type, not field validation: nothing bound, so
+        // there is no errors map - which is what keeps one type URI to one response shape.
+        assertThat(problemDetail.getProperties()).doesNotContainKey("errors");
 
         String[] parserMessageMarkers = {
             "JSON parse error",
