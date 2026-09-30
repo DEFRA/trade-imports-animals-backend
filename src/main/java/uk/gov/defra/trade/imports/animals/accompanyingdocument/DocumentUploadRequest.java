@@ -13,16 +13,21 @@ import java.time.Instant;
 @Schema(description = "Request to initiate an accompanying document upload")
 public record DocumentUploadRequest(
     @NotNull
-    @Schema(description = "Type of accompanying document", example = "ITAHC")
+    @Schema(description = "Type of accompanying document",
+        requiredMode = Schema.RequiredMode.REQUIRED,
+        example = "ITAHC")
     DocumentType documentType,
 
     @NotBlank
     @Size(max = 100)
     @Pattern(regexp = "^[a-zA-Z0-9]*$")
-    @Schema(description = "Reference number printed on the document", example = "UKGB2026001234")
+    @Schema(description = "Reference number printed on the document",
+        requiredMode = Schema.RequiredMode.REQUIRED,
+        example = "UKGB2026001234")
     String documentReference,
 
     @NotNull
     @Schema(description = "Date of issue on the physical document, as UTC midnight",
+        requiredMode = Schema.RequiredMode.REQUIRED,
         example = "2026-01-15T00:00:00Z")
     Instant dateOfIssue) {}
