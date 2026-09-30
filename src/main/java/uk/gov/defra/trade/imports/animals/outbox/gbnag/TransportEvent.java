@@ -22,9 +22,11 @@ public record TransportEvent(
     }
 
     /**
-     * The arrival date arrives as UTC midnight — the frontend labels the user's chosen calendar
-     * day as UTC rather than converting it from a local zone, so this emits the same string the
-     * previous {@code atStartOfDay().toInstant(ZoneOffset.UTC)} produced.
+     * The arrival date reaches here as UTC midnight because {@code NotificationService} truncates
+     * it to the start of its UTC day on save — the frontend labels the user's chosen calendar day
+     * as UTC rather than converting it from a local zone, and the truncation holds any other
+     * caller to the same rule. So this emits the same string the previous
+     * {@code atStartOfDay().toInstant(ZoneOffset.UTC)} produced.
      */
     private static String toUtcDateTime(Instant date) {
         return date != null ? date.toString() : null;
