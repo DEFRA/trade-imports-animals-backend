@@ -254,6 +254,13 @@ class NotificationControllerTest {
                 .name("Cow")
                 .commodityComplement(List.of(complement))
                 .build();
+            // EUDPA-565 — arrivalDate is deliberately neither midnight nor a whole second. The
+            // producer labels it UTC midnight, but a fixture that agrees with midnight cannot
+            // distinguish a faithful instant from one truncated to a day on the way out.
+            Transport transport = Transport.builder()
+                .portOfEntry("GB DVR")
+                .arrivalDate(Instant.parse("2026-12-19T13:45:30.250Z"))
+                .build();
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(origin)
                 .commodity(commodity)
@@ -261,6 +268,7 @@ class NotificationControllerTest {
                 .destinationCountry("DE")
                 .portOfExit("GB DVR")
                 .exitDate(Instant.parse("2026-12-20T00:00:00Z"))
+                .transport(transport)
                 .build();
 
             NotificationAggregate savedNotification = new NotificationAggregate();
@@ -273,6 +281,7 @@ class NotificationControllerTest {
             savedNotification.getNotification().setDestinationCountry("DE");
             savedNotification.getNotification().setPortOfExit("GB DVR");
             savedNotification.getNotification().setExitDate(Instant.parse("2026-12-20T00:00:00Z"));
+            savedNotification.getNotification().setTransport(transport);
 
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(savedNotification);
@@ -288,6 +297,8 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.notification.destinationCountry").value("DE"))
                 .andExpect(jsonPath("$.notification.portOfExit").value("GB DVR"))
                 .andExpect(jsonPath("$.notification.exitDate").value("2026-12-20T00:00:00Z"))
+                .andExpect(jsonPath("$.notification.transport.arrivalDate")
+                    .value("2026-12-19T13:45:30.250Z"))
                 .andExpect(jsonPath(
                     "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[0].earTag")
                     .value("UK123456789012"))
@@ -810,6 +821,13 @@ class NotificationControllerTest {
     @Nested
     class FindAll {
 
+        /**
+         * Sub-second and well away from midnight, so an implementation that truncated
+         * {@code created} to a day — or serialised it as a numeric epoch — could not produce
+         * the string the assertion below pins.
+         */
+        private static final Instant VIEW_CREATED = Instant.parse("2026-07-21T00:30:00.456Z");
+
         @Test
         void findAll_shouldReturnEmptyPage() throws Exception {
             // Given
@@ -857,6 +875,8 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.content[0].status").value("DRAFT"))
                 .andExpect(jsonPath("$.content[0].origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$.content[0].commodity.name").value("Live cattle"))
+                // EUDPA-565 — created is an Instant on this projection; pin its RFC 3339 Z form.
+                .andExpect(jsonPath("$.content[0].created").value("2026-07-21T00:30:00.456Z"))
                 .andExpect(jsonPath("$.content[1].referenceNumber").value(REF_2))
                 .andExpect(jsonPath("$.content[1].status").value("SUBMITTED"))
                 .andExpect(jsonPath("$.content[1].origin.countryCode").value("FR"))
@@ -870,7 +890,7 @@ class NotificationControllerTest {
         private NotificationView testView(String ref, NotificationStatus status, Origin origin,
                 Commodity commodity, ConsignmentParty consignor, Transport transport) {
             return new NotificationViewData(
-                ref, 0L, status, null, origin, commodity, consignor, null, transport);
+                ref, 0L, status, VIEW_CREATED, origin, commodity, consignor, null, transport);
         }
 
         @Test
@@ -1030,8 +1050,11 @@ class NotificationControllerTest {
                 @Override public String getReferenceNumber() { return REF_1; }
                 @Override public Long getConcurrencyToken() { return 0L; }
                 @Override public NotificationStatus getStatus() { return NotificationStatus.SUBMITTED; }
-                @Override public java.time.Instant getCreated() { return null; }
-                @Override public java.time.Instant getSubmittedAt() { return null; }
+                // Deliberately neither midnight nor a whole second: a truncating or offset-less
+                // serialiser would still match a value like 2026-07-21T00:00:00Z, so those
+                // fixtures cannot tell a correct implementation from a broken one.
+                @Override public Instant getCreated() { return Instant.parse("2026-07-21T06:42:17.123Z"); }
+                @Override public Instant getSubmittedAt() { return Instant.parse("2026-07-21T14:09:05Z"); }
                 @Override public java.util.List<org.bson.Document> getFulfilments() {
                     return java.util.List.of(new org.bson.Document("obligationId", "abc"));
                 }
@@ -1044,6 +1067,10 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                // EUDPA-565 — exact strings, so a numeric-epoch or offset-less regression on the
+                // instants this projection now carries goes red rather than passing an is-not-null.
+                .andExpect(jsonPath("$.created").value("2026-07-21T06:42:17.123Z"))
+                .andExpect(jsonPath("$.submittedAt").value("2026-07-21T14:09:05Z"))
                 .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"));
         }
 
