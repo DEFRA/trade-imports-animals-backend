@@ -28,7 +28,17 @@ import uk.gov.defra.trade.imports.animals.notification.Transport;
  * <p>Every assertion here reads the <em>raw BSON</em> rather than round-tripping through the
  * repository. A round trip decodes with the same zone that encoded it, so it cancels any drift
  * out and passes whether the fields are {@code Instant} or {@code LocalDateTime} — it cannot tell
- * the two apart. {@code PersistedTimestampZoneSpikeTest} works through why in detail.
+ * the two apart.
+ *
+ * <p>The drift these fields were exposed to was never a daylight-saving crossing between write and
+ * read. Spring Data's stock JSR-310 pair resolved a {@code LocalDateTime} through {@code
+ * ZoneId.systemDefault()} in both directions, but {@code atZone()} takes the offset from the
+ * value's own date rather than from "now", so when a value was written or read made no difference
+ * and the round trip stayed lossless. What did lose information was a change of <em>zone</em>
+ * between the process that wrote and the process that read: a timestamp written by a {@code
+ * Europe/London} JVM and read by a UTC one came back an hour early, with nothing about the stored
+ * document changed. An {@code Instant} needs no zone to be decoded, so a zone change has nothing to
+ * corrupt — which is why the guard below asserts raw BSON.
  *
  * <p>The zone is pinned to {@code Europe/London} rather than left to the host: on a UTC CI
  * container the drift these tests guard against is zero, so the test would pass without proving
