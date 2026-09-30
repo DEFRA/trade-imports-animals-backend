@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -265,7 +266,7 @@ public class DocumentService {
         .correlationId(correlationId)
         .documentType(request.documentType())
         .documentReference(request.documentReference())
-        .dateOfIssue(request.dateOfIssue())
+        .dateOfIssue(request.dateOfIssue().truncatedTo(ChronoUnit.DAYS))
         .scanStatus(ScanStatus.PENDING)
         .files(new ArrayList<>())
         .build();
