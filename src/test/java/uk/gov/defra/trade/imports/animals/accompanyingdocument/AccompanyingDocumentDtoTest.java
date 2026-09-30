@@ -49,40 +49,12 @@ class AccompanyingDocumentDtoTest {
   }
 
   /**
-   * The DTO carries the entity's instants through untouched. It used to convert them to a
-   * zone-less {@code LocalDateTime} at {@code ZoneOffset.UTC} for the wire; EUDPA-565 made the
-   * wire type an {@code Instant} too, so there is no conversion left to get wrong.
+   * A null audit instant on the entity stays null on the DTO rather than becoming an epoch or
+   * throwing. The non-null pass-through is covered by {@link FullFieldMapping}, which already
+   * asserts that both {@code created} and {@code updated} arrive unchanged.
    */
   @Nested
-  class InstantPassThrough {
-
-    @Test
-    void from_shouldCarryCreatedInstantThroughUnchanged() {
-      Instant created = Instant.parse("2026-06-15T13:30:00Z");
-
-      AccompanyingDocument entity = AccompanyingDocument.builder()
-          .uploadId("upload-uuid-2")
-          .created(created)
-          .build();
-
-      AccompanyingDocumentDto dto = AccompanyingDocumentDto.from(entity);
-
-      assertThat(dto.created()).isEqualTo(Instant.parse("2026-06-15T13:30:00Z"));
-    }
-
-    @Test
-    void from_shouldCarryUpdatedInstantThroughUnchanged() {
-      Instant updated = Instant.parse("2026-07-20T08:00:00Z");
-
-      AccompanyingDocument entity = AccompanyingDocument.builder()
-          .uploadId("upload-uuid-3")
-          .updated(updated)
-          .build();
-
-      AccompanyingDocumentDto dto = AccompanyingDocumentDto.from(entity);
-
-      assertThat(dto.updated()).isEqualTo(Instant.parse("2026-07-20T08:00:00Z"));
-    }
+  class NullInstants {
 
     @Test
     void from_shouldMapCreatedToNull_whenEntityCreatedIsNull() {

@@ -83,8 +83,10 @@ class DocumentServiceTest {
       final String uploadId = UUID.randomUUID().toString();
       String notificationRef = "GBN-AG-26-ABC123";
 
+      // A late-evening instant, so a truncation taken in a JVM-default zone east of UTC would
+      // land on 2026-01-16 and fail this test rather than passing by coincidence.
       DocumentUploadRequest request = new DocumentUploadRequest(
-          DocumentType.ITAHC, "UKGB2026001", Instant.parse("2026-01-15T00:00:00Z"));
+          DocumentType.ITAHC, "UKGB2026001", Instant.parse("2026-01-15T23:30:00Z"));
 
       stubCdpConfig();
 
@@ -123,6 +125,7 @@ class DocumentServiceTest {
       AccompanyingDocument saved = captor.getValue();
       assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.PENDING);
       assertThat(saved.getNotificationReferenceNumber()).isEqualTo(notificationRef);
+      // Then — dateOfIssue is normalised to UTC midnight on the way in, not stored verbatim
       Instant expectedDateOfIssue = Instant.parse("2026-01-15T00:00:00Z");
       assertThat(saved.getDateOfIssue()).isEqualTo(expectedDateOfIssue);
 
