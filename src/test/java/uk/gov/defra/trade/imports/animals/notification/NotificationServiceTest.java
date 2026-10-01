@@ -373,9 +373,8 @@ class NotificationServiceTest {
         void saveNotification_shouldTruncateArrivalDateToTheStartOfItsUtcDay() {
             // Guards the PIMS off-by-a-day. LocalDate made a time of day impossible to represent
             // and Instant does not, so a caller can post one; the stored value must still be the
-            // calendar day the trader chose. 23:30Z discriminates twice over — a passthrough keeps
-            // the 23:30, and a truncation that used the JVM's local zone rather than UTC would,
-            // under Europe/London in July, round to 2026-07-21T23:00:00Z rather than midnight.
+            // calendar day the trader chose. The 23:30Z fixture guards against passthrough — storing
+            // the posted value verbatim keeps the 23:30 and fails the assertion below.
             String referenceNumber = "GBN-AG-26-ARRV01";
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
