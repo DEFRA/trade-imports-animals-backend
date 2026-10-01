@@ -126,7 +126,11 @@ class NotificationControllerTest {
         @Test
         void post_shouldCreateNotificationAndReturnReferenceNumber() throws Exception {
             // Given
-            Origin origin = new Origin("GB", "true", "CUSTOMER-REF-123", null, null);
+            Origin origin = Origin.builder()
+                .countryCode("GB")
+                .requiresRegionCode("true")
+                .internalReference("CUSTOMER-REF-123")
+                .build();
             Species species = species();
             CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species));
             Commodity commodity = Commodity.builder()
@@ -197,7 +201,11 @@ class NotificationControllerTest {
         @Test
         void post_shouldAcceptNotificationWithAllOriginFields() throws Exception {
             // Given
-            Origin origin = new Origin("FR", "false", "INTERNAL-456", null, null);
+            Origin origin = Origin.builder()
+                .countryCode("FR")
+                .requiresRegionCode("false")
+                .internalReference("INTERNAL-456")
+                .build();
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(origin)
                 .build();
@@ -257,7 +265,12 @@ class NotificationControllerTest {
         @Test
         void post_shouldAcceptNotificationWithRegionOfOriginCodeAndPerUnitAnimalIdentifiers() throws Exception {
             // Given
-            Origin origin = new Origin("FR", "yes", "INTERNAL-789", "FR-75", null);
+            Origin origin = Origin.builder()
+                .countryCode("FR")
+                .requiresRegionCode("yes")
+                .internalReference("INTERNAL-789")
+                .regionOfOriginCode("FR-75")
+                .build();
             AnimalIdentifier firstUnit = AnimalIdentifier.builder()
                 .earTag("UK123456789012")
                 .passport("UK123456789")
@@ -344,7 +357,11 @@ class NotificationControllerTest {
         void post_shouldAcceptNotificationWithExistingId() throws Exception {
             // Given
             String existingId = "507f1f77bcf86cd799439011";
-            Origin origin = new Origin("DE", "true", "UPDATE-REF", null, null);
+            Origin origin = Origin.builder()
+                .countryCode("DE")
+                .requiresRegionCode("true")
+                .internalReference("UPDATE-REF")
+                .build();
             NotificationDto notificationDto = NotificationDto.builder()
                 .referenceNumber(REF_3)
                 .origin(origin)
@@ -375,7 +392,7 @@ class NotificationControllerTest {
         void post_shouldForwardTraceIdHeader_toSaveNotification() throws Exception {
             // Given
             NotificationDto notificationDto = NotificationDto.builder()
-                .origin(new Origin("GB", "true", "REF", null, null))
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF").build())
                 .build();
             NotificationAggregate saved = new NotificationAggregate();
             saved.setReferenceNumber(REF_1);
@@ -397,7 +414,7 @@ class NotificationControllerTest {
         void post_shouldPassActorToService_whenActorProvided() throws Exception {
             NotificationDto notificationDto = NotificationDto.builder()
                 .referenceNumber(REF_1)
-                .origin(new Origin("GB", "true", "REF", null, null))
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF").build())
                 .build();
             NotificationAggregate saved = new NotificationAggregate();
             saved.setReferenceNumber(REF_1);
@@ -823,13 +840,13 @@ class NotificationControllerTest {
         void findAll_shouldReturnPageOfNotifications() throws Exception {
             // Given
             NotificationView notification1 = testView(REF_1, NotificationStatus.DRAFT,
-                new Origin("GB", "true", "REF-GB-001", null, null),
+                Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-GB-001").build(),
                 Commodity.builder().name("Live cattle").build(),
                 consignors().getFirst(),
                 Transport.builder().transporter(transporters().getFirst()).build());
 
             NotificationView notification2 = testView(REF_2, NotificationStatus.SUBMITTED,
-                new Origin("FR", "false", "REF-FR-002", null, null),
+                Origin.builder().countryCode("FR").requiresRegionCode("false").internalReference("REF-FR-002").build(),
                 Commodity.builder().name("Live sheep").build(),
                 consignors().getLast(),
                 Transport.builder().transporter(transporters().getLast()).build());

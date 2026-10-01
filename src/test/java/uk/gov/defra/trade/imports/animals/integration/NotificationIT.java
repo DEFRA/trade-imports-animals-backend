@@ -123,7 +123,7 @@ class NotificationIT extends IntegrationBase {
             .transitedCountries(List.of("FR", "DE"))
             .build();
         NotificationDto notificationDto = NotificationDto.builder()
-            .origin(new Origin("GB", "true", "REF-001", "GB-ENG", null))
+            .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-001").regionOfOriginCode("GB-ENG").build())
             .commodity(commodity)
             .reasonForImport("PERMANENT")
             .additionalDetails(new AdditionalDetails("HUMAN_CONSUMPTION", "true"))
@@ -159,7 +159,7 @@ class NotificationIT extends IntegrationBase {
     @Test
     void post_shouldPersistCountrySubdivisionCode() {
         NotificationDto notificationDto = NotificationDto.builder()
-            .origin(new Origin("ES", "no", "REF-CN", null, "ES-CN"))
+            .origin(Origin.builder().countryCode("ES").requiresRegionCode("no").internalReference("REF-CN").countrySubdivisionCode("ES-CN").build())
             .commodity(Commodity.builder().name("Live animals").build())
             .build();
 
@@ -646,7 +646,7 @@ class NotificationIT extends IntegrationBase {
             .build();
         CommodityComplement initialComplement = new CommodityComplement("LIVE", 5, 2, List.of(initialSpecies));
         NotificationDto initial = NotificationDto.builder()
-            .origin(new Origin("IE", "false", "REF-initial", null, null))
+            .origin(Origin.builder().countryCode("IE").requiresRegionCode("false").internalReference("REF-initial").build())
             .commodity(Commodity.builder()
                 .name("Live ovine animals")
                 .commodityComplement(List.of(initialComplement))
@@ -670,7 +670,7 @@ class NotificationIT extends IntegrationBase {
         NotificationDto updateDto = NotificationDto.builder()
             .referenceNumber(referenceNumber)
             .concurrencyToken(created.getConcurrencyToken())
-            .origin(new Origin("GB", "true", "REF-updated", null, null))
+            .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-updated").build())
             .commodity(Commodity.builder()
                 .name("Live bovine animals")
                 .commodityComplement(List.of(updatedComplement))
@@ -710,7 +710,7 @@ class NotificationIT extends IntegrationBase {
     @Test
     void post_shouldClearTransitedCountries_whenUpdatedToMeansThatDoesNotRequireTransit() {
         NotificationDto initial = NotificationDto.builder()
-            .origin(new Origin("GB", "true", "REF-001", null, null))
+            .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-001").build())
             .commodity(Commodity.builder().name("Live bovine animals").build())
             .transport(Transport.builder()
                 .portOfEntry("GBFXT")
@@ -732,7 +732,7 @@ class NotificationIT extends IntegrationBase {
         NotificationDto updateDto = NotificationDto.builder()
             .referenceNumber(referenceNumber)
             .concurrencyToken(created.getConcurrencyToken())
-            .origin(new Origin("GB", "true", "REF-001", null, null))
+            .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-001").build())
             .commodity(Commodity.builder().name("Live bovine animals").build())
             .transport(Transport.builder()
                 .portOfEntry("GBFXT")
@@ -2209,7 +2209,7 @@ class NotificationIT extends IntegrationBase {
         // A PUT edit advances the source to version 1.
         NotificationDto newVersion = NotificationDto.builder()
             .referenceNumber(oldVersion.getReferenceNumber())
-            .origin(new Origin("GB", "no", "EDITED", null, null))
+            .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("EDITED").build())
             .commodity(Commodity.builder().name("Live cattle").build())
             .concurrencyToken(oldVersion.getConcurrencyToken())
             .build();
@@ -2379,7 +2379,7 @@ class NotificationIT extends IntegrationBase {
 
         NotificationDto firstEdit = NotificationDto.builder()
             .referenceNumber(ref)
-            .origin(new Origin("GB", "no", "FIRST", null, null))
+            .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("FIRST").build())
             .commodity(Commodity.builder().name("Live cattle").build())
             .concurrencyToken(staleVersion)
             .build();
@@ -2392,7 +2392,7 @@ class NotificationIT extends IntegrationBase {
         // When — a second PUT is attempted using the stale version
         NotificationDto staleEdit = NotificationDto.builder()
             .referenceNumber(ref)
-            .origin(new Origin("GB", "no", "STALE", null, null))
+            .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("STALE").build())
             .commodity(Commodity.builder().name("Live cattle").build())
             .concurrencyToken(staleVersion)
             .build();
@@ -2429,7 +2429,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     private NotificationDto createNotificationDto(String countryCode, String commodity) {
-        Origin origin = new Origin();
+        Origin origin = Origin.builder().build();
         origin.setCountryCode(countryCode);
 
         return NotificationDto.builder()
@@ -2513,7 +2513,7 @@ class NotificationIT extends IntegrationBase {
 
     private NotificationDto notificationDtoWithArrivalDate(String countryCode, LocalDate arrivalDate) {
         return NotificationDto.builder()
-            .origin(new Origin(countryCode, null, null, null, null))
+            .origin(Origin.builder().countryCode(countryCode).build())
             .commodity(Commodity.builder().name("Live animals").build())
             .transport(Transport.builder().arrivalDate(arrivalDate).build())
             .build();
@@ -2521,7 +2521,7 @@ class NotificationIT extends IntegrationBase {
 
     private NotificationDto notificationDtoWithTransportButNoArrivalDate(String countryCode) {
         return NotificationDto.builder()
-            .origin(new Origin(countryCode, null, null, null, null))
+            .origin(Origin.builder().countryCode(countryCode).build())
             .commodity(Commodity.builder().name("Live animals").build())
             .transport(Transport.builder().portOfEntry("GBFXT").build())
             .build();
@@ -2535,7 +2535,7 @@ class NotificationIT extends IntegrationBase {
         CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
             List.of(NotificationTestData.species()));
         return NotificationDto.builder()
-            .origin(new Origin("DE", "yes", "INTERNAL-DO-NOT-COPY", null, null))
+            .origin(Origin.builder().countryCode("DE").requiresRegionCode("yes").internalReference("INTERNAL-DO-NOT-COPY").build())
             .commodity(Commodity.builder()
                 .name("Live bovine animals")
                 .commodityComplement(List.of(complement))
