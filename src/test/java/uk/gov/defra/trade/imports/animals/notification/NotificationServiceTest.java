@@ -143,7 +143,7 @@ class NotificationServiceTest {
         @Test
         void saveNotification_shouldCreateNotificationWithGeneratedReferenceNumber() {
             // Given - new notification without referenceNumber
-            Origin origin = new Origin("GB", "true", "REF123", null);
+            Origin origin = new Origin("GB", "true", "REF123", null, null);
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(origin)
                 .build();
@@ -203,7 +203,7 @@ class NotificationServiceTest {
         @Test
         void saveNotification_shouldRetryPersistence_whenDuplicateKeyExceptionOnFirstAttempt() {
             // Given — first persistence attempt collides, second succeeds
-            Origin origin = new Origin("GB", "true", "REF123", null);
+            Origin origin = new Origin("GB", "true", "REF123", null, null);
             NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
 
             NotificationAggregate saved = new NotificationAggregate();
@@ -232,7 +232,7 @@ class NotificationServiceTest {
         @Test
         void saveNotification_shouldThrowIllegalStateException_whenAllPersistenceRetriesExhausted() {
             // Given — all three persistence attempts collide
-            Origin origin = new Origin("GB", "true", "REF123", null);
+            Origin origin = new Origin("GB", "true", "REF123", null, null);
             NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
 
             when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-ABC001");
@@ -260,7 +260,7 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
                 .notification(Notification.builder()
-                    .origin(new Origin("GB", "true", "STALE", null))
+                    .origin(new Origin("GB", "true", "STALE", null, null))
                     .build())
                 .build();
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -268,7 +268,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-            Origin origin = new Origin("FR", "false", "REF456", "FR-75");
+            Origin origin = new Origin("FR", "false", "REF456", "FR-75", null);
             Commodity commodity = Commodity.builder()
                 .name("Fish")
                 .commodityComplement(List.of(new CommodityComplement("LIVE", 5, null, List.of(species()))))
@@ -491,7 +491,7 @@ class NotificationServiceTest {
 
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
-                .origin(new Origin("GB", "no", "REF", null))
+                .origin(new Origin("GB", "no", "REF", null, null))
                 .build();
 
             // When / Then
@@ -651,7 +651,7 @@ class NotificationServiceTest {
             // Given
             NotificationView view = notificationView()
                 .referenceNumber("GBN-AG-26-ABC123")
-                .origin(new Origin("GB", "true", "REF-1", null))
+                .origin(new Origin("GB", "true", "REF-1", null, null))
                 .status(SUBMITTED)
                 .build();
             Page<NotificationView> page = new PageImpl<>(
@@ -998,7 +998,7 @@ class NotificationServiceTest {
         private NotificationAggregate create(NotificationTtlConfig ttlConfig) {
             NotificationService service = buildService(ttlConfig);
             return service.saveNotification(
-                NotificationDto.builder().origin(new Origin("GB", "true", "REF123", null)).build(), "", null);
+                NotificationDto.builder().origin(new Origin("GB", "true", "REF123", null, null)).build(), "", null);
         }
 
         @Test
@@ -1464,7 +1464,7 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
                 .notification(Notification.builder()
-                    .origin(new Origin("GB", "true", "LIVE-REF", null))
+                    .origin(new Origin("GB", "true", "LIVE-REF", null, null))
                     .build())
                 .fulfilments(List.of(new Document("obligationId", "amd-8")))
                 .build();
@@ -1672,14 +1672,14 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-CAN001";
             Notification baseline = Notification.builder()
-                .origin(new Origin("GB", "true", "ORIGINAL-REF", null))
+                .origin(new Origin("GB", "true", "ORIGINAL-REF", null, null))
                 .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("notif-id-can-1")
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
                 .notification(Notification.builder()
-                    .origin(new Origin("FR", "false", "EDITED-REF", null))
+                    .origin(new Origin("FR", "false", "EDITED-REF", null, null))
                     .build())
                 .preAmendNotification(baseline)
                 .build();
@@ -1821,7 +1821,7 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .notification(Notification.builder()
-                    .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY", null))
+                    .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY", null, null))
                     .build())
                 .status(NotificationStatus.DRAFT)
                 .notification(Notification.builder().build())
@@ -1855,7 +1855,7 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .notification(Notification.builder()
-                    .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY", null))
+                    .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY", null, null))
                     .build())
                 .status(NotificationStatus.SUBMITTED)
                 .notification(Notification.builder().build())
@@ -1885,7 +1885,7 @@ class NotificationServiceTest {
         void copyNotification_shouldRetainCopiedFields() {
             // Given
             String sourceRef = "GBN-AG-26-SRC002";
-            Origin origin = new Origin("DE", "yes", "INTERNAL-REF", null);
+            Origin origin = new Origin("DE", "yes", "INTERNAL-REF", null, null);
             AdditionalDetails additionalDetails = new AdditionalDetails("Breeding", "yes");
             CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
                 List.of(species()));
@@ -1954,7 +1954,7 @@ class NotificationServiceTest {
                 .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
-                    .origin(new Origin("FR", "no", "DO-NOT-COPY", null))
+                    .origin(new Origin("FR", "no", "DO-NOT-COPY", null, null))
                     .commodity(Commodity.builder()
                         .name("Cattle")
                         .commodityComplement(List.of(complement))
@@ -2003,7 +2003,7 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .notification(Notification.builder()
-                    .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY", null))
+                    .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY", null, null))
                     .build())
                 .status(AMEND)
                 .notification(Notification.builder().build())
@@ -2194,14 +2194,14 @@ class NotificationServiceTest {
                 .referenceNumber(ref)
                 .status(DRAFT)
                 .notification(Notification.builder()
-                    .origin(new Origin("FR", "no", "OLD", null))
+                    .origin(new Origin("FR", "no", "OLD", null, null))
                     .build())
                 .build();
             List<Document> newFulfilments = List.of(new Document("obligationId", "abc"));
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
                 .concurrencyToken(0L)
-                .origin(new Origin("GB", "no", "NEW", null))
+                .origin(new Origin("GB", "no", "NEW", null, null))
                 .fulfilments(newFulfilments)
                 .build();
 
@@ -2235,7 +2235,7 @@ class NotificationServiceTest {
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
                 .concurrencyToken(0L)
-                .origin(new Origin("GB", "no", "AMEND-EDIT", null))
+                .origin(new Origin("GB", "no", "AMEND-EDIT", null, null))
                 .fulfilments(List.of(new Document("obligationId", "xyz")))
                 .build();
 
@@ -2324,7 +2324,7 @@ class NotificationServiceTest {
             //When a concurrency token is not supplied
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
-                .origin(new Origin("GB", "no", "REF", null))
+                .origin(new Origin("GB", "no", "REF", null, null))
                 .build();
 
             //Then the update should fail 
@@ -2346,7 +2346,7 @@ class NotificationServiceTest {
                 .referenceNumber(ref)
                 .status(SUBMITTED)
                 .notification(Notification.builder()
-                    .origin(new Origin("GB", "no", "REF", null))
+                    .origin(new Origin("GB", "no", "REF", null, null))
                     .build())
                 .fulfilments(fulfilments)
                 .build();
@@ -2376,7 +2376,7 @@ class NotificationServiceTest {
                 .referenceNumber(ref)
                 .status(SUBMITTED)
                 .notification(Notification.builder()
-                    .origin(new Origin("GB", "no", "LIVE-REF", null))
+                    .origin(new Origin("GB", "no", "LIVE-REF", null, null))
                     .commodity(Commodity.builder().name("Cattle").build())
                     .reasonForImport("PERMANENT")
                     .cphNumber("12/345/6789")
@@ -2425,14 +2425,14 @@ class NotificationServiceTest {
             LocalDateTime originalSubmittedAt = LocalDateTime.of(2026, Month.APRIL, 15, 10, 0);
             List<Document> priorFulfilments = List.of(new Document("obligationId", "prior"));
             Notification baseline = Notification.builder()
-                .origin(new Origin("GB", "no", "ORIGINAL", null))
+                .origin(new Origin("GB", "no", "ORIGINAL", null, null))
                 .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("db-id-c")
                 .referenceNumber(ref)
                 .status(AMEND)
                 .notification(Notification.builder()
-                    .origin(new Origin("FR", "yes", "EDITED", null))
+                    .origin(new Origin("FR", "yes", "EDITED", null, null))
                     .build())
                 .preAmendNotification(baseline)
                 .preAmendFulfilments(new ArrayList<>(priorFulfilments))
@@ -2530,14 +2530,14 @@ class NotificationServiceTest {
             // Given
             String ref = "GBN-AG-26-SBM001";
             Notification priorFreeze = Notification.builder()
-                .origin(new Origin("GB", "no", "PRIOR", null))
+                .origin(new Origin("GB", "no", "PRIOR", null, null))
                 .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("db-id-s")
                 .referenceNumber(ref)
                 .status(AMEND)
                 .notification(Notification.builder()
-                    .origin(new Origin("FR", "yes", "AMENDED", null))
+                    .origin(new Origin("FR", "yes", "AMENDED", null, null))
                     .build())
                 .preAmendNotification(priorFreeze)
                 .preAmendFulfilments(new ArrayList<>(
@@ -2597,7 +2597,7 @@ class NotificationServiceTest {
                 .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
-                    .origin(new Origin("GB", "no", "SOURCE-REF", null))
+                    .origin(new Origin("GB", "no", "SOURCE-REF", null, null))
                     .build())
                 .fulfilments(sourceFulfilments)
                 .build();

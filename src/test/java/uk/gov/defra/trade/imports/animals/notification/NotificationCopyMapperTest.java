@@ -31,7 +31,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldRetainCountryOfOriginAndRequiresRegionCode() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .origin(new Origin("DE", "yes", "INTERNAL-REF", null))
+                .origin(new Origin("DE", "yes", "INTERNAL-REF", null, null))
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
@@ -164,7 +164,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldRetainRegionOfOriginCode() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .origin(new Origin("FR", "yes", "INTERNAL-REF", "FR-75"))
+                .origin(new Origin("FR", "yes", "INTERNAL-REF", "FR-75", null))
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
@@ -244,7 +244,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldOmitInternalReference() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .origin(new Origin("FR", "no", "DO-NOT-COPY", null))
+                .origin(new Origin("FR", "no", "DO-NOT-COPY", null, null))
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);

@@ -641,7 +641,7 @@ class GbnAgMapperTest {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-BLK001")
             .notification(Notification.builder()
-                .origin(new Origin("FR", "false", "Imports456_GB", " "))
+                .origin(new Origin("FR", "false", "Imports456_GB", " ", null))
                 .cphNumber(" ")
                 .build())
             .build();
@@ -719,7 +719,7 @@ class GbnAgMapperTest {
             .status(NotificationStatus.SUBMITTED)
             .updated(LocalDateTime.of(2026, Month.MAY, 21, 10, 15, 0))
             .notification(Notification.builder()
-                .origin(new Origin("FR", "true", "Imports456_GB", "FR-75"))
+                .origin(new Origin("FR", "true", "Imports456_GB", "FR-75", null))
                 .reasonForImport("INTERNAL_MARKET")
                 .additionalDetails(new AdditionalDetails("BREEDING_AND_PRODUCTION", "true"))
                 .consignor(party("Astra Rosales",
