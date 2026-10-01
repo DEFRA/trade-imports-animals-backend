@@ -66,6 +66,7 @@ public class NotificationCopyMapper {
         }
         return Origin.builder()
             .countryCode(source.getCountryCode())
+            .countrySubdivisionCode(source.getCountrySubdivisionCode())
             .requiresRegionCode(source.getRequiresRegionCode())
             .regionOfOriginCode(source.getRegionOfOriginCode())
             // internalReference intentionally omitted — per-consignment reference is reset on copy

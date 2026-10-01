@@ -31,7 +31,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldRetainCountryOfOriginAndRequiresRegionCode() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .origin(new Origin("DE", "yes", "INTERNAL-REF", null))
+                .origin(Origin.builder().countryCode("DE").requiresRegionCode("yes").internalReference("INTERNAL-REF").build())
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
@@ -164,12 +164,29 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldRetainRegionOfOriginCode() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .origin(new Origin("FR", "yes", "INTERNAL-REF", "FR-75"))
+                .origin(Origin.builder().countryCode("FR").requiresRegionCode("yes").internalReference("INTERNAL-REF").regionOfOriginCode("FR-75").build())
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
             assertThat(result.getOrigin().getRegionOfOriginCode()).isEqualTo("FR-75");
+        }
+
+        @Test
+        void toCopyDto_shouldRetainCountrySubdivisionCode() {
+            NotificationAggregate source = aggregateOf(Notification.builder()
+                .origin(Origin.builder()
+                    .countryCode("ES")
+                    .countrySubdivisionCode("ES-CN")
+                    .requiresRegionCode("no")
+                    .build())
+                .build());
+
+            NotificationDto result = mapper.toCopyDto(source);
+
+            assertThat(result.getOrigin().getCountryCode()).isEqualTo("ES");
+            assertThat(result.getOrigin().getCountrySubdivisionCode()).isEqualTo("ES-CN");
+            assertThat(result.getOrigin().getInternalReference()).isNull();
         }
 
         @Test
@@ -227,7 +244,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldOmitInternalReference() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .origin(new Origin("FR", "no", "DO-NOT-COPY", null))
+                .origin(Origin.builder().countryCode("FR").requiresRegionCode("no").internalReference("DO-NOT-COPY").build())
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
