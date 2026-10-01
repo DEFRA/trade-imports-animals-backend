@@ -83,8 +83,8 @@ class DocumentServiceTest {
       final String uploadId = UUID.randomUUID().toString();
       String notificationRef = "GBN-AG-26-ABC123";
 
-      // A late-evening instant, so a truncation taken in a JVM-default zone east of UTC would
-      // land on 2026-01-16 and fail this test rather than passing by coincidence.
+      // A late-evening instant rather than midnight, so storing the request's value verbatim
+      // keeps the 23:30 and fails this test rather than passing by coincidence.
       DocumentUploadRequest request = new DocumentUploadRequest(
           DocumentType.ITAHC, "UKGB2026001", Instant.parse("2026-01-15T23:30:00Z"));
 
