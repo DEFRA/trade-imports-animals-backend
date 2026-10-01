@@ -72,10 +72,14 @@ class PersistedTimestampZoneIT extends IntegrationBase {
     @Autowired
     private MongoTemplate mongoTemplate;
 
-    private final TimeZone originalTimeZone = TimeZone.getDefault();
+    private TimeZone originalTimeZone;
 
     @BeforeEach
     void setUp() {
+        // Captured here rather than in a field initializer: by now the Spring context has loaded
+        // Application, which pins the JVM to UTC, so the restore puts that pin back and not the
+        // host zone.
+        originalTimeZone = TimeZone.getDefault();
         notificationRepository.deleteAll();
         auditRepository.deleteAll();
         TimeZone.setDefault(TimeZone.getTimeZone("Europe/London"));
