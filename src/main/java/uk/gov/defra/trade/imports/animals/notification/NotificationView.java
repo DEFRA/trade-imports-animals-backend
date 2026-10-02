@@ -42,17 +42,8 @@ public interface NotificationView {
     @Value("#{target.notification?.transport}")
     Transport getTransport();
 
-    /**
-     * This row as the dashboard should read it.
-     *
-     * <p>A submitted notification is part of the legal record, so its parties come from the
-     * inline details stored on the notification at submit. They are handed over <em>inline</em>
-     * — details without an {@code addressId} — so a consumer that resolves references simply reads
-     * the frozen name and makes no lookup at all. Drafts and in-flight amendments keep their
-     * reference, which is meant to reflect edits via live address-book resolution on the client.
-     */
+    /** This row as the dashboard reads it, copied out of the Spring Data proxy. */
     default NotificationView forDashboard() {
-        boolean submitted = getStatus() == NotificationStatus.SUBMITTED;
         return new NotificationViewData(
             getReferenceNumber(),
             getConcurrencyToken(),
@@ -60,8 +51,8 @@ public interface NotificationView {
             getCreated(),
             getOrigin(),
             getCommodity(),
-            submitted ? ConsignmentParty.inlineOnly(getConsignor()) : getConsignor(),
-            submitted ? ConsignmentParty.inlineOnly(getConsignee()) : getConsignee(),
+            getConsignor(),
+            getConsignee(),
             getTransport());
     }
 }
