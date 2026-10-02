@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
  * A Standard Address Block.
  *
  * <p>Field names follow the address book (the system of record for saved addresses), so a record
- * resolved from it maps across without translation. This replaced an earlier shape carrying
+ * copied from it maps across without translation. This replaced an earlier shape carrying
  * {@code addressLine3}, {@code city} and a free-text {@code country}; {@code countryCode} is an
  * ISO 3166-1 alpha-2 code (cv-011), not a display name.
  */

@@ -3,7 +3,6 @@ package uk.gov.defra.trade.imports.animals.notification;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -102,25 +101,10 @@ public class NotificationController {
     @ApiResponse(responseCode = "200", description = "Notification submitted",
         content = @Content(schema = @Schema(implementation = NotificationAggregate.class)))
     @ApiResponse(responseCode = "400",
-        description = "Notification not in a submittable state, or it references address-book "
-            + "records that no longer resolve — the response body's `errors` names each affected "
-            + "role",
+        description = "Notification not in a submittable state",
         content = @Content(
             mediaType = "application/problem+json",
-            schema = @Schema(implementation = ProblemDetail.class),
-            examples = @ExampleObject(value = """
-                {
-                  "type": "https://api.cdp.defra.cloud/problems/unresolvable-consignment-party",
-                  "title": "Validation Error",
-                  "status": 400,
-                  "detail": "Cannot submit notification: no address-book record for consignor, importer",
-                  "errors": {
-                    "consignor": ["No address-book record for 65f1a2b3c4d5e6f708192a3b"],
-                    "importer": ["No address-book record for 65f1a2b3c4d5e6f708192a3c"]
-                  },
-                  "traceId": "abc-123"
-                }
-                """)))
+            schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
     @ApiResponse(responseCode = "500", description = "Submission failed", content = @Content)

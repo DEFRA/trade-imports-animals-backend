@@ -7,7 +7,6 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.cons
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.importers;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.placesOfOrigin;
-import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.reference;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
 import java.time.Instant;
@@ -103,18 +102,20 @@ class NotificationCopyMapperTest {
         }
 
         @Test
-        void toCopyDto_shouldCopyReferencedPartyAsReferenceAlone() {
+        void toCopyDto_shouldCopyEveryFieldOfTheStoredPartyLiteral() {
+            ConsignmentParty stored = consignors().getFirst().toBuilder()
+                .email("astra@example.com")
+                .phone("01632 960001")
+                .build();
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .consignor(reference("addr-1"))
+                .consignor(stored)
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
-            assertThat(result.getConsignor()).isEqualTo(ConsignmentParty.reference("addr-1"));
-            assertThat(result.getConsignor().getName()).isNull();
-            assertThat(result.getConsignor().getEmail()).isNull();
-            assertThat(result.getConsignor().getPhone()).isNull();
-            assertThat(result.getConsignor().getAddress()).isNull();
+            assertThat(result.getConsignor())
+                .isEqualTo(stored)
+                .isNotSameAs(stored);
         }
 
         @Test

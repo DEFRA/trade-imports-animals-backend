@@ -1,9 +1,9 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockserver.model.HttpRequest.request;
-import static org.mockserver.model.HttpResponse.response;
 
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Updates;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
@@ -12,8 +12,8 @@ import java.util.stream.Stream;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockserver.model.MediaType;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.HttpMethod;
 import org.bson.Document;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
@@ -57,24 +57,8 @@ class NotificationIT extends IntegrationBase {
     private static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
     private static final String REF_FORMAT_REGEX = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN;
     private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
-    /** The submitting actor's organisation, whose address book the outbox resolve reads. */
+    /** The acting user's organisation, sent on submit and copy. */
     private static final String ORG_ID = "5900002";
-    private static final String ADDRESS_ID = "665f1c2ab3e4d51a2c9d0e77";
-    private static final String ADDRESS_BOOK_JSON = """
-        {
-          "id": "665f1c2ab3e4d51a2c9d0e77",
-          "name": "Astra Rosales",
-          "addressLine1": "43 East Hague Extension",
-          "addressLine2": null,
-          "townOrCity": "Vernier",
-          "county": "Soleure",
-          "postcode": "30055",
-          "countryCode": "CH",
-          "phone": "+41 22 000 0000",
-          "email": "astra@example.com",
-          "deleted": false
-        }
-        """;
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -87,6 +71,9 @@ class NotificationIT extends IntegrationBase {
 
     @Autowired
     private OutboxEventRepository outboxEventRepository;
+
+    @Autowired
+    private MongoTemplate mongoTemplate;
 
     @BeforeEach
     void setUp() {
@@ -978,97 +965,53 @@ class NotificationIT extends IntegrationBase {
         assertThat(gbnAgIdentifier(amendEvent)).isEqualTo(referenceNumber);
     }
 
-    /*
-     * Submission is the only path that still reads the address book — the dashboard resolves its own
-     * names. These two cover it end to end, against a stubbed book, because the unit tests mock the
-     * client and so cannot show the wiring (base URL, org header, deserialisation) actually working.
-     */
-
     @Test
-    void submit_shouldCarryInlinePartyDetails_onTheOutboxEvent_fromWhatIsStored() {
-        // Given — a notification whose consignor carries inline details (as the frontend persists
-        // after pick and re-inflates before submit)
-        stubAddressBook(ADDRESS_BOOK_JSON, 200);
-        String referenceNumber = createNotificationWithInflatedConsignor();
+    void submit_shouldCarryTheStoredPartyLiteral_onTheOutboxEvent() {
+        // Given — a notification whose consignor is a literal copy, as the frontend stores it
+        String referenceNumber = createNotificationWithLiteralConsignor();
 
         // When
         submitAs(referenceNumber, ORG_ID);
 
-        // Then — GBNAG carries the stored inline details
+        // Then — GBNAG carries exactly the stored details
         Map<String, Object> consignor = outboxConsignorParty(submittedOutboxEvent());
         assertThat(consignor).containsEntry("name", "Astra Rosales");
         assertThat((Map<String, Object>) consignor.get("postalAddress"))
+            .containsEntry("lineOne", "43 East Hague Extension")
             .containsEntry("postcodeCode", "30055")
-            .containsEntry("cityName", "Vernier");
+            .containsEntry("cityName", "Vernier")
+            .containsEntry("countryId", "CH");
+        assertThat((List<Map<String, Object>>) consignor.get("definedContact"))
+            .singleElement()
+            .satisfies(contact -> assertThat(contact)
+                .containsEntry("emailURIUniversalCommunication", "astra@example.com")
+                .containsEntry("telephoneUniversalCommunication", "+41 22 000 0000"));
 
-        // And — storage keeps the inline shape the frontend supplied
+        // And — storage keeps the literal the frontend supplied
         NotificationAggregate stored = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
-        assertThat(stored.getNotification().getConsignor().getName()).isEqualTo("Astra Rosales");
-        assertThat(stored.getNotification().getConsignor().getAddressId()).isEqualTo(ADDRESS_ID);
+        assertThat(stored.getNotification().getConsignor()).isEqualTo(literalConsignor());
     }
 
     @Test
-    void submit_shouldReturn400_andEmitNoSubmittedEvent_whenAReferencedPartyCannotBeResolved() {
-        // Given — the referenced address has since been deleted. Unlike a read, which would render
-        // the role blank, a submit must fail rather than send GBNAG a party with no name.
-        stubAddressBook(ADDRESS_BOOK_JSON.replace("\"deleted\": false", "\"deleted\": true"), 200);
-        String referenceNumber = createNotificationWithReferencedConsignor();
+    void submit_shouldIgnoreALegacyAddressIdOnAStoredParty() {
+        // Given — a draft written before parties became literals still carries addressId
+        String referenceNumber = createNotificationWithLiteralConsignor();
+        mongoTemplate.getCollection("notification").updateOne(
+            Filters.eq("referenceNumber", referenceNumber),
+            Updates.set("notification.consignor.addressId", "665f1c2ab3e4d51a2c9d0e77"));
 
-        // When & Then — the rejection names the role, so the caller knows which one to correct,
-        // and carries the address id so the cause is diagnosable.
-        webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
-            .bodyValue(Map.of("organisationId", ORG_ID))
-            .exchange()
-            .expectStatus().isBadRequest()
-            .expectBody()
-            .jsonPath("$.detail").value(Matchers.containsString("consignor"))
-            .jsonPath("$.errors.consignor[0]").value(Matchers.containsString(ADDRESS_ID));
+        // When
+        submitAs(referenceNumber, ORG_ID);
 
-        // The draft's own NotificationCreated event stays; only the submission must not be emitted.
-        assertThat(outboxEventRepository.findAll())
-            .noneMatch(e -> e.getEventType().equals(OutboxEventType.NOTIFICATION_SUBMITTED.value()));
-        assertThat(notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow()
-            .getStatus()).isEqualTo(NotificationStatus.DRAFT);
-    }
-
-    @Test
-    void submit_shouldName_everyRole_whenSeveralReferencedAddressesAreDeleted() {
-        // Given — two roles reference addresses that have both since been deleted. Reporting only
-        // the first would send the submitter round the loop once per bad reference.
-        String secondAddressId = "665f1c2ab3e4d51a2c9d0e88";
-        String deleted = ADDRESS_BOOK_JSON.replace("\"deleted\": false", "\"deleted\": true");
-        stubAddressBookFor(ADDRESS_ID, deleted, 200);
-        stubAddressBookFor(secondAddressId, deleted.replace(ADDRESS_ID, secondAddressId), 200);
-
-        NotificationDto dto = createNotificationDto("CH", "Live cattle");
-        dto.setConsignor(ConsignmentParty.reference(ADDRESS_ID));
-        dto.setImporter(ConsignmentParty.reference(secondAddressId));
-        String referenceNumber = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(dto))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult()
-            .getResponseBody().getReferenceNumber();
-
-        // When & Then — both roles come back, each with the address it refers to.
-        webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
-            .bodyValue(Map.of("organisationId", ORG_ID))
-            .exchange()
-            .expectStatus().isBadRequest()
-            .expectBody()
-            .jsonPath("$.errors.consignor[0]").value(Matchers.containsString(ADDRESS_ID))
-            .jsonPath("$.errors.importer[0]").value(Matchers.containsString(secondAddressId));
-
-        // NOTIFICATION_CREATED was written when the draft was created; no NOTIFICATION_SUBMITTED
-        // because the submit failed before the outbox write.
-        assertThat(outboxEventRepository.findAll())
-            .hasSize(1)
-            .allMatch(e -> e.getEventType().endsWith("NotificationCreated"));
-        assertThat(notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow()
-            .getStatus()).isEqualTo(NotificationStatus.DRAFT);
+        // Then — the read ignores the unknown field and the event carries the literal
+        NotificationAggregate stored = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(stored.getNotification().getConsignor()).isEqualTo(literalConsignor());
+        assertThat(outboxConsignorParty(submittedOutboxEvent()))
+            .containsEntry("name", "Astra Rosales")
+            .doesNotContainKey("addressId");
     }
 
     @Test
@@ -1744,9 +1687,9 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void copy_shouldRetainReferencedConsignorAddressIdAlone() {
+    void copy_shouldRetainTheConsignorLiteral() {
         NotificationDto sourceDto = createNotificationDto("DE", "Live cattle");
-        sourceDto.setConsignor(ConsignmentParty.reference(ADDRESS_ID));
+        sourceDto.setConsignor(literalConsignor());
 
         NotificationAggregate source = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(sourceDto))
@@ -1754,8 +1697,7 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
         assertThat(source).isNotNull();
-        assertThat(source.getNotification().getConsignor().getAddressId()).isEqualTo(ADDRESS_ID);
-        assertThat(source.getNotification().getConsignor().getName()).isNull();
+        assertThat(source.getNotification().getConsignor()).isEqualTo(literalConsignor());
 
         NotificationAggregate copy = webClient("NoAuth")
             .post()
@@ -1767,7 +1709,7 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
         assertThat(copy).isNotNull();
-        assertThat(copy.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(ADDRESS_ID));
+        assertThat(copy.getNotification().getConsignor()).isEqualTo(literalConsignor());
     }
 
     @Test
@@ -2238,16 +2180,15 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void copy_shouldInflateConsignorOnCreatedOutbox_whenSourceIsSubmittedWithReferencedParty() {
-        // Given — submitted notification whose consignor is an address-book reference alone
-        stubAddressBook(ADDRESS_BOOK_JSON, 200);
-        String sourceRef = createNotificationWithReferencedConsignor();
+    void copy_shouldCarryTheSourceConsignorLiteral_onCreatedOutbox_whenSourceIsSubmitted() {
+        // Given — submitted notification whose consignor is a literal copy
+        String sourceRef = createNotificationWithLiteralConsignor();
         submitAs(sourceRef, ORG_ID);
 
         NotificationAggregate source = notificationRepository.findByReferenceNumber(sourceRef).orElseThrow();
         Long version = source.getConcurrencyToken();
 
-        // When — copy it with the submitting organisation so the outbox can inflate parties
+        // When
         NotificationAggregate copy = webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
@@ -2259,11 +2200,11 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody();
 
-        // Then — stored draft stays reference-only; Created outbox carries inflated party details
+        // Then — stored draft and Created outbox both carry the source's literal party
         assertThat(copy).isNotNull();
         NotificationAggregate stored = notificationRepository.findByReferenceNumber(copy.getReferenceNumber())
             .orElseThrow();
-        assertThat(stored.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(ADDRESS_ID));
+        assertThat(stored.getNotification().getConsignor()).isEqualTo(literalConsignor());
 
         OutboxEvent created = outboxEventRepository.findAll().stream()
             .filter(e -> e.getAggregateId().equals(OutboxService.buildAggregateId(copy.getReferenceNumber())))
@@ -2387,10 +2328,9 @@ class NotificationIT extends IntegrationBase {
             .build();
     }
 
-    private String createNotificationWithInflatedConsignor() {
-        NotificationDto dto = createNotificationDto("CH", "Live cattle");
-        dto.setConsignor(ConsignmentParty.builder()
-            .addressId(ADDRESS_ID)
+    /** The consignor as the frontend stores it: a literal copy of the picked address. */
+    private static ConsignmentParty literalConsignor() {
+        return ConsignmentParty.builder()
             .name("Astra Rosales")
             .phone("+41 22 000 0000")
             .email("astra@example.com")
@@ -2400,18 +2340,12 @@ class NotificationIT extends IntegrationBase {
                 .postcode("30055")
                 .countryCode("CH")
                 .build())
-            .build());
-        return webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(dto))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult()
-            .getResponseBody().getReferenceNumber();
+            .build();
     }
 
-    private String createNotificationWithReferencedConsignor() {
+    private String createNotificationWithLiteralConsignor() {
         NotificationDto dto = createNotificationDto("CH", "Live cattle");
-        dto.setConsignor(ConsignmentParty.reference(ADDRESS_ID));
+        dto.setConsignor(literalConsignor());
         return webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(dto))
@@ -2425,25 +2359,6 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
             .bodyValue(Map.of("organisationId", organisationId))
             .exchange().expectStatus().isOk();
-    }
-
-    private void stubAddressBook(String body, int statusCode) {
-        stubAddressBookFor(ADDRESS_ID, body, statusCode);
-    }
-
-    /** The address book is scoped by organisation in both the path and the header, and the stub
-     * matches on both — a resolve that sent the wrong organisation would miss this stub rather than
-     * quietly return someone else's address. */
-    private void stubAddressBookFor(String addressId, String body, int statusCode) {
-        usingStub()
-            .when(request()
-                .withMethod("GET")
-                .withPath("/organisation/" + ORG_ID + "/addresses/" + addressId)
-                .withHeader("Trade-Imports-Organisation-Id", ORG_ID))
-            .respond(response()
-                .withStatusCode(statusCode)
-                .withContentType(MediaType.APPLICATION_JSON)
-                .withBody(body));
     }
 
     private OutboxEvent submittedOutboxEvent() {

@@ -58,11 +58,6 @@ public final class NotificationTestData {
             party("GB Animal Imports", "5 Port Way", "Dover", "CT16 3AQ", "GB"));
     }
 
-    /** A party held as an address-book reference — no details until it is resolved on read. */
-    public static ConsignmentParty reference(String addressId) {
-        return ConsignmentParty.reference(addressId);
-    }
-
     public static List<Transporter> transporters() {
         return List.of(
             Transporter.builder()
