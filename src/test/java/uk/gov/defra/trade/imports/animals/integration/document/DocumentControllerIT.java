@@ -496,7 +496,7 @@ class DocumentControllerIT extends IntegrationBase {
 
     private static String initiateBody() {
         return """
-            {"documentType":"ITAHC","documentReference":"UKGB2026001234","dateOfIssue":"2026-01-15"}
+            {"documentType":"ITAHC","documentReference":"UKGB2026001234","dateOfIssue":"2026-01-15T00:00:00Z"}
             """;
     }
 

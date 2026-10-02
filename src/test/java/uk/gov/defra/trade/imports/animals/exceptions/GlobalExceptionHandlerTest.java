@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.exceptions;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -28,6 +29,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -138,6 +141,89 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         Map<String, Object> properties = problemDetail.getProperties();
         assertThat(properties).isNotNull().doesNotContainKey("traceId");
+    }
+
+    @Test
+    void handleUnreadableRequestBody_shouldReturnBadRequest_withoutEchoingTheParserMessage() {
+        // Given
+        String traceId = "test-trace-unreadable-1";
+        MDC.put("trace.id", traceId);
+        HttpMessageNotReadableException exception = unreadableRequestBodyException();
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleUnreadableRequestBody(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problemDetail.getTitle()).isEqualTo("Malformed Request");
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/malformed-request"));
+        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
+        assertThat(problemDetail.getDetail())
+            .isEqualTo("Request body could not be read. Check the JSON is well-formed and that each "
+                + "date is an RFC 3339 instant, for example 2026-12-12T00:00:00Z");
+
+        // An unreadable body is its own problem type, not field validation: nothing bound, so
+        // there is no errors map - which is what keeps one type URI to one response shape.
+        assertThat(problemDetail.getProperties()).doesNotContainKey("errors");
+
+        String[] parserMessageMarkers = {
+            "JSON parse error",
+            "java.time.Instant",
+            "DateTimeParseException",
+            "1999-07-04",
+            "NotificationRequest",
+            "reference chain"
+        };
+
+        // Pin the fixture: the parser message really does carry every marker, so the non-leak
+        // assertion below cannot pass just because the marker was never there to leak.
+        assertThat(exception.getMessage()).contains(parserMessageMarkers);
+
+        // The parser message quotes the submitted value and names internal types - none of it
+        // may reach the caller.
+        assertThat(problemDetail.getDetail()).doesNotContain(parserMessageMarkers);
+    }
+
+    @Test
+    void handleUnreadableRequestBody_shouldHandleNullTraceId() {
+        // Given - no trace ID in MDC
+        HttpMessageNotReadableException exception = unreadableRequestBodyException();
+
+        // When
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleUnreadableRequestBody(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        Map<String, Object> properties = problemDetail.getProperties();
+        assertThat(properties).satisfiesAnyOf(
+            p -> assertThat(p).isNull(),
+            p -> assertThat(p).doesNotContainKey("traceId")
+        );
+    }
+
+    /**
+     * A date-only value where an {@code Instant} is required - the EUDPA-565 case - carrying the
+     * kind of Jackson message the handler logs but must not echo back to the caller.
+     */
+    private static HttpMessageNotReadableException unreadableRequestBodyException() {
+        String parserMessage = "JSON parse error: Cannot deserialize value of type "
+            + "`java.time.Instant` from String \"1999-07-04\": Failed to deserialize "
+            + "java.time.Instant: (java.time.format.DateTimeParseException) Text '1999-07-04' "
+            + "could not be parsed at index 10 (through reference chain: "
+            + "uk.gov.defra.trade.imports.animals.notification.NotificationRequest[\"arrivalDate\"])";
+        return new HttpMessageNotReadableException(
+            parserMessage,
+            new MockHttpInputMessage("{\"arrivalDate\":\"1999-07-04\"}".getBytes(UTF_8)));
     }
 
     @Test

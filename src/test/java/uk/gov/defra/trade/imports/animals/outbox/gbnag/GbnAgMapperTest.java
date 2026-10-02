@@ -2,9 +2,7 @@ package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -298,6 +296,45 @@ class GbnAgMapperTest {
     @Test
     void toGbnAgEventData_shouldReturnNull_whenNotificationNull() {
         assertThat(mapper.toGbnAgEventData(null, null)).isNull();
+    }
+
+    @Test
+    void shouldEmitIssueDateTimeWithItsSubMillisecondDigitsIntact() {
+        // PIMS reads issueDateTime as the string this emits, so rounding the instant anywhere on
+        // the path — a truncatedTo(MILLIS), say — silently changes the value it receives. The
+        // whole-second fixture the happy path uses cannot tell a rounding implementation from a
+        // faithful one, because both produce the same string; this fixture can.
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-NANO01")
+            .status(NotificationStatus.SUBMITTED)
+            .updated(Instant.parse("2026-05-21T10:15:00.123456789Z"))
+            .notification(Notification.builder().build())
+            .build();
+
+        assertThat(mapper.toGbnAgEventData(notificationAggregate, 1).exchangedDocument().issueDateTime())
+            .isEqualTo("2026-05-21T10:15:00.123456789Z");
+    }
+
+    @Test
+    void shouldEmitArrivalDateVerbatim_asNormalisingItIsTheServicesJobNotTheMappers() {
+        // NotificationService truncates arrivalDate to UTC midnight on save; TransportEvent emits
+        // whatever Instant it is handed. Pinning a genuinely non-midnight time of day here holds
+        // the mapper to its half of that division — were truncation to migrate back into the
+        // mapper, or be applied in both places, this would go red.
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-ARV001")
+            .notification(Notification.builder()
+                .transport(Transport.builder()
+                    .arrivalDate(Instant.parse("2026-07-21T23:30:00Z"))
+                    .build())
+                .build())
+            .build();
+
+        TransportEvent arrival = mapper.toGbnAgEventData(notificationAggregate, 1)
+            .specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst()
+            .arrivalEvent().getFirst();
+
+        assertThat(arrival.scheduledOccurrenceDateTime()).isEqualTo("2026-07-21T23:30:00Z");
     }
 
     @ParameterizedTest
@@ -717,7 +754,7 @@ class GbnAgMapperTest {
         return NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-7K8M2P")
             .status(NotificationStatus.SUBMITTED)
-            .updated(LocalDateTime.of(2026, Month.MAY, 21, 10, 15, 0))
+            .updated(Instant.parse("2026-05-21T10:15:00Z"))
             .notification(Notification.builder()
                 .origin(Origin.builder().countryCode("FR").requiresRegionCode("true").internalReference("Imports456_GB").regionOfOriginCode("FR-75").build())
                 .reasonForImport("INTERNAL_MARKET")
@@ -761,7 +798,7 @@ class GbnAgMapperTest {
                     .build())
                 .transport(Transport.builder()
                     .portOfEntry("GBDVR")
-                    .arrivalDate(LocalDate.of(2026, Month.MAY, 6))
+                    .arrivalDate(Instant.parse("2026-05-06T00:00:00Z"))
                     .meansOfTransport(MeansOfTransport.ROAD_VEHICLE)
                     .transportIdentification("AB-1234")
                     .transportDocumentReference("CMR-2026-884721")

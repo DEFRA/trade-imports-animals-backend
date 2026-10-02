@@ -1,6 +1,6 @@
 package uk.gov.defra.trade.imports.animals.audit;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,7 +22,7 @@ public class Audit {
     
     private Result result;
     
-    private LocalDateTime timestamp;
+    private Instant timestamp;
     
     private Integer numberOfNotifications;
     

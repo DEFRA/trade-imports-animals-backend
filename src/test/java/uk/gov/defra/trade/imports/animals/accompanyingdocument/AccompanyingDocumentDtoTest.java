@@ -4,8 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -45,41 +43,18 @@ class AccompanyingDocumentDtoTest {
       assertThat(dto.documentReference()).isEqualTo("ITAHC/2026/001");
       assertThat(dto.dateOfIssue()).isEqualTo(dateOfIssue);
       assertThat(dto.scanStatus()).isEqualTo(ScanStatus.COMPLETE);
-      assertThat(dto.created()).isEqualTo(LocalDateTime.ofInstant(created, ZoneOffset.UTC));
-      assertThat(dto.updated()).isEqualTo(LocalDateTime.ofInstant(updated, ZoneOffset.UTC));
+      assertThat(dto.created()).isEqualTo(created);
+      assertThat(dto.updated()).isEqualTo(updated);
     }
   }
 
+  /**
+   * A null audit instant on the entity stays null on the DTO rather than becoming an epoch or
+   * throwing. The non-null pass-through is covered by {@link FullFieldMapping}, which already
+   * asserts that both {@code created} and {@code updated} arrive unchanged.
+   */
   @Nested
-  class InstantConversion {
-
-    @Test
-    void from_shouldConvertCreatedInstantToUtcLocalDateTime() {
-      Instant created = Instant.parse("2026-06-15T13:30:00Z");
-
-      AccompanyingDocument entity = AccompanyingDocument.builder()
-          .uploadId("upload-uuid-2")
-          .created(created)
-          .build();
-
-      AccompanyingDocumentDto dto = AccompanyingDocumentDto.from(entity);
-
-      assertThat(dto.created()).isEqualTo(LocalDateTime.of(2026, 6, 15, 13, 30, 0));
-    }
-
-    @Test
-    void from_shouldConvertUpdatedInstantToUtcLocalDateTime() {
-      Instant updated = Instant.parse("2026-07-20T08:00:00Z");
-
-      AccompanyingDocument entity = AccompanyingDocument.builder()
-          .uploadId("upload-uuid-3")
-          .updated(updated)
-          .build();
-
-      AccompanyingDocumentDto dto = AccompanyingDocumentDto.from(entity);
-
-      assertThat(dto.updated()).isEqualTo(LocalDateTime.of(2026, 7, 20, 8, 0, 0));
-    }
+  class NullInstants {
 
     @Test
     void from_shouldMapCreatedToNull_whenEntityCreatedIsNull() {

@@ -8,7 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.LocalDate;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -44,7 +44,7 @@ class DocumentControllerTrailingSlashTest {
   @Test
   void shouldNormaliseTrailingSlashInLocationHeader() throws Exception {
     String ref = "GBN-AG-26-000001";
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.of(2026, 1, 15));
+    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", Instant.parse("2026-01-15T00:00:00Z"));
     DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
 
     when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class)))

@@ -2,7 +2,8 @@ package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -47,11 +48,11 @@ class NotificationExpiryIT extends IntegrationBase {
         auditRepository.deleteAll();
     }
 
-    private void saveNotification(String referenceNumber, LocalDateTime expireAt) {
+    private void saveNotification(String referenceNumber, Instant expireAt) {
         notificationRepository.save(NotificationAggregate.builder()
             .referenceNumber(referenceNumber)
             .status(NotificationStatus.DRAFT)
-            .created(LocalDateTime.now().minusDays(8))
+            .created(Instant.now().minus(8, ChronoUnit.DAYS))
             .expireAt(expireAt)
             .build());
     }
@@ -69,8 +70,8 @@ class NotificationExpiryIT extends IntegrationBase {
     void deleteExpired_removesDueNotificationAndDocuments_leavingAuditAndNonDueUntouched() {
         String expiredRef = "GBN-AG-26-EXP001";
         String activeRef = "GBN-AG-26-ACT001";
-        saveNotification(expiredRef, LocalDateTime.now().minusMinutes(1));
-        saveNotification(activeRef, LocalDateTime.now().plusDays(7));
+        saveNotification(expiredRef, Instant.now().minus(1, ChronoUnit.MINUTES));
+        saveNotification(activeRef, Instant.now().plus(7, ChronoUnit.DAYS));
         saveDocument("expiry-it-doc-1", expiredRef);
         saveDocument("expiry-it-doc-2", expiredRef);
         saveDocument("expiry-it-doc-3", activeRef);
@@ -79,7 +80,7 @@ class NotificationExpiryIT extends IntegrationBase {
             .result(Result.SUCCESS)
             .notificationReferenceNumbers(List.of(expiredRef))
             .numberOfNotifications(1)
-            .timestamp(LocalDateTime.now().minusDays(1))
+            .timestamp(Instant.now().minus(1, ChronoUnit.DAYS))
             .build());
 
         int deleted = notificationService.deleteExpired(10);
@@ -115,9 +116,9 @@ class NotificationExpiryIT extends IntegrationBase {
 
     @Test
     void deleteExpired_removesAtMostBatchSizePerRun() {
-        saveNotification("GBN-AG-26-BAT001", LocalDateTime.now().minusMinutes(1));
-        saveNotification("GBN-AG-26-BAT002", LocalDateTime.now().minusMinutes(1));
-        saveNotification("GBN-AG-26-BAT003", LocalDateTime.now().minusMinutes(1));
+        saveNotification("GBN-AG-26-BAT001", Instant.now().minus(1, ChronoUnit.MINUTES));
+        saveNotification("GBN-AG-26-BAT002", Instant.now().minus(1, ChronoUnit.MINUTES));
+        saveNotification("GBN-AG-26-BAT003", Instant.now().minus(1, ChronoUnit.MINUTES));
 
         assertThat(notificationService.deleteExpired(2)).isEqualTo(2);
         assertThat(notificationRepository.findAll()).hasSize(1);
