@@ -37,26 +37,33 @@ class LocalDateStringConvertersTest {
     @ParameterizedTest
     @ValueSource(strings = {"UTC", "Europe/London", "America/New_York", "Australia/Sydney"})
     void write_shouldStoreTheIsoDateString_whateverTheJvmDefaultZone(String zoneId) {
+        // Given
         TimeZone.setDefault(TimeZone.getTimeZone(zoneId));
 
+        // When & Then
         assertThat(new LocalDateToStringConverter().convert(DATE)).isEqualTo(STORED);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"UTC", "Europe/London", "America/New_York", "Australia/Sydney"})
     void read_shouldReturnTheSameCalendarDate_whateverTheJvmDefaultZone(String zoneId) {
+        // Given
         TimeZone.setDefault(TimeZone.getTimeZone(zoneId));
 
+        // When & Then
         assertThat(new StringToLocalDateConverter().convert(STORED)).isEqualTo(DATE);
     }
 
     @ParameterizedTest
     @ValueSource(strings = {"UTC", "Europe/London", "America/New_York", "Australia/Sydney"})
     void roundTrip_shouldPreserveTheCalendarDate_whateverTheJvmDefaultZone(String zoneId) {
+        // Given
         TimeZone.setDefault(TimeZone.getTimeZone(zoneId));
 
+        // When
         String stored = new LocalDateToStringConverter().convert(DATE);
 
+        // Then
         assertThat(new StringToLocalDateConverter().convert(stored)).isEqualTo(DATE);
     }
 }
