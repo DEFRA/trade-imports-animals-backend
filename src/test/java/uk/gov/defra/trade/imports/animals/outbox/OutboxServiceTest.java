@@ -289,7 +289,7 @@ class OutboxServiceTest {
                 .build();
             StatusChange priorChange = StatusChange.builder()
                 .status(NotificationStatus.SUBMITTED)
-                .dateChanged(java.time.Instant.parse("2026-01-01T10:00:00Z"))
+                .dateChanged(Instant.parse("2026-01-01T10:00:00Z"))
                 .actor(submitActor)
                 .build();
             OutboxEvent latestEvent = OutboxEvent.builder()
@@ -354,7 +354,7 @@ class OutboxServiceTest {
                 .build();
             StatusChange priorChange = StatusChange.builder()
                 .status(NotificationStatus.DRAFT)
-                .dateChanged(java.time.Instant.parse("2026-01-01T10:00:00Z"))
+                .dateChanged(Instant.parse("2026-01-01T10:00:00Z"))
                 .actor(null)
                 .build();
             OutboxEvent latestEvent = OutboxEvent.builder()
@@ -389,7 +389,7 @@ class OutboxServiceTest {
                 .build();
             StatusChange priorChange = StatusChange.builder()
                 .status(NotificationStatus.AMEND)
-                .dateChanged(java.time.Instant.parse("2026-01-01T11:00:00Z"))
+                .dateChanged(Instant.parse("2026-01-01T11:00:00Z"))
                 .actor(null)
                 .build();
             OutboxEvent latestEvent = OutboxEvent.builder()
