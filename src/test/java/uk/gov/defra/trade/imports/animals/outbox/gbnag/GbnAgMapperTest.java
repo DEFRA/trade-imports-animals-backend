@@ -69,7 +69,7 @@ class GbnAgMapperTest {
         void shouldMapEachAccompanyingDocumentToAReferenceDocumentInOrder() {
             assertThat(result.exchangedDocument().referenceDocument()).containsExactly(
                 new ReferencedDocument(
-                    "856", "https://vocabulary.uncefact.org/DocumentCodeList", null, "ITAHC-2026-0001", "2026-05-01"),
+                    "856", "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types", null, "ITAHC-2026-0001", "2026-05-01"),
                 new ReferencedDocument(
                     "GBN1", "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types", null, "LOA-778", "2026-04-20"));
         }
@@ -315,31 +315,32 @@ class GbnAgMapperTest {
         assertThat(mapper.toGbnAgEventData(null, null, List.of())).isNull();
     }
 
-    // Pins every row of schemas/codelists/gbn-ag-document-types.json in trade-imports-schemas.
+    // Pins every row of schemas/codelists/gbn-ag-document-types.json in trade-imports-schemas. The
+    // urlId names that one codelist for every code, UNTDID-derived or Defra.
     @ParameterizedTest
     @CsvSource({
-        "VETERINARY_HEALTH_CERTIFICATE, 853, https://vocabulary.uncefact.org/DocumentCodeList",
-        "HEALTH_CERTIFICATE, 636, https://vocabulary.uncefact.org/DocumentCodeList",
-        "AIR_WAYBILL, 740, https://vocabulary.uncefact.org/DocumentCodeList",
-        "SEA_WAYBILL, 710, https://vocabulary.uncefact.org/DocumentCodeList",
-        "RAIL_WAYBILL, 720, https://vocabulary.uncefact.org/DocumentCodeList",
-        "BILL_OF_LADING, 705, https://vocabulary.uncefact.org/DocumentCodeList",
-        "COMMERCIAL_INVOICE, 380, https://vocabulary.uncefact.org/DocumentCodeList",
-        "ITAHC, 856, https://vocabulary.uncefact.org/DocumentCodeList",
-        "IMPORT_PERMIT, 911, https://vocabulary.uncefact.org/DocumentCodeList",
-        "LETTER_OF_AUTHORITY, GBN1, https://refdata.tbc.defra.gov.uk/gbn-ag-document-types",
-        "CATCH_CERTIFICATE, GBN2, https://refdata.tbc.defra.gov.uk/gbn-ag-document-types",
-        "LABORATORY_SAMPLING_RESULTS_FOR_AFLATOXIN, 4, https://vocabulary.uncefact.org/DocumentCodeList",
-        "JOURNEY_LOG, GBN3, https://refdata.tbc.defra.gov.uk/gbn-ag-document-types",
-        "OTHER, 916, https://vocabulary.uncefact.org/DocumentCodeList"
+        "VETERINARY_HEALTH_CERTIFICATE, 853",
+        "HEALTH_CERTIFICATE, 636",
+        "AIR_WAYBILL, 740",
+        "SEA_WAYBILL, 710",
+        "RAIL_WAYBILL, 720",
+        "BILL_OF_LADING, 705",
+        "COMMERCIAL_INVOICE, 380",
+        "ITAHC, 856",
+        "IMPORT_PERMIT, 911",
+        "LETTER_OF_AUTHORITY, GBN1",
+        "CATCH_CERTIFICATE, GBN2",
+        "LABORATORY_SAMPLING_RESULTS_FOR_AFLATOXIN, 4",
+        "JOURNEY_LOG, GBN3",
+        "OTHER, 916"
     })
-    void shouldCodeEachDocumentTypeFromTheDocumentTypeCodelist(DocumentType type, String typeCode, String urlId) {
+    void shouldCodeEachDocumentTypeFromTheDocumentTypeCodelist(DocumentType type, String typeCode) {
         ReferencedDocument document = mapper.toGbnAgEventData(
                 fullyPopulatedNotification(), 1, List.of(accompanyingDocument(type, "REF-1", "2026-05-01T00:00:00Z")))
             .exchangedDocument().referenceDocument().getFirst();
 
         assertThat(document.typeCode()).isEqualTo(typeCode);
-        assertThat(document.urlId()).isEqualTo(urlId);
+        assertThat(document.urlId()).isEqualTo("https://refdata.tbc.defra.gov.uk/gbn-ag-document-types");
     }
 
     @Test

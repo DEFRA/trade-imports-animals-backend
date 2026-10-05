@@ -17,8 +17,7 @@ public record ReferencedDocument(
     String issueDateTime
 ) {
 
-    static final String UNTDID_1001 = "https://vocabulary.uncefact.org/DocumentCodeList";
-    static final String DEFRA_DOCUMENT_TYPES = "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types";
+    static final String GBN_AG_DOCUMENT_TYPES = "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types";
 
     /**
      * The transport document for the arrival leg. Only the reference is collected, so its UNTDID
@@ -34,14 +33,13 @@ public record ReferencedDocument(
 
     /**
      * An accompanying document, coded from the GBN-AG document-type codelist
-     * (schemas/codelists/gbn-ag-document-types.json in trade-imports-schemas). The urlId names the
-     * system that defines the code: UNTDID 1001 where it has one, the Defra list for GBN codes.
+     * (schemas/codelists/gbn-ag-document-types.json in trade-imports-schemas). That list copies in
+     * the UNTDID 1001 codes it uses, so the urlId always names it, whatever the code.
      */
     static ReferencedDocument accompanyingDocument(AccompanyingDocument document) {
-        String typeCode = accompanyingDocumentTypeCode(document.getDocumentType());
         return new ReferencedDocument(
-            typeCode,
-            typeCode.startsWith("GBN") ? DEFRA_DOCUMENT_TYPES : UNTDID_1001,
+            accompanyingDocumentTypeCode(document.getDocumentType()),
+            GBN_AG_DOCUMENT_TYPES,
             null,
             document.getDocumentReference(),
             issueDate(document));
@@ -59,8 +57,8 @@ public record ReferencedDocument(
         };
     }
 
-    // Exhaustive on purpose: a new document type fails to compile until someone decides its code,
-    // which is 916 (Related document) when there is no confident mapping.
+    // Exhaustive on purpose: a new document type fails to compile until someone decides its code.
+    // 916 (Related document) is only for a notifier who chooses "Other", never a default.
     private static String accompanyingDocumentTypeCode(DocumentType documentType) {
         return switch (documentType) {
             case VETERINARY_HEALTH_CERTIFICATE -> "853";

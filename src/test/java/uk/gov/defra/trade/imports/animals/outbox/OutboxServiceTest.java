@@ -212,7 +212,7 @@ class OutboxServiceTest {
             assertThat((List<Map<String, Object>>) exchangedDocument.get("referenceDocument"))
                 .containsExactly(Map.of(
                     "typeCode", "853",
-                    "urlId", "https://vocabulary.uncefact.org/DocumentCodeList",
+                    "urlId", "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types",
                     "identifier", "GBHC1234567890",
                     "issueDateTime", "2026-09-10"));
         }
