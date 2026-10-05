@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Instant;
@@ -135,9 +136,13 @@ class AccompanyingDocumentTest {
           .dateOfIssue(original)
           .build();
 
+      // application.yml turns timestamps off; without this the date is written as [2026,1,15].
+      objectMapper.disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS);
+
       String json = objectMapper.writeValueAsString(doc);
       AccompanyingDocument deserialised = objectMapper.readValue(json, AccompanyingDocument.class);
 
+      assertThat(json).contains("\"dateOfIssue\":\"2026-01-15\"");
       assertThat(deserialised.getDateOfIssue()).isEqualTo(original);
     }
   }
