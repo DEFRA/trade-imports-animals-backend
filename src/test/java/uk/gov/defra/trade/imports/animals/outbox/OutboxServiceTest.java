@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -128,7 +129,7 @@ class OutboxServiceTest {
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()
                 .portOfEntry("GBFXT")
-                .arrivalDate(Instant.parse("2026-04-22T00:00:00Z"))
+                .arrivalDate(LocalDate.parse("2026-04-22"))
                 .build();
 
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()

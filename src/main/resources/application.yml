@@ -30,9 +30,10 @@ spring:
       max-request-size: ${SPRING_MULTIPART_MAX_REQUEST_SIZE:51MB}
   jackson:
     serialization:
-      # Every date on this API is an Instant. Enabling this would serialise each one as a decimal
-      # epoch instead of an ISO-8601 string — a silent contract break the previous LocalDateTime
-      # fields were immune to. Pinned to the Spring Boot default so it cannot change by accident.
+      # Timestamps on this API are Instants and date-only fields are LocalDates. Enabling this
+      # would serialise an Instant as a decimal epoch and a LocalDate as a [year, month, day]
+      # array instead of ISO-8601 strings — a silent contract break. Pinned to the Spring Boot
+      # default so it cannot change by accident.
       write-dates-as-timestamps: false
 
 # CDP platform configuration

@@ -18,7 +18,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.hamcrest.Matchers;
@@ -73,7 +73,7 @@ class DocumentControllerTest {
     @Test
     void shouldReturn201WithLocationHeader() throws Exception {
       String ref = "GBN-AG-26-000001";
-      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", Instant.parse("2026-01-15T00:00:00Z"));
+      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"));
       DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
 
       when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class)))
@@ -97,14 +97,14 @@ class DocumentControllerTest {
         throws Exception {
       String ref = "GBN-AG-26-000001";
       DocumentUploadRequest expectedRequest = new DocumentUploadRequest(
-          documentType, "UKGB2026001", Instant.parse("2026-01-15T00:00:00Z"));
+          documentType, "UKGB2026001", LocalDate.parse("2026-01-15"));
       DocumentUploadResponse serviceResponse = new DocumentUploadResponse(
           "upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
       String body = """
           {
             "documentType":"%s",
             "documentReference":"UKGB2026001",
-            "dateOfIssue":"2026-01-15T00:00:00Z"
+            "dateOfIssue":"2026-01-15"
           }
           """.formatted(documentType.name());
 
@@ -121,7 +121,7 @@ class DocumentControllerTest {
     @Test
     void shouldReturn400_whenDocumentReferenceIsBlank() throws Exception {
       String body = """
-          {"documentType":"ITAHC","documentReference":"","dateOfIssue":"2026-01-15T00:00:00Z"}
+          {"documentType":"ITAHC","documentReference":"","dateOfIssue":"2026-01-15"}
           """;
 
       mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
@@ -135,7 +135,7 @@ class DocumentControllerTest {
     void shouldReturn400_whenDocumentReferenceExceeds100Chars() throws Exception {
       String longRef = "A".repeat(101);
       String body = String.format(
-          "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15T00:00:00Z\"}",
+          "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
           longRef);
 
       mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
@@ -148,7 +148,7 @@ class DocumentControllerTest {
     @Test
     void shouldReturn400_whenDocumentTypeIsNull() throws Exception {
       String body = """
-          {"documentReference":"UKGB2026001","dateOfIssue":"2026-01-15T00:00:00Z"}
+          {"documentReference":"UKGB2026001","dateOfIssue":"2026-01-15"}
           """;
 
       mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
@@ -159,16 +159,18 @@ class DocumentControllerTest {
     }
 
     /**
-     * EUDPA-565 — every date on this API is an {@code Instant}, so neither the date-only form the
-     * API used to take nor a local date-time without an offset binds any longer. Jackson's
-     * {@code InstantDeserializer} does the enforcing; what this pins is the contract the caller
-     * sees — 400 rather than the 500 {@code HttpMessageNotReadableException} draws from the
-     * {@code RuntimeException} catch-all, a problem+json body carrying the malformed-request
-     * type, and a detail naming the form the caller must send. Nothing is saved.
+     * {@code dateOfIssue} is a calendar date, so a value carrying a time or an offset must not
+     * bind. Jackson's {@code LocalDateDeserializer} is lenient by default and would keep the date
+     * part of {@code 2026-01-15T00:00:00Z}; {@code StrictLocalDateModule} turns that off. What this pins
+     * is the contract the caller sees — 400 rather than a silently trimmed value, a problem+json
+     * body carrying the malformed-request type, and a detail naming the form the caller must
+     * send. Nothing is saved.
      */
     @ParameterizedTest
-    @ValueSource(strings = {"2026-01-15", "2026-01-15T00:00:00"})
-    void post_shouldReturn400_whenDateOfIssueIsNotAnInstant(String dateOfIssue) throws Exception {
+    @ValueSource(strings = {
+        "2026-01-15T00:00:00Z", "2026-01-15T00:00:00", "2026-01-15T00:00:00+01:00"})
+    void post_shouldReturn400_whenDateOfIssueCarriesATimeOrAnOffset(String dateOfIssue)
+        throws Exception {
       String body = """
           {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"%s"}
           """.formatted(dateOfIssue);
@@ -182,7 +184,7 @@ class DocumentControllerTest {
               .value("https://api.cdp.defra.cloud/problems/malformed-request"))
           .andExpect(jsonPath("$.title").value("Malformed Request"))
           .andExpect(jsonPath("$.detail")
-              .value(Matchers.containsString("RFC 3339 instant, for example 2026-12-12T00:00:00Z")));
+              .value(Matchers.containsString("each date-only field is a date, for example 2026-12-12")));
 
       verify(documentService, never()).initiate(any(), any());
     }
@@ -204,7 +206,7 @@ class DocumentControllerTest {
     void shouldIgnoreUnknownFieldsLikeRedirectUrl() throws Exception {
       String ref = "GBN-AG-26-000001";
       String body = """
-          {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15T00:00:00Z","redirectUrl":"/anything"}
+          {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"/anything"}
           """;
       DocumentUploadResponse serviceResponse = new DocumentUploadResponse(
           "upload-abc-123", "https://cdp-uploader.example/upload/abc");
@@ -223,7 +225,7 @@ class DocumentControllerTest {
       DocumentUploadRequest captured = requestCaptor.getValue();
       assertThat(captured.documentType()).isEqualTo(DocumentType.ITAHC);
       assertThat(captured.documentReference()).isEqualTo("UKGB2026001");
-      assertThat(captured.dateOfIssue()).isEqualTo(Instant.parse("2026-01-15T00:00:00Z"));
+      assertThat(captured.dateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
     }
   }
 

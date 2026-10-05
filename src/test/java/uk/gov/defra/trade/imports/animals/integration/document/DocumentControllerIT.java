@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -163,6 +164,9 @@ class DocumentControllerIT extends IntegrationBase {
     @Autowired
     private AccompanyingDocumentRepository accompanyingDocumentRepository;
 
+    @Autowired
+    private MongoTemplate mongoTemplate;
+
     @BeforeEach
     void setUpDocuments() {
         accompanyingDocumentRepository.deleteAll();
@@ -278,7 +282,7 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(item.id()).isNotNull();
             assertThat(item.documentType()).isEqualTo(DocumentType.ITAHC);
             assertThat(item.documentReference()).isEqualTo("UKGB2026001234");
-            assertThat(item.dateOfIssue()).isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
+            assertThat(item.dateOfIssue()).isEqualTo(java.time.LocalDate.parse("2026-01-15"));
         }
     }
 
@@ -410,7 +414,7 @@ class DocumentControllerIT extends IntegrationBase {
     class DateOfIssue {
 
         @Test
-        void shouldPersistDateOfIssueAsInstant() {
+        void shouldPersistDateOfIssueAsAnIsoDateString() {
             EntityExchangeResult<DocumentUploadResponse> result = webClient("NoAuth")
                 .post()
                 .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
@@ -424,9 +428,15 @@ class DocumentControllerIT extends IntegrationBase {
 
             AccompanyingDocument doc =
                 accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
-            assertThat(doc.getDateOfIssue()).isNotNull();
-            assertThat(doc.getDateOfIssue())
-                .isEqualTo(java.time.Instant.parse("2026-01-15T00:00:00Z"));
+            assertThat(doc.getDateOfIssue()).isEqualTo(java.time.LocalDate.parse("2026-01-15"));
+
+            // The raw document, not a repository round trip: a round trip would pass whether
+            // the field is stored as a string or as a BSON date.
+            org.bson.Document stored = mongoTemplate.getCollection("accompanying_documents")
+                .find(new org.bson.Document("uploadId", uploadId))
+                .first();
+            assertThat(stored).isNotNull();
+            assertThat(stored.get("dateOfIssue", String.class)).isEqualTo("2026-01-15");
         }
     }
 
@@ -496,7 +506,7 @@ class DocumentControllerIT extends IntegrationBase {
 
     private static String initiateBody() {
         return """
-            {"documentType":"ITAHC","documentReference":"UKGB2026001234","dateOfIssue":"2026-01-15T00:00:00Z"}
+            {"documentType":"ITAHC","documentReference":"UKGB2026001234","dateOfIssue":"2026-01-15"}
             """;
     }
 

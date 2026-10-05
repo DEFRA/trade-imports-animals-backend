@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -39,7 +40,7 @@ class AccompanyingDocumentTest {
           .uploadId("upload-uuid-1")
           .documentType(DocumentType.ITAHC)
           .documentReference("ITAHC/2026/001")
-          .dateOfIssue(now)
+          .dateOfIssue(LocalDate.parse("2026-01-15"))
           .scanStatus(ScanStatus.COMPLETE)
           .created(now)
           .updated(now)
@@ -51,7 +52,7 @@ class AccompanyingDocumentTest {
       assertThat(doc.getUploadId()).isEqualTo("upload-uuid-1");
       assertThat(doc.getDocumentType()).isEqualTo(DocumentType.ITAHC);
       assertThat(doc.getDocumentReference()).isEqualTo("ITAHC/2026/001");
-      assertThat(doc.getDateOfIssue()).isEqualTo(now);
+      assertThat(doc.getDateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
       assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
       assertThat(doc.getCreated()).isEqualTo(now);
       assertThat(doc.getUpdated()).isEqualTo(now);
@@ -126,8 +127,8 @@ class AccompanyingDocumentTest {
   class DateOfIssueJsonRoundTrip {
 
     @Test
-    void dateOfIssue_instantRoundTrip_survivesJsonSerialiseDeserialise() throws JsonProcessingException {
-      Instant original = Instant.parse("2026-01-15T00:00:00Z");
+    void dateOfIssue_roundTrip_survivesJsonSerialiseDeserialise() throws JsonProcessingException {
+      LocalDate original = LocalDate.parse("2026-01-15");
 
       AccompanyingDocument doc = AccompanyingDocument.builder()
           .uploadId("upload-round-trip-1")

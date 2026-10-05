@@ -69,7 +69,7 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
             .bodyValue("""
-                {"documentType":"ITAHC","documentReference":"UKGB2026001234","dateOfIssue":"2026-01-15T00:00:00Z"}
+                {"documentType":"ITAHC","documentReference":"UKGB2026001234","dateOfIssue":"2026-01-15"}
                 """)
             .exchange()
             .expectStatus().isCreated()
