@@ -10,7 +10,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.plac
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.reference;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 
-import java.time.LocalDate;
+import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -31,7 +31,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldRetainCountryOfOriginAndRequiresRegionCode() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .origin(new Origin("DE", "yes", "INTERNAL-REF", null))
+                .origin(Origin.builder().countryCode("DE").requiresRegionCode("yes").internalReference("INTERNAL-REF").build())
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
@@ -164,12 +164,29 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldRetainRegionOfOriginCode() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .origin(new Origin("FR", "yes", "INTERNAL-REF", "FR-75"))
+                .origin(Origin.builder().countryCode("FR").requiresRegionCode("yes").internalReference("INTERNAL-REF").regionOfOriginCode("FR-75").build())
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
             assertThat(result.getOrigin().getRegionOfOriginCode()).isEqualTo("FR-75");
+        }
+
+        @Test
+        void toCopyDto_shouldRetainCountrySubdivisionCode() {
+            NotificationAggregate source = aggregateOf(Notification.builder()
+                .origin(Origin.builder()
+                    .countryCode("ES")
+                    .countrySubdivisionCode("ES-CN")
+                    .requiresRegionCode("no")
+                    .build())
+                .build());
+
+            NotificationDto result = mapper.toCopyDto(source);
+
+            assertThat(result.getOrigin().getCountryCode()).isEqualTo("ES");
+            assertThat(result.getOrigin().getCountrySubdivisionCode()).isEqualTo("ES-CN");
+            assertThat(result.getOrigin().getInternalReference()).isNull();
         }
 
         @Test
@@ -227,7 +244,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldOmitInternalReference() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .origin(new Origin("FR", "no", "DO-NOT-COPY", null))
+                .origin(Origin.builder().countryCode("FR").requiresRegionCode("no").internalReference("DO-NOT-COPY").build())
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
@@ -287,7 +304,7 @@ class NotificationCopyMapperTest {
             NotificationAggregate source = aggregateOf(Notification.builder()
                 .transport(Transport.builder()
                     .portOfEntry("GBDVR")
-                    .arrivalDate(LocalDate.of(2026, 6, 1))
+                    .arrivalDate(Instant.parse("2026-06-01T00:00:00Z"))
                     .build())
                 .build());
 
@@ -310,7 +327,7 @@ class NotificationCopyMapperTest {
         @Test
         void toCopyDto_shouldOmitExitDate() {
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .exitDate(LocalDate.of(2026, 12, 20))
+                .exitDate(Instant.parse("2026-12-20T00:00:00Z"))
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);

@@ -5,7 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
-import java.time.LocalDate;
+import java.time.Instant;
 
 /**
  * Request body for initiating an accompanying document upload.
@@ -13,15 +13,21 @@ import java.time.LocalDate;
 @Schema(description = "Request to initiate an accompanying document upload")
 public record DocumentUploadRequest(
     @NotNull
-    @Schema(description = "Type of accompanying document", example = "ITAHC")
+    @Schema(description = "Type of accompanying document",
+        requiredMode = Schema.RequiredMode.REQUIRED,
+        example = "ITAHC")
     DocumentType documentType,
 
     @NotBlank
     @Size(max = 100)
     @Pattern(regexp = "^[a-zA-Z0-9]*$")
-    @Schema(description = "Reference number printed on the document", example = "UKGB2026001234")
+    @Schema(description = "Reference number printed on the document",
+        requiredMode = Schema.RequiredMode.REQUIRED,
+        example = "UKGB2026001234")
     String documentReference,
 
     @NotNull
-    @Schema(description = "Date of issue on the physical document", example = "2026-01-15")
-    LocalDate dateOfIssue) {}
+    @Schema(description = "Date of issue on the physical document, as UTC midnight",
+        requiredMode = Schema.RequiredMode.REQUIRED,
+        example = "2026-01-15T00:00:00Z")
+    Instant dateOfIssue) {}

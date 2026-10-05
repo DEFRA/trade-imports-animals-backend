@@ -1,7 +1,7 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -37,9 +37,9 @@ public class NotificationAggregate {
 
     private NotificationStatus status;
 
-    private LocalDateTime created;
+    private Instant created;
 
-    private LocalDateTime updated;
+    private Instant updated;
 
     /**
      * Timestamp of the most recent submission — set the first time the notification is submitted
@@ -47,7 +47,7 @@ public class NotificationAggregate {
      * and cancel-amend, so it always points at the latest submission event rather than the
      * original one. Set by {@code submitNotification}; carried into the fulfilment-view projection.
      */
-    private LocalDateTime submittedAt;
+    private Instant submittedAt;
 
     /**
      * When this notification becomes eligible for automatic expiry, anchored to {@code created}.
@@ -58,7 +58,7 @@ public class NotificationAggregate {
      */
     @JsonIgnore
     @Indexed
-    private LocalDateTime expireAt;
+    private Instant expireAt;
 
     /** The notification content — parties, commodity, transport, etc. Symmetric to {@link #fulfilments}. */
     private Notification notification;

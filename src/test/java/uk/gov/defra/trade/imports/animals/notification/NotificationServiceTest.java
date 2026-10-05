@@ -25,9 +25,8 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.spec
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
 import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.Month;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -143,7 +142,11 @@ class NotificationServiceTest {
         @Test
         void saveNotification_shouldCreateNotificationWithGeneratedReferenceNumber() {
             // Given - new notification without referenceNumber
-            Origin origin = new Origin("GB", "true", "REF123", null);
+            Origin origin = Origin.builder()
+                .countryCode("GB")
+                .requiresRegionCode("true")
+                .internalReference("REF123")
+                .build();
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(origin)
                 .build();
@@ -203,7 +206,11 @@ class NotificationServiceTest {
         @Test
         void saveNotification_shouldRetryPersistence_whenDuplicateKeyExceptionOnFirstAttempt() {
             // Given — first persistence attempt collides, second succeeds
-            Origin origin = new Origin("GB", "true", "REF123", null);
+            Origin origin = Origin.builder()
+                .countryCode("GB")
+                .requiresRegionCode("true")
+                .internalReference("REF123")
+                .build();
             NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
 
             NotificationAggregate saved = new NotificationAggregate();
@@ -232,7 +239,11 @@ class NotificationServiceTest {
         @Test
         void saveNotification_shouldThrowIllegalStateException_whenAllPersistenceRetriesExhausted() {
             // Given — all three persistence attempts collide
-            Origin origin = new Origin("GB", "true", "REF123", null);
+            Origin origin = Origin.builder()
+                .countryCode("GB")
+                .requiresRegionCode("true")
+                .internalReference("REF123")
+                .build();
             NotificationDto notificationDto = NotificationDto.builder().origin(origin).build();
 
             when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-ABC001");
@@ -260,7 +271,7 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
                 .notification(Notification.builder()
-                    .origin(new Origin("GB", "true", "STALE", null))
+                    .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("STALE").build())
                     .build())
                 .build();
             when(notificationRepository.findByReferenceNumber(referenceNumber))
@@ -268,7 +279,12 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-            Origin origin = new Origin("FR", "false", "REF456", "FR-75");
+            Origin origin = Origin.builder()
+                .countryCode("FR")
+                .requiresRegionCode("false")
+                .internalReference("REF456")
+                .regionOfOriginCode("FR-75")
+                .build();
             Commodity commodity = Commodity.builder()
                 .name("Fish")
                 .commodityComplement(List.of(new CommodityComplement("LIVE", 5, null, List.of(species()))))
@@ -276,10 +292,10 @@ class NotificationServiceTest {
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()
                 .portOfEntry("ABERDEEN")
-                .arrivalDate(LocalDate.of(2026, Month.JANUARY, 1))
+                .arrivalDate(Instant.parse("2026-01-01T00:00:00Z"))
                 .transporter(transporters().getFirst())
                 .build();
-            LocalDate exitDate = LocalDate.of(2026, Month.JANUARY, 15);
+            Instant exitDate = Instant.parse("2026-01-15T00:00:00Z");
 
             NotificationDto updateDto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
@@ -368,6 +384,39 @@ class NotificationServiceTest {
             // Then
             assertThat(saved.getNotification().getPlaceOfOrigin()).isEqualTo(originParty);
             assertThat(saved.getNotification().getConsignment()).isEqualTo(contactParty);
+        }
+
+        @Test
+        void saveNotification_shouldTruncateArrivalDateToTheStartOfItsUtcDay() {
+            // Guards the PIMS off-by-a-day. LocalDate made a time of day impossible to represent
+            // and Instant does not, so a caller can post one; the stored value must still be the
+            // calendar day the trader chose. The 23:30Z fixture guards against passthrough — storing
+            // the posted value verbatim keeps the 23:30 and fails the assertion below.
+            String referenceNumber = "GBN-AG-26-ARRV01";
+            NotificationAggregate existing = NotificationAggregate.builder()
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .notification(Notification.builder().build())
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(referenceNumber)
+                .concurrencyToken(0L)
+                .transport(Transport.builder()
+                    .arrivalDate(Instant.parse("2026-07-21T23:30:00Z"))
+                    .build())
+                .build();
+
+            // When
+            NotificationAggregate saved = notificationService.saveNotification(dto, "trace-arrival-001", null);
+
+            // Then
+            assertThat(saved.getNotification().getTransport().getArrivalDate())
+                .isEqualTo(Instant.parse("2026-07-21T00:00:00Z"));
         }
 
         @Test
@@ -491,7 +540,7 @@ class NotificationServiceTest {
 
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
-                .origin(new Origin("GB", "no", "REF", null))
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("REF").build())
                 .build();
 
             // When / Then
@@ -651,7 +700,7 @@ class NotificationServiceTest {
             // Given
             NotificationView view = notificationView()
                 .referenceNumber("GBN-AG-26-ABC123")
-                .origin(new Origin("GB", "true", "REF-1", null))
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-1").build())
                 .status(SUBMITTED)
                 .build();
             Page<NotificationView> page = new PageImpl<>(
@@ -998,14 +1047,14 @@ class NotificationServiceTest {
         private NotificationAggregate create(NotificationTtlConfig ttlConfig) {
             NotificationService service = buildService(ttlConfig);
             return service.saveNotification(
-                NotificationDto.builder().origin(new Origin("GB", "true", "REF123", null)).build(), "", null);
+                NotificationDto.builder().origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF123").build()).build(), "", null);
         }
 
         @Test
         void createNotification_stampsExpireAt_whenDaysConfiguredAndNotProd() {
             NotificationAggregate result = create(new NotificationTtlConfig(7, "dev", sweep(false)));
 
-            assertThat(result.getExpireAt()).isEqualTo(result.getCreated().plusDays(7));
+            assertThat(result.getExpireAt()).isEqualTo(result.getCreated().plus(7, ChronoUnit.DAYS));
         }
 
         @Test
@@ -1040,7 +1089,7 @@ class NotificationServiceTest {
             String ref1 = "GBN-AG-26-EXP001";
             String ref2 = "GBN-AG-26-EXP002";
             when(notificationRepository.findExpired(
-                any(LocalDateTime.class), any(Pageable.class)))
+                any(Instant.class), any(Pageable.class)))
                 .thenReturn(List.of(() -> ref1, () -> ref2));
 
             int deleted = notificationService.deleteExpired(10);
@@ -1056,7 +1105,7 @@ class NotificationServiceTest {
         @Test
         void deleteExpired_returnsZeroAndSkipsDeletion_whenNothingDue() {
             when(notificationRepository.findExpired(
-                any(LocalDateTime.class), any(Pageable.class)))
+                any(Instant.class), any(Pageable.class)))
                 .thenReturn(Collections.emptyList());
 
             assertThat(notificationService.deleteExpired(10)).isZero();
@@ -1069,7 +1118,7 @@ class NotificationServiceTest {
         void deleteExpired_queriesFirstPageBoundedByBatchSize() {
             ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
             when(notificationRepository.findExpired(
-                any(LocalDateTime.class), pageableCaptor.capture()))
+                any(Instant.class), pageableCaptor.capture()))
                 .thenReturn(Collections.emptyList());
 
             notificationService.deleteExpired(5);
@@ -1464,7 +1513,7 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .status(SUBMITTED)
                 .notification(Notification.builder()
-                    .origin(new Origin("GB", "true", "LIVE-REF", null))
+                    .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("LIVE-REF").build())
                     .build())
                 .fulfilments(List.of(new Document("obligationId", "amd-8")))
                 .build();
@@ -1672,14 +1721,14 @@ class NotificationServiceTest {
             // Given
             String referenceNumber = "GBN-AG-26-CAN001";
             Notification baseline = Notification.builder()
-                .origin(new Origin("GB", "true", "ORIGINAL-REF", null))
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("ORIGINAL-REF").build())
                 .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("notif-id-can-1")
                 .referenceNumber(referenceNumber)
                 .status(AMEND)
                 .notification(Notification.builder()
-                    .origin(new Origin("FR", "false", "EDITED-REF", null))
+                    .origin(Origin.builder().countryCode("FR").requiresRegionCode("false").internalReference("EDITED-REF").build())
                     .build())
                 .preAmendNotification(baseline)
                 .build();
@@ -1821,7 +1870,7 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .notification(Notification.builder()
-                    .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY", null))
+                    .origin(Origin.builder().countryCode("IE").requiresRegionCode("no").internalReference("INT-REF-DO-NOT-COPY").build())
                     .build())
                 .status(NotificationStatus.DRAFT)
                 .notification(Notification.builder().build())
@@ -1855,7 +1904,7 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .notification(Notification.builder()
-                    .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY", null))
+                    .origin(Origin.builder().countryCode("IE").requiresRegionCode("no").internalReference("INT-REF-DO-NOT-COPY").build())
                     .build())
                 .status(NotificationStatus.SUBMITTED)
                 .notification(Notification.builder().build())
@@ -1885,7 +1934,11 @@ class NotificationServiceTest {
         void copyNotification_shouldRetainCopiedFields() {
             // Given
             String sourceRef = "GBN-AG-26-SRC002";
-            Origin origin = new Origin("DE", "yes", "INTERNAL-REF", null);
+            Origin origin = Origin.builder()
+                .countryCode("DE")
+                .requiresRegionCode("yes")
+                .internalReference("INTERNAL-REF")
+                .build();
             AdditionalDetails additionalDetails = new AdditionalDetails("Breeding", "yes");
             CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
                 List.of(species()));
@@ -1909,7 +1962,7 @@ class NotificationServiceTest {
                     .cphNumber("12/345/6789")
                     .transport(Transport.builder()
                         .portOfEntry("GBDVR")
-                        .arrivalDate(LocalDate.of(2026, Month.MAY, 1))
+                        .arrivalDate(Instant.parse("2026-05-01T00:00:00Z"))
                         .transporter(transporters().getFirst())
                         .build())
                     .consignment(consignments().getFirst())
@@ -1954,7 +2007,7 @@ class NotificationServiceTest {
                 .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
-                    .origin(new Origin("FR", "no", "DO-NOT-COPY", null))
+                    .origin(Origin.builder().countryCode("FR").requiresRegionCode("no").internalReference("DO-NOT-COPY").build())
                     .commodity(Commodity.builder()
                         .name("Cattle")
                         .commodityComplement(List.of(complement))
@@ -1962,7 +2015,7 @@ class NotificationServiceTest {
                     .additionalDetails(new AdditionalDetails("Slaughter", "no"))
                     .transport(Transport.builder()
                         .portOfEntry("GBFXT")
-                        .arrivalDate(LocalDate.of(2026, Month.JUNE, 1))
+                        .arrivalDate(Instant.parse("2026-06-01T00:00:00Z"))
                         .build())
                     .consignment(consignments().getFirst())
                     .build())
@@ -2003,7 +2056,7 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .notification(Notification.builder()
-                    .origin(new Origin("IE", "no", "INT-REF-DO-NOT-COPY", null))
+                    .origin(Origin.builder().countryCode("IE").requiresRegionCode("no").internalReference("INT-REF-DO-NOT-COPY").build())
                     .build())
                 .status(AMEND)
                 .notification(Notification.builder().build())
@@ -2194,14 +2247,14 @@ class NotificationServiceTest {
                 .referenceNumber(ref)
                 .status(DRAFT)
                 .notification(Notification.builder()
-                    .origin(new Origin("FR", "no", "OLD", null))
+                    .origin(Origin.builder().countryCode("FR").requiresRegionCode("no").internalReference("OLD").build())
                     .build())
                 .build();
             List<Document> newFulfilments = List.of(new Document("obligationId", "abc"));
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
                 .concurrencyToken(0L)
-                .origin(new Origin("GB", "no", "NEW", null))
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("NEW").build())
                 .fulfilments(newFulfilments)
                 .build();
 
@@ -2235,7 +2288,7 @@ class NotificationServiceTest {
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
                 .concurrencyToken(0L)
-                .origin(new Origin("GB", "no", "AMEND-EDIT", null))
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("AMEND-EDIT").build())
                 .fulfilments(List.of(new Document("obligationId", "xyz")))
                 .build();
 
@@ -2324,7 +2377,7 @@ class NotificationServiceTest {
             //When a concurrency token is not supplied
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
-                .origin(new Origin("GB", "no", "REF", null))
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("REF").build())
                 .build();
 
             //Then the update should fail 
@@ -2346,7 +2399,7 @@ class NotificationServiceTest {
                 .referenceNumber(ref)
                 .status(SUBMITTED)
                 .notification(Notification.builder()
-                    .origin(new Origin("GB", "no", "REF", null))
+                    .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("REF").build())
                     .build())
                 .fulfilments(fulfilments)
                 .build();
@@ -2376,7 +2429,7 @@ class NotificationServiceTest {
                 .referenceNumber(ref)
                 .status(SUBMITTED)
                 .notification(Notification.builder()
-                    .origin(new Origin("GB", "no", "LIVE-REF", null))
+                    .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("LIVE-REF").build())
                     .commodity(Commodity.builder().name("Cattle").build())
                     .reasonForImport("PERMANENT")
                     .cphNumber("12/345/6789")
@@ -2422,17 +2475,17 @@ class NotificationServiceTest {
             // does not touch it on the SUBMITTED -> AMEND transition), so cancel-amend must
             // return that same timestamp untouched.
             String ref = "GBN-AG-26-CAN001";
-            LocalDateTime originalSubmittedAt = LocalDateTime.of(2026, Month.APRIL, 15, 10, 0);
+            Instant originalSubmittedAt = Instant.parse("2026-04-15T10:00:00Z");
             List<Document> priorFulfilments = List.of(new Document("obligationId", "prior"));
             Notification baseline = Notification.builder()
-                .origin(new Origin("GB", "no", "ORIGINAL", null))
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("ORIGINAL").build())
                 .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("db-id-c")
                 .referenceNumber(ref)
                 .status(AMEND)
                 .notification(Notification.builder()
-                    .origin(new Origin("FR", "yes", "EDITED", null))
+                    .origin(Origin.builder().countryCode("FR").requiresRegionCode("yes").internalReference("EDITED").build())
                     .build())
                 .preAmendNotification(baseline)
                 .preAmendFulfilments(new ArrayList<>(priorFulfilments))
@@ -2510,7 +2563,7 @@ class NotificationServiceTest {
 
             // When — DRAFT -> SUBMITTED (first submit)
             NotificationAggregate afterFirstSubmit = notificationService.submitNotification(ref, "t1", null);
-            LocalDateTime firstSubmittedAt = afterFirstSubmit.getSubmittedAt();
+            Instant firstSubmittedAt = afterFirstSubmit.getSubmittedAt();
             assertThat(firstSubmittedAt).isNotNull();
 
             // And — SUBMITTED -> AMEND (submittedAt preserved through the transition)
@@ -2530,14 +2583,14 @@ class NotificationServiceTest {
             // Given
             String ref = "GBN-AG-26-SBM001";
             Notification priorFreeze = Notification.builder()
-                .origin(new Origin("GB", "no", "PRIOR", null))
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("PRIOR").build())
                 .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("db-id-s")
                 .referenceNumber(ref)
                 .status(AMEND)
                 .notification(Notification.builder()
-                    .origin(new Origin("FR", "yes", "AMENDED", null))
+                    .origin(Origin.builder().countryCode("FR").requiresRegionCode("yes").internalReference("AMENDED").build())
                     .build())
                 .preAmendNotification(priorFreeze)
                 .preAmendFulfilments(new ArrayList<>(
@@ -2597,7 +2650,7 @@ class NotificationServiceTest {
                 .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
-                    .origin(new Origin("GB", "no", "SOURCE-REF", null))
+                    .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("SOURCE-REF").build())
                     .build())
                 .fulfilments(sourceFulfilments)
                 .build();
@@ -2803,7 +2856,7 @@ class NotificationServiceTest {
     private static final class NotificationViewBuilder {
         private String referenceNumber;
         private NotificationStatus status;
-        private LocalDateTime created;
+        private Instant created;
         private Origin origin;
         private Commodity commodity;
         private ConsignmentParty consignor;
@@ -2812,7 +2865,7 @@ class NotificationServiceTest {
 
         NotificationViewBuilder referenceNumber(String v) { this.referenceNumber = v; return this; }
         NotificationViewBuilder status(NotificationStatus v) { this.status = v; return this; }
-        NotificationViewBuilder created(LocalDateTime v) { this.created = v; return this; }
+        NotificationViewBuilder created(Instant v) { this.created = v; return this; }
         NotificationViewBuilder origin(Origin v) { this.origin = v; return this; }
         NotificationViewBuilder commodity(Commodity v) { this.commodity = v; return this; }
         NotificationViewBuilder consignor(ConsignmentParty v) { this.consignor = v; return this; }
@@ -2820,7 +2873,7 @@ class NotificationServiceTest {
         NotificationViewBuilder transport(Transport v) { this.transport = v; return this; }
 
         NotificationView build() {
-            return new NotificationView.Data(
+            return new NotificationViewData(
                 referenceNumber, 0L, status, created,
                 origin, commodity, consignor, consignee, transport);
         }

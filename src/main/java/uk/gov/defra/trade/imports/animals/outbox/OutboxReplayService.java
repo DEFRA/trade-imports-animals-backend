@@ -1,7 +1,7 @@
 package uk.gov.defra.trade.imports.animals.outbox;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -60,7 +60,7 @@ public class OutboxReplayService {
             .numberOfEvents(count)
             .traceId(auditContext.traceId())
             .userId(auditContext.userId())
-            .timestamp(LocalDateTime.now())
+            .timestamp(Instant.now())
             .build());
     }
 }

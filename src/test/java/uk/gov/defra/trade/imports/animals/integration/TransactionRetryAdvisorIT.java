@@ -118,7 +118,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
         String referenceNumber = draft.getReferenceNumber();
         NotificationDto edit = NotificationDto.builder()
             .referenceNumber(referenceNumber)
-            .origin(new Origin("GB", "no", "EDITED", null))
+            .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("EDITED").build())
             .commodity(Commodity.builder().name("Live cattle").build())
             .concurrencyToken(draft.getConcurrencyToken())
             .build();
@@ -140,7 +140,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
     }
 
     private NotificationAggregate createDraft() {
-        Origin origin = new Origin();
+        Origin origin = Origin.builder().build();
         origin.setCountryCode("GB");
         NotificationDto dto = NotificationDto.builder()
             .origin(origin)

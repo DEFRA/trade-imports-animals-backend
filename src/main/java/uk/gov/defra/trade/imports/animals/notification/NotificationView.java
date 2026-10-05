@@ -1,7 +1,7 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import java.time.LocalDateTime;
+import java.time.Instant;
 import org.springframework.beans.factory.annotation.Value;
 
 /**
@@ -13,10 +13,10 @@ import org.springframework.beans.factory.annotation.Value;
  * Accepted trade-off: this endpoint is being replaced by an event-populated dashboard service
  * and there are no live users to notice the cost.
  *
- * <p>{@link Data} is the concrete carrier Jackson deserializes into on the client side; Spring
- * Data returns proxy instances on the server side.
+ * <p>{@link NotificationViewData} is the concrete carrier Jackson deserializes into on the client
+ * side; Spring Data returns proxy instances on the server side.
  */
-@JsonDeserialize(as = NotificationView.Data.class)
+@JsonDeserialize(as = NotificationViewData.class)
 public interface NotificationView {
 
     String getReferenceNumber();
@@ -25,7 +25,7 @@ public interface NotificationView {
 
     NotificationStatus getStatus();
 
-    LocalDateTime getCreated();
+    Instant getCreated();
 
     @Value("#{target.notification?.origin}")
     Origin getOrigin();
@@ -53,7 +53,7 @@ public interface NotificationView {
      */
     default NotificationView forDashboard() {
         boolean submitted = getStatus() == NotificationStatus.SUBMITTED;
-        return new Data(
+        return new NotificationViewData(
             getReferenceNumber(),
             getConcurrencyToken(),
             getStatus(),
@@ -63,21 +63,5 @@ public interface NotificationView {
             submitted ? ConsignmentParty.inlineOnly(getConsignor()) : getConsignor(),
             submitted ? ConsignmentParty.inlineOnly(getConsignee()) : getConsignee(),
             getTransport());
-    }
-
-    /** Jackson deserialization target — flat, matches the on-wire JSON produced by the projection. */
-    @lombok.Data
-    @lombok.NoArgsConstructor
-    @lombok.AllArgsConstructor
-    class Data implements NotificationView {
-        private String referenceNumber;
-        private Long concurrencyToken;
-        private NotificationStatus status;
-        private LocalDateTime created;
-        private Origin origin;
-        private Commodity commodity;
-        private ConsignmentParty consignor;
-        private ConsignmentParty consignee;
-        private Transport transport;
     }
 }

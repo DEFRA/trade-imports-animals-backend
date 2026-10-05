@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -24,11 +25,14 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.spec
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.LocalDate;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
@@ -126,7 +130,11 @@ class NotificationControllerTest {
         @Test
         void post_shouldCreateNotificationAndReturnReferenceNumber() throws Exception {
             // Given
-            Origin origin = new Origin("GB", "true", "CUSTOMER-REF-123", null);
+            Origin origin = Origin.builder()
+                .countryCode("GB")
+                .requiresRegionCode("true")
+                .internalReference("CUSTOMER-REF-123")
+                .build();
             Species species = species();
             CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species));
             Commodity commodity = Commodity.builder()
@@ -197,7 +205,11 @@ class NotificationControllerTest {
         @Test
         void post_shouldAcceptNotificationWithAllOriginFields() throws Exception {
             // Given
-            Origin origin = new Origin("FR", "false", "INTERNAL-456", null);
+            Origin origin = Origin.builder()
+                .countryCode("FR")
+                .requiresRegionCode("false")
+                .internalReference("INTERNAL-456")
+                .build();
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(origin)
                 .build();
@@ -224,9 +236,45 @@ class NotificationControllerTest {
         }
 
         @Test
+        void post_shouldAcceptNotificationWithCountrySubdivisionCode() throws Exception {
+            Origin origin = Origin.builder()
+                .countryCode("ES")
+                .countrySubdivisionCode("ES-CN")
+                .requiresRegionCode("no")
+                .internalReference("INTERNAL-CN")
+                .build();
+            NotificationDto notificationDto = NotificationDto.builder()
+                .origin(origin)
+                .build();
+
+            NotificationAggregate savedNotification = new NotificationAggregate();
+            savedNotification.setNotification(new Notification());
+            savedNotification.setId("507f1f77bcf86cd799439088");
+            savedNotification.setReferenceNumber(REF_2);
+            savedNotification.getNotification().setOrigin(origin);
+
+            when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
+                .thenReturn(savedNotification);
+
+            mockMvc.perform(post("/notifications")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(
+                        SaveNotificationDto.builder().notification(notificationDto).build())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.notification.origin.countryCode").value("ES"))
+                .andExpect(jsonPath("$.notification.origin.countrySubdivisionCode").value("ES-CN"))
+                .andExpect(jsonPath("$.notification.origin.internalReference").value("INTERNAL-CN"));
+        }
+
+        @Test
         void post_shouldAcceptNotificationWithRegionOfOriginCodeAndPerUnitAnimalIdentifiers() throws Exception {
             // Given
-            Origin origin = new Origin("FR", "yes", "INTERNAL-789", "FR-75");
+            Origin origin = Origin.builder()
+                .countryCode("FR")
+                .requiresRegionCode("yes")
+                .internalReference("INTERNAL-789")
+                .regionOfOriginCode("FR-75")
+                .build();
             AnimalIdentifier firstUnit = AnimalIdentifier.builder()
                 .earTag("UK123456789012")
                 .passport("UK123456789")
@@ -252,13 +300,21 @@ class NotificationControllerTest {
                 .name("Cow")
                 .commodityComplement(List.of(complement))
                 .build();
+            // EUDPA-565 — arrivalDate is deliberately neither midnight nor a whole second. The
+            // producer labels it UTC midnight, but a fixture that agrees with midnight cannot
+            // distinguish a faithful instant from one truncated to a day on the way out.
+            Transport transport = Transport.builder()
+                .portOfEntry("GB DVR")
+                .arrivalDate(Instant.parse("2026-12-19T13:45:30.250Z"))
+                .build();
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(origin)
                 .commodity(commodity)
                 .purposeInInternalMarket("Breeding")
                 .destinationCountry("DE")
                 .portOfExit("GB DVR")
-                .exitDate(LocalDate.of(2026, 12, 20))
+                .exitDate(Instant.parse("2026-12-20T00:00:00Z"))
+                .transport(transport)
                 .build();
 
             NotificationAggregate savedNotification = new NotificationAggregate();
@@ -270,7 +326,8 @@ class NotificationControllerTest {
             savedNotification.getNotification().setPurposeInInternalMarket("Breeding");
             savedNotification.getNotification().setDestinationCountry("DE");
             savedNotification.getNotification().setPortOfExit("GB DVR");
-            savedNotification.getNotification().setExitDate(LocalDate.of(2026, 12, 20));
+            savedNotification.getNotification().setExitDate(Instant.parse("2026-12-20T00:00:00Z"));
+            savedNotification.getNotification().setTransport(transport);
 
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
                 .thenReturn(savedNotification);
@@ -285,7 +342,9 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.notification.purposeInInternalMarket").value("Breeding"))
                 .andExpect(jsonPath("$.notification.destinationCountry").value("DE"))
                 .andExpect(jsonPath("$.notification.portOfExit").value("GB DVR"))
-                .andExpect(jsonPath("$.notification.exitDate").value("2026-12-20"))
+                .andExpect(jsonPath("$.notification.exitDate").value("2026-12-20T00:00:00Z"))
+                .andExpect(jsonPath("$.notification.transport.arrivalDate")
+                    .value("2026-12-19T13:45:30.250Z"))
                 .andExpect(jsonPath(
                     "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[0].earTag")
                     .value("UK123456789012"))
@@ -313,7 +372,11 @@ class NotificationControllerTest {
         void post_shouldAcceptNotificationWithExistingId() throws Exception {
             // Given
             String existingId = "507f1f77bcf86cd799439011";
-            Origin origin = new Origin("DE", "true", "UPDATE-REF", null);
+            Origin origin = Origin.builder()
+                .countryCode("DE")
+                .requiresRegionCode("true")
+                .internalReference("UPDATE-REF")
+                .build();
             NotificationDto notificationDto = NotificationDto.builder()
                 .referenceNumber(REF_3)
                 .origin(origin)
@@ -340,11 +403,63 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.notification.origin.internalReference").value("UPDATE-REF"));
         }
 
+        /**
+         * EUDPA-565 — {@code arrivalDate} and {@code exitDate} are instants on the wire, so the
+         * date-only form the API used to take no longer binds. Jackson does the enforcing; what
+         * is pinned here is that the caller gets 400 rather than the 500 the
+         * {@code RuntimeException} catch-all would otherwise produce, and that nothing is saved.
+         */
+        @ParameterizedTest
+        @ValueSource(strings = {
+            "{\"notification\":{\"transport\":{\"arrivalDate\":\"2026-12-12\"}}}",
+            "{\"notification\":{\"transport\":{\"arrivalDate\":\"2026-12-12T00:00:00\"}}}",
+            "{\"notification\":{\"exitDate\":\"2026-12-12\"}}",
+            "{\"notification\":{\"exitDate\":\"2026-12-12T00:00:00\"}}"
+        })
+        void post_shouldReturn400_whenADateIsNotAnInstant(String body) throws Exception {
+            mockMvc.perform(post("/notifications")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+                .andExpect(status().isBadRequest());
+
+            verify(notificationService, never()).saveNotification(any(), any(), any());
+        }
+
+        /**
+         * EUDPA-565 — the point of the instant wire type is that the moment the caller sent is the
+         * moment that binds. Both values carry a non-zero time of day and sub-second precision and
+         * they differ from one another, so an hour shift, a truncation to the day, and a
+         * transposition of the two fields each surface as a failure rather than pass unnoticed.
+         *
+         * <p>{@code notificationService} is a mock here, so the save-time {@code arrivalDate}
+         * truncation does not run — the captor sees exactly what the controller bound from the JSON.
+         */
+        @Test
+        void post_shouldBindTheExactInstant_whenADateIsAnInstant() throws Exception {
+            Instant arrivalDate = Instant.parse("2026-12-12T07:41:23.456Z");
+            Instant exitDate = Instant.parse("2026-12-13T19:04:57.891Z");
+            NotificationAggregate saved = new NotificationAggregate();
+            saved.setReferenceNumber(REF_1);
+            when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
+                .thenReturn(saved);
+
+            mockMvc.perform(post("/notifications")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"notification\":{\"transport\":{\"arrivalDate\":\"" + arrivalDate
+                        + "\"},\"exitDate\":\"" + exitDate + "\"}}"))
+                .andExpect(status().isOk());
+
+            ArgumentCaptor<NotificationDto> captor = ArgumentCaptor.forClass(NotificationDto.class);
+            verify(notificationService).saveNotification(captor.capture(), any(), any());
+            assertThat(captor.getValue().getTransport().getArrivalDate()).isEqualTo(arrivalDate);
+            assertThat(captor.getValue().getExitDate()).isEqualTo(exitDate);
+        }
+
         @Test
         void post_shouldForwardTraceIdHeader_toSaveNotification() throws Exception {
             // Given
             NotificationDto notificationDto = NotificationDto.builder()
-                .origin(new Origin("GB", "true", "REF", null))
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF").build())
                 .build();
             NotificationAggregate saved = new NotificationAggregate();
             saved.setReferenceNumber(REF_1);
@@ -366,7 +481,7 @@ class NotificationControllerTest {
         void post_shouldPassActorToService_whenActorProvided() throws Exception {
             NotificationDto notificationDto = NotificationDto.builder()
                 .referenceNumber(REF_1)
-                .origin(new Origin("GB", "true", "REF", null))
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF").build())
                 .build();
             NotificationAggregate saved = new NotificationAggregate();
             saved.setReferenceNumber(REF_1);
@@ -769,6 +884,13 @@ class NotificationControllerTest {
     @Nested
     class FindAll {
 
+        /**
+         * Sub-second and well away from midnight, so an implementation that truncated
+         * {@code created} to a day — or serialised it as a numeric epoch — could not produce
+         * the string the assertion below pins.
+         */
+        private static final Instant VIEW_CREATED = Instant.parse("2026-07-21T00:30:00.456Z");
+
         @Test
         void findAll_shouldReturnEmptyPage() throws Exception {
             // Given
@@ -792,13 +914,13 @@ class NotificationControllerTest {
         void findAll_shouldReturnPageOfNotifications() throws Exception {
             // Given
             NotificationView notification1 = testView(REF_1, NotificationStatus.DRAFT,
-                new Origin("GB", "true", "REF-GB-001", null),
+                Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-GB-001").build(),
                 Commodity.builder().name("Live cattle").build(),
                 consignors().getFirst(),
                 Transport.builder().transporter(transporters().getFirst()).build());
 
             NotificationView notification2 = testView(REF_2, NotificationStatus.SUBMITTED,
-                new Origin("FR", "false", "REF-FR-002", null),
+                Origin.builder().countryCode("FR").requiresRegionCode("false").internalReference("REF-FR-002").build(),
                 Commodity.builder().name("Live sheep").build(),
                 consignors().getLast(),
                 Transport.builder().transporter(transporters().getLast()).build());
@@ -816,6 +938,8 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.content[0].status").value("DRAFT"))
                 .andExpect(jsonPath("$.content[0].origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$.content[0].commodity.name").value("Live cattle"))
+                // EUDPA-565 — created is an Instant on this projection; pin its RFC 3339 Z form.
+                .andExpect(jsonPath("$.content[0].created").value("2026-07-21T00:30:00.456Z"))
                 .andExpect(jsonPath("$.content[1].referenceNumber").value(REF_2))
                 .andExpect(jsonPath("$.content[1].status").value("SUBMITTED"))
                 .andExpect(jsonPath("$.content[1].origin.countryCode").value("FR"))
@@ -828,8 +952,8 @@ class NotificationControllerTest {
 
         private NotificationView testView(String ref, NotificationStatus status, Origin origin,
                 Commodity commodity, ConsignmentParty consignor, Transport transport) {
-            return new NotificationView.Data(
-                ref, 0L, status, null, origin, commodity, consignor, null, transport);
+            return new NotificationViewData(
+                ref, 0L, status, VIEW_CREATED, origin, commodity, consignor, null, transport);
         }
 
         @Test
@@ -989,8 +1113,11 @@ class NotificationControllerTest {
                 @Override public String getReferenceNumber() { return REF_1; }
                 @Override public Long getConcurrencyToken() { return 0L; }
                 @Override public NotificationStatus getStatus() { return NotificationStatus.SUBMITTED; }
-                @Override public java.time.LocalDateTime getCreated() { return null; }
-                @Override public java.time.LocalDateTime getSubmittedAt() { return null; }
+                // Deliberately neither midnight nor a whole second: a truncating or offset-less
+                // serialiser would still match a value like 2026-07-21T00:00:00Z, so those
+                // fixtures cannot tell a correct implementation from a broken one.
+                @Override public Instant getCreated() { return Instant.parse("2026-07-21T06:42:17.123Z"); }
+                @Override public Instant getSubmittedAt() { return Instant.parse("2026-07-21T14:09:05Z"); }
                 @Override public java.util.List<org.bson.Document> getFulfilments() {
                     return java.util.List.of(new org.bson.Document("obligationId", "abc"));
                 }
@@ -1003,6 +1130,10 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.status").value("SUBMITTED"))
+                // EUDPA-565 — exact strings, so a numeric-epoch or offset-less regression on the
+                // instants this projection now carries goes red rather than passing an is-not-null.
+                .andExpect(jsonPath("$.created").value("2026-07-21T06:42:17.123Z"))
+                .andExpect(jsonPath("$.submittedAt").value("2026-07-21T14:09:05Z"))
                 .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"));
         }
 

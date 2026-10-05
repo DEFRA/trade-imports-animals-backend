@@ -10,8 +10,6 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -129,12 +127,16 @@ class OutboxServiceTest {
         @SuppressWarnings("unchecked")
         void appendEvent_shouldStoreGbnAgPayloadInDataField() {
             // Given
-            Origin origin = new Origin("GB", "true", "REF123", null);
+            Origin origin = Origin.builder()
+                .countryCode("GB")
+                .requiresRegionCode("true")
+                .internalReference("REF123")
+                .build();
             Commodity commodity = Commodity.builder().name("Live bovine animals").build();
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()
                 .portOfEntry("GBFXT")
-                .arrivalDate(LocalDate.of(2026, Month.APRIL, 22))
+                .arrivalDate(Instant.parse("2026-04-22T00:00:00Z"))
                 .build();
 
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()

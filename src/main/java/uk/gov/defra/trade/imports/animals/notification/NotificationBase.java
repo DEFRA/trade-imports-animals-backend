@@ -1,6 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
-import java.time.LocalDate;
+import java.time.Instant;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -41,5 +41,11 @@ public abstract class NotificationBase {
 
     private String portOfExit;
 
-    private LocalDate exitDate;
+    /**
+     * A calendar day carried as an instant, so every date on this API has one representation and
+     * no reader has to resolve a zone-less value. The producer labels the user's chosen day as
+     * UTC midnight rather than converting it from a local zone — converting would shift the day
+     * for any reader east or west of that zone, PIMS included.
+     */
+    private Instant exitDate;
 }

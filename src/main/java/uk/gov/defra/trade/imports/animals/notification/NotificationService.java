@@ -2,7 +2,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -296,11 +296,11 @@ public class NotificationService {
                     notification.setPreAmendNotification(null);
                 }
                 notification.setStatus(targetStatus);
-                notification.setUpdated(LocalDateTime.now());
+                notification.setUpdated(Instant.now());
                 // Only actual submissions mint a new submittedAt; cancel-amend restores to SUBMITTED
                 // but must preserve the timestamp from the original submission.
                 if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)) {
-                    notification.setSubmittedAt(LocalDateTime.now());
+                    notification.setSubmittedAt(Instant.now());
                 }
                 NotificationAggregate saved = notificationRepository.save(notification);
                 forOutbox.setStatus(saved.getStatus());
@@ -460,7 +460,7 @@ public class NotificationService {
     @Transactional
     public int deleteExpired(int batchSize) {
         List<NotificationReferenceOnly> due =
-            notificationRepository.findExpired(LocalDateTime.now(), PageRequest.of(0, batchSize));
+            notificationRepository.findExpired(Instant.now(), PageRequest.of(0, batchSize));
         if (due.isEmpty()) {
             return 0;
         }
@@ -493,12 +493,12 @@ public class NotificationService {
         if (days == null || ttlConfig.isProd()) {
             return;
         }
-        notificationAggregate.setExpireAt(notificationAggregate.getCreated().plusDays(days));
+        notificationAggregate.setExpireAt(notificationAggregate.getCreated().plus(days, ChronoUnit.DAYS));
     }
 
     private NotificationAggregate createNotification(NotificationDto dto, String correlationId, Actor actor) {
         NotificationAggregate notificationAggregate = new NotificationAggregate();
-        notificationAggregate.setCreated(LocalDateTime.now());
+        notificationAggregate.setCreated(Instant.now());
         notificationAggregate.setStatus(NotificationStatus.DRAFT);
         stampExpiry(notificationAggregate);
         setNotificationDetails(dto, notificationAggregate);
@@ -557,14 +557,30 @@ public class NotificationService {
         notification.setImporter(dto.getImporter());
         notification.setDestination(dto.getDestination());
         notification.setCphNumber(dto.getCphNumber());
-        notification.setTransport(dto.getTransport());
+        notification.setTransport(normaliseArrivalDate(dto.getTransport()));
         notification.setConsignment(dto.getConsignment());
         notification.setPurposeInInternalMarket(dto.getPurposeInInternalMarket());
         notification.setDestinationCountry(dto.getDestinationCountry());
         notification.setPortOfExit(dto.getPortOfExit());
         notification.setExitDate(dto.getExitDate());
         notificationAggregate.setFulfilments(dto.getFulfilments());
-        notificationAggregate.setUpdated(LocalDateTime.now());
+        notificationAggregate.setUpdated(Instant.now());
+    }
+
+    /**
+     * Truncates a transport's arrival date to the start of its UTC day, in place, so the stored
+     * value keeps the promise {@link Transport#arrivalDate} makes. {@code LocalDate} made a time
+     * of day impossible to represent and {@code Instant} does not, so without this a caller could
+     * store {@code 2026-07-21T23:00:00Z} and leave its readers — the API response, the
+     * arrival-date sort, and PIMS by way of the GB-NAG {@code scheduledOccurrenceDateTime} it is
+     * emitted into — disagreeing about which day the consignment arrives. A {@code null} transport
+     * and a {@code null} arrival date are both legitimate and pass through untouched.
+     */
+    private static Transport normaliseArrivalDate(Transport transport) {
+        if (transport != null && transport.getArrivalDate() != null) {
+            transport.setArrivalDate(transport.getArrivalDate().truncatedTo(ChronoUnit.DAYS));
+        }
+        return transport;
     }
 
     private void createNotificationAuditRecord(
@@ -576,7 +592,7 @@ public class NotificationService {
             .numberOfNotifications(referenceNumbers.size())
             .traceId(auditContext.traceId())
             .userId(auditContext.userId())
-            .timestamp(LocalDateTime.now())
+            .timestamp(Instant.now())
             .build();
 
         auditRepository.save(auditRecord);
