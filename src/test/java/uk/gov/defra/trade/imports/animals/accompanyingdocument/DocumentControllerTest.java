@@ -242,6 +242,7 @@ class DocumentControllerTest {
           .uploadId("upload-abc-123")
           .documentType(DocumentType.ITAHC)
           .documentReference("UKGB2026001")
+          .dateOfIssue(LocalDate.parse("2026-01-15"))
           .scanStatus(ScanStatus.COMPLETE)
           .files(List.of())
           .build();
@@ -254,6 +255,7 @@ class DocumentControllerTest {
           .andExpect(jsonPath("$.items").isArray())
           .andExpect(jsonPath("$.items.length()").value(1))
           .andExpect(jsonPath("$.items[0].uploadId").value("upload-abc-123"))
+          .andExpect(jsonPath("$.items[0].dateOfIssue").value("2026-01-15"))
           .andExpect(jsonPath("$.items[0].scanStatus").value("COMPLETE"));
     }
 
@@ -283,6 +285,7 @@ class DocumentControllerTest {
           .uploadId(uploadId)
           .documentType(DocumentType.ITAHC)
           .documentReference("UKGB2026001")
+          .dateOfIssue(LocalDate.parse("2026-01-15"))
           .scanStatus(ScanStatus.PENDING)
           .files(List.of())
           .build();
@@ -294,6 +297,7 @@ class DocumentControllerTest {
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.uploadId").value(uploadId))
           .andExpect(jsonPath("$.documentType").value("ITAHC"))
+          .andExpect(jsonPath("$.dateOfIssue").value("2026-01-15"))
           .andExpect(jsonPath("$.scanStatus").value("PENDING"));
     }
 
