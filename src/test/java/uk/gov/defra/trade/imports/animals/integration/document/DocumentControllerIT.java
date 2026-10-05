@@ -283,6 +283,15 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(item.documentType()).isEqualTo(DocumentType.ITAHC);
             assertThat(item.documentReference()).isEqualTo("UKGB2026001234");
             assertThat(item.dateOfIssue()).isEqualTo(java.time.LocalDate.parse("2026-01-15"));
+
+            // The typed read above would accept any shape Jackson can decode; this pins the wire.
+            webClient("NoAuth")
+                .get()
+                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.items[0].dateOfIssue").isEqualTo("2026-01-15");
         }
     }
 
