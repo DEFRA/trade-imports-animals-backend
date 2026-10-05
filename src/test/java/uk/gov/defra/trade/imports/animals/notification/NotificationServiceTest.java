@@ -1192,13 +1192,13 @@ class NotificationServiceTest {
             NotificationAggregate returned =
                 notificationService.submitNotification(referenceNumber, "trace-ref-001", actor);
 
-            // Then — the event carries an independent copy equal to what was stored
+            // Then — the event carries the saved notification, parties exactly as stored
             ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(outboxService).appendEvent(
                 captor.capture(), eq(OutboxEventType.NOTIFICATION_SUBMITTED), eq("trace-ref-001"),
                 eq(actor));
+            assertThat(captor.getValue()).isSameAs(returned);
             Notification emitted = captor.getValue().getNotification();
-            assertThat(emitted).isNotSameAs(returned.getNotification());
             assertThat(emitted.getConsignor()).isEqualTo(stored.getConsignor());
             assertThat(emitted.getConsignee()).isEqualTo(stored.getConsignee());
             assertThat(emitted.getImporter()).isEqualTo(stored.getImporter());

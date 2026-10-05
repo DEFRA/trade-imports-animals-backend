@@ -279,8 +279,6 @@ public class NotificationService {
         NotificationStatus targetStatus,
         OutboxEventType eventType,
         Actor actor) {
-        NotificationAggregate forOutbox = forOutbox(notification);
-
         return executeWithOutboxLock(
             OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
                 if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)
@@ -296,24 +294,9 @@ public class NotificationService {
                     notification.setSubmittedAt(Instant.now());
                 }
                 NotificationAggregate saved = notificationRepository.save(notification);
-                forOutbox.setStatus(saved.getStatus());
-                forOutbox.setUpdated(saved.getUpdated());
-                forOutbox.setSubmittedAt(saved.getSubmittedAt());
-                outboxService.appendEvent(forOutbox, eventType, correlationId, actor);
+                outboxService.appendEvent(saved, eventType, correlationId, actor);
                 return saved;
             });
-    }
-
-    /**
-     * The notification as the outbox event carries it: a copy with its content deep-cloned, so the
-     * event is independent of the aggregate we save. Cancel-amend has already restored the
-     * pre-amend snapshot by now. Parties are carried exactly as stored — each is already a literal
-     * copy of its address.
-     */
-    private NotificationAggregate forOutbox(NotificationAggregate notificationAggregate) {
-        NotificationAggregate copy = notificationAggregate.toBuilder().build();
-        copy.setNotification(notificationContentMapper.deepClone(copy.getNotification()));
-        return copy;
     }
 
     private <T> T executeWithOutboxLock(
