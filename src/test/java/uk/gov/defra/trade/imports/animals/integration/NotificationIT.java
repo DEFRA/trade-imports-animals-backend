@@ -1010,8 +1010,13 @@ class NotificationIT extends IntegrationBase {
         assertThat(stored.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(stored.getNotification().getConsignor()).isEqualTo(literalConsignor());
         assertThat(outboxConsignorParty(submittedOutboxEvent()))
-            .containsEntry("name", "Astra Rosales")
-            .doesNotContainKey("addressId");
+            .containsEntry("name", "Astra Rosales");
+
+        // And — the submit re-save sheds the legacy field from the stored document
+        Document rawNotification = mongoTemplate.getCollection("notification")
+            .find(Filters.eq("referenceNumber", referenceNumber)).first()
+            .get("notification", Document.class);
+        assertThat(rawNotification.get("consignor", Document.class)).doesNotContainKey("addressId");
     }
 
     @Test
