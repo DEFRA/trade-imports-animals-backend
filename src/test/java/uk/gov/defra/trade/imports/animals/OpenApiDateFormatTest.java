@@ -10,10 +10,13 @@ import java.util.Map;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentListResponse;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentUploadRequest;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationFulfilmentsView;
 import uk.gov.defra.trade.imports.animals.notification.NotificationView;
+import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 
 /**
  * The OpenAPI schema tells a caller which form each date takes: {@code format: date} for a
@@ -29,10 +32,13 @@ class OpenApiDateFormatTest {
 
     private static final List<Class<?>> API_TYPES = List.of(
         NotificationDto.class,
+        SaveNotificationDto.class,
+        NotificationAggregate.class,
         NotificationView.class,
         NotificationFulfilmentsView.class,
         DocumentUploadRequest.class,
-        AccompanyingDocumentDto.class);
+        AccompanyingDocumentDto.class,
+        DocumentListResponse.class);
 
     @ParameterizedTest
     @CsvSource({
