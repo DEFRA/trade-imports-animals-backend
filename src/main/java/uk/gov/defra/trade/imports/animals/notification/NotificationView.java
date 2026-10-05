@@ -41,18 +41,4 @@ public interface NotificationView {
 
     @Value("#{target.notification?.transport}")
     Transport getTransport();
-
-    /** This row as the dashboard reads it, copied out of the Spring Data proxy. */
-    default NotificationView forDashboard() {
-        return new NotificationViewData(
-            getReferenceNumber(),
-            getConcurrencyToken(),
-            getStatus(),
-            getCreated(),
-            getOrigin(),
-            getCommodity(),
-            getConsignor(),
-            getConsignee(),
-            getTransport());
-    }
 }
