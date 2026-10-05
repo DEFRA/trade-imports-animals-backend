@@ -39,7 +39,7 @@ class LocalDateStringConvertersTest {
     void write_shouldStoreTheIsoDateString_whateverTheJvmDefaultZone(String zoneId) {
         TimeZone.setDefault(TimeZone.getTimeZone(zoneId));
 
-        assertThat(LocalDateToStringConverter.INSTANCE.convert(DATE)).isEqualTo(STORED);
+        assertThat(new LocalDateToStringConverter().convert(DATE)).isEqualTo(STORED);
     }
 
     @ParameterizedTest
@@ -47,7 +47,7 @@ class LocalDateStringConvertersTest {
     void read_shouldReturnTheSameCalendarDate_whateverTheJvmDefaultZone(String zoneId) {
         TimeZone.setDefault(TimeZone.getTimeZone(zoneId));
 
-        assertThat(StringToLocalDateConverter.INSTANCE.convert(STORED)).isEqualTo(DATE);
+        assertThat(new StringToLocalDateConverter().convert(STORED)).isEqualTo(DATE);
     }
 
     @ParameterizedTest
@@ -55,8 +55,8 @@ class LocalDateStringConvertersTest {
     void roundTrip_shouldPreserveTheCalendarDate_whateverTheJvmDefaultZone(String zoneId) {
         TimeZone.setDefault(TimeZone.getTimeZone(zoneId));
 
-        String stored = LocalDateToStringConverter.INSTANCE.convert(DATE);
+        String stored = new LocalDateToStringConverter().convert(DATE);
 
-        assertThat(StringToLocalDateConverter.INSTANCE.convert(stored)).isEqualTo(DATE);
+        assertThat(new StringToLocalDateConverter().convert(stored)).isEqualTo(DATE);
     }
 }

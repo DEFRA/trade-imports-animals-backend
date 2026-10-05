@@ -34,8 +34,7 @@ public final class LocalDateStringConverters {
 
     /** Writes a {@code LocalDate} as its ISO-8601 string, for example {@code 2026-07-21}. */
     @WritingConverter
-    public enum LocalDateToStringConverter implements Converter<LocalDate, String> {
-        INSTANCE;
+    public static class LocalDateToStringConverter implements Converter<LocalDate, String> {
 
         @Override
         public String convert(LocalDate source) {
@@ -45,8 +44,7 @@ public final class LocalDateStringConverters {
 
     /** Reads a stored {@code YYYY-MM-DD} string back as the calendar date it names. */
     @ReadingConverter
-    public enum StringToLocalDateConverter implements Converter<String, LocalDate> {
-        INSTANCE;
+    public static class StringToLocalDateConverter implements Converter<String, LocalDate> {
 
         @Override
         public LocalDate convert(String source) {

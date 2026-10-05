@@ -92,8 +92,8 @@ public class MongoConfig {
   @Bean
   MongoCustomConversions mongoCustomConversions() {
     return new MongoCustomConversions(List.of(
-        LocalDateStringConverters.LocalDateToStringConverter.INSTANCE,
-        LocalDateStringConverters.StringToLocalDateConverter.INSTANCE));
+        new LocalDateStringConverters.LocalDateToStringConverter(),
+        new LocalDateStringConverters.StringToLocalDateConverter()));
   }
 
   @Bean
