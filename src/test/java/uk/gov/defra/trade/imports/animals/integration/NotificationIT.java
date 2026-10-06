@@ -1298,7 +1298,8 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void submit_shouldReferenceOnlyTheDocumentsThatPassedTheVirusScan() {
-        // Given — a notification with one scanned document and one still being scanned
+        // Given — a notification with one scanned document, one still being scanned and one the
+        // scan rejected
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
@@ -1322,6 +1323,15 @@ class NotificationIT extends IntegrationBase {
             .documentReference("INV-9912")
             .dateOfIssue(Instant.parse("2026-09-02T00:00:00Z"))
             .scanStatus(ScanStatus.PENDING)
+            .build());
+        accompanyingDocumentRepository.save(AccompanyingDocument.builder()
+            .notificationReferenceNumber(referenceNumber)
+            .uploadId("upload-refdoc-rejected")
+            .correlationId("correlation-refdoc-rejected")
+            .documentType(DocumentType.VETERINARY_HEALTH_CERTIFICATE)
+            .documentReference("VHC-REJ-1")
+            .dateOfIssue(Instant.parse("2026-09-03T00:00:00Z"))
+            .scanStatus(ScanStatus.REJECTED)
             .build());
 
         // When
