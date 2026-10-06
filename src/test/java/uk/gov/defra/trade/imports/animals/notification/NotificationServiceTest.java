@@ -26,6 +26,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.tran
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -292,10 +293,10 @@ class NotificationServiceTest {
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()
                 .portOfEntry("ABERDEEN")
-                .arrivalDate(Instant.parse("2026-01-01T00:00:00Z"))
+                .arrivalDate(LocalDate.parse("2026-01-01"))
                 .transporter(transporters().getFirst())
                 .build();
-            Instant exitDate = Instant.parse("2026-01-15T00:00:00Z");
+            LocalDate exitDate = LocalDate.parse("2026-01-15");
 
             NotificationDto updateDto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
@@ -384,39 +385,6 @@ class NotificationServiceTest {
             // Then
             assertThat(saved.getNotification().getPlaceOfOrigin()).isEqualTo(originParty);
             assertThat(saved.getNotification().getConsignment()).isEqualTo(contactParty);
-        }
-
-        @Test
-        void saveNotification_shouldTruncateArrivalDateToTheStartOfItsUtcDay() {
-            // Guards the PIMS off-by-a-day. LocalDate made a time of day impossible to represent
-            // and Instant does not, so a caller can post one; the stored value must still be the
-            // calendar day the trader chose. The 23:30Z fixture guards against passthrough — storing
-            // the posted value verbatim keeps the 23:30 and fails the assertion below.
-            String referenceNumber = "GBN-AG-26-ARRV01";
-            NotificationAggregate existing = NotificationAggregate.builder()
-                .referenceNumber(referenceNumber)
-                .status(DRAFT)
-                .notification(Notification.builder().build())
-                .build();
-            when(notificationRepository.findByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.of(existing));
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
-
-            NotificationDto dto = NotificationDto.builder()
-                .referenceNumber(referenceNumber)
-                .concurrencyToken(0L)
-                .transport(Transport.builder()
-                    .arrivalDate(Instant.parse("2026-07-21T23:30:00Z"))
-                    .build())
-                .build();
-
-            // When
-            NotificationAggregate saved = notificationService.saveNotification(dto, "trace-arrival-001", null);
-
-            // Then
-            assertThat(saved.getNotification().getTransport().getArrivalDate())
-                .isEqualTo(Instant.parse("2026-07-21T00:00:00Z"));
         }
 
         @Test
@@ -1962,7 +1930,7 @@ class NotificationServiceTest {
                     .cphNumber("12/345/6789")
                     .transport(Transport.builder()
                         .portOfEntry("GBDVR")
-                        .arrivalDate(Instant.parse("2026-05-01T00:00:00Z"))
+                        .arrivalDate(LocalDate.parse("2026-05-01"))
                         .transporter(transporters().getFirst())
                         .build())
                     .consignment(consignments().getFirst())
@@ -2015,7 +1983,7 @@ class NotificationServiceTest {
                     .additionalDetails(new AdditionalDetails("Slaughter", "no"))
                     .transport(Transport.builder()
                         .portOfEntry("GBFXT")
-                        .arrivalDate(Instant.parse("2026-06-01T00:00:00Z"))
+                        .arrivalDate(LocalDate.parse("2026-06-01"))
                         .build())
                     .consignment(consignments().getFirst())
                     .build())

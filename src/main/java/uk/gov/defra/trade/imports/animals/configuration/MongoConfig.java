@@ -84,15 +84,16 @@ public class MongoConfig {
   }
 
   /**
-   * Registers the UTC-scoped {@code LocalDate} converters ahead of Spring Data's built-in
-   * JSR-310 pair, so date-only fields persist as UTC start-of-day rather than start-of-day in
-   * the JVM's default timezone. See {@link UtcLocalDateConverters} for the rationale.
+   * Registers the {@code LocalDate} string converters ahead of Spring Data's built-in JSR-310
+   * pair, so date-only fields persist as a {@code YYYY-MM-DD} string rather than a BSON date at
+   * start-of-day in the JVM's default timezone. See {@link LocalDateStringConverters} for the
+   * rationale.
    */
   @Bean
   MongoCustomConversions mongoCustomConversions() {
     return new MongoCustomConversions(List.of(
-        UtcLocalDateConverters.LocalDateToDateConverter.INSTANCE,
-        UtcLocalDateConverters.DateToLocalDateConverter.INSTANCE));
+        new LocalDateStringConverters.LocalDateToStringConverter(),
+        new LocalDateStringConverters.StringToLocalDateConverter()));
   }
 
   @Bean

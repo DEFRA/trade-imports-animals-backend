@@ -20,11 +20,11 @@ public class Application {
 
     static {
         // Pin the JVM default zone so every zone-less API (LocalDate.now(), new Date(), ...)
-        // resolves against UTC, whatever the host timezone. Complements — never replaces — the
-        // explicit UTC conversion at the persistence boundary
-        // (uk.gov.defra.trade.imports.animals.configuration.UtcLocalDateConverters). Runs on
-        // class load, so it covers both main() and @SpringBootTest contexts, which bootstrap
-        // this class directly without calling main().
+        // resolves against UTC, whatever the host timezone. Stored dates do not depend on it:
+        // a calendar date persists as a zone-free string
+        // (uk.gov.defra.trade.imports.animals.configuration.LocalDateStringConverters) and a
+        // moment as an Instant. Runs on class load, so it covers both main() and
+        // @SpringBootTest contexts, which bootstrap this class directly without calling main().
         TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
     }
 
