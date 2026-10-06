@@ -1,6 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
-import java.time.Instant;
+import java.time.LocalDate;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -42,10 +42,9 @@ public abstract class NotificationBase {
     private String portOfExit;
 
     /**
-     * A calendar day carried as an instant, so every date on this API has one representation and
-     * no reader has to resolve a zone-less value. The producer labels the user's chosen day as
-     * UTC midnight rather than converting it from a local zone — converting would shift the day
-     * for any reader east or west of that zone, PIMS included.
+     * A calendar day the user chose, carried as a {@code LocalDate}: {@code YYYY-MM-DD} on the
+     * wire and a string in Mongo. It has no time and no zone, so no reader can shift it by a day.
+     * Moments such as {@code created} are {@code Instant} instead.
      */
-    private Instant exitDate;
+    private LocalDate exitDate;
 }

@@ -164,8 +164,9 @@ class GlobalExceptionHandlerTest {
             .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/malformed-request"));
         assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
         assertThat(problemDetail.getDetail())
-            .isEqualTo("Request body could not be read. Check the JSON is well-formed and that each "
-                + "date is an RFC 3339 instant, for example 2026-12-12T00:00:00Z");
+            .isEqualTo("Request body could not be read. Check the JSON is well-formed, that each "
+                + "date-only field is a date, for example 2026-12-12, and that each timestamp is "
+                + "an RFC 3339 instant, for example 2026-12-12T00:00:00Z");
 
         // An unreadable body is its own problem type, not field validation: nothing bound, so
         // there is no errors map - which is what keeps one type URI to one response shape.
@@ -173,9 +174,9 @@ class GlobalExceptionHandlerTest {
 
         String[] parserMessageMarkers = {
             "JSON parse error",
-            "java.time.Instant",
+            "java.time.LocalDate",
             "DateTimeParseException",
-            "1999-07-04",
+            "1999-07-04T00:00:00Z",
             "NotificationRequest",
             "reference chain"
         };
@@ -211,18 +212,20 @@ class GlobalExceptionHandlerTest {
     }
 
     /**
-     * A date-only value where an {@code Instant} is required - the EUDPA-565 case - carrying the
-     * kind of Jackson message the handler logs but must not echo back to the caller.
+     * An instant where a date-only {@code LocalDate} is required, carrying the kind of Jackson
+     * message the handler logs but must not echo back to the caller.
      */
     private static HttpMessageNotReadableException unreadableRequestBodyException() {
         String parserMessage = "JSON parse error: Cannot deserialize value of type "
-            + "`java.time.Instant` from String \"1999-07-04\": Failed to deserialize "
-            + "java.time.Instant: (java.time.format.DateTimeParseException) Text '1999-07-04' "
-            + "could not be parsed at index 10 (through reference chain: "
+            + "`java.time.LocalDate` from String \"1999-07-04T00:00:00Z\": Failed to deserialize "
+            + "java.time.LocalDate: (java.time.format.DateTimeParseException) Text "
+            + "'1999-07-04T00:00:00Z' could not be parsed, unparsed text found at index 10 "
+            + "(through reference chain: "
             + "uk.gov.defra.trade.imports.animals.notification.NotificationRequest[\"arrivalDate\"])";
         return new HttpMessageNotReadableException(
             parserMessage,
-            new MockHttpInputMessage("{\"arrivalDate\":\"1999-07-04\"}".getBytes(UTF_8)));
+            new MockHttpInputMessage(
+                "{\"arrivalDate\":\"1999-07-04T00:00:00Z\"}".getBytes(UTF_8)));
     }
 
     @Test

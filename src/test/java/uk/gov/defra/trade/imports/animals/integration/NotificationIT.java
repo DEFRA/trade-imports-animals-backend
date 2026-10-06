@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Updates;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -94,7 +95,7 @@ class NotificationIT extends IntegrationBase {
             .build();
         Transport transport = Transport.builder()
             .portOfEntry("GBFXT")
-            .arrivalDate(Instant.parse("2026-04-22T00:00:00Z"))
+            .arrivalDate(LocalDate.parse("2026-04-22"))
             .meansOfTransport(MeansOfTransport.RAILWAY)
             .transportIdentification("Train 4471, wagon 12")
             .transportDocumentReference("CIM-CONSIGNMENT-001")
@@ -262,19 +263,19 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("GB", Instant.parse("2026-01-10T00:00:00Z"))))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("GB", LocalDate.parse("2026-01-10"))))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", Instant.parse("2026-06-15T00:00:00Z"))))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", LocalDate.parse("2026-06-15"))))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("FR", Instant.parse("2026-03-01T00:00:00Z"))))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("FR", LocalDate.parse("2026-03-01"))))
             .exchange()
             .expectStatus().isOk();
 
@@ -287,11 +288,11 @@ class NotificationIT extends IntegrationBase {
         assertThat(page0.content())
             .extracting(n -> n.getTransport().getArrivalDate())
             .containsExactly(
-                Instant.parse("2026-06-15T00:00:00Z"),
-                Instant.parse("2026-03-01T00:00:00Z"));
+                LocalDate.parse("2026-06-15"),
+                LocalDate.parse("2026-03-01"));
         assertThat(page1.content()).hasSize(1);
         assertThat(page1.content().getFirst().getTransport().getArrivalDate())
-            .isEqualTo(Instant.parse("2026-01-10T00:00:00Z"));
+            .isEqualTo(LocalDate.parse("2026-01-10"));
     }
 
     @Test
@@ -299,7 +300,7 @@ class NotificationIT extends IntegrationBase {
         String refOlder = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("GB", Instant.parse("2026-01-10T00:00:00Z"))))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("GB", LocalDate.parse("2026-01-10"))))
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationAggregate.class)
@@ -310,7 +311,7 @@ class NotificationIT extends IntegrationBase {
         String refNewer = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", Instant.parse("2026-06-15T00:00:00Z"))))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", LocalDate.parse("2026-06-15"))))
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationAggregate.class)
@@ -339,13 +340,13 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", Instant.parse("2026-06-15T00:00:00Z"))))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", LocalDate.parse("2026-06-15"))))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("FR", Instant.parse("2026-01-10T00:00:00Z"))))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("FR", LocalDate.parse("2026-01-10"))))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
@@ -374,7 +375,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(page1.content()).hasSize(2);
         assertThat(page1.content())
             .extracting(n -> n.getTransport().getArrivalDate())
-            .containsExactly(Instant.parse("2026-01-10T00:00:00Z"), Instant.parse("2026-06-15T00:00:00Z"));
+            .containsExactly(LocalDate.parse("2026-01-10"), LocalDate.parse("2026-06-15"));
     }
 
     @Test
@@ -383,13 +384,13 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", Instant.parse("2026-06-15T00:00:00Z"))))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", LocalDate.parse("2026-06-15"))))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("FR", Instant.parse("2026-01-10T00:00:00Z"))))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("FR", LocalDate.parse("2026-01-10"))))
             .exchange()
             .expectStatus().isOk();
         webClient("NoAuth")
@@ -414,7 +415,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(page0.content()).hasSize(2);
         assertThat(page0.content())
             .extracting(n -> n.getTransport().getArrivalDate())
-            .containsExactly(Instant.parse("2026-06-15T00:00:00Z"), Instant.parse("2026-01-10T00:00:00Z"));
+            .containsExactly(LocalDate.parse("2026-06-15"), LocalDate.parse("2026-01-10"));
         assertThat(page1.content()).hasSize(2);
         assertThat(page1.content())
             .extracting(this::extractArrivalDate)
@@ -434,7 +435,7 @@ class NotificationIT extends IntegrationBase {
         String submittedRef = webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", Instant.parse("2026-06-15T00:00:00Z"))))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("IE", LocalDate.parse("2026-06-15"))))
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationAggregate.class)
@@ -445,7 +446,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("FR", Instant.parse("2026-03-01T00:00:00Z"))))
+            .bodyValue(SaveNotificationDto.of(notificationDtoWithArrivalDate("FR", LocalDate.parse("2026-03-01"))))
             .exchange()
             .expectStatus().isOk();
 
@@ -474,9 +475,9 @@ class NotificationIT extends IntegrationBase {
         assertThat(all.getFirst().getReferenceNumber()).isEqualTo(submittedRef);
         assertThat(all.getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(all.getFirst().getTransport().getArrivalDate())
-            .isEqualTo(Instant.parse("2026-06-15T00:00:00Z"));
+            .isEqualTo(LocalDate.parse("2026-06-15"));
         assertThat(all.get(1).getTransport().getArrivalDate())
-            .isEqualTo(Instant.parse("2026-03-01T00:00:00Z"));
+            .isEqualTo(LocalDate.parse("2026-03-01"));
         assertThat(extractArrivalDate(all.get(2))).isNull();
     }
 
@@ -590,7 +591,7 @@ class NotificationIT extends IntegrationBase {
             .reasonForImport("TRANSIT")
             .additionalDetails(new AdditionalDetails("OTHER", "false"))
             .cphNumber("11/111/1111")
-            .transport(Transport.builder().portOfEntry("GBBEL").arrivalDate(Instant.parse("2026-01-01T00:00:00Z")).build())
+            .transport(Transport.builder().portOfEntry("GBBEL").arrivalDate(LocalDate.parse("2026-01-01")).build())
             .build();
 
         NotificationAggregate created = webClient("NoAuth")
@@ -616,7 +617,7 @@ class NotificationIT extends IntegrationBase {
             .cphNumber("22/123/4567")
             .transport(Transport.builder()
                 .portOfEntry("GBFXT")
-                .arrivalDate(Instant.parse("2026-04-22T00:00:00Z"))
+                .arrivalDate(LocalDate.parse("2026-04-22"))
                 .meansOfTransport(MeansOfTransport.RAILWAY)
                 .transportIdentification("Train 4471, wagon 12")
                 .transportDocumentReference("CIM-CONSIGNMENT-001")
@@ -650,7 +651,7 @@ class NotificationIT extends IntegrationBase {
             .commodity(Commodity.builder().name("Live bovine animals").build())
             .transport(Transport.builder()
                 .portOfEntry("GBFXT")
-                .arrivalDate(Instant.parse("2026-04-22T00:00:00Z"))
+                .arrivalDate(LocalDate.parse("2026-04-22"))
                 .meansOfTransport(MeansOfTransport.ROAD_VEHICLE)
                 .transportIdentification("HG12 ABC")
                 .transportDocumentReference("CMR-001")
@@ -672,7 +673,7 @@ class NotificationIT extends IntegrationBase {
             .commodity(Commodity.builder().name("Live bovine animals").build())
             .transport(Transport.builder()
                 .portOfEntry("GBFXT")
-                .arrivalDate(Instant.parse("2026-04-22T00:00:00Z"))
+                .arrivalDate(LocalDate.parse("2026-04-22"))
                 .meansOfTransport(MeansOfTransport.VESSEL)
                 .transportIdentification("Vessel Poseidon, voyage 42")
                 .transportDocumentReference("BILL-OF-LADING-001")
@@ -1854,7 +1855,7 @@ class NotificationIT extends IntegrationBase {
                 Transport::getTransitedCountries)
             .containsExactly(
                 "GBFXT",
-                Instant.parse("2026-04-22T00:00:00Z"),
+                LocalDate.parse("2026-04-22"),
                 MeansOfTransport.RAILWAY,
                 "Train 4471, wagon 12",
                 "CIM-CONSIGNMENT-001",
@@ -2380,7 +2381,7 @@ class NotificationIT extends IntegrationBase {
         return (Map<String, Object>) consignment.get("consignorParty");
     }
 
-    private NotificationDto notificationDtoWithArrivalDate(String countryCode, Instant arrivalDate) {
+    private NotificationDto notificationDtoWithArrivalDate(String countryCode, LocalDate arrivalDate) {
         return NotificationDto.builder()
             .origin(Origin.builder().countryCode(countryCode).build())
             .commodity(Commodity.builder().name("Live animals").build())
@@ -2420,13 +2421,13 @@ class NotificationIT extends IntegrationBase {
             .cphNumber("12/345/6789")
             .transport(Transport.builder()
                 .portOfEntry("GBDVR")
-                .arrivalDate(Instant.parse("2026-06-01T00:00:00Z"))
+                .arrivalDate(LocalDate.parse("2026-06-01"))
                 .build())
             .fulfilments(sampleFulfilments())
             .build();
     }
 
-    private Instant extractArrivalDate(NotificationView notification) {
+    private LocalDate extractArrivalDate(NotificationView notification) {
         if (notification.getTransport() == null) {
             return null;
         }

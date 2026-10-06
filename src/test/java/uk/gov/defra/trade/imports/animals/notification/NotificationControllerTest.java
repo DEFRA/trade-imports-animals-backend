@@ -26,6 +26,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.tran
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
@@ -299,12 +300,9 @@ class NotificationControllerTest {
                 .name("Cow")
                 .commodityComplement(List.of(complement))
                 .build();
-            // EUDPA-565 — arrivalDate is deliberately neither midnight nor a whole second. The
-            // producer labels it UTC midnight, but a fixture that agrees with midnight cannot
-            // distinguish a faithful instant from one truncated to a day on the way out.
             Transport transport = Transport.builder()
                 .portOfEntry("GB DVR")
-                .arrivalDate(Instant.parse("2026-12-19T13:45:30.250Z"))
+                .arrivalDate(LocalDate.parse("2026-12-19"))
                 .build();
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(origin)
@@ -312,7 +310,7 @@ class NotificationControllerTest {
                 .purposeInInternalMarket("Breeding")
                 .destinationCountry("DE")
                 .portOfExit("GB DVR")
-                .exitDate(Instant.parse("2026-12-20T00:00:00Z"))
+                .exitDate(LocalDate.parse("2026-12-20"))
                 .transport(transport)
                 .build();
 
@@ -325,7 +323,7 @@ class NotificationControllerTest {
             savedNotification.getNotification().setPurposeInInternalMarket("Breeding");
             savedNotification.getNotification().setDestinationCountry("DE");
             savedNotification.getNotification().setPortOfExit("GB DVR");
-            savedNotification.getNotification().setExitDate(Instant.parse("2026-12-20T00:00:00Z"));
+            savedNotification.getNotification().setExitDate(LocalDate.parse("2026-12-20"));
             savedNotification.getNotification().setTransport(transport);
 
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))
@@ -341,9 +339,8 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.notification.purposeInInternalMarket").value("Breeding"))
                 .andExpect(jsonPath("$.notification.destinationCountry").value("DE"))
                 .andExpect(jsonPath("$.notification.portOfExit").value("GB DVR"))
-                .andExpect(jsonPath("$.notification.exitDate").value("2026-12-20T00:00:00Z"))
-                .andExpect(jsonPath("$.notification.transport.arrivalDate")
-                    .value("2026-12-19T13:45:30.250Z"))
+                .andExpect(jsonPath("$.notification.exitDate").value("2026-12-20"))
+                .andExpect(jsonPath("$.notification.transport.arrivalDate").value("2026-12-19"))
                 .andExpect(jsonPath(
                     "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[0].earTag")
                     .value("UK123456789012"))
@@ -403,19 +400,23 @@ class NotificationControllerTest {
         }
 
         /**
-         * EUDPA-565 — {@code arrivalDate} and {@code exitDate} are instants on the wire, so the
-         * date-only form the API used to take no longer binds. Jackson does the enforcing; what
-         * is pinned here is that the caller gets 400 rather than the 500 the
-         * {@code RuntimeException} catch-all would otherwise produce, and that nothing is saved.
+         * {@code arrivalDate} and {@code exitDate} are calendar dates on the wire, so a value
+         * carrying a time or an offset must not bind. Jackson's {@code LocalDateDeserializer} is
+         * lenient by default and would keep the date part of {@code 2026-12-12T00:00:00Z};
+         * {@code StrictLocalDateModule} turns that off. What is pinned here is that the caller
+         * gets 400 rather than a silently trimmed value, and that nothing is saved.
          */
         @ParameterizedTest
         @ValueSource(strings = {
-            "{\"notification\":{\"transport\":{\"arrivalDate\":\"2026-12-12\"}}}",
+            "{\"notification\":{\"transport\":{\"arrivalDate\":\"2026-12-12T00:00:00Z\"}}}",
             "{\"notification\":{\"transport\":{\"arrivalDate\":\"2026-12-12T00:00:00\"}}}",
-            "{\"notification\":{\"exitDate\":\"2026-12-12\"}}",
-            "{\"notification\":{\"exitDate\":\"2026-12-12T00:00:00\"}}"
+            "{\"notification\":{\"transport\":{\"arrivalDate\":\"2026-12-12T00:00:00+01:00\"}}}",
+            "{\"notification\":{\"exitDate\":\"2026-12-12T00:00:00Z\"}}",
+            "{\"notification\":{\"exitDate\":\"2026-12-12T00:00:00\"}}",
+            "{\"notification\":{\"exitDate\":\"2026-12-12T00:00:00+01:00\"}}"
         })
-        void post_shouldReturn400_whenADateIsNotAnInstant(String body) throws Exception {
+        void post_shouldReturn400_whenADateOnlyFieldCarriesATimeOrAnOffset(String body)
+            throws Exception {
             mockMvc.perform(post("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(body))
@@ -425,18 +426,14 @@ class NotificationControllerTest {
         }
 
         /**
-         * EUDPA-565 — the point of the instant wire type is that the moment the caller sent is the
-         * moment that binds. Both values carry a non-zero time of day and sub-second precision and
-         * they differ from one another, so an hour shift, a truncation to the day, and a
-         * transposition of the two fields each surface as a failure rather than pass unnoticed.
-         *
-         * <p>{@code notificationService} is a mock here, so the save-time {@code arrivalDate}
-         * truncation does not run — the captor sees exactly what the controller bound from the JSON.
+         * The calendar date the caller sent is the date that binds. The two values differ from
+         * one another, so a transposition of the two fields surfaces as a failure rather than
+         * passing unnoticed.
          */
         @Test
-        void post_shouldBindTheExactInstant_whenADateIsAnInstant() throws Exception {
-            Instant arrivalDate = Instant.parse("2026-12-12T07:41:23.456Z");
-            Instant exitDate = Instant.parse("2026-12-13T19:04:57.891Z");
+        void post_shouldBindTheCalendarDate_whenADateOnlyFieldIsADate() throws Exception {
+            LocalDate arrivalDate = LocalDate.parse("2026-12-12");
+            LocalDate exitDate = LocalDate.parse("2026-12-13");
             NotificationAggregate saved = new NotificationAggregate();
             saved.setReferenceNumber(REF_1);
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any()))

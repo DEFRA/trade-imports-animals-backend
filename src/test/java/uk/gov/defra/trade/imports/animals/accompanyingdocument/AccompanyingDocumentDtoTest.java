@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,7 @@ class AccompanyingDocumentDtoTest {
 
     @Test
     void from_shouldMapAllScalarFieldsFromEntity() {
-      Instant dateOfIssue = Instant.parse("2026-01-15T00:00:00Z");
+      LocalDate dateOfIssue = LocalDate.parse("2026-01-15");
       Instant created = Instant.parse("2026-02-01T10:00:00Z");
       Instant updated = Instant.parse("2026-02-02T12:00:00Z");
 

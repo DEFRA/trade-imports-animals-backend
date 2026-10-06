@@ -9,7 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -83,10 +83,8 @@ class DocumentServiceTest {
       final String uploadId = UUID.randomUUID().toString();
       String notificationRef = "GBN-AG-26-ABC123";
 
-      // A late-evening instant rather than midnight, so storing the request's value verbatim
-      // keeps the 23:30 and fails this test rather than passing by coincidence.
       DocumentUploadRequest request = new DocumentUploadRequest(
-          DocumentType.ITAHC, "UKGB2026001", Instant.parse("2026-01-15T23:30:00Z"));
+          DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"));
 
       stubCdpConfig();
 
@@ -125,9 +123,8 @@ class DocumentServiceTest {
       AccompanyingDocument saved = captor.getValue();
       assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.PENDING);
       assertThat(saved.getNotificationReferenceNumber()).isEqualTo(notificationRef);
-      // Then — dateOfIssue is normalised to UTC midnight on the way in, not stored verbatim
-      Instant expectedDateOfIssue = Instant.parse("2026-01-15T00:00:00Z");
-      assertThat(saved.getDateOfIssue()).isEqualTo(expectedDateOfIssue);
+      // Then — dateOfIssue is stored as the calendar date the request carried
+      assertThat(saved.getDateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
 
       // Then — the same correlationId is on the saved doc and is a valid UUID
       assertThat(saved.getCorrelationId()).isEqualTo(metadataCorrelationId);
@@ -139,7 +136,7 @@ class DocumentServiceTest {
       // Given — production code catches DuplicateKeyException and re-throws ConflictException (→ 409)
       String notificationRef = "GBN-AG-26-CNCR00";
 
-      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", Instant.parse("2026-01-15T00:00:00Z"));
+      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"));
 
       stubCdpConfig();
 

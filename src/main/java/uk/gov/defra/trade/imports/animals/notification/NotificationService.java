@@ -508,7 +508,7 @@ public class NotificationService {
         notification.setImporter(dto.getImporter());
         notification.setDestination(dto.getDestination());
         notification.setCphNumber(dto.getCphNumber());
-        notification.setTransport(normaliseArrivalDate(dto.getTransport()));
+        notification.setTransport(dto.getTransport());
         notification.setConsignment(dto.getConsignment());
         notification.setPurposeInInternalMarket(dto.getPurposeInInternalMarket());
         notification.setDestinationCountry(dto.getDestinationCountry());
@@ -516,22 +516,6 @@ public class NotificationService {
         notification.setExitDate(dto.getExitDate());
         notificationAggregate.setFulfilments(dto.getFulfilments());
         notificationAggregate.setUpdated(Instant.now());
-    }
-
-    /**
-     * Truncates a transport's arrival date to the start of its UTC day, in place, so the stored
-     * value keeps the promise {@link Transport#arrivalDate} makes. {@code LocalDate} made a time
-     * of day impossible to represent and {@code Instant} does not, so without this a caller could
-     * store {@code 2026-07-21T23:00:00Z} and leave its readers — the API response, the
-     * arrival-date sort, and PIMS by way of the GB-NAG {@code scheduledOccurrenceDateTime} it is
-     * emitted into — disagreeing about which day the consignment arrives. A {@code null} transport
-     * and a {@code null} arrival date are both legitimate and pass through untouched.
-     */
-    private static Transport normaliseArrivalDate(Transport transport) {
-        if (transport != null && transport.getArrivalDate() != null) {
-            transport.setArrivalDate(transport.getArrivalDate().truncatedTo(ChronoUnit.DAYS));
-        }
-        return transport;
     }
 
     private void createNotificationAuditRecord(
