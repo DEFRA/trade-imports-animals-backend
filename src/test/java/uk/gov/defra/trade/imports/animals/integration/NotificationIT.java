@@ -1293,6 +1293,63 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getStatusChanges().getLast().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(event.getStatusChanges().getLast().getDateChanged()).isNotNull();
         assertThat(event.getStatusChanges().getLast().getActor()).isNull();
+        // No accompanying documents: the key is omitted rather than sent as an empty array
+        assertThat(gbnAgReferenceDocuments(event)).isNull();
+    }
+
+    @Test
+    void submit_shouldReferenceOnlyTheDocumentsThatPassedTheVirusScan() {
+        // Given — a notification with one scanned document, one still being scanned and one the
+        // scan rejected
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+        accompanyingDocumentRepository.save(AccompanyingDocument.builder()
+            .notificationReferenceNumber(referenceNumber)
+            .uploadId("upload-refdoc-clean")
+            .correlationId("correlation-refdoc-clean")
+            .documentType(DocumentType.LETTER_OF_AUTHORITY)
+            .documentReference("LOA-778")
+            .dateOfIssue(LocalDate.parse("2026-09-01"))
+            .scanStatus(ScanStatus.COMPLETE)
+            .build());
+        accompanyingDocumentRepository.save(AccompanyingDocument.builder()
+            .notificationReferenceNumber(referenceNumber)
+            .uploadId("upload-refdoc-pending")
+            .correlationId("correlation-refdoc-pending")
+            .documentType(DocumentType.COMMERCIAL_INVOICE)
+            .documentReference("INV-9912")
+            .dateOfIssue(LocalDate.parse("2026-09-02"))
+            .scanStatus(ScanStatus.PENDING)
+            .build());
+        accompanyingDocumentRepository.save(AccompanyingDocument.builder()
+            .notificationReferenceNumber(referenceNumber)
+            .uploadId("upload-refdoc-rejected")
+            .correlationId("correlation-refdoc-rejected")
+            .documentType(DocumentType.VETERINARY_HEALTH_CERTIFICATE)
+            .documentReference("VHC-REJ-1")
+            .dateOfIssue(LocalDate.parse("2026-09-03"))
+            .scanStatus(ScanStatus.REJECTED)
+            .build());
+
+        // When
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .exchange()
+            .expectStatus().isOk();
+
+        // Then
+        OutboxEvent event = outboxEventRepository.findAll().stream()
+            .filter(e -> e.getEventType().endsWith("NotificationSubmitted"))
+            .findFirst().orElseThrow();
+        assertThat(gbnAgReferenceDocuments(event)).containsExactly(Map.of(
+            "typeCode", "GBN1",
+            "urlId", "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types",
+            "identifier", "LOA-778",
+            "issueDateTime", "2026-09-01"));
     }
 
     @Test
@@ -1392,6 +1449,13 @@ class NotificationIT extends IntegrationBase {
         Map<String, Object> exchangedDocument =
             (Map<String, Object>) event.getData().get("exchangedDocument");
         return exchangedDocument.get("identifier");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> gbnAgReferenceDocuments(OutboxEvent event) {
+        Map<String, Object> exchangedDocument =
+            (Map<String, Object>) event.getData().get("exchangedDocument");
+        return (List<Map<String, Object>>) exchangedDocument.get("referenceDocument");
     }
 
     @SuppressWarnings("unchecked")

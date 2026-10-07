@@ -10,6 +10,9 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Address;
 import uk.gov.defra.trade.imports.animals.notification.AnimalIdentifier;
@@ -33,7 +36,9 @@ class GbnAgMapperTest {
     @Nested
     class HappyPath {
 
-        private final GbnAgEventData result = mapper.toGbnAgEventData(fullyPopulatedNotification(), 1);
+        private final GbnAgEventData result = mapper.toGbnAgEventData(fullyPopulatedNotification(), 1, List.of(
+            accompanyingDocument(DocumentType.ITAHC, "ITAHC-2026-0001", "2026-05-01"),
+            accompanyingDocument(DocumentType.LETTER_OF_AUTHORITY, "LOA-778", "2026-04-20")));
 
         @Test
         void shouldSetConstantModelAndType() {
@@ -57,7 +62,15 @@ class GbnAgMapperTest {
             // The fixture sets a consignment contact, but where it belongs on the event is still
             // an open question, so it is deliberately not mapped to issuer yet.
             assertThat(doc.issuer()).isNull();            // gap G1
-            assertThat(doc.referenceDocument()).isNull(); // gap G3
+        }
+
+        @Test
+        void shouldMapEachAccompanyingDocumentToAReferenceDocumentInOrder() {
+            assertThat(result.exchangedDocument().referenceDocument()).containsExactly(
+                new ReferencedDocument(
+                    "856", "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types", null, "ITAHC-2026-0001", "2026-05-01"),
+                new ReferencedDocument(
+                    "GBN1", "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types", null, "LOA-778", "2026-04-20"));
         }
 
         @Test
@@ -162,6 +175,7 @@ class GbnAgMapperTest {
             assertThat(movement.transportContractRelatedReferencedDocument()).singleElement().satisfies(doc -> {
                 assertThat(doc.identifier()).isEqualTo("CMR-2026-884721");
                 assertThat(doc.typeCode()).isEqualTo("730"); // road consignment note, as ROAD_VEHICLE
+                assertThat(doc.urlId()).isNull(); // transport documents are outside the document-type codelist
                 assertThat(doc.relationshipTypeCode()).isNull();
                 assertThat(doc.issueDateTime()).isNull();
             });
@@ -251,7 +265,7 @@ class GbnAgMapperTest {
                 .referenceNumber("GBN-AG-26-MIN001")
                 .status(NotificationStatus.DRAFT)
                 .notification(Notification.builder().build())
-                .build(), null);
+                .build(), null, List.of());
 
         @Test
         void shouldStillSetConstantsAndIdentifier() {
@@ -297,7 +311,52 @@ class GbnAgMapperTest {
 
     @Test
     void toGbnAgEventData_shouldReturnNull_whenNotificationNull() {
-        assertThat(mapper.toGbnAgEventData(null, null)).isNull();
+        assertThat(mapper.toGbnAgEventData(null, null, List.of())).isNull();
+    }
+
+    // Pins every row of schemas/codelists/gbn-ag-document-types.json in trade-imports-schemas. The
+    // urlId names that one codelist for every code, UNTDID-derived or Defra.
+    @ParameterizedTest
+    @CsvSource({
+        "VETERINARY_HEALTH_CERTIFICATE, 853",
+        "HEALTH_CERTIFICATE, 636",
+        "AIR_WAYBILL, 740",
+        "SEA_WAYBILL, 710",
+        "RAIL_WAYBILL, 720",
+        "BILL_OF_LADING, 705",
+        "COMMERCIAL_INVOICE, 380",
+        "ITAHC, 856",
+        "IMPORT_PERMIT, 911",
+        "LETTER_OF_AUTHORITY, GBN1",
+        "CATCH_CERTIFICATE, GBN2",
+        "LABORATORY_SAMPLING_RESULTS_FOR_AFLATOXIN, 4",
+        "JOURNEY_LOG, GBN3",
+        "OTHER, 916"
+    })
+    void shouldCodeEachDocumentTypeFromTheDocumentTypeCodelist(DocumentType type, String typeCode) {
+        ReferencedDocument document = mapper.toGbnAgEventData(
+                fullyPopulatedNotification(), 1, List.of(accompanyingDocument(type, "REF-1", "2026-05-01")))
+            .exchangedDocument().referenceDocument().getFirst();
+
+        assertThat(document.typeCode()).isEqualTo(typeCode);
+        assertThat(document.urlId()).isEqualTo("https://refdata.tbc.defra.gov.uk/gbn-ag-document-types");
+    }
+
+    @Test
+    void shouldHaveACodelistRowForEveryDocumentType() {
+        // Fails when a document type is added without a row above and in the codelist file.
+        assertThat(DocumentType.values()).hasSize(14);
+    }
+
+    @Test
+    void shouldLeaveIssueDateOut_whenDocumentHasNoDateOfIssue() {
+        AccompanyingDocument undated = AccompanyingDocument.builder()
+            .documentType(DocumentType.OTHER).documentReference("REF-2").build();
+
+        ReferencedDocument document = mapper.toGbnAgEventData(fullyPopulatedNotification(), 1, List.of(undated))
+            .exchangedDocument().referenceDocument().getFirst();
+
+        assertThat(document.issueDateTime()).isNull();
     }
 
     @Test
@@ -313,7 +372,7 @@ class GbnAgMapperTest {
             .notification(Notification.builder().build())
             .build();
 
-        assertThat(mapper.toGbnAgEventData(notificationAggregate, 1).exchangedDocument().issueDateTime())
+        assertThat(mapper.toGbnAgEventData(notificationAggregate, 1, List.of()).exchangedDocument().issueDateTime())
             .isEqualTo("2026-05-21T10:15:00.123456789Z");
     }
 
@@ -334,9 +393,9 @@ class GbnAgMapperTest {
         TimeZone original = TimeZone.getDefault();
         TimeZone.setDefault(TimeZone.getTimeZone("Europe/London"));
         try {
-            TransportEvent arrival = mapper.toGbnAgEventData(notificationAggregate, 1)
-                .specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst()
-                .arrivalEvent().getFirst();
+            TransportEvent arrival = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
+            .specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst()
+            .arrivalEvent().getFirst();
 
             assertThat(arrival.scheduledOccurrenceDateTime()).isEqualTo("2026-07-21T00:00:00Z");
         } finally {
@@ -354,7 +413,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        Integer modeCode = mapper.toGbnAgEventData(notificationAggregate, 1)
+        Integer modeCode = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst().modeCode();
 
         assertThat(modeCode).isEqualTo(expectedCode);
@@ -374,7 +433,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
 
@@ -395,7 +454,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
 
@@ -416,7 +475,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
 
@@ -437,7 +496,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
 
@@ -459,7 +518,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
 
@@ -481,7 +540,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1)
+        TradeLineItem line = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
 
@@ -510,7 +569,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        List<TradeLineItem> lines = mapper.toGbnAgEventData(notificationAggregate, 1)
+        List<TradeLineItem> lines = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().includedConsignmentItem().getFirst().includedTradeLineItem();
 
         assertThat(lines).satisfiesExactly(
@@ -676,7 +735,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        assertThat(mapper.toGbnAgEventData(notificationAggregate, 1)
+        assertThat(mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().transitTradeCountry()).isNull();
     }
 
@@ -690,7 +749,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        SpecifiedConsignment consignment = mapper.toGbnAgEventData(notificationAggregate, 1).specifiedConsignment();
+        SpecifiedConsignment consignment = mapper.toGbnAgEventData(notificationAggregate, 1, List.of()).specifiedConsignment();
 
         assertThat(consignment.finalDestinationLocation()).isNull();
         assertThat(consignment.originCountry().subordinateTradeCountrySubDivision()).isNull();
@@ -701,7 +760,7 @@ class GbnAgMapperTest {
             .referenceNumber("GBN-AG-26-DOC001")
             .notification(Notification.builder().transport(transport).build())
             .build();
-        return mapper.toGbnAgEventData(notificationAggregate, 1)
+        return mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst()
             .transportContractRelatedReferencedDocument();
     }
@@ -752,7 +811,7 @@ class GbnAgMapperTest {
     }
 
     private TradeLineItem firstLineOf(NotificationAggregate notificationAggregate) {
-        return mapper.toGbnAgEventData(notificationAggregate, 1)
+        return mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
     }
@@ -832,7 +891,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1)
+        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().consignorParty();
 
         assertThat(consignor.name()).isNull();
@@ -858,7 +917,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1)
+        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().consignorParty();
 
         assertThat(consignor.name()).isEqualTo("Astra Rosales");
@@ -882,7 +941,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1)
+        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().consignorParty();
 
         assertThat(consignor.definedContact()).singleElement().satisfies(contact -> {
@@ -906,7 +965,7 @@ class GbnAgMapperTest {
                 .build())
             .build();
 
-        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1)
+        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().consignorParty();
 
         assertThat(consignor.definedContact()).singleElement().satisfies(contact -> {
@@ -921,5 +980,14 @@ class GbnAgMapperTest {
 
     private static Address simpleAddress(String line1, String countryCode) {
         return Address.builder().addressLine1(line1).countryCode(countryCode).build();
+    }
+
+    private static AccompanyingDocument accompanyingDocument(DocumentType type, String reference, String dateOfIssue) {
+        return AccompanyingDocument.builder()
+            .documentType(type)
+            .documentReference(reference)
+            .dateOfIssue(LocalDate.parse(dateOfIssue))
+            .scanStatus(ScanStatus.COMPLETE)
+            .build();
     }
 }
