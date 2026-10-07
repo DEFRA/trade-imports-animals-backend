@@ -1120,10 +1120,8 @@ class NotificationServiceTest {
             assertThat(result.getUpdated()).isNotNull();
             assertThat(result.getPreAmendNotification()).isNull();
             verify(notificationRepository).save(notificationAggregate);
-            // The outbox payload is a deep copy, not the stored aggregate. Match on type rather
-            // than instance equality.
-            verify(outboxService).appendEvent(any(NotificationAggregate.class),
-                eq(OutboxEventType.NOTIFICATION_SUBMITTED), eq("trace-001"), eq(null));
+            verify(outboxService).appendEvent(notificationAggregate,
+                OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
         }
 
         @Test
