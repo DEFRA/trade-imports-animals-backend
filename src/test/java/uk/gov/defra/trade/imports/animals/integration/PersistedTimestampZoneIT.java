@@ -3,15 +3,22 @@ package uk.gov.defra.trade.imports.animals.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
 import java.util.TimeZone;
 import org.bson.Document;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
 import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
@@ -22,10 +29,12 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationSort;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
+import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 
 /**
- * EUDPA-565 — the five persisted timestamps are stored as the instant they name, whatever the
- * JVM's default zone, and documents written before the change still read back.
+ * The five persisted timestamps are stored as the instant they name, and the date-only fields as
+ * the {@code YYYY-MM-DD} string they name, whatever the JVM's default zone. Documents whose
+ * timestamps were written before EUDPA-565 still read back.
  *
  * <p>Every storage assertion here reads the <em>raw BSON</em> rather than round-tripping through
  * the repository. A round trip decodes with the same zone that encoded it, so it cancels any drift
@@ -56,9 +65,9 @@ class PersistedTimestampZoneIT extends IntegrationBase {
     private static final Instant EXPIRE_AT = Instant.parse("2026-08-21T00:30:00Z");
     private static final Instant AUDIT_TIMESTAMP = Instant.parse("2026-07-23T00:15:00Z");
 
-    /** Calendar dates: the day the user chose, labelled UTC midnight by the frontend. */
-    private static final Instant ARRIVAL_DATE = Instant.parse("2026-07-21T00:00:00Z");
-    private static final Instant EXIT_DATE = Instant.parse("2026-07-28T00:00:00Z");
+    /** Calendar dates: the day the user chose, with no time and no zone. */
+    private static final LocalDate ARRIVAL_DATE = LocalDate.parse("2026-07-21");
+    private static final LocalDate EXIT_DATE = LocalDate.parse("2026-07-28");
 
     private static final String REF = "GBN-AG-26-TZ0001";
     private static final String NOTIFICATION_COLLECTION = "notification";
@@ -118,17 +127,16 @@ class PersistedTimestampZoneIT extends IntegrationBase {
     }
 
     /**
-     * The two calendar dates, asserted at exactly UTC midnight in the raw BSON. This is the half
-     * of the zone guarantee that keeps {@code TransportEvent.scheduledOccurrenceDateTime}
-     * byte-identical — the emitted string is the stored instant, so if either date drifted an
-     * hour the GB-NAG event would name the previous day to every UTC reader, PIMS included.
+     * The two calendar dates, asserted as {@code YYYY-MM-DD} strings in the raw document. A
+     * string has no zone, so there is nothing for a BST JVM to shift — were either field still
+     * a BSON date, {@code get(..., String.class)} would throw rather than pass.
      *
      * <p>{@code NotificationIT} exercises the same two fields through the API on the way in and
      * out; this covers both through the repository, so neither is left resting on a single layer.
      */
     @Test
-    void save_shouldStoreCalendarDatesAtExactlyUtcMidnight_whenJvmDefaultZoneIsBst() {
-        // Given — a draft whose nested arrival and exit dates are UTC-midnight calendar days
+    void save_shouldStoreCalendarDatesAsIsoDateStrings_whenJvmDefaultZoneIsBst() {
+        // Given — a draft carrying nested arrival and exit dates
         NotificationAggregate aggregate = NotificationAggregate.builder()
             .referenceNumber(REF)
             .status(NotificationStatus.DRAFT)
@@ -149,12 +157,82 @@ class PersistedTimestampZoneIT extends IntegrationBase {
         Document stored = storedNotification();
         assertThat(stored).isNotNull();
         Document notification = stored.get("notification", Document.class);
-        assertThat(notification.get("transport", Document.class).get("arrivalDate", Date.class).toInstant())
-            .isEqualTo(ARRIVAL_DATE)
-            .hasToString("2026-07-21T00:00:00Z");
-        assertThat(notification.get("exitDate", Date.class).toInstant())
-            .isEqualTo(EXIT_DATE)
-            .hasToString("2026-07-28T00:00:00Z");
+        assertThat(notification.get("transport", Document.class).get("arrivalDate", String.class))
+            .isEqualTo("2026-07-21");
+        assertThat(notification.get("exitDate", String.class)).isEqualTo("2026-07-28");
+    }
+
+    /**
+     * A stored date-only field reads back as the same calendar date whatever zone the reading
+     * JVM is in. The document is written under UTC and read under zones either side of it.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"UTC", "Europe/London", "America/New_York", "Australia/Sydney"})
+    void findByReferenceNumber_shouldReadBackTheSameCalendarDate_whateverTheJvmDefaultZone(
+        String zoneId) {
+        // Given — a document written by a UTC JVM
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
+        notificationRepository.save(NotificationAggregate.builder()
+            .referenceNumber(REF)
+            .status(NotificationStatus.DRAFT)
+            .created(CREATED)
+            .notification(Notification.builder()
+                .transport(Transport.builder().arrivalDate(ARRIVAL_DATE).build())
+                .exitDate(EXIT_DATE)
+                .build())
+            .build());
+
+        // When — it is read by a JVM in another zone
+        TimeZone.setDefault(TimeZone.getTimeZone(zoneId));
+        NotificationAggregate read = notificationRepository.findByReferenceNumber(REF).orElseThrow();
+
+        // Then
+        assertThat(read.getNotification().getTransport().getArrivalDate()).isEqualTo(ARRIVAL_DATE);
+        assertThat(read.getNotification().getExitDate()).isEqualTo(EXIT_DATE);
+    }
+
+    /**
+     * The {@code String} to {@code LocalDate} reading converter is registered globally, so this
+     * pins that it runs only where the target property is a {@code LocalDate}. A date-shaped
+     * string in a {@code String} field, in the untyped {@code fulfilments} payload and in an
+     * outbox event's untyped {@code data} map each come back as the string that was stored.
+     */
+    @Test
+    void read_shouldLeaveDateShapedStringsAsStrings_whenTheTargetIsNotALocalDate() {
+        // Given — date-shaped strings in a String field and in both untyped payloads
+        String dateShaped = "2026-07-21";
+        notificationRepository.save(NotificationAggregate.builder()
+            .referenceNumber(REF)
+            .status(NotificationStatus.DRAFT)
+            .created(CREATED)
+            .notification(Notification.builder().cphNumber(dateShaped).build())
+            .fulfilments(List.of(new Document("arrivalDate", dateShaped)))
+            .build());
+        String eventId = "evt-date-shaped-string";
+        mongoTemplate.save(OutboxEvent.builder()
+            .eventId(eventId)
+            .aggregateId(REF)
+            .aggregateVersion(1)
+            .timestamp(CREATED)
+            // Already published, so the outbox poller leaves it alone.
+            .publishedAt(CREATED)
+            .data(Map.of("arrivalDate", dateShaped))
+            .build());
+
+        try {
+            // When
+            NotificationAggregate read =
+                notificationRepository.findByReferenceNumber(REF).orElseThrow();
+            OutboxEvent event = mongoTemplate.findById(eventId, OutboxEvent.class);
+
+            // Then
+            assertThat(read.getNotification().getCphNumber()).isEqualTo(dateShaped);
+            assertThat(read.getFulfilments().getFirst().get("arrivalDate")).isEqualTo(dateShaped);
+            assertThat(event).isNotNull();
+            assertThat(event.getData().get("arrivalDate")).isEqualTo(dateShaped);
+        } finally {
+            mongoTemplate.remove(new Query(Criteria.where("_id").is(eventId)), OutboxEvent.class);
+        }
     }
 
     @Test
@@ -182,10 +260,8 @@ class PersistedTimestampZoneIT extends IntegrationBase {
      * it. Written here as raw BSON rather than through the repository, because the repository can
      * no longer produce the old shape.
      *
-     * <p>The nested calendar dates are seeded alongside the four top-level timestamps because
-     * those two fields are the ones {@code UtcLocalDateConverters} used to own as {@code
-     * LocalDate}. They were written as BSON dates at UTC midnight then and are read as {@code
-     * Instant} now, so they are exactly where a legacy read would break if the decode had changed.
+     * <p>The nested calendar dates are not seeded. They are stored as strings now, and with no
+     * live data there is no migration and no legacy shape to read.
      */
     @Test
     void findByReferenceNumber_shouldReadBackEveryTimestamp_whenTheDocumentWasWrittenBeforeTheChange() {
@@ -196,12 +272,7 @@ class PersistedTimestampZoneIT extends IntegrationBase {
             .append("created", Date.from(CREATED))
             .append("updated", Date.from(SUBMITTED_AT))
             .append("submittedAt", Date.from(SUBMITTED_AT))
-            .append("expireAt", Date.from(EXPIRE_AT))
-            .append("notification", new Document()
-                .append("transport", new Document()
-                    .append("portOfEntry", "GBDVR")
-                    .append("arrivalDate", Date.from(ARRIVAL_DATE)))
-                .append("exitDate", Date.from(EXIT_DATE))));
+            .append("expireAt", Date.from(EXPIRE_AT)));
 
         // When
         NotificationAggregate read = notificationRepository.findByReferenceNumber(REF).orElseThrow();
@@ -211,12 +282,6 @@ class PersistedTimestampZoneIT extends IntegrationBase {
         assertThat(read.getUpdated()).isEqualTo(SUBMITTED_AT);
         assertThat(read.getSubmittedAt()).isEqualTo(SUBMITTED_AT);
         assertThat(read.getExpireAt()).isEqualTo(EXPIRE_AT);
-        assertThat(read.getNotification().getTransport().getArrivalDate())
-            .isEqualTo(ARRIVAL_DATE)
-            .hasToString("2026-07-21T00:00:00Z");
-        assertThat(read.getNotification().getExitDate())
-            .isEqualTo(EXIT_DATE)
-            .hasToString("2026-07-28T00:00:00Z");
     }
 
     /**

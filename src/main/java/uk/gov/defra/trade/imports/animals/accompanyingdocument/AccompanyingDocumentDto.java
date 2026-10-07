@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
@@ -17,7 +18,7 @@ public record AccompanyingDocumentDto(
     String uploadId,
     DocumentType documentType,
     String documentReference,
-    Instant dateOfIssue,
+    LocalDate dateOfIssue,
     ScanStatus scanStatus,
     List<UploadedFileDto> files,
     Instant created,

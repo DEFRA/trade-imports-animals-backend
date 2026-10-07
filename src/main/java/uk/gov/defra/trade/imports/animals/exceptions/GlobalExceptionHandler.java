@@ -84,10 +84,10 @@ public class GlobalExceptionHandler {
      * not fit the field's type.
      *
      * <p>Without this the exception reaches the {@code RuntimeException} catch-all and the caller
-     * is told 500, blaming the server for the caller's payload. EUDPA-565 made that reachable in
-     * an ordinary way: every date on this API is now an {@code Instant}, so a date-only
-     * {@code "2026-12-12"} where {@code "2026-12-12T00:00:00Z"} is required lands here rather
-     * than binding.
+     * is told 500, blaming the server for the caller's payload. Dates make that reachable in an
+     * ordinary way: a date-only field is a {@code LocalDate} and a timestamp is an
+     * {@code Instant}, so {@code "2026-12-12T00:00:00Z"} where {@code "2026-12-12"} is required,
+     * or the reverse, lands here rather than binding.
      *
      * <p>The parser message is logged but deliberately not returned — it quotes the submitted
      * value and names internal types.
@@ -99,8 +99,9 @@ public class GlobalExceptionHandler {
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST,
-            "Request body could not be read. Check the JSON is well-formed and that each date is "
-                + "an RFC 3339 instant, for example 2026-12-12T00:00:00Z"
+            "Request body could not be read. Check the JSON is well-formed, that each date-only "
+                + "field is a date, for example 2026-12-12, and that each timestamp is an "
+                + "RFC 3339 instant, for example 2026-12-12T00:00:00Z"
         );
 
         problemDetail.setType(TYPE_MALFORMED_REQUEST);

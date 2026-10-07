@@ -3,7 +3,9 @@ package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.TimeZone;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -375,25 +377,30 @@ class GbnAgMapperTest {
     }
 
     @Test
-    void shouldEmitArrivalDateVerbatim_asNormalisingItIsTheServicesJobNotTheMappers() {
-        // NotificationService truncates arrivalDate to UTC midnight on save; TransportEvent emits
-        // whatever Instant it is handed. Pinning a genuinely non-midnight time of day here holds
-        // the mapper to its half of that division — were truncation to migrate back into the
-        // mapper, or be applied in both places, this would go red.
+    void shouldEmitArrivalDateAsUtcMidnight_whateverTheJvmDefaultZone() {
+        // PIMS receives an instant, so the calendar date becomes the start of that day in UTC.
+        // A BST summer date under Europe/London would come out as 2026-07-20T23:00:00Z were the
+        // conversion to use the JVM default zone.
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-ARV001")
             .notification(Notification.builder()
                 .transport(Transport.builder()
-                    .arrivalDate(Instant.parse("2026-07-21T23:30:00Z"))
+                    .arrivalDate(LocalDate.parse("2026-07-21"))
                     .build())
                 .build())
             .build();
 
-        TransportEvent arrival = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
+        TimeZone original = TimeZone.getDefault();
+        TimeZone.setDefault(TimeZone.getTimeZone("Europe/London"));
+        try {
+            TransportEvent arrival = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().mainCarriageLogisticsTransportMovement().getFirst()
             .arrivalEvent().getFirst();
 
-        assertThat(arrival.scheduledOccurrenceDateTime()).isEqualTo("2026-07-21T23:30:00Z");
+            assertThat(arrival.scheduledOccurrenceDateTime()).isEqualTo("2026-07-21T00:00:00Z");
+        } finally {
+            TimeZone.setDefault(original);
+        }
     }
 
     @ParameterizedTest
@@ -857,7 +864,7 @@ class GbnAgMapperTest {
                     .build())
                 .transport(Transport.builder()
                     .portOfEntry("GBDVR")
-                    .arrivalDate(Instant.parse("2026-05-06T00:00:00Z"))
+                    .arrivalDate(LocalDate.parse("2026-05-06"))
                     .meansOfTransport(MeansOfTransport.ROAD_VEHICLE)
                     .transportIdentification("AB-1234")
                     .transportDocumentReference("CMR-2026-884721")

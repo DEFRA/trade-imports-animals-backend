@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.AccessLevel;
@@ -23,14 +24,9 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile
  * notification. One record exists per upload initiation; the embedded {@code files} list is
  * populated by cdp-uploader callbacks.
  *
- * <p>{@code dateOfIssue} is stored as an {@link Instant} (UTC epoch millis in MongoDB). We use
- * {@code Instant} rather than {@code LocalDate} because: (a) we want unambiguous UTC storage with
- * no timezone conversion, and (b) the cdp-uploader callback provides ISO-8601 timestamps.
- * Consumers that need a date-only view should truncate to the date component at presentation time.
- *
- * <p>{@code Instant} does not require a custom MongoDB codec — Spring Data MongoDB 3.x includes
- * native {@code Instant} codec support via its {@code InstantCodec} registered in the
- * {@code MongoMappingContext}.
+ * <p>{@code dateOfIssue} is a calendar date, so it is a {@link LocalDate}: {@code YYYY-MM-DD} on
+ * the wire and a string in MongoDB, written and read by {@code LocalDateStringConverters}. The
+ * moments {@code created} and {@code updated} are {@link Instant}, which MongoDB stores natively.
  */
 @CompoundIndex(def = "{'notificationReferenceNumber': 1, 'scanStatus': 1}")
 @Document(collection = "accompanying_documents")
@@ -70,13 +66,8 @@ public class AccompanyingDocument {
 
   private String documentReference;
 
-  /**
-   * Date of issue on the physical document. Stored as a UTC {@link Instant} at midnight
-   * (start-of-day, {@code 00:00:00Z}) to represent a date-only value — e.g. 2024-06-15 is stored
-   * as {@code 2024-06-15T00:00:00Z}. See class-level Javadoc for the rationale for choosing
-   * {@code Instant} over {@code LocalDate}.
-   */
-  private Instant dateOfIssue;
+  /** Date of issue on the physical document, stored as a string such as {@code 2024-06-15}. */
+  private LocalDate dateOfIssue;
 
   private ScanStatus scanStatus;
 

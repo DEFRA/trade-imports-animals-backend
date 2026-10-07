@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -136,7 +137,7 @@ class OutboxServiceTest {
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()
                 .portOfEntry("GBFXT")
-                .arrivalDate(Instant.parse("2026-04-22T00:00:00Z"))
+                .arrivalDate(LocalDate.parse("2026-04-22"))
                 .build();
 
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
@@ -332,7 +333,7 @@ class OutboxServiceTest {
                 .build();
             StatusChange priorChange = StatusChange.builder()
                 .status(NotificationStatus.SUBMITTED)
-                .dateChanged(java.time.Instant.parse("2026-01-01T10:00:00Z"))
+                .dateChanged(Instant.parse("2026-01-01T10:00:00Z"))
                 .actor(submitActor)
                 .build();
             OutboxEvent latestEvent = OutboxEvent.builder()
@@ -397,7 +398,7 @@ class OutboxServiceTest {
                 .build();
             StatusChange priorChange = StatusChange.builder()
                 .status(NotificationStatus.DRAFT)
-                .dateChanged(java.time.Instant.parse("2026-01-01T10:00:00Z"))
+                .dateChanged(Instant.parse("2026-01-01T10:00:00Z"))
                 .actor(null)
                 .build();
             OutboxEvent latestEvent = OutboxEvent.builder()
@@ -432,7 +433,7 @@ class OutboxServiceTest {
                 .build();
             StatusChange priorChange = StatusChange.builder()
                 .status(NotificationStatus.AMEND)
-                .dateChanged(java.time.Instant.parse("2026-01-01T11:00:00Z"))
+                .dateChanged(Instant.parse("2026-01-01T11:00:00Z"))
                 .actor(null)
                 .build();
             OutboxEvent latestEvent = OutboxEvent.builder()

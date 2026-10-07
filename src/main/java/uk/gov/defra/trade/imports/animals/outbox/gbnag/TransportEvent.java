@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
-import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
 
@@ -22,13 +23,11 @@ public record TransportEvent(
     }
 
     /**
-     * The arrival date reaches here as UTC midnight because {@code NotificationService} truncates
-     * it to the start of its UTC day on save — the frontend labels the user's chosen calendar day
-     * as UTC rather than converting it from a local zone, and the truncation holds any other
-     * caller to the same rule. So this emits the same string the previous
-     * {@code atStartOfDay().toInstant(ZoneOffset.UTC)} produced.
+     * PIMS receives an instant, so the arrival date is sent as the start of that day in UTC, for
+     * example {@code 2026-07-21T00:00:00Z}. The zone is fixed here rather than taken from the
+     * JVM, so the string is the same on any host.
      */
-    private static String toUtcDateTime(Instant date) {
-        return date != null ? date.toString() : null;
+    private static String toUtcDateTime(LocalDate date) {
+        return date != null ? date.atStartOfDay(ZoneOffset.UTC).toInstant().toString() : null;
     }
 }
