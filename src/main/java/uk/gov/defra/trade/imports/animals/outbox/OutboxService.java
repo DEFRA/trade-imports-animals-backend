@@ -15,6 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
@@ -48,6 +51,7 @@ public class OutboxService {
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
     private final GbnAgEventDataMapper gbnAgEventDataMapper;
+    private final AccompanyingDocumentRepository accompanyingDocumentRepository;
 
     public void appendEvent(NotificationAggregate notificationAggregate, OutboxEventType eventType, String correlationId, Actor actor) {
         String aggregateId = buildAggregateId(notificationAggregate.getReferenceNumber());
@@ -80,8 +84,15 @@ public class OutboxService {
 
         Integer versionId = computeVersionId(aggregateId, eventType);
 
+        // Only documents that passed the virus scan are referenced; read inside the outbox write so
+        // the event and the documents it lists are consistent.
+        List<AccompanyingDocument> accompanyingDocuments = accompanyingDocumentRepository
+            .findAllByNotificationReferenceNumberAndScanStatusOrderByCreatedAsc(
+                notificationAggregate.getReferenceNumber(), ScanStatus.COMPLETE);
+
         Map<String, Object> data = objectMapper.convertValue(
-            gbnAgEventDataMapper.toGbnAgEventData(notificationAggregate, versionId), MAP_TYPE);
+            gbnAgEventDataMapper.toGbnAgEventData(notificationAggregate, versionId, accompanyingDocuments),
+            MAP_TYPE);
 
         OutboxEvent event = OutboxEvent.builder()
             .eventId(UUID.randomUUID().toString())

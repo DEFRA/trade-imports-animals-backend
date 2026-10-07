@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.time.Instant;
 import java.util.List;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
@@ -19,7 +20,10 @@ public record ExchangedDocument(
     List<ReferencedDocument> referenceDocument
 ) {
 
-    static ExchangedDocument from(NotificationAggregate notificationAggregate, Integer versionId) {
+    static ExchangedDocument from(
+        NotificationAggregate notificationAggregate,
+        Integer versionId,
+        List<AccompanyingDocument> accompanyingDocuments) {
         Notification notification = notificationAggregate.requireNotification();
         Origin origin = notification.getOrigin();
         return new ExchangedDocument(
@@ -30,7 +34,16 @@ public record ExchangedDocument(
             toUtcDateTime(notificationAggregate.getUpdated()),
             null,
             Authentication.from(notification),
-            null);
+            referenceDocuments(accompanyingDocuments));
+    }
+
+    // No documents means no referenceDocument key, never an empty array.
+    @SuppressWarnings("java:S1168")
+    private static List<ReferencedDocument> referenceDocuments(List<AccompanyingDocument> accompanyingDocuments) {
+        if (accompanyingDocuments == null || accompanyingDocuments.isEmpty()) {
+            return null;
+        }
+        return accompanyingDocuments.stream().map(ReferencedDocument::accompanyingDocument).toList();
     }
 
     /**

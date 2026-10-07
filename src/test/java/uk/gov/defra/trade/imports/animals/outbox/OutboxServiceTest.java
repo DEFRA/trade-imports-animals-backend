@@ -22,6 +22,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
@@ -39,12 +43,16 @@ class OutboxServiceTest {
     @Mock
     private OutboxEventRepository outboxEventRepository;
 
+    @Mock
+    private AccompanyingDocumentRepository accompanyingDocumentRepository;
+
     private OutboxService outboxService;
 
     @BeforeEach
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        outboxService = new OutboxService(outboxEventRepository, objectMapper, new GbnAgEventDataMapper());
+        outboxService = new OutboxService(
+            outboxEventRepository, objectMapper, new GbnAgEventDataMapper(), accompanyingDocumentRepository);
     }
 
     @Nested
@@ -169,11 +177,47 @@ class OutboxServiceTest {
             Map<String, Object> exchangedDocument = (Map<String, Object>) data.get("exchangedDocument");
             assertThat(exchangedDocument)
                 .containsEntry("identifier", "GBN-AG-26-ABC123")
-                .containsEntry("notificationStatusCode", "SUBMITTED");
+                .containsEntry("notificationStatusCode", "SUBMITTED")
+                .doesNotContainKey("referenceDocument"); // no documents: key omitted, not an empty array
 
             Map<String, Object> specifiedConsignment =
                 (Map<String, Object>) data.get("specifiedConsignment");
             assertThat(specifiedConsignment).containsKeys("consignorParty", "deliveryParty");
+        }
+
+        @Test
+        @SuppressWarnings("unchecked")
+        void appendEvent_shouldReferenceTheNotificationsScannedDocuments() {
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .referenceNumber("GBN-AG-26-ABC123")
+                .status(NotificationStatus.SUBMITTED)
+                .notification(Notification.builder().build())
+                .build();
+            when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(any()))
+                .thenReturn(Optional.empty());
+            when(accompanyingDocumentRepository
+                .findAllByNotificationReferenceNumberAndScanStatusOrderByCreatedAsc(
+                    "GBN-AG-26-ABC123", ScanStatus.COMPLETE))
+                .thenReturn(List.of(AccompanyingDocument.builder()
+                    .documentType(DocumentType.VETERINARY_HEALTH_CERTIFICATE)
+                    .documentReference("GBHC1234567890")
+                    .dateOfIssue(LocalDate.parse("2026-09-10"))
+                    .scanStatus(ScanStatus.COMPLETE)
+                    .build()));
+            when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            outboxService.appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
+
+            ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
+            verify(outboxEventRepository).save(captor.capture());
+            Map<String, Object> exchangedDocument =
+                (Map<String, Object>) captor.getValue().getData().get("exchangedDocument");
+            assertThat((List<Map<String, Object>>) exchangedDocument.get("referenceDocument"))
+                .containsExactly(Map.of(
+                    "typeCode", "853",
+                    "urlId", "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types",
+                    "identifier", "GBHC1234567890",
+                    "issueDateTime", "2026-09-10"));
         }
 
         @Test

@@ -11,6 +11,9 @@ public interface AccompanyingDocumentRepository
 
   List<AccompanyingDocument> findAllByNotificationReferenceNumber(String referenceNumber);
 
+  List<AccompanyingDocument> findAllByNotificationReferenceNumberAndScanStatusOrderByCreatedAsc(
+      String referenceNumber, ScanStatus scanStatus);
+
   Optional<AccompanyingDocument> findByUploadId(String uploadId);
 
   Optional<AccompanyingDocument> findByCorrelationId(String correlationId);
