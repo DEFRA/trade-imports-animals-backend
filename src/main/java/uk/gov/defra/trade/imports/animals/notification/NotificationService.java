@@ -50,7 +50,6 @@ public class NotificationService {
     private final LockingTaskExecutor lockingTaskExecutor;
     private final NotificationCopyMapper notificationCopyMapper;
     private final NotificationContentMapper notificationContentMapper;
-    private final ConsignmentPartyResolver consignmentPartyResolver;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final NotificationTtlConfig ttlConfig;
     private final Duration lockAtLeastFor;
@@ -65,7 +64,6 @@ public class NotificationService {
         LockingTaskExecutor lockingTaskExecutor,
         NotificationCopyMapper notificationCopyMapper,
         NotificationContentMapper notificationContentMapper,
-        ConsignmentPartyResolver consignmentPartyResolver,
         ReferenceNumberGenerator referenceNumberGenerator,
         NotificationTtlConfig ttlConfig,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
@@ -78,7 +76,6 @@ public class NotificationService {
         this.lockingTaskExecutor = lockingTaskExecutor;
         this.notificationCopyMapper = notificationCopyMapper;
         this.notificationContentMapper = notificationContentMapper;
-        this.consignmentPartyResolver = consignmentPartyResolver;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.ttlConfig = ttlConfig;
         this.lockAtLeastFor = lockAtLeastFor;
@@ -223,7 +220,7 @@ public class NotificationService {
 
         // The content baseline is captured here alongside fulfilments: a deep-clone of the
         // notification as it stood when the trader opened the amendment, so cancel-amend can
-        // restore what was really submitted without re-resolving today's address book.
+        // restore what was really submitted.
         notificationAggregate.setPreAmendNotification(
             notificationContentMapper.deepClone(notificationAggregate.getNotification()));
         List<Document> currentFulfilments = notificationAggregate.getFulfilments();
@@ -282,12 +279,6 @@ public class NotificationService {
         NotificationStatus targetStatus,
         OutboxEventType eventType,
         Actor actor) {
-        // Address-book resolution is HTTP, so it happens here rather than inside the lock below:
-        // the outbox critical section is bounded by LOCK_AT_MOST_FOR, and a slow address book that
-        // outlived it would let a second writer in behind us. It resolves into a copy, so the
-        // notification we save keeps the reference alone and only the event carries the details.
-        NotificationAggregate forOutbox = resolvedForOutbox(notification, eventType, actor);
-
         return executeWithOutboxLock(
             OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
                 if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)
@@ -303,49 +294,9 @@ public class NotificationService {
                     notification.setSubmittedAt(Instant.now());
                 }
                 NotificationAggregate saved = notificationRepository.save(notification);
-                forOutbox.setStatus(saved.getStatus());
-                forOutbox.setUpdated(saved.getUpdated());
-                forOutbox.setSubmittedAt(saved.getSubmittedAt());
-                outboxService.appendEvent(forOutbox, eventType, correlationId, actor);
+                outboxService.appendEvent(saved, eventType, correlationId, actor);
                 return saved;
             });
-    }
-
-    // Draft-grade events carry whatever inline details the frontend already persisted on the
-    // notification fields. Copy is the exception for NOTIFICATION_CREATED: parties are stored as
-    // address-book references alone, so the Created outbox event inflates them before transmission.
-    private static final Set<OutboxEventType> DRAFT_GRADE_EVENTS = Set.of(
-        OutboxEventType.NOTIFICATION_CREATED,
-        OutboxEventType.NOTIFICATION_EDITED,
-        OutboxEventType.NOTIFICATION_DELETED);
-
-    /**
-     * The notification as every outbox event should carry it. Submit events validate that
-     * referenced parties still resolve; cancel-amend restores from the pre-amend snapshot.
-     */
-    private NotificationAggregate resolvedForOutbox(
-        NotificationAggregate notificationAggregate, OutboxEventType eventType, Actor actor) {
-        NotificationAggregate copy = notificationAggregate.toBuilder().build();
-        if (eventType == OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED) {
-            Notification snapshot = notificationAggregate.getPreAmendNotification();
-            if (snapshot != null) {
-                copy.setNotification(notificationContentMapper.deepClone(snapshot));
-            } else if (copy.getNotification() != null) {
-                copy.setNotification(notificationContentMapper.deepClone(copy.getNotification()));
-            }
-            return copy;
-        }
-        String organisationId = actor != null ? actor.getOrganisationId() : null;
-        if (copy.getNotification() != null) {
-            copy.setNotification(notificationContentMapper.deepClone(copy.getNotification()));
-        }
-        if (eventType == OutboxEventType.NOTIFICATION_CREATED && copy.getNotification() != null) {
-            consignmentPartyResolver.inflateReferencedParties(copy.getNotification(), organisationId);
-        }
-        if (!DRAFT_GRADE_EVENTS.contains(eventType)) {
-            consignmentPartyResolver.validatePartiesAtSubmit(copy, organisationId);
-        }
-        return copy;
     }
 
     private <T> T executeWithOutboxLock(

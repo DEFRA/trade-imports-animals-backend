@@ -78,11 +78,10 @@ class NotificationControllerTest {
     class ReplaceNotification {
 
         @Test
-        void replace_shouldPassTheActorThrough_soReferencedPartiesResolveOnTheEditEvent()
-            throws Exception {
+        void replace_shouldPassTheActorThroughToTheEditEvent() throws Exception {
             NotificationDto notificationDto = NotificationDto.builder()
                 .referenceNumber(REF_1)
-                .consignor(ConsignmentParty.reference("665f1c2ab3e4d51a2c9d0e77"))
+                .consignor(ConsignmentParty.builder().name("Astra Rosales").build())
                 .build();
             SaveNotificationDto body = SaveNotificationDto.builder()
                 .notification(notificationDto)

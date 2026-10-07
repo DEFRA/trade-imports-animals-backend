@@ -20,7 +20,7 @@ public record NotificationPageResponse(
 
   public static NotificationPageResponse from(Page<NotificationView> pageResult) {
     return new NotificationPageResponse(
-        pageResult.getContent().stream().map(NotificationView::forDashboard).toList(),
+        pageResult.getContent(),
         pageResult.getNumber() + 1,
         pageResult.getSize(),
         pageResult.getNumberOfElements(),

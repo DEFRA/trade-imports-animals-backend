@@ -27,7 +27,6 @@ import uk.gov.defra.trade.imports.animals.notification.Species;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
 import uk.gov.defra.trade.imports.animals.notification.Transporter;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
-import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 class GbnAgMapperTest {
 
@@ -881,31 +880,11 @@ class GbnAgMapperTest {
     }
 
     @Test
-    void shouldEmitNullNameAndPostalAddress_whenConsignorIsUnresolvedReference() {
-        // TradeParty.from does not resolve address-book references; NotificationService must call
-        // ConsignmentPartyResolver.validatePartiesAtSubmit before appendEvent, or GBNAG receives nulls.
-        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-            .referenceNumber("GBN-AG-26-REFMAP")
-            .notification(Notification.builder()
-                .consignor(NotificationTestData.reference("665f1c2ab3e4d51a2c9d0e77"))
-                .build())
-            .build();
-
-        TradeParty consignor = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
-            .specifiedConsignment().consignorParty();
-
-        assertThat(consignor.name()).isNull();
-        assertThat(consignor.postalAddress()).isNull();
-    }
-
-    @Test
-    void shouldMapResolvedReferencedParty_toConsignorNameAndPostalAddress() {
-        // Shape after ConsignmentPartyResolver resolution: addressId retained with filled details.
+    void shouldMapInlineParty_toConsignorNameAndPostalAddress() {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-REFRES")
             .notification(Notification.builder()
                 .consignor(ConsignmentParty.builder()
-                    .addressId("665f1c2ab3e4d51a2c9d0e77")
                     .name("Astra Rosales")
                     .address(Address.builder()
                         .addressLine1("43 East Hague Extension")
@@ -932,7 +911,6 @@ class GbnAgMapperTest {
             .referenceNumber("GBN-AG-26-CONTACT")
             .notification(Notification.builder()
                 .consignor(ConsignmentParty.builder()
-                    .addressId("665f1c2ab3e4d51a2c9d0e77")
                     .name("Astra Rosales")
                     .email("astra@example.com")
                     .phone("01632 960111")
@@ -947,7 +925,7 @@ class GbnAgMapperTest {
         assertThat(consignor.definedContact()).singleElement().satisfies(contact -> {
             assertThat(contact.emailURIUniversalCommunication()).isEqualTo("astra@example.com");
             assertThat(contact.telephoneUniversalCommunication()).isEqualTo("01632 960111");
-            // The address book has no contact person — the name it holds is the party's own.
+            // A party has no separate contact person — its name is the party's own.
             assertThat(contact.personName()).isNull();
         });
     }

@@ -54,8 +54,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Sort.Direction;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
-import uk.gov.defra.trade.imports.animals.addressbook.AddressBookClient;
-import uk.gov.defra.trade.imports.animals.addressbook.AddressBookRecord;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
@@ -73,7 +71,7 @@ class NotificationServiceTest {
 
     private static final String TEST_TRACE_ID = "test-trace-id";
     private static final String TEST_USER_ID = "test-user-id";
-    /** The submitting actor's organisation, whose address book the outbox resolve reads. */
+    /** The acting user's organisation, passed through to the outbox event. */
     private static final String ORG_ID = "5900002";
 
     @Mock
@@ -94,9 +92,6 @@ class NotificationServiceTest {
     @Mock
     private ReferenceNumberGenerator referenceNumberGenerator;
 
-    @Mock
-    private AddressBookClient addressBookClient;
-
     private NotificationService notificationService;
 
     // Real executor (its executeWithLock must actually run the locked task) built from the
@@ -111,9 +106,19 @@ class NotificationServiceTest {
         notificationService = buildService(new NotificationTtlConfig(null, "local", sweep(false)));
     }
 
-    private static AddressBookRecord addressBookRecord(String addressId, boolean deleted) {
-        return new AddressBookRecord(addressId, "Astra Rosales", "43 East Hague Extension", null,
-            "Vernier", "Soleure", "30055", "CH", "+41 22 000 0000", "astra@example.com", deleted);
+    /** A party as the frontend stores it: a literal copy of the address the trader picked. */
+    private static ConsignmentParty literalParty() {
+        return ConsignmentParty.builder()
+            .name("Astra Rosales")
+            .email("astra@example.com")
+            .phone("+41 22 000 0000")
+            .address(Address.builder()
+                .addressLine1("43 East Hague Extension")
+                .townOrCity("Vernier")
+                .postcode("30055")
+                .countryCode("CH")
+                .build())
+            .build();
     }
 
     private NotificationService buildService(NotificationTtlConfig ttlConfig) {
@@ -121,7 +126,6 @@ class NotificationServiceTest {
             documentService, outboxService, lockingTaskExecutor,
             new NotificationCopyMapper(),
             Mappers.getMapper(NotificationContentMapper.class),
-            new ConsignmentPartyResolver(addressBookClient),
             referenceNumberGenerator, ttlConfig,
             Duration.ZERO, 54, 50);
     }
@@ -177,31 +181,28 @@ class NotificationServiceTest {
         }
 
         @Test
-        void saveNotification_shouldInflateReferencedConsignorInCreatedOutbox_whenActorHasOrganisationId() {
-            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+        void saveNotification_shouldCarryTheStoredConsignorLiteralInCreatedOutbox() {
             String expectedRef = "GBN-AG-26-NEW-REF";
             NotificationDto notificationDto = NotificationDto.builder()
-                .consignor(ConsignmentParty.reference(addressId))
+                .consignor(literalParty())
                 .build();
 
             when(referenceNumberGenerator.generate()).thenReturn(expectedRef);
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
-            when(addressBookClient.findById(ORG_ID, addressId))
-                .thenReturn(Optional.of(addressBookRecord(addressId, false)));
 
             Actor actor = Actor.builder().organisationId(ORG_ID).build();
 
             NotificationAggregate saved = notificationService.saveNotification(notificationDto, "trace-new", actor);
 
-            assertThat(saved.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
+            assertThat(saved.getNotification().getConsignor()).isEqualTo(literalParty());
 
             ArgumentCaptor<NotificationAggregate> outboxCaptor =
                 ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(outboxService).appendEvent(
                 outboxCaptor.capture(), eq(OutboxEventType.NOTIFICATION_CREATED), eq("trace-new"), eq(actor));
-            assertThat(outboxCaptor.getValue().getNotification().getConsignor().getName())
-                .isEqualTo("Astra Rosales");
+            assertThat(outboxCaptor.getValue().getNotification().getConsignor())
+                .isEqualTo(literalParty());
         }
 
         @Test
@@ -349,10 +350,7 @@ class NotificationServiceTest {
 
         @Test
         void saveNotification_shouldPersistInlinePartyDetailsFromTheDto_byteFaithfully() {
-            // Given — the frontend sends inline details alongside the address-book id; ingest
-            // stores the payload byte-faithfully rather than stripping back to a reference.
-            String originId = "665f1c2ab3e4d51a2c9d0e78";
-            String contactId = "665f1c2ab3e4d51a2c9d0e79";
+            // Given — the frontend sends each party as a literal copy; ingest stores it as sent.
             String referenceNumber = "GBN-AG-26-ORIG01";
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
@@ -364,13 +362,10 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-            ConsignmentParty originParty = ConsignmentParty.builder()
-                .addressId(originId)
-                .name("Stale Origin")
-                .build();
+            ConsignmentParty originParty = literalParty();
             ConsignmentParty contactParty = ConsignmentParty.builder()
-                .addressId(contactId)
-                .name("Stale Contact")
+                .name("Contact")
+                .email("contact@example.com")
                 .build();
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
@@ -388,10 +383,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void saveNotification_shouldStillSave_whenAReferencedAddressHasBeenDeleted() {
-            // Given — a draft whose consignor still references an address the trader has since
-            // deleted. Saving must not call the address book or block the write; submit validates.
-            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+        void saveNotification_shouldCarryTheStoredPartyLiteralInEditedOutbox() {
             String referenceNumber = "GBN-AG-26-EDIT01";
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
@@ -406,23 +398,20 @@ class NotificationServiceTest {
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
                 .concurrencyToken(0L)
-                .consignor(NotificationTestData.reference(addressId))
+                .consignor(literalParty())
                 .build();
 
             // When
             NotificationAggregate saved = notificationService.saveNotification(
                 dto, "trace-edit-001", Actor.builder().organisationId(ORG_ID).build());
 
-            // Then — the draft is saved, still holding the reference
-            assertThat(saved.getNotification().getConsignor()).isEqualTo(ConsignmentParty.reference(addressId));
-
-            // Draft edit events carry whatever was persisted — address-book resolution is submit-only
+            // Then
+            assertThat(saved.getNotification().getConsignor()).isEqualTo(literalParty());
             ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(outboxService).appendEvent(
                 captor.capture(), eq(OutboxEventType.NOTIFICATION_EDITED), eq("trace-edit-001"),
                 any());
-            assertThat(captor.getValue().getNotification().getConsignor())
-                .isEqualTo(ConsignmentParty.reference(addressId));
+            assertThat(captor.getValue().getNotification().getConsignor()).isEqualTo(literalParty());
         }
 
         @Test
@@ -1131,125 +1120,58 @@ class NotificationServiceTest {
             assertThat(result.getUpdated()).isNotNull();
             assertThat(result.getPreAmendNotification()).isNull();
             verify(notificationRepository).save(notificationAggregate);
-            // The outbox payload is a resolved copy, not the stored aggregate (which now also
-            // holds the submit freeze). Match on type rather than instance equality.
-            verify(outboxService).appendEvent(any(NotificationAggregate.class),
-                eq(OutboxEventType.NOTIFICATION_SUBMITTED), eq("trace-001"), eq(null));
+            verify(outboxService).appendEvent(notificationAggregate,
+                OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
         }
 
         @Test
-        void submitNotification_shouldValidateReferencedParty_beforeAppendingOutboxEvent() {
-            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+        void submitNotification_shouldCarryEveryPartyOnTheOutboxEvent_exactlyAsStored() {
+            // Given — every party a literal copy, as the frontend stores it
             String referenceNumber = "GBN-AG-26-REF011";
+            ConsignmentParty contact = ConsignmentParty.builder()
+                .name("Contact")
+                .email("contact@example.com")
+                .phone("01632 960001")
+                .address(Address.builder().addressLine1("1 Contact Road").countryCode("GB").build())
+                .build();
+            Notification stored = Notification.builder()
+                .consignor(literalParty())
+                .consignee(literalParty().toBuilder().name("Consignee").build())
+                .importer(literalParty().toBuilder().name("Importer").build())
+                .placeOfOrigin(literalParty().toBuilder().name("Origin").build())
+                .destination(literalParty().toBuilder().name("Destination").build())
+                .consignment(contact)
+                .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("notif-id-ref")
                 .referenceNumber(referenceNumber)
                 .status(DRAFT)
-                .notification(Notification.builder()
-                    .consignor(ConsignmentParty.builder()
-                        .addressId(addressId)
-                        .name("Astra Rosales")
-                        .address(Address.builder().postcode("30055").countryCode("CH").build())
-                        .build())
-                    .build())
+                .notification(stored)
                 .build();
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.of(notificationAggregate));
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
-            when(addressBookClient.findById(ORG_ID, addressId))
-                .thenReturn(Optional.of(new AddressBookRecord(
-                    addressId, "Astra Rosales", "43 East Hague Extension", null, "Vernier",
-                    "Soleure", "30055", "CH", "+41 22 000 0000", "astra@example.com", false)));
             Actor actor = Actor.builder().organisationId(ORG_ID).build();
 
-            notificationService.submitNotification(referenceNumber, "trace-ref-001", actor);
+            // When
+            NotificationAggregate returned =
+                notificationService.submitNotification(referenceNumber, "trace-ref-001", actor);
 
+            // Then — the event carries the saved notification, parties exactly as stored
             ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(outboxService).appendEvent(
                 captor.capture(), eq(OutboxEventType.NOTIFICATION_SUBMITTED), eq("trace-ref-001"),
                 eq(actor));
-            assertThat(captor.getValue().getNotification().getConsignor().getName()).isEqualTo("Astra Rosales");
-            assertThat(captor.getValue().getNotification().getConsignor().getAddress().getPostcode()).isEqualTo("30055");
-        }
-
-        @Test
-        void submitNotification_shouldCarryInlineDetailsOnTheOutboxEvent_asStoredOnTheNotification() {
-            // Given — the frontend inflates inline details before submit; validation checks the
-            // reference still resolves but does not rewrite the stored payload for the event.
-            String addressId = "665f1c2ab3e4d51a2c9d0e77";
-            String referenceNumber = "GBN-AG-26-REF012";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("notif-id-copy")
-                .referenceNumber(referenceNumber)
-                .status(DRAFT)
-                .notification(Notification.builder()
-                    .consignor(ConsignmentParty.builder()
-                        .addressId(addressId)
-                        .name("Astra Rosales")
-                        .address(Address.builder().postcode("30055").countryCode("CH").build())
-                        .build())
-                    .build())
-                .build();
-            when(notificationRepository.findByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.of(notificationAggregate));
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
-            when(addressBookClient.findById(ORG_ID, addressId))
-                .thenReturn(Optional.of(addressBookRecord(addressId, false)));
-
-            // When
-            NotificationAggregate returned = notificationService.submitNotification(
-                referenceNumber, "trace-copy-001", Actor.builder().organisationId(ORG_ID).build());
-
-            // Then
-            ConsignmentParty storedConsignor = returned.getNotification().getConsignor();
-            assertThat(storedConsignor.getAddressId()).isEqualTo(addressId);
-            assertThat(storedConsignor.getName()).isEqualTo("Astra Rosales");
-            assertThat(returned.getPreAmendNotification()).isNull();
-            ArgumentCaptor<NotificationAggregate> outbox = ArgumentCaptor.forClass(NotificationAggregate.class);
-            verify(outboxService).appendEvent(
-                outbox.capture(), eq(OutboxEventType.NOTIFICATION_SUBMITTED), eq("trace-copy-001"), any());
-            assertThat(outbox.getValue().getNotification().getConsignor().getName())
-                .isEqualTo("Astra Rosales");
-            ArgumentCaptor<NotificationAggregate> saved = ArgumentCaptor.forClass(NotificationAggregate.class);
-            verify(notificationRepository).save(saved.capture());
-            assertThat(saved.getValue().getNotification().getConsignor().getName())
-                .isEqualTo("Astra Rosales");
-        }
-
-        @Test
-        void submitNotification_shouldFetchASharedAddressOnce_whenTwoRolesReferenceIt() {
-            // Given — the same saved address used as both consignor and consignee. Submit
-            // validation deduplicates the lookup; the outbox event carries stored refs as-is.
-            String addressId = "665f1c2ab3e4d51a2c9d0e77";
-            String referenceNumber = "GBN-AG-26-REF013";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("notif-id-shared")
-                .referenceNumber(referenceNumber)
-                .status(DRAFT)
-                .notification(Notification.builder()
-                    .consignor(NotificationTestData.reference(addressId))
-                    .consignee(NotificationTestData.reference(addressId))
-                    .build())
-                .build();
-            when(notificationRepository.findByReferenceNumber(referenceNumber))
-                .thenReturn(Optional.of(notificationAggregate));
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
-            when(addressBookClient.findById(ORG_ID, addressId))
-                .thenReturn(Optional.of(addressBookRecord(addressId, false)));
-
-            // When
-            notificationService.submitNotification(
-                referenceNumber, "trace-shared-001", Actor.builder().organisationId(ORG_ID).build());
-
-            // Then
-            verify(addressBookClient, times(1)).findById(ORG_ID, addressId);
-            ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
-            verify(outboxService).appendEvent(captor.capture(), any(), any(), any());
-            assertThat(captor.getValue().getNotification().getConsignee().getAddressId()).isEqualTo(addressId);
-            assertThat(captor.getValue().getNotification().getConsignee().getName()).isNull();
+            assertThat(captor.getValue()).isSameAs(returned);
+            Notification emitted = captor.getValue().getNotification();
+            assertThat(emitted.getConsignor()).isEqualTo(stored.getConsignor());
+            assertThat(emitted.getConsignee()).isEqualTo(stored.getConsignee());
+            assertThat(emitted.getImporter()).isEqualTo(stored.getImporter());
+            assertThat(emitted.getPlaceOfOrigin()).isEqualTo(stored.getPlaceOfOrigin());
+            assertThat(emitted.getDestination()).isEqualTo(stored.getDestination());
+            assertThat(emitted.getConsignment()).isEqualTo(contact);
+            assertThat(returned.getNotification().getConsignor()).isEqualTo(literalParty());
         }
 
         @Test
@@ -1719,14 +1641,10 @@ class NotificationServiceTest {
         }
 
         @Test
-        void cancelAmend_shouldPutTheSubmitFreezeOnTheOutboxEvent_notLiveResolve() {
-            // Given — live roles are references (and would fail validatePartiesAtSubmit without an
-            // organisation). The freeze already holds the submitted names. Cancel must restore
-            // without an address-book round trip.
-            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+        void cancelAmend_shouldPutThePreAmendSnapshotOnTheOutboxEvent_notTheAmendedParty() {
+            // Given — the in-flight amendment edited the origin; the snapshot holds the submitted one
             Notification freeze = Notification.builder()
                 .placeOfOrigin(ConsignmentParty.builder()
-                    .addressId(addressId)
                     .name("Frozen Origin")
                     .build())
                 .build();
@@ -1735,7 +1653,7 @@ class NotificationServiceTest {
                 .referenceNumber("GBN-AG-26-CANF01")
                 .status(AMEND)
                 .notification(Notification.builder()
-                    .placeOfOrigin(ConsignmentParty.reference(addressId))
+                    .placeOfOrigin(ConsignmentParty.builder().name("Amended Origin").build())
                     .build())
                 .preAmendNotification(freeze)
                 .build();
@@ -1752,15 +1670,12 @@ class NotificationServiceTest {
             // Then — restored notification carries the pre-amend inline details; snapshot cleared.
             assertThat(result.getNotification().getPlaceOfOrigin().getName())
                 .isEqualTo("Frozen Origin");
-            assertThat(result.getNotification().getPlaceOfOrigin().getAddressId())
-                .isEqualTo(addressId);
             assertThat(result.getPreAmendNotification()).isNull();
             ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(outboxService).appendEvent(
                 captor.capture(), eq(OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED), eq("trace"), eq(null));
             assertThat(captor.getValue().getNotification().getPlaceOfOrigin().getName())
                 .isEqualTo("Frozen Origin");
-            verify(addressBookClient, never()).findById(any(), any());
         }
 
         @Test
@@ -2152,15 +2067,14 @@ class NotificationServiceTest {
         }
 
         @Test
-        void copyNotification_shouldPersistReferenceOnlyConsignor_butInflateConsignorInCreatedOutbox() {
-            String addressId = "665f1c2ab3e4d51a2c9d0e77";
+        void copyNotification_shouldPersistAndEmitTheSourceConsignorLiteral() {
             String sourceRef = "GBN-AG-26-CPY-REF";
             String newRef = "GBN-AG-26-CPY-OUT";
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .status(SUBMITTED)
                 .notification(Notification.builder()
-                    .consignor(ConsignmentParty.reference(addressId))
+                    .consignor(literalParty())
                     .build())
                 .concurrencyToken(0L)
                 .build();
@@ -2170,8 +2084,6 @@ class NotificationServiceTest {
             when(referenceNumberGenerator.generate()).thenReturn(newRef);
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
-            when(addressBookClient.findById(ORG_ID, addressId))
-                .thenReturn(Optional.of(addressBookRecord(addressId, false)));
 
             Actor actor = Actor.builder().organisationId(ORG_ID).build();
 
@@ -2181,16 +2093,14 @@ class NotificationServiceTest {
                 ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(notificationRepository).save(savedCaptor.capture());
             assertThat(savedCaptor.getValue().getNotification().getConsignor())
-                .isEqualTo(ConsignmentParty.reference(addressId));
+                .isEqualTo(literalParty());
 
             ArgumentCaptor<NotificationAggregate> outboxCaptor =
                 ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(outboxService).appendEvent(
                 outboxCaptor.capture(), eq(OutboxEventType.NOTIFICATION_CREATED), eq("trace"), eq(actor));
-            assertThat(outboxCaptor.getValue().getNotification().getConsignor().getName())
-                .isEqualTo("Astra Rosales");
-            assertThat(outboxCaptor.getValue().getNotification().getConsignor().getAddress().getPostcode())
-                .isEqualTo("30055");
+            assertThat(outboxCaptor.getValue().getNotification().getConsignor())
+                .isEqualTo(literalParty());
         }
     }
 
