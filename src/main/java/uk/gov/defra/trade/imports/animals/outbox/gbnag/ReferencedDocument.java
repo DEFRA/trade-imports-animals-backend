@@ -1,8 +1,6 @@
 package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import java.time.LocalDate;
-import java.time.ZoneOffset;
 import java.util.List;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
@@ -78,10 +76,10 @@ public record ReferencedDocument(
         };
     }
 
-    // dateOfIssue is stored as midnight UTC to stand for a date, so its UTC date is the issue date.
+    // dateOfIssue is a calendar date, so its ISO form is the date-only issue date.
     private static String issueDate(AccompanyingDocument document) {
         return document.getDateOfIssue() != null
-            ? LocalDate.ofInstant(document.getDateOfIssue(), ZoneOffset.UTC).toString()
+            ? document.getDateOfIssue().toString()
             : null;
     }
 }

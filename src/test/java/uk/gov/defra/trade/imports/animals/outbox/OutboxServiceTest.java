@@ -201,7 +201,7 @@ class OutboxServiceTest {
                 .thenReturn(List.of(AccompanyingDocument.builder()
                     .documentType(DocumentType.VETERINARY_HEALTH_CERTIFICATE)
                     .documentReference("GBHC1234567890")
-                    .dateOfIssue(Instant.parse("2026-09-10T00:00:00Z"))
+                    .dateOfIssue(LocalDate.parse("2026-09-10"))
                     .scanStatus(ScanStatus.COMPLETE)
                     .build()));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));

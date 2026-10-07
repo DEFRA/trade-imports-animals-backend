@@ -1313,7 +1313,7 @@ class NotificationIT extends IntegrationBase {
             .correlationId("correlation-refdoc-clean")
             .documentType(DocumentType.LETTER_OF_AUTHORITY)
             .documentReference("LOA-778")
-            .dateOfIssue(Instant.parse("2026-09-01T00:00:00Z"))
+            .dateOfIssue(LocalDate.parse("2026-09-01"))
             .scanStatus(ScanStatus.COMPLETE)
             .build());
         accompanyingDocumentRepository.save(AccompanyingDocument.builder()
@@ -1322,7 +1322,7 @@ class NotificationIT extends IntegrationBase {
             .correlationId("correlation-refdoc-pending")
             .documentType(DocumentType.COMMERCIAL_INVOICE)
             .documentReference("INV-9912")
-            .dateOfIssue(Instant.parse("2026-09-02T00:00:00Z"))
+            .dateOfIssue(LocalDate.parse("2026-09-02"))
             .scanStatus(ScanStatus.PENDING)
             .build());
         accompanyingDocumentRepository.save(AccompanyingDocument.builder()
@@ -1331,7 +1331,7 @@ class NotificationIT extends IntegrationBase {
             .correlationId("correlation-refdoc-rejected")
             .documentType(DocumentType.VETERINARY_HEALTH_CERTIFICATE)
             .documentReference("VHC-REJ-1")
-            .dateOfIssue(Instant.parse("2026-09-03T00:00:00Z"))
+            .dateOfIssue(LocalDate.parse("2026-09-03"))
             .scanStatus(ScanStatus.REJECTED)
             .build());
 

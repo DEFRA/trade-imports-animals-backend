@@ -37,8 +37,8 @@ class GbnAgMapperTest {
     class HappyPath {
 
         private final GbnAgEventData result = mapper.toGbnAgEventData(fullyPopulatedNotification(), 1, List.of(
-            accompanyingDocument(DocumentType.ITAHC, "ITAHC-2026-0001", "2026-05-01T00:00:00Z"),
-            accompanyingDocument(DocumentType.LETTER_OF_AUTHORITY, "LOA-778", "2026-04-20T00:00:00Z")));
+            accompanyingDocument(DocumentType.ITAHC, "ITAHC-2026-0001", "2026-05-01"),
+            accompanyingDocument(DocumentType.LETTER_OF_AUTHORITY, "LOA-778", "2026-04-20")));
 
         @Test
         void shouldSetConstantModelAndType() {
@@ -335,7 +335,7 @@ class GbnAgMapperTest {
     })
     void shouldCodeEachDocumentTypeFromTheDocumentTypeCodelist(DocumentType type, String typeCode) {
         ReferencedDocument document = mapper.toGbnAgEventData(
-                fullyPopulatedNotification(), 1, List.of(accompanyingDocument(type, "REF-1", "2026-05-01T00:00:00Z")))
+                fullyPopulatedNotification(), 1, List.of(accompanyingDocument(type, "REF-1", "2026-05-01")))
             .exchangedDocument().referenceDocument().getFirst();
 
         assertThat(document.typeCode()).isEqualTo(typeCode);
@@ -986,7 +986,7 @@ class GbnAgMapperTest {
         return AccompanyingDocument.builder()
             .documentType(type)
             .documentReference(reference)
-            .dateOfIssue(Instant.parse(dateOfIssue))
+            .dateOfIssue(LocalDate.parse(dateOfIssue))
             .scanStatus(ScanStatus.COMPLETE)
             .build();
     }
