@@ -182,7 +182,8 @@ public class NotificationService {
     }
 
     @Transactional
-    public NotificationAggregate submitNotification(String referenceNumber, String correlationId, Actor actor) {
+    public NotificationAggregate submitNotification(String referenceNumber, Long expectedConcurrencyToken,
+        String correlationId, Actor actor) {
         NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
@@ -192,6 +193,12 @@ public class NotificationService {
             throw new BadRequestException(
                 "Cannot submit notification with status: " + notificationAggregate.getStatus());
         }
+        if (expectedConcurrencyToken == null) {
+            throw new BadRequestException("concurrencyToken is required to submit a notification");
+        }
+        // Saving at the caller's token lets @Version refuse the submit atomically if anything changed since
+        // the caller read it - a Java comparison here would leave a gap before the save.
+        notificationAggregate.setConcurrencyToken(expectedConcurrencyToken);
 
         // AMEND -> SUBMITTED is a re-submission; DRAFT -> SUBMITTED is the first submission.
         OutboxEventType eventType = notificationAggregate.getStatus() == NotificationStatus.AMEND

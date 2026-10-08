@@ -9,6 +9,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -36,6 +37,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -605,6 +607,29 @@ class NotificationControllerTest {
     @Nested
     class SubmitNotification {
 
+        private static final Long SUBMIT_TOKEN = 3L;
+
+        @Test
+        void submit_shouldReturn400_whenConcurrencyTokenMissing() throws Exception {
+            mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest());
+
+            verifyNoInteractions(notificationService);
+        }
+
+        @Test
+        void submit_shouldReturn409_whenConcurrencyTokenIsStale() throws Exception {
+            when(notificationService.submitNotification(eq(REF_1), eq(SUBMIT_TOKEN), anyString(), any()))
+                .thenThrow(new OptimisticLockingFailureException("stale"));
+
+            mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
+                    .queryParam("concurrencyToken", String.valueOf(SUBMIT_TOKEN))
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("STALE_CONCURRENCY_TOKEN"));
+        }
+
         @Test
         void submit_shouldReturn200WithSubmittedNotification() throws Exception {
             // Given
@@ -613,11 +638,12 @@ class NotificationControllerTest {
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.submitNotification(eq(REF_1), anyString(), any()))
+            when(notificationService.submitNotification(eq(REF_1), eq(SUBMIT_TOKEN), anyString(), any()))
                 .thenReturn(submitted);
 
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
+                    .queryParam("concurrencyToken", String.valueOf(SUBMIT_TOKEN))
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
@@ -632,27 +658,29 @@ class NotificationControllerTest {
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.submitNotification(REF_1, "trace-abc", null))
+            when(notificationService.submitNotification(REF_1, SUBMIT_TOKEN, "trace-abc", null))
                 .thenReturn(submitted);
 
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
+                    .queryParam("concurrencyToken", String.valueOf(SUBMIT_TOKEN))
                     .header(HEADER_TRACE_ID, "trace-abc")
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk());
 
-            verify(notificationService).submitNotification(REF_1, "trace-abc", null);
+            verify(notificationService).submitNotification(REF_1, SUBMIT_TOKEN, "trace-abc", null);
         }
 
         @Test
         void submit_shouldReturn404_whenReferenceNumberUnknown() throws Exception {
             // Given
-            when(notificationService.submitNotification(eq(NONEXISTENT_REF), anyString(), any()))
+            when(notificationService.submitNotification(eq(NONEXISTENT_REF), eq(SUBMIT_TOKEN), anyString(), any()))
                 .thenThrow(new NotFoundException(
                     "Cannot find notification with reference number: " + NONEXISTENT_REF));
 
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/submit", NONEXISTENT_REF)
+                    .queryParam("concurrencyToken", String.valueOf(SUBMIT_TOKEN))
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value(
@@ -662,12 +690,13 @@ class NotificationControllerTest {
         @Test
         void submit_shouldReturn400_whenNotificationNotInSubmittableState() throws Exception {
             // Given
-            when(notificationService.submitNotification(eq(REF_1), anyString(), any()))
+            when(notificationService.submitNotification(eq(REF_1), eq(SUBMIT_TOKEN), anyString(), any()))
                 .thenThrow(new BadRequestException(
                     "Cannot submit notification with status: DELETED"));
 
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
+                    .queryParam("concurrencyToken", String.valueOf(SUBMIT_TOKEN))
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
@@ -682,7 +711,7 @@ class NotificationControllerTest {
             submitted.setReferenceNumber(REF_1);
             submitted.setStatus(NotificationStatus.SUBMITTED);
 
-            when(notificationService.submitNotification(eq(REF_1), anyString(), any()))
+            when(notificationService.submitNotification(eq(REF_1), eq(SUBMIT_TOKEN), anyString(), any()))
                 .thenReturn(submitted);
 
             String actorBody = """
@@ -697,12 +726,13 @@ class NotificationControllerTest {
 
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
+                    .queryParam("concurrencyToken", String.valueOf(SUBMIT_TOKEN))
                     .contentType(MediaType.APPLICATION_JSON)
                     .content(actorBody))
                 .andExpect(status().isOk());
 
             verify(notificationService).submitNotification(
-                eq(REF_1), anyString(),
+                eq(REF_1), eq(SUBMIT_TOKEN), anyString(),
                 argThat(a -> a != null
                     && "contact-guid-001".equals(a.getId())
                     && "dynamics-contact".equals(a.getSource())
