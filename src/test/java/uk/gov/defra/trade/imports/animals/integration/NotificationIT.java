@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.bson.Document;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
@@ -2430,7 +2431,10 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", ref)
             .exchange()
-            .expectStatus().isBadRequest();
+            .expectStatus().isBadRequest()
+            .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
+            .expectBody()
+            .jsonPath("$.errors.concurrencyToken").exists();
 
         assertThat(notificationRepository.findByReferenceNumber(ref).orElseThrow().getStatus())
             .isEqualTo(NotificationStatus.DRAFT);

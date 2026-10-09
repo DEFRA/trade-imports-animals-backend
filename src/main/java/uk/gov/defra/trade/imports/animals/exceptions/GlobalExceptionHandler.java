@@ -17,8 +17,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import lombok.extern.slf4j.Slf4j;
@@ -35,8 +37,9 @@ public class GlobalExceptionHandler {
     private static final String PROPERTY_ERRORS = "errors";
     private static final String TITLE_VALIDATION_ERROR = "Validation Error";
     /**
-     * RFC 7807 {@code type} for the field-validation 400s — {@link #handleValidationException} and
-     * {@link #handleConstraintViolationException} — each of which carries an {@code errors} map
+     * RFC 7807 {@code type} for the field-validation 400s — {@link #handleValidationException},
+     * {@link #handleConstraintViolationException}, {@link #handleMissingRequestParameter} and
+     * {@link #handleRequestParameterTypeMismatch} — each of which carries an {@code errors} map
      * naming the offending fields.
      */
     private static final URI TYPE_VALIDATION_ERROR =
@@ -146,6 +149,54 @@ public class GlobalExceptionHandler {
             errors.computeIfAbsent(field, k -> new ArrayList<>()).add(violation.getMessage());
         }
         problemDetail.setProperty(PROPERTY_ERRORS, errors);
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
+    /**
+     * Handle a required query parameter that was not sent (400 Bad Request), such as a submit or
+     * copy without {@code concurrencyToken}.
+     *
+     * <p>Without this Spring answers with its own {@code /error} JSON rather than a ProblemDetail.
+     */
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<ProblemDetail> handleMissingRequestParameter(
+        MissingServletRequestParameterException ex) {
+        log.warn("Missing request parameter (trace: {}): {}", MDC.get(MDC_TRACE_ID), ex.getMessage());
+        return requestParameterProblem(ex.getParameterName(), "Required request parameter is missing");
+    }
+
+    /**
+     * Handle a request parameter that does not convert to its declared type (400 Bad Request),
+     * such as a non-numeric {@code concurrencyToken}.
+     *
+     * <p>Without this the exception reaches the {@code RuntimeException} catch-all and the caller
+     * is told 500. The submitted value is logged but not returned.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ProblemDetail> handleRequestParameterTypeMismatch(
+        MethodArgumentTypeMismatchException ex) {
+        log.warn("Request parameter type mismatch (trace: {}): {}", MDC.get(MDC_TRACE_ID), ex.getMessage());
+        return requestParameterProblem(ex.getName(), "Request parameter has an invalid value");
+    }
+
+    private ResponseEntity<ProblemDetail> requestParameterProblem(String parameterName, String message) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.BAD_REQUEST,
+            "Validation failed for one or more fields"
+        );
+
+        problemDetail.setType(TYPE_VALIDATION_ERROR);
+        problemDetail.setTitle(TITLE_VALIDATION_ERROR);
+
+        String traceId = MDC.get(MDC_TRACE_ID);
+        if (traceId != null) {
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
+        }
+
+        problemDetail.setProperty(PROPERTY_ERRORS, Map.of(parameterName, List.of(message)));
 
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)

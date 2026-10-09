@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_TRACE_ID;
@@ -613,7 +614,21 @@ class NotificationControllerTest {
         void submit_shouldReturn400_whenConcurrencyTokenMissing() throws Exception {
             mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
                     .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors.concurrencyToken").exists());
+
+            verifyNoInteractions(notificationService);
+        }
+
+        @Test
+        void submit_shouldReturn400_whenConcurrencyTokenNotANumber() throws Exception {
+            mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
+                    .queryParam("concurrencyToken", "not-a-number")
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.errors.concurrencyToken").exists());
 
             verifyNoInteractions(notificationService);
         }
