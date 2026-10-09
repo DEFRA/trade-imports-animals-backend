@@ -2421,13 +2421,16 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void submit_shouldReturn400_whenConcurrencyTokenMissing() {
+        // Given — a draft notification
         String ref = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
+        long eventsBeforeSubmit = outboxEventRepository.count();
 
+        // When — submit without a concurrency token
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", ref)
             .exchange()
@@ -2436,8 +2439,10 @@ class NotificationIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.errors.concurrencyToken").exists();
 
+        // Then — it stays a draft and no submission event is written
         assertThat(notificationRepository.findByReferenceNumber(ref).orElseThrow().getStatus())
             .isEqualTo(NotificationStatus.DRAFT);
+        assertThat(outboxEventRepository.count()).isEqualTo(eventsBeforeSubmit);
     }
 
     private Long currentConcurrencyToken(String referenceNumber) {
