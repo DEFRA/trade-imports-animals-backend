@@ -10,9 +10,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.http.MediaType;
+import uk.gov.defra.trade.imports.animals.template.NotificationTemplate;
 import uk.gov.defra.trade.imports.animals.template.NotificationTemplateController;
 import uk.gov.defra.trade.imports.animals.template.NotificationTemplateListResponse;
 import uk.gov.defra.trade.imports.animals.template.NotificationTemplateRepository;
+import uk.gov.defra.trade.imports.animals.template.NotificationTemplateResponse;
+import uk.gov.defra.trade.imports.animals.template.StartTemplateRequest;
+import uk.gov.defra.trade.imports.animals.template.TemplateDetailsRequest;
+import uk.gov.defra.trade.imports.animals.template.TemplateStatus;
 
 class NotificationTemplateIT extends IntegrationBase {
 
@@ -69,6 +75,127 @@ class NotificationTemplateIT extends IntegrationBase {
             .uri(TEMPLATES_ENDPOINT)
             .exchange()
             .expectStatus().isBadRequest();
+    }
+
+    @Test
+    void start_thenGet_returnsTheInProgressTemplateWithItsTypeAndName() {
+        // When
+        NotificationTemplateResponse started = start(OWNER, "germinal-products", "Weekly semen");
+        NotificationTemplateResponse fetched = get(OWNER, started.id());
+
+        // Then
+        assertThat(fetched.status()).isEqualTo(TemplateStatus.IN_PROGRESS);
+        assertThat(fetched.setId()).isEqualTo("germinal-products");
+        assertThat(fetched.name()).isEqualTo("Weekly semen");
+    }
+
+    @Test
+    void get_shouldReturn404_forAnotherOwnersTemplate() {
+        // Given
+        NotificationTemplateResponse started = start(OWNER, "live-animals", "Mine");
+
+        // When / Then
+        webClient("NoAuth")
+            .get()
+            .uri(TEMPLATES_ENDPOINT + "/" + started.id())
+            .header(HEADER_USER_ID, OTHER_OWNER)
+            .exchange()
+            .expectStatus().isNotFound();
+    }
+
+    @Test
+    void updateDetails_shouldChangeTypeAndName() {
+        // Given
+        NotificationTemplateResponse started = start(OWNER, "live-animals", "Before");
+
+        // When
+        webClient("NoAuth")
+            .put()
+            .uri(TEMPLATES_ENDPOINT + "/" + started.id() + "/details")
+            .header(HEADER_USER_ID, OWNER)
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(new TemplateDetailsRequest("germinal-products", "After"))
+            .exchange()
+            .expectStatus().isOk();
+
+        // Then
+        NotificationTemplateResponse fetched = get(OWNER, started.id());
+        assertThat(fetched.setId()).isEqualTo("germinal-products");
+        assertThat(fetched.name()).isEqualTo("After");
+    }
+
+    @Test
+    void replaceFulfilments_shouldStoreThePayloadByteFaithfully() {
+        // Given
+        NotificationTemplateResponse started = start(OWNER, "live-animals", "Answers");
+        String body = "{\"fulfilments\":[{\"id\":\"origin\",\"answers\":{\"a\":\"b\"}}]}";
+
+        // When
+        webClient("NoAuth")
+            .put()
+            .uri(TEMPLATES_ENDPOINT + "/" + started.id() + "/fulfilments")
+            .header(HEADER_USER_ID, OWNER)
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(body)
+            .exchange()
+            .expectStatus().isOk();
+
+        // Then
+        NotificationTemplate stored = repository.findById(started.id()).orElseThrow();
+        assertThat(stored.getFulfilments()).hasSize(1);
+        assertThat(stored.getFulfilments().get(0).getString("id")).isEqualTo("origin");
+        assertThat(stored.getFulfilments().get(0).get("answers", Document.class).getString("a"))
+            .isEqualTo("b");
+    }
+
+    @Test
+    void findAll_shouldNotListAnInProgressTemplate() {
+        // Given
+        start(OWNER, "live-animals", "Still being made");
+
+        // When
+        NotificationTemplateListResponse response = list(OWNER);
+
+        // Then
+        assertThat(response.items()).isEmpty();
+    }
+
+    @Test
+    void findAll_shouldStillListARowWithNoStatus() {
+        // Given
+        seed(OWNER, "Legacy", Instant.parse("2026-10-01T10:00:00Z"));
+
+        // When
+        NotificationTemplateListResponse response = list(OWNER);
+
+        // Then
+        assertThat(response.items()).hasSize(1);
+    }
+
+    private NotificationTemplateResponse start(String ownerId, String setId, String name) {
+        return webClient("NoAuth")
+            .post()
+            .uri(TEMPLATES_ENDPOINT)
+            .header(HEADER_USER_ID, ownerId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(new StartTemplateRequest(setId, name, "5900001"))
+            .exchange()
+            .expectStatus().isCreated()
+            .expectBody(NotificationTemplateResponse.class)
+            .returnResult()
+            .getResponseBody();
+    }
+
+    private NotificationTemplateResponse get(String ownerId, String id) {
+        return webClient("NoAuth")
+            .get()
+            .uri(TEMPLATES_ENDPOINT + "/" + id)
+            .header(HEADER_USER_ID, ownerId)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationTemplateResponse.class)
+            .returnResult()
+            .getResponseBody();
     }
 
     private NotificationTemplateListResponse list(String ownerId) {

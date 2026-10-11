@@ -51,6 +51,12 @@ public class NotificationTemplate {
     /** The template's title, as the user typed it. */
     private String name;
 
+    /**
+     * Whether the template is still being created or has been saved. Rows written before
+     * templates could be created carry none and read as saved.
+     */
+    private TemplateStatus status;
+
     /** The notification answers the template holds, persisted byte-faithfully. */
     @Builder.Default
     private List<Document> fulfilments = new ArrayList<>();
