@@ -82,6 +82,14 @@ public class NotificationAggregate {
     @JsonIgnore
     private List<Document> preAmendFulfilments;
 
+    /**
+     * Whether an amendment's notification content differs from {@link #preAmendNotification}.
+     * Set to {@code false} when an amendment starts and recalculated on every content save while
+     * amending. Only the notification content counts, never documents or fulfilments. {@code null}
+     * outside an amendment.
+     */
+    private Boolean answersChangedSinceSubmission;
+
     /** Returns the notification sub-object, failing fast if absent. Use at seams that require content. */
     public Notification requireNotification() {
         return requireNonNull(notification,

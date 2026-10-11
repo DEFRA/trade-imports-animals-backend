@@ -2347,6 +2347,175 @@ class NotificationServiceTest {
                 .isEqualTo("12/345/6789");
         }
 
+        private Origin originWithReference(String internalReference) {
+            return Origin.builder().countryCode("GB").requiresRegionCode("no")
+                .internalReference(internalReference).build();
+        }
+
+        private NotificationAggregate amendingAggregate(String ref, Notification snapshot, Notification live) {
+            return NotificationAggregate.builder()
+                .id("db-id-" + ref)
+                .referenceNumber(ref)
+                .status(AMEND)
+                .notification(live)
+                .preAmendNotification(snapshot)
+                .preAmendFulfilments(new ArrayList<>(List.of(new Document("obligationId", "prior"))))
+                .fulfilments(List.of(new Document("obligationId", "prior")))
+                .answersChangedSinceSubmission(false)
+                .build();
+        }
+
+        private NotificationAggregate replaceWith(NotificationAggregate existing, NotificationDto dto) {
+            when(notificationRepository.findByReferenceNumber(existing.getReferenceNumber()))
+                .thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            return notificationService.replace(existing.getReferenceNumber(), dto, "trace", null);
+        }
+
+        @Test
+        void amend_shouldStartWithNoAnswersChanged() {
+            String ref = "GBN-AG-26-CHG001";
+            NotificationAggregate submitted = NotificationAggregate.builder()
+                .id("db-id-chg1")
+                .referenceNumber(ref)
+                .status(SUBMITTED)
+                .notification(Notification.builder().origin(originWithReference("REF")).build())
+                .fulfilments(List.of(new Document("obligationId", "abc")))
+                .build();
+            when(notificationRepository.findByReferenceNumber(ref)).thenReturn(Optional.of(submitted));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            NotificationAggregate result = notificationService.amendNotification(ref, "trace", null);
+
+            assertThat(result.getAnswersChangedSinceSubmission()).isFalse();
+        }
+
+        @Test
+        void replace_shouldMarkAnswersChanged_whenAmendedContentDiffersFromSnapshot() {
+            String ref = "GBN-AG-26-CHG002";
+            NotificationAggregate existing = amendingAggregate(ref,
+                Notification.builder().origin(originWithReference("ORIGINAL")).build(),
+                Notification.builder().origin(originWithReference("ORIGINAL")).build());
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(ref).concurrencyToken(0L)
+                .origin(originWithReference("CHANGED"))
+                .fulfilments(existing.getFulfilments())
+                .build();
+
+            NotificationAggregate result = replaceWith(existing, dto);
+
+            assertThat(result.getAnswersChangedSinceSubmission()).isTrue();
+        }
+
+        @Test
+        void replace_shouldNotMarkAnswersChanged_whenAmendedContentMatchesSnapshot() {
+            String ref = "GBN-AG-26-CHG003";
+            Notification snapshot = Notification.builder()
+                .origin(originWithReference("SAME"))
+                .commodity(Commodity.builder().name("Cattle").commodityComplement(List.of()).build())
+                .build();
+            NotificationAggregate existing = amendingAggregate(ref, snapshot,
+                Notification.builder().origin(originWithReference("SAME")).build());
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(ref).concurrencyToken(0L)
+                .origin(originWithReference("SAME"))
+                .commodity(Commodity.builder().name("Cattle").commodityComplement(null).build())
+                .fulfilments(existing.getFulfilments())
+                .build();
+
+            NotificationAggregate result = replaceWith(existing, dto);
+
+            assertThat(result.getAnswersChangedSinceSubmission()).isFalse();
+        }
+
+        @Test
+        void replace_shouldNotMarkAnswersChanged_whenOnlyFulfilmentsChange() {
+            String ref = "GBN-AG-26-CHG004";
+            NotificationAggregate existing = amendingAggregate(ref,
+                Notification.builder().origin(originWithReference("SAME")).build(),
+                Notification.builder().origin(originWithReference("SAME")).build());
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(ref).concurrencyToken(0L)
+                .origin(originWithReference("SAME"))
+                .fulfilments(List.of(new Document("obligationId", "different")))
+                .build();
+
+            NotificationAggregate result = replaceWith(existing, dto);
+
+            assertThat(result.getAnswersChangedSinceSubmission()).isFalse();
+        }
+
+        @Test
+        void replace_shouldClearAnswersChanged_whenContentIsPutBack() {
+            String ref = "GBN-AG-26-CHG005";
+            NotificationAggregate existing = amendingAggregate(ref,
+                Notification.builder().origin(originWithReference("ORIGINAL")).build(),
+                Notification.builder().origin(originWithReference("CHANGED")).build());
+            existing.setAnswersChangedSinceSubmission(true);
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(ref).concurrencyToken(0L)
+                .origin(originWithReference("ORIGINAL"))
+                .fulfilments(existing.getFulfilments())
+                .build();
+
+            NotificationAggregate result = replaceWith(existing, dto);
+
+            assertThat(result.getAnswersChangedSinceSubmission()).isFalse();
+        }
+
+        @Test
+        void replace_shouldLeaveAnswersChangedNull_whenDraft() {
+            String ref = "GBN-AG-26-CHG006";
+            NotificationAggregate existing = NotificationAggregate.builder()
+                .id("db-id-chg6")
+                .referenceNumber(ref)
+                .status(DRAFT)
+                .notification(Notification.builder().origin(originWithReference("OLD")).build())
+                .build();
+            NotificationDto dto = NotificationDto.builder()
+                .referenceNumber(ref).concurrencyToken(0L)
+                .origin(originWithReference("NEW"))
+                .build();
+
+            NotificationAggregate result = replaceWith(existing, dto);
+
+            assertThat(result.getAnswersChangedSinceSubmission()).isNull();
+        }
+
+        @Test
+        void submit_shouldClearAnswersChanged_whenSubmittingFromAmend() {
+            String ref = "GBN-AG-26-CHG007";
+            NotificationAggregate existing = amendingAggregate(ref,
+                Notification.builder().origin(originWithReference("ORIGINAL")).build(),
+                Notification.builder().origin(originWithReference("CHANGED")).build());
+            existing.setAnswersChangedSinceSubmission(true);
+            when(notificationRepository.findByReferenceNumber(ref)).thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            NotificationAggregate result = notificationService.submitNotification(ref, "trace", null);
+
+            assertThat(result.getAnswersChangedSinceSubmission()).isNull();
+        }
+
+        @Test
+        void cancelAmend_shouldClearAnswersChanged() {
+            String ref = "GBN-AG-26-CHG008";
+            NotificationAggregate existing = amendingAggregate(ref,
+                Notification.builder().origin(originWithReference("ORIGINAL")).build(),
+                Notification.builder().origin(originWithReference("CHANGED")).build());
+            existing.setAnswersChangedSinceSubmission(true);
+            when(notificationRepository.findByReferenceNumber(ref)).thenReturn(Optional.of(existing));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            NotificationAggregate result = notificationService.cancelAmendNotification(ref, "trace", null);
+
+            assertThat(result.getAnswersChangedSinceSubmission()).isNull();
+        }
+
         @Test
         void cancelAmend_shouldRestoreFulfilmentsAndPreserveOriginalSubmittedAt() {
             // Given — an in-flight amendment carries the original submittedAt (writeWithOutbox

@@ -2326,6 +2326,55 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void findFulfilments_shouldReportAnswersChangedSinceSubmission_onlyWhileAmendedContentDiffers() {
+        // Given — a submitted notification that is then amended
+        String ref = createAndSubmitNotificationWithFullContent();
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", ref)
+            .exchange().expectStatus().isOk();
+        expectAnswersChanged(ref, false);
+
+        // When — only the fulfilments change, then an answer changes, then it is put back
+        putAmendedContent(ref, sourceNotificationWithAllOperators(), List.of(new Document("obligationId", "other")));
+        expectAnswersChanged(ref, false);
+
+        NotificationDto changed = sourceNotificationWithAllOperators();
+        changed.getOrigin().setInternalReference("CHANGED-ANSWER");
+        putAmendedContent(ref, changed, sampleFulfilments());
+        expectAnswersChanged(ref, true);
+
+        putAmendedContent(ref, sourceNotificationWithAllOperators(), sampleFulfilments());
+        expectAnswersChanged(ref, false);
+
+        // Then — resubmission clears the signal
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", ref)
+            .exchange().expectStatus().isOk();
+        NotificationAggregate reloaded = notificationRepository.findByReferenceNumber(ref).orElseThrow();
+        assertThat(reloaded.getAnswersChangedSinceSubmission()).isNull();
+    }
+
+    private void putAmendedContent(String ref, NotificationDto content, List<Document> fulfilments) {
+        NotificationAggregate stored = notificationRepository.findByReferenceNumber(ref).orElseThrow();
+        content.setReferenceNumber(ref);
+        content.setConcurrencyToken(stored.getConcurrencyToken());
+        content.setFulfilments(fulfilments);
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", ref)
+            .bodyValue(SaveNotificationDto.of(content))
+            .exchange().expectStatus().isOk();
+    }
+
+    private void expectAnswersChanged(String ref, boolean expected) {
+        webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", ref)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.answersChangedSinceSubmission").isEqualTo(expected);
+    }
+
+    @Test
     void put_shouldReturn409StaleConcurrencyToken_whenTokenIsStale() {
         // Given a notification with a version that has been progressed by an update.
         NotificationAggregate created = webClient("NoAuth")

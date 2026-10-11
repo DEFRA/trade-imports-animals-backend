@@ -229,6 +229,7 @@ public class NotificationService {
                 "Cannot amend notification: fulfilments payload is missing");
         }
         notificationAggregate.setPreAmendFulfilments(deepCopyFulfilments(currentFulfilments));
+        notificationAggregate.setAnswersChangedSinceSubmission(false);
 
         return writeWithOutbox(
             notificationAggregate,
@@ -261,6 +262,7 @@ public class NotificationService {
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
         notificationAggregate.setPreAmendFulfilments(null);
         notificationAggregate.setPreAmendNotification(null);
+        notificationAggregate.setAnswersChangedSinceSubmission(null);
         // submittedAt is deliberately NOT reset — reverting to the previously-submitted state
         // preserves the original submission timestamp.
         return writeWithOutbox(
@@ -285,6 +287,7 @@ public class NotificationService {
                     && notification.getStatus() == NotificationStatus.AMEND) {
                     notification.setPreAmendFulfilments(null);
                     notification.setPreAmendNotification(null);
+                    notification.setAnswersChangedSinceSubmission(null);
                 }
                 notification.setStatus(targetStatus);
                 notification.setUpdated(Instant.now());
@@ -516,6 +519,17 @@ public class NotificationService {
         notification.setExitDate(dto.getExitDate());
         notificationAggregate.setFulfilments(dto.getFulfilments());
         notificationAggregate.setUpdated(Instant.now());
+        if (notificationAggregate.getStatus() == NotificationStatus.AMEND) {
+            notificationAggregate.setAnswersChangedSinceSubmission(
+                answersDifferFromPreAmend(notificationAggregate));
+        }
+    }
+
+    /** Content only, with both sides normalised by the same deep clone. */
+    private boolean answersDifferFromPreAmend(NotificationAggregate aggregate) {
+        return aggregate.getPreAmendNotification() != null
+            && !notificationContentMapper.deepClone(aggregate.getNotification())
+                .equals(aggregate.getPreAmendNotification());
     }
 
     private void createNotificationAuditRecord(
