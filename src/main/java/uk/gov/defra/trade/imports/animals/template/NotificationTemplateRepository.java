@@ -9,7 +9,7 @@ import org.springframework.stereotype.Repository;
 public interface NotificationTemplateRepository
     extends MongoRepository<NotificationTemplate, String> {
 
-    List<NotificationTemplate> findAllByOwnerIdAndStatusNotOrderByCreatedDesc(
+    List<NotificationTemplate> findAllByOwnerIdAndStatusNotOrderBySavedDescCreatedDesc(
         String ownerId, TemplateStatus status);
 
     Optional<NotificationTemplate> findByIdAndOwnerId(String id, String ownerId);

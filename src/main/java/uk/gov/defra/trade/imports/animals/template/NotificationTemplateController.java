@@ -41,7 +41,7 @@ public class NotificationTemplateController {
 
     @GetMapping
     @Operation(summary = "List the user's templates",
-        description = "Returns every template the user named by the User-Id header has saved, newest first. Never returns another user's templates.")
+        description = "Returns every template the user named by the User-Id header has saved, newest saved first. Never returns another user's templates.")
     @ApiResponse(responseCode = "200", description = "Templates returned",
         content = @Content(schema = @Schema(implementation = NotificationTemplateListResponse.class)))
     @ApiResponse(responseCode = "400", description = "User-Id header missing or blank", content = @Content)

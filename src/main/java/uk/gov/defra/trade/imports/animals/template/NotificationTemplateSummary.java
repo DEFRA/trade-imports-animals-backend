@@ -15,7 +15,7 @@ public record NotificationTemplateSummary(
     @Schema(description = "The journey set the template was made in",
         requiredMode = RequiredMode.REQUIRED, example = "live-animals")
     String setId,
-    @Schema(description = "When the template was saved", requiredMode = RequiredMode.REQUIRED,
+    @Schema(description = "When the template was started", requiredMode = RequiredMode.REQUIRED,
         example = "2026-10-09T10:15:30Z")
     Instant created) {
 

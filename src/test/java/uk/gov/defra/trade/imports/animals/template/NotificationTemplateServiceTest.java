@@ -38,7 +38,7 @@ class NotificationTemplateServiceTest {
     @Test
     void listFor_shouldReturnNoTemplates_whenOwnerHasSavedNone() {
         // Given
-        when(repository.findAllByOwnerIdAndStatusNotOrderByCreatedDesc(
+        when(repository.findAllByOwnerIdAndStatusNotOrderBySavedDescCreatedDesc(
             OWNER_ID, TemplateStatus.IN_PROGRESS)).thenReturn(List.of());
 
         // When
@@ -56,7 +56,7 @@ class NotificationTemplateServiceTest {
         Instant older = Instant.parse("2026-10-01T10:00:00Z");
         NotificationTemplate first = template("t-1", "Arena Aintree", newer);
         NotificationTemplate second = template("t-2", "Acorn Farm", older);
-        when(repository.findAllByOwnerIdAndStatusNotOrderByCreatedDesc(
+        when(repository.findAllByOwnerIdAndStatusNotOrderBySavedDescCreatedDesc(
             OWNER_ID, TemplateStatus.IN_PROGRESS)).thenReturn(List.of(first, second));
 
         // When
@@ -172,6 +172,41 @@ class NotificationTemplateServiceTest {
         // Then
         assertThat(existing.getStatus()).isEqualTo(TemplateStatus.SAVED);
         assertThat(response.status()).isEqualTo(TemplateStatus.SAVED);
+    }
+
+    @Test
+    void save_shouldRecordWhenTheTemplateWasFirstSaved() {
+        // Given
+        NotificationTemplate existing = template(TEMPLATE_ID, "Weekly", null);
+        existing.setStatus(TemplateStatus.IN_PROGRESS);
+        when(repository.findByIdAndOwnerId(TEMPLATE_ID, OWNER_ID))
+            .thenReturn(Optional.of(existing));
+        when(repository.save(existing)).thenReturn(existing);
+        Instant before = Instant.now();
+
+        // When
+        service.save(OWNER_ID, TEMPLATE_ID);
+
+        // Then
+        Instant after = Instant.now();
+        assertThat(existing.getSaved()).isNotNull().isBetween(before, after);
+    }
+
+    @Test
+    void save_shouldKeepTheFirstSavedTime_whenSavedAgain() {
+        // Given
+        Instant firstSaved = Instant.parse("2026-10-01T10:00:00Z");
+        NotificationTemplate existing = template(TEMPLATE_ID, "Weekly", null);
+        existing.setSaved(firstSaved);
+        when(repository.findByIdAndOwnerId(TEMPLATE_ID, OWNER_ID))
+            .thenReturn(Optional.of(existing));
+        when(repository.save(existing)).thenReturn(existing);
+
+        // When
+        service.save(OWNER_ID, TEMPLATE_ID);
+
+        // Then
+        assertThat(existing.getSaved()).isEqualTo(firstSaved);
     }
 
     @Test

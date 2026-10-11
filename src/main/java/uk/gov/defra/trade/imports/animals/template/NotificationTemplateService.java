@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.template;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -13,15 +14,15 @@ public class NotificationTemplateService {
     private final NotificationTemplateRepository notificationTemplateRepository;
 
     /**
-     * Lists the templates one user has saved, newest first. A template still being created is not
-     * listed.
+     * Lists the templates one user has saved, newest saved first; rows saved before the saved time
+     * was recorded come after, newest created first. A template still being created is not listed.
      *
      * @param ownerId the user whose templates to list
      * @return a summary of each of the user's saved templates, and how many there are
      */
     public NotificationTemplateListResponse listFor(String ownerId) {
         List<NotificationTemplateSummary> items = notificationTemplateRepository
-            .findAllByOwnerIdAndStatusNotOrderByCreatedDesc(ownerId, TemplateStatus.IN_PROGRESS)
+            .findAllByOwnerIdAndStatusNotOrderBySavedDescCreatedDesc(ownerId, TemplateStatus.IN_PROGRESS)
             .stream()
             .map(NotificationTemplateSummary::from)
             .toList();
@@ -93,7 +94,8 @@ public class NotificationTemplateService {
 
     /**
      * Saves a template, so Manage templates lists it. Saving a template already saved leaves it
-     * saved.
+     * saved. The first save records when it was saved, which orders the list; saving again keeps
+     * that time.
      *
      * @param ownerId the user who owns the template
      * @param id the template's identifier
@@ -103,6 +105,9 @@ public class NotificationTemplateService {
     public NotificationTemplateResponse save(String ownerId, String id) {
         NotificationTemplate template = load(ownerId, id);
         template.setStatus(TemplateStatus.SAVED);
+        if (template.getSaved() == null) {
+            template.setSaved(Instant.now());
+        }
         return NotificationTemplateResponse.from(notificationTemplateRepository.save(template));
     }
 

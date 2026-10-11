@@ -198,6 +198,23 @@ class NotificationTemplateIT extends IntegrationBase {
     }
 
     @Test
+    void findAll_shouldListTheLaterSavedTemplateFirst() {
+        // Given
+        NotificationTemplateResponse startedFirst = start(OWNER, "live-animals", "Started first");
+        NotificationTemplateResponse startedSecond =
+            start(OWNER, "live-animals", "Started second");
+        save(OWNER, startedSecond.id());
+        save(OWNER, startedFirst.id());
+
+        // When
+        NotificationTemplateListResponse response = list(OWNER);
+
+        // Then
+        assertThat(response.items()).extracting(item -> item.name())
+            .containsExactly("Started first", "Started second");
+    }
+
+    @Test
     void save_shouldReturn404_forAnotherOwnersTemplate() {
         // Given
         NotificationTemplateResponse started = start(OWNER, "live-animals", "Mine");
