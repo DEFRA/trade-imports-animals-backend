@@ -29,6 +29,9 @@ public record NotificationTemplateResponse(
     @Schema(description = "When the template was last changed",
         requiredMode = RequiredMode.NOT_REQUIRED, example = "2026-10-09T10:15:30Z")
     Instant updated,
+    @Schema(description = "When the template was first saved; absent while it is being created",
+        requiredMode = RequiredMode.NOT_REQUIRED, example = "2026-10-09T10:15:30Z")
+    Instant saved,
     @Schema(description = "The notification answers the template holds",
         requiredMode = RequiredMode.REQUIRED)
     List<Document> fulfilments) {
@@ -40,6 +43,7 @@ public record NotificationTemplateResponse(
             ? List.of() : List.copyOf(template.getFulfilments());
         return new NotificationTemplateResponse(
             template.getId(), template.getName(), template.getSetId(), status,
-            template.getVersion(), template.getCreated(), template.getUpdated(), fulfilments);
+            template.getVersion(), template.getCreated(), template.getUpdated(),
+            template.getSaved(), fulfilments);
     }
 }

@@ -198,6 +198,21 @@ class NotificationTemplateIT extends IntegrationBase {
     }
 
     @Test
+    void save_thenGet_returnsWhenTheTemplateWasFirstSaved() {
+        // Given
+        NotificationTemplateResponse started = start(OWNER, "live-animals", "Weekly cattle");
+        assertThat(get(OWNER, started.id()).saved()).isNull();
+
+        // When
+        save(OWNER, started.id());
+        NotificationTemplateResponse fetched = get(OWNER, started.id());
+
+        // Then
+        assertThat(fetched.saved()).isNotNull();
+        assertThat(fetched.saved()).isAfterOrEqualTo(fetched.created());
+    }
+
+    @Test
     void findAll_shouldListTheLaterSavedTemplateFirst() {
         // Given
         NotificationTemplateResponse startedFirst = start(OWNER, "live-animals", "Started first");

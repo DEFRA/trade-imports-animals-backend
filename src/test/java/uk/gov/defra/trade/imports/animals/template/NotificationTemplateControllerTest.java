@@ -203,6 +203,6 @@ class NotificationTemplateControllerTest {
     private static NotificationTemplateResponse response() {
         return new NotificationTemplateResponse(TEMPLATE_ID, "Weekly cattle", "live-animals",
             TemplateStatus.IN_PROGRESS, 0L, Instant.parse("2026-10-09T10:00:00Z"), null,
-            List.of());
+            null, List.of());
     }
 }

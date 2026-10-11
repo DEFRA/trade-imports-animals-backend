@@ -111,6 +111,22 @@ class NotificationTemplateServiceTest {
     }
 
     @Test
+    void get_shouldReturnWhenTheTemplateWasFirstSaved() {
+        // Given
+        Instant firstSaved = Instant.parse("2026-10-09T10:15:30Z");
+        NotificationTemplate existing = template(TEMPLATE_ID, "Arena Aintree", null);
+        existing.setSaved(firstSaved);
+        when(repository.findByIdAndOwnerId(TEMPLATE_ID, OWNER_ID))
+            .thenReturn(Optional.of(existing));
+
+        // When
+        NotificationTemplateResponse response = service.get(OWNER_ID, TEMPLATE_ID);
+
+        // Then
+        assertThat(response.saved()).isEqualTo(firstSaved);
+    }
+
+    @Test
     void get_shouldThrowNotFound_whenTheFinderIsEmpty() {
         // Given
         when(repository.findByIdAndOwnerId(TEMPLATE_ID, OWNER_ID)).thenReturn(Optional.empty());
