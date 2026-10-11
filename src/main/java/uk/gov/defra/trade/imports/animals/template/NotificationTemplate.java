@@ -18,11 +18,11 @@ import org.springframework.data.mongodb.core.index.CompoundIndex;
 
 /**
  * A user's saved set of notification answers. Each template is owned by one user, recorded with
- * the journey set it was made in, and listed newest first. The {@code fulfilments} are opaque and
- * persisted exactly as {@code NotificationAggregate.fulfilments} are, so a template reuses the
+ * the journey set it was made in, and listed newest saved first. The {@code fulfilments} are opaque
+ * and persisted exactly as {@code NotificationAggregate.fulfilments} are, so a template reuses the
  * engine's own payload.
  */
-@CompoundIndex(def = "{'ownerId': 1, 'created': -1}")
+@CompoundIndex(def = "{'ownerId': 1, 'saved': -1, 'created': -1}")
 @org.springframework.data.mongodb.core.mapping.Document(collection = "notification_templates")
 @Data
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
@@ -56,6 +56,12 @@ public class NotificationTemplate {
      * templates could be created carry none and read as saved.
      */
     private TemplateStatus status;
+
+    /**
+     * When the template was first saved; none while it is being created, or on a row saved before
+     * this was recorded.
+     */
+    private Instant saved;
 
     /** The notification answers the template holds, persisted byte-faithfully. */
     @Builder.Default
