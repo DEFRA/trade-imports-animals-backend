@@ -2315,6 +2315,24 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void findFulfilments_shouldReturnTheStoredSubmissionInstant_onceSubmitted() {
+        // Given — a notification submitted through the real endpoints
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
+        Instant stored = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow().getSubmittedAt();
+        assertThat(stored).isNotNull();
+
+        // When / Then — the fulfilments read carries that same instant
+        webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo("SUBMITTED")
+            .jsonPath("$.submittedAt").isEqualTo(stored.toString());
+    }
+
+    @Test
     void findFulfilments_shouldReturn404_whenReferenceNumberUnknown() {
         webClient("NoAuth")
             .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", NONEXISTENT_REF)
