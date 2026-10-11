@@ -172,6 +172,58 @@ class NotificationTemplateIT extends IntegrationBase {
         assertThat(response.items()).hasSize(1);
     }
 
+    @Test
+    void save_thenList_listsTheTemplateWithItsAnswers() {
+        // Given
+        NotificationTemplateResponse started = start(OWNER, "live-animals", "Weekly cattle");
+        webClient("NoAuth")
+            .put()
+            .uri(TEMPLATES_ENDPOINT + "/" + started.id() + "/fulfilments")
+            .header(HEADER_USER_ID, OWNER)
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue("{\"fulfilments\":[{\"id\":\"origin\"}]}")
+            .exchange()
+            .expectStatus().isOk();
+
+        // When
+        NotificationTemplateResponse saved = save(OWNER, started.id());
+
+        // Then
+        assertThat(saved.status()).isEqualTo(TemplateStatus.SAVED);
+        assertThat(list(OWNER).items()).extracting(item -> item.name())
+            .containsExactly("Weekly cattle");
+        NotificationTemplate stored = repository.findById(started.id()).orElseThrow();
+        assertThat(stored.getFulfilments()).hasSize(1);
+        assertThat(stored.getFulfilments().get(0).getString("id")).isEqualTo("origin");
+    }
+
+    @Test
+    void save_shouldReturn404_forAnotherOwnersTemplate() {
+        // Given
+        NotificationTemplateResponse started = start(OWNER, "live-animals", "Mine");
+
+        // When / Then
+        webClient("NoAuth")
+            .post()
+            .uri(TEMPLATES_ENDPOINT + "/" + started.id() + "/save")
+            .header(HEADER_USER_ID, OTHER_OWNER)
+            .exchange()
+            .expectStatus().isNotFound();
+        assertThat(list(OWNER).items()).isEmpty();
+    }
+
+    private NotificationTemplateResponse save(String ownerId, String id) {
+        return webClient("NoAuth")
+            .post()
+            .uri(TEMPLATES_ENDPOINT + "/" + id + "/save")
+            .header(HEADER_USER_ID, ownerId)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationTemplateResponse.class)
+            .returnResult()
+            .getResponseBody();
+    }
+
     private NotificationTemplateResponse start(String ownerId, String setId, String name) {
         return webClient("NoAuth")
             .post()

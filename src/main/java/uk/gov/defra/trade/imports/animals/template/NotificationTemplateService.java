@@ -91,6 +91,21 @@ public class NotificationTemplateService {
         return NotificationTemplateResponse.from(notificationTemplateRepository.save(template));
     }
 
+    /**
+     * Saves a template, so Manage templates lists it. Saving a template already saved leaves it
+     * saved.
+     *
+     * @param ownerId the user who owns the template
+     * @param id the template's identifier
+     * @return the template as stored
+     * @throws NotFoundException when there is no such template, or another user owns it
+     */
+    public NotificationTemplateResponse save(String ownerId, String id) {
+        NotificationTemplate template = load(ownerId, id);
+        template.setStatus(TemplateStatus.SAVED);
+        return NotificationTemplateResponse.from(notificationTemplateRepository.save(template));
+    }
+
     private NotificationTemplate load(String ownerId, String id) {
         return notificationTemplateRepository.findByIdAndOwnerId(id, ownerId)
             .orElseThrow(() -> new NotFoundException("Template not found"));

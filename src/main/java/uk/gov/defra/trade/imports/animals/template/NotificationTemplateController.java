@@ -114,4 +114,19 @@ public class NotificationTemplateController {
         return ResponseEntity.ok(
             notificationTemplateService.replaceFulfilments(userId, id, request));
     }
+
+    @PostMapping("/{id}/save")
+    @Operation(summary = "Save a template",
+        description = "Saves a template the user owns, so it is listed among their templates. Saving a saved template leaves it saved.")
+    @ApiResponse(responseCode = "200", description = "Template saved",
+        content = @Content(schema = @Schema(implementation = NotificationTemplateResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid id or User-Id header missing", content = @Content)
+    @ApiResponse(responseCode = "404", description = "Template not found", content = @Content)
+    @Timed("controller.saveTemplate.time")
+    public ResponseEntity<NotificationTemplateResponse> save(
+        @RequestHeader(HEADER_USER_ID) @NotBlank String userId,
+        @Pattern(regexp = TEMPLATE_ID_PATTERN) @PathVariable String id) {
+        log.debug("POST /templates/{}/save", id);
+        return ResponseEntity.ok(notificationTemplateService.save(userId, id));
+    }
 }

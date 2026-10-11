@@ -151,6 +151,38 @@ class NotificationTemplateControllerTest {
     }
 
     @Test
+    void save_shouldReturn200WithTheSavedTemplate() throws Exception {
+        // Given
+        when(notificationTemplateService.save(OWNER_ID, TEMPLATE_ID)).thenReturn(response());
+
+        // When / Then
+        mockMvc.perform(post("/templates/" + TEMPLATE_ID + "/save")
+                .header(HEADER_USER_ID, OWNER_ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.name").value("Weekly cattle"));
+    }
+
+    @Test
+    void save_shouldReturn404_whenTheTemplateIsNotFound() throws Exception {
+        // Given
+        when(notificationTemplateService.save(OWNER_ID, TEMPLATE_ID))
+            .thenThrow(new NotFoundException("Template not found"));
+
+        // When / Then
+        mockMvc.perform(post("/templates/" + TEMPLATE_ID + "/save")
+                .header(HEADER_USER_ID, OWNER_ID))
+            .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void save_shouldReturn400_whenTheIdIsNotTwentyFourHexCharacters() throws Exception {
+        // When / Then
+        mockMvc.perform(post("/templates/not-an-id/save").header(HEADER_USER_ID, OWNER_ID))
+            .andExpect(status().isBadRequest());
+        verify(notificationTemplateService, never()).save(any(), any());
+    }
+
+    @Test
     void everyNewRoute_shouldReturn400_whenUserIdHeaderIsMissing() throws Exception {
         // When / Then
         mockMvc.perform(post("/templates")
@@ -163,6 +195,8 @@ class NotificationTemplateControllerTest {
             .andExpect(status().isBadRequest());
         mockMvc.perform(put("/templates/" + TEMPLATE_ID + "/fulfilments")
                 .contentType(MediaType.APPLICATION_JSON).content(FULFILMENTS_BODY))
+            .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/templates/" + TEMPLATE_ID + "/save"))
             .andExpect(status().isBadRequest());
     }
 

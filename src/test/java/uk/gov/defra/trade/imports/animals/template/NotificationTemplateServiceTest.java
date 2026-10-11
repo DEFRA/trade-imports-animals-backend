@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.template;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -154,6 +155,35 @@ class NotificationTemplateServiceTest {
         // Then
         assertThat(existing.getFulfilments()).containsExactlyElementsOf(fulfilments);
         assertThat(response.fulfilments()).containsExactlyElementsOf(fulfilments);
+    }
+
+    @Test
+    void save_shouldMarkTheTemplateSaved() {
+        // Given
+        NotificationTemplate existing = template(TEMPLATE_ID, "Weekly", null);
+        existing.setStatus(TemplateStatus.IN_PROGRESS);
+        when(repository.findByIdAndOwnerId(TEMPLATE_ID, OWNER_ID))
+            .thenReturn(Optional.of(existing));
+        when(repository.save(existing)).thenReturn(existing);
+
+        // When
+        NotificationTemplateResponse response = service.save(OWNER_ID, TEMPLATE_ID);
+
+        // Then
+        assertThat(existing.getStatus()).isEqualTo(TemplateStatus.SAVED);
+        assertThat(response.status()).isEqualTo(TemplateStatus.SAVED);
+    }
+
+    @Test
+    void save_shouldThrowNotFound_whenTheFinderIsEmpty() {
+        // Given
+        when(repository.findByIdAndOwnerId(TEMPLATE_ID, OWNER_ID)).thenReturn(Optional.empty());
+
+        // When / Then
+        assertThatThrownBy(() -> service.save(OWNER_ID, TEMPLATE_ID))
+            .isInstanceOf(NotFoundException.class)
+            .hasMessage("Template not found");
+        verify(repository, never()).save(any());
     }
 
     private static NotificationTemplate template(String id, String name, Instant created) {
