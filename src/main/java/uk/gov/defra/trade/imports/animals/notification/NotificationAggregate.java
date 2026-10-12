@@ -50,6 +50,13 @@ public class NotificationAggregate {
     private Instant submittedAt;
 
     /**
+     * What the latest submission still owed, worked out afresh on every submission. Kept through
+     * an amendment so cancel-amend restores the status the submission had; {@code null} before
+     * the first submission.
+     */
+    private List<OutstandingItem> outstandingItems;
+
+    /**
      * When this notification becomes eligible for automatic expiry, anchored to {@code created}.
      * Set only for app-created notifications in non-prod environments (see
      * {@code NotificationService.stampExpiry}); {@code null} in prod and for notifications created

@@ -10,7 +10,8 @@ import org.bson.Document;
  * ({@code preAmendNotification}, {@code preAmendFulfilments}, {@code expireAt}) are
  * intentionally omitted so they aren't loaded on read. It does carry
  * {@code answersChangedSinceSubmission}: whether an amendment's content differs from its pre-amend
- * snapshot, without exposing the snapshot itself.
+ * snapshot, without exposing the snapshot itself. It also carries {@code outstandingItems}: what
+ * the latest submission still owed.
  */
 public interface NotificationFulfilmentsView {
 
@@ -27,4 +28,6 @@ public interface NotificationFulfilmentsView {
     List<Document> getFulfilments();
 
     Boolean getAnswersChangedSinceSubmission();
+
+    List<OutstandingItem> getOutstandingItems();
 }

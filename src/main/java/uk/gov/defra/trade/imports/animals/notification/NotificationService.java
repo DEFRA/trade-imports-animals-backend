@@ -124,7 +124,7 @@ public class NotificationService {
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
         if (source.getStatus() != NotificationStatus.DRAFT
-            && source.getStatus() != NotificationStatus.SUBMITTED
+            && !isSubmitted(source.getStatus())
             && source.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException("Cannot copy notification with status: " + source.getStatus());
         }
@@ -157,7 +157,8 @@ public class NotificationService {
     /** Serves {@code GET /notifications?…} for the dashboard list. */
     public NotificationPageResponse findAll(int page, String sort, String referenceNumber) {
         List<NotificationStatus> dashboardStatuses = List.of(
-            NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
+            NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND,
+            NotificationStatus.SUBMITTED_ACTION_REQUIRED);
         var pageable = PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort));
 
         String trimmedReference = StringUtils.trimToNull(referenceNumber);
@@ -193,18 +194,33 @@ public class NotificationService {
                 "Cannot submit notification with status: " + notificationAggregate.getStatus());
         }
 
-        // AMEND -> SUBMITTED is a re-submission; DRAFT -> SUBMITTED is the first submission.
+        // AMEND -> a submitted status is a re-submission; DRAFT -> a submitted status is the first submission.
         OutboxEventType eventType = notificationAggregate.getStatus() == NotificationStatus.AMEND
             ? OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED
             : OutboxEventType.NOTIFICATION_SUBMITTED;
+
+        List<OutstandingItem> outstanding =
+            OutstandingItem.outstandingFor(documentService.findByNotificationRef(referenceNumber));
+        notificationAggregate.setOutstandingItems(outstanding);
 
         return writeWithOutbox(
             notificationAggregate,
             referenceNumber,
             correlationId,
-            NotificationStatus.SUBMITTED,
+            submittedStatusFor(outstanding),
             eventType,
             actor);
+    }
+
+    private static NotificationStatus submittedStatusFor(List<OutstandingItem> outstanding) {
+        return outstanding == null || outstanding.isEmpty()
+            ? NotificationStatus.SUBMITTED
+            : NotificationStatus.SUBMITTED_ACTION_REQUIRED;
+    }
+
+    private static boolean isSubmitted(NotificationStatus status) {
+        return status == NotificationStatus.SUBMITTED
+            || status == NotificationStatus.SUBMITTED_ACTION_REQUIRED;
     }
 
     @Transactional
@@ -213,7 +229,7 @@ public class NotificationService {
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
 
-        if (notificationAggregate.getStatus() != NotificationStatus.SUBMITTED) {
+        if (!isSubmitted(notificationAggregate.getStatus())) {
             throw new BadRequestException(
                 "Cannot amend notification with status: " + notificationAggregate.getStatus());
         }
@@ -269,7 +285,7 @@ public class NotificationService {
             notificationAggregate,
             referenceNumber,
             correlationId,
-            NotificationStatus.SUBMITTED,
+            submittedStatusFor(notificationAggregate.getOutstandingItems()),
             OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED,
             actor);
     }
@@ -291,7 +307,7 @@ public class NotificationService {
                 }
                 notification.setStatus(targetStatus);
                 notification.setUpdated(Instant.now());
-                // Only actual submissions mint a new submittedAt; cancel-amend restores to SUBMITTED
+                // Only actual submissions mint a new submittedAt; cancel-amend restores the submitted status
                 // but must preserve the timestamp from the original submission.
                 if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)) {
                     notification.setSubmittedAt(Instant.now());
@@ -350,12 +366,12 @@ public class NotificationService {
             return notificationAggregate;
         }
         if (notificationAggregate.getStatus() != NotificationStatus.DRAFT
-            && notificationAggregate.getStatus() != NotificationStatus.SUBMITTED
+            && !isSubmitted(notificationAggregate.getStatus())
             && notificationAggregate.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException(
                 "Cannot delete notification with status: " + notificationAggregate.getStatus());
         }
-        // DRAFT -> DELETED has no submission history; SUBMITTED/AMEND -> DELETED does.
+        // DRAFT -> DELETED has no submission history; a submitted status (SUBMITTED or SUBMITTED_ACTION_REQUIRED) or AMEND -> DELETED does.
         OutboxEventType eventType = notificationAggregate.getStatus() == NotificationStatus.DRAFT
             ? OutboxEventType.NOTIFICATION_DELETED
             : OutboxEventType.NOTIFICATION_SUBMISSION_DELETED;
