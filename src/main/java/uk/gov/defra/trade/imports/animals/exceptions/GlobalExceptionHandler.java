@@ -36,6 +36,7 @@ public class GlobalExceptionHandler {
     private static final String PROPERTY_TRACE_ID = "traceId";
     private static final String PROPERTY_ERRORS = "errors";
     private static final String TITLE_VALIDATION_ERROR = "Validation Error";
+    private static final String DETAIL_VALIDATION_ERROR = "Validation failed for one or more fields";
     /**
      * RFC 7807 {@code type} for the field-validation 400s — {@link #handleValidationException},
      * {@link #handleConstraintViolationException}, {@link #handleMissingRequestParameter} and
@@ -61,7 +62,7 @@ public class GlobalExceptionHandler {
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST,
-            "Validation failed for one or more fields"
+            DETAIL_VALIDATION_ERROR
         );
 
         problemDetail.setType(TYPE_VALIDATION_ERROR);
@@ -130,7 +131,7 @@ public class GlobalExceptionHandler {
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST,
-            "Validation failed for one or more fields"
+            DETAIL_VALIDATION_ERROR
         );
 
         problemDetail.setType(TYPE_VALIDATION_ERROR);
@@ -185,7 +186,7 @@ public class GlobalExceptionHandler {
     private ResponseEntity<ProblemDetail> requestParameterProblem(String parameterName, String message) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST,
-            "Validation failed for one or more fields"
+            DETAIL_VALIDATION_ERROR
         );
 
         problemDetail.setType(TYPE_VALIDATION_ERROR);
