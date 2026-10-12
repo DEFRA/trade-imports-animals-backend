@@ -156,12 +156,6 @@ public class GlobalExceptionHandler {
             .body(problemDetail);
     }
 
-    /**
-     * Handle a required query parameter that was not sent (400 Bad Request), such as a submit or
-     * copy without {@code concurrencyToken}.
-     *
-     * <p>Without this Spring answers with its own {@code /error} JSON rather than a ProblemDetail.
-     */
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ProblemDetail> handleMissingRequestParameter(
         MissingServletRequestParameterException ex) {
@@ -169,13 +163,6 @@ public class GlobalExceptionHandler {
         return requestParameterProblem(ex.getParameterName(), "Required request parameter is missing");
     }
 
-    /**
-     * Handle a request parameter that does not convert to its declared type (400 Bad Request),
-     * such as a non-numeric {@code concurrencyToken}.
-     *
-     * <p>Without this the exception reaches the {@code RuntimeException} catch-all and the caller
-     * is told 500. The submitted value is logged but not returned.
-     */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ProblemDetail> handleRequestParameterTypeMismatch(
         MethodArgumentTypeMismatchException ex) {
