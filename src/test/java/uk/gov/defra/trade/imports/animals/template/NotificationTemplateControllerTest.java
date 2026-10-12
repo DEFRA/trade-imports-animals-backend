@@ -14,6 +14,7 @@ import static uk.gov.defra.trade.imports.animals.template.NotificationTemplateCo
 
 import java.time.Instant;
 import java.util.List;
+import org.bson.Document;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -48,7 +49,8 @@ class NotificationTemplateControllerTest {
     void list_shouldReturnTheUsersTemplates() throws Exception {
         // Given
         NotificationTemplateSummary summary = new NotificationTemplateSummary(
-            "t-1", "Arena Aintree", "live-animals", Instant.parse("2026-10-09T10:00:00Z"));
+            "t-1", "Arena Aintree", "live-animals", Instant.parse("2026-10-09T10:00:00Z"),
+            List.of(new Document("id", "origin")));
         when(notificationTemplateService.listFor(OWNER_ID))
             .thenReturn(new NotificationTemplateListResponse(List.of(summary), 1));
 
@@ -57,7 +59,8 @@ class NotificationTemplateControllerTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.totalItems").value(1))
             .andExpect(jsonPath("$.items[0].name").value("Arena Aintree"))
-            .andExpect(jsonPath("$.items[0].setId").value("live-animals"));
+            .andExpect(jsonPath("$.items[0].setId").value("live-animals"))
+            .andExpect(jsonPath("$.items[0].fulfilments[0].id").value("origin"));
         verify(notificationTemplateService).listFor(OWNER_ID);
     }
 

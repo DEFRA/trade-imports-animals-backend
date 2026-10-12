@@ -18,7 +18,7 @@ public class NotificationTemplateService {
      * was recorded come after, newest created first. A template still being created is not listed.
      *
      * @param ownerId the user whose templates to list
-     * @return a summary of each of the user's saved templates, and how many there are
+     * @return a summary of each of the user's saved templates, with the answers each holds, and how many there are
      */
     public NotificationTemplateListResponse listFor(String ownerId) {
         List<NotificationTemplateSummary> items = notificationTemplateRepository

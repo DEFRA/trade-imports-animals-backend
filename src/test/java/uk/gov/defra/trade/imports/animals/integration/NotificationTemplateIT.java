@@ -179,6 +179,8 @@ class NotificationTemplateIT extends IntegrationBase {
         assertThat(saved.status()).isEqualTo(TemplateStatus.SAVED);
         assertThat(list(OWNER).items()).extracting(item -> item.name())
             .containsExactly("Weekly cattle");
+        assertThat(list(OWNER).items().get(0).fulfilments())
+            .extracting(document -> document.getString("id")).containsExactly("origin");
         NotificationTemplate stored = repository.findById(started.id()).orElseThrow();
         assertThat(stored.getFulfilments()).hasSize(1);
         assertThat(stored.getFulfilments().get(0).getString("id")).isEqualTo("origin");

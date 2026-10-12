@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import org.bson.Document;
@@ -64,9 +65,44 @@ class NotificationTemplateServiceTest {
 
         // Then
         assertThat(response.items()).containsExactly(
-            new NotificationTemplateSummary("t-1", "Arena Aintree", "live-animals", newer),
-            new NotificationTemplateSummary("t-2", "Acorn Farm", "live-animals", older));
+            new NotificationTemplateSummary("t-1", "Arena Aintree", "live-animals", newer,
+                List.of(new Document("id", "origin"))),
+            new NotificationTemplateSummary("t-2", "Acorn Farm", "live-animals", older,
+                List.of(new Document("id", "origin"))));
         assertThat(response.totalItems()).isEqualTo(2);
+    }
+
+    @Test
+    void listFor_shouldCarryEachTemplatesAnswers() {
+        // Given
+        NotificationTemplate withAnswers = template("t-1", "Arena Aintree",
+            Instant.parse("2026-10-09T10:00:00Z"));
+        withAnswers.setFulfilments(new ArrayList<>(List.of(new Document("id", "origin"))));
+        when(repository.findAllByOwnerIdAndStatusNotOrderBySavedDescCreatedDesc(
+            OWNER_ID, TemplateStatus.IN_PROGRESS)).thenReturn(List.of(withAnswers));
+
+        // When
+        NotificationTemplateListResponse response = service.listFor(OWNER_ID);
+
+        // Then
+        assertThat(response.items().get(0).fulfilments()).hasSize(1);
+        assertThat(response.items().get(0).fulfilments().get(0).getString("id")).isEqualTo("origin");
+    }
+
+    @Test
+    void listFor_shouldCarryNoAnswers_whenTheTemplateHoldsNone() {
+        // Given
+        NotificationTemplate withNone = template("t-1", "Arena Aintree",
+            Instant.parse("2026-10-09T10:00:00Z"));
+        withNone.setFulfilments(null);
+        when(repository.findAllByOwnerIdAndStatusNotOrderBySavedDescCreatedDesc(
+            OWNER_ID, TemplateStatus.IN_PROGRESS)).thenReturn(List.of(withNone));
+
+        // When
+        NotificationTemplateListResponse response = service.listFor(OWNER_ID);
+
+        // Then
+        assertThat(response.items().get(0).fulfilments()).isEmpty();
     }
 
     @Test
