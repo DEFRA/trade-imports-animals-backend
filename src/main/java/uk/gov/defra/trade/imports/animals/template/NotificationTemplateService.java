@@ -77,7 +77,9 @@ public class NotificationTemplateService {
     }
 
     /**
-     * Replaces the answers a template holds.
+     * Replaces the answers a template holds. Changing the answers of a saved template moves its
+     * saved time on to now, so its date created is the day of the change and the list shows it
+     * first; a template still being created keeps none.
      *
      * @param ownerId the user who owns the template
      * @param id the template's identifier
@@ -89,6 +91,9 @@ public class NotificationTemplateService {
         String ownerId, String id, TemplateFulfilmentsRequest request) {
         NotificationTemplate template = load(ownerId, id);
         template.setFulfilments(new ArrayList<>(request.fulfilments()));
+        if (template.getStatus() != TemplateStatus.IN_PROGRESS) {
+            template.setSaved(Instant.now());
+        }
         return NotificationTemplateResponse.from(notificationTemplateRepository.save(template));
     }
 

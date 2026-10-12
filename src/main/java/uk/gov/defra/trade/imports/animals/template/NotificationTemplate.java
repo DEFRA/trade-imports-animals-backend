@@ -58,7 +58,8 @@ public class NotificationTemplate {
     private TemplateStatus status;
 
     /**
-     * When the template was first saved; none while it is being created, or on a row saved before
+     * When the template was last saved: first set when it is saved, then moved on each time its
+     * answers are changed once saved; none while it is being created, or on a row saved before
      * this was recorded.
      */
     private Instant saved;

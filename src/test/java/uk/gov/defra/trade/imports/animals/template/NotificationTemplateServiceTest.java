@@ -174,6 +174,61 @@ class NotificationTemplateServiceTest {
     }
 
     @Test
+    void replaceFulfilments_shouldMoveTheSavedTimeOn_whenTheTemplateIsSaved() {
+        // Given
+        NotificationTemplate existing = template(TEMPLATE_ID, "Weekly", null);
+        existing.setStatus(TemplateStatus.SAVED);
+        existing.setSaved(Instant.parse("2026-10-01T09:00:00Z"));
+        when(repository.findByIdAndOwnerId(TEMPLATE_ID, OWNER_ID))
+            .thenReturn(Optional.of(existing));
+        when(repository.save(existing)).thenReturn(existing);
+        Instant before = Instant.now();
+
+        // When
+        service.replaceFulfilments(OWNER_ID, TEMPLATE_ID,
+            new TemplateFulfilmentsRequest(List.of(new Document("id", "origin"))));
+
+        // Then
+        assertThat(existing.getSaved()).isBetween(before, Instant.now());
+    }
+
+    @Test
+    void replaceFulfilments_shouldMoveTheSavedTimeOn_whenTheTemplateHasNoStatus() {
+        // Given
+        NotificationTemplate existing = template(TEMPLATE_ID, "Weekly", null);
+        existing.setStatus(null);
+        existing.setSaved(Instant.parse("2026-10-01T09:00:00Z"));
+        when(repository.findByIdAndOwnerId(TEMPLATE_ID, OWNER_ID))
+            .thenReturn(Optional.of(existing));
+        when(repository.save(existing)).thenReturn(existing);
+        Instant before = Instant.now();
+
+        // When
+        service.replaceFulfilments(OWNER_ID, TEMPLATE_ID,
+            new TemplateFulfilmentsRequest(List.of(new Document("id", "origin"))));
+
+        // Then
+        assertThat(existing.getSaved()).isBetween(before, Instant.now());
+    }
+
+    @Test
+    void replaceFulfilments_shouldLeaveSavedUnset_whenTheTemplateIsBeingCreated() {
+        // Given
+        NotificationTemplate existing = template(TEMPLATE_ID, "Weekly", null);
+        existing.setStatus(TemplateStatus.IN_PROGRESS);
+        when(repository.findByIdAndOwnerId(TEMPLATE_ID, OWNER_ID))
+            .thenReturn(Optional.of(existing));
+        when(repository.save(existing)).thenReturn(existing);
+
+        // When
+        service.replaceFulfilments(OWNER_ID, TEMPLATE_ID,
+            new TemplateFulfilmentsRequest(List.of(new Document("id", "origin"))));
+
+        // Then
+        assertThat(existing.getSaved()).isNull();
+    }
+
+    @Test
     void save_shouldMarkTheTemplateSaved() {
         // Given
         NotificationTemplate existing = template(TEMPLATE_ID, "Weekly", null);

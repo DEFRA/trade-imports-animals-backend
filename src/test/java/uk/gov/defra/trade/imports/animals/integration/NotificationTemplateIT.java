@@ -26,6 +26,7 @@ class NotificationTemplateIT extends IntegrationBase {
     private static final String HEADER_USER_ID = NotificationTemplateController.HEADER_USER_ID;
     private static final String OWNER = "2100010101";
     private static final String OTHER_OWNER = "2100010102";
+    private static final String ORIGIN_ONLY = "{\"fulfilments\":[{\"id\":\"origin\"}]}";
 
     @Autowired
     private NotificationTemplateRepository repository;
@@ -131,14 +132,7 @@ class NotificationTemplateIT extends IntegrationBase {
         String body = "{\"fulfilments\":[{\"id\":\"origin\",\"answers\":{\"a\":\"b\"}}]}";
 
         // When
-        webClient("NoAuth")
-            .put()
-            .uri(TEMPLATES_ENDPOINT + "/" + started.id() + "/fulfilments")
-            .header(HEADER_USER_ID, OWNER)
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(body)
-            .exchange()
-            .expectStatus().isOk();
+        replaceFulfilments(OWNER, started.id(), body);
 
         // Then
         NotificationTemplate stored = repository.findById(started.id()).orElseThrow();
@@ -176,14 +170,7 @@ class NotificationTemplateIT extends IntegrationBase {
     void save_thenList_listsTheTemplateWithItsAnswers() {
         // Given
         NotificationTemplateResponse started = start(OWNER, "live-animals", "Weekly cattle");
-        webClient("NoAuth")
-            .put()
-            .uri(TEMPLATES_ENDPOINT + "/" + started.id() + "/fulfilments")
-            .header(HEADER_USER_ID, OWNER)
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue("{\"fulfilments\":[{\"id\":\"origin\"}]}")
-            .exchange()
-            .expectStatus().isOk();
+        replaceFulfilments(OWNER, started.id(), ORIGIN_ONLY);
 
         // When
         NotificationTemplateResponse saved = save(OWNER, started.id());
@@ -213,6 +200,20 @@ class NotificationTemplateIT extends IntegrationBase {
     }
 
     @Test
+    void replaceFulfilments_onASavedTemplate_movesTheSavedTimeOn() {
+        // Given
+        NotificationTemplateResponse started = start(OWNER, "live-animals", "Weekly cattle");
+        save(OWNER, started.id());
+        Instant firstSaved = get(OWNER, started.id()).saved();
+
+        // When
+        replaceFulfilments(OWNER, started.id(), ORIGIN_ONLY);
+
+        // Then
+        assertThat(get(OWNER, started.id()).saved()).isAfter(firstSaved);
+    }
+
+    @Test
     void findAll_shouldListTheLaterSavedTemplateFirst() {
         // Given
         NotificationTemplateResponse startedFirst = start(OWNER, "live-animals", "Started first");
@@ -230,6 +231,22 @@ class NotificationTemplateIT extends IntegrationBase {
     }
 
     @Test
+    void findAll_shouldListAChangedSavedTemplateFirst() {
+        // Given
+        NotificationTemplateResponse older = start(OWNER, "live-animals", "Saved first");
+        NotificationTemplateResponse newer = start(OWNER, "live-animals", "Saved second");
+        save(OWNER, older.id());
+        save(OWNER, newer.id());
+
+        // When
+        replaceFulfilments(OWNER, older.id(), ORIGIN_ONLY);
+
+        // Then
+        assertThat(list(OWNER).items()).extracting(item -> item.name())
+            .containsExactly("Saved first", "Saved second");
+    }
+
+    @Test
     void save_shouldReturn404_forAnotherOwnersTemplate() {
         // Given
         NotificationTemplateResponse started = start(OWNER, "live-animals", "Mine");
@@ -242,6 +259,17 @@ class NotificationTemplateIT extends IntegrationBase {
             .exchange()
             .expectStatus().isNotFound();
         assertThat(list(OWNER).items()).isEmpty();
+    }
+
+    private void replaceFulfilments(String ownerId, String id, String body) {
+        webClient("NoAuth")
+            .put()
+            .uri(TEMPLATES_ENDPOINT + "/" + id + "/fulfilments")
+            .header(HEADER_USER_ID, ownerId)
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(body)
+            .exchange()
+            .expectStatus().isOk();
     }
 
     private NotificationTemplateResponse save(String ownerId, String id) {
