@@ -52,6 +52,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Sort.Direction;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
@@ -73,6 +74,7 @@ class NotificationServiceTest {
     private static final String TEST_USER_ID = "test-user-id";
     /** The acting user's organisation, passed through to the outbox event. */
     private static final String ORG_ID = "5900002";
+    private static final Long SUBMIT_TOKEN = 7L;
 
     @Mock
     private NotificationRepository notificationRepository;
@@ -1112,7 +1114,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            NotificationAggregate result = notificationService.submitNotification(referenceNumber,
+            NotificationAggregate result = notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN,
                 "trace-001", null);
 
             // Then
@@ -1156,7 +1158,7 @@ class NotificationServiceTest {
 
             // When
             NotificationAggregate returned =
-                notificationService.submitNotification(referenceNumber, "trace-ref-001", actor);
+                notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-ref-001", actor);
 
             // Then — the event carries the saved notification, parties exactly as stored
             ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
@@ -1191,7 +1193,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            notificationService.submitNotification(referenceNumber, "trace-001", null);
+            notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-001", null);
 
             // Then — save must happen before the outbox event is written
             InOrder inOrder = inOrder(notificationRepository, outboxService);
@@ -1220,7 +1222,7 @@ class NotificationServiceTest {
 
             // When / Then — exception propagates out of submitNotification
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-001", null))
+                () -> notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-001", null))
                 .isInstanceOf(OutboxWriteException.class);
         }
 
@@ -1233,7 +1235,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-001", null))
+                () -> notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-001", null))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(referenceNumber);
 
@@ -1262,7 +1264,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-001", null))
+                () -> notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-001", null))
                 .isInstanceOf(OutboxWriteException.class)
                 .satisfies(ex -> {
                     OutboxWriteException owe = (OutboxWriteException) ex;
@@ -1292,7 +1294,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            NotificationAggregate result = notificationService.submitNotification(referenceNumber,
+            NotificationAggregate result = notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN,
                 "trace-002", null);
 
             // Then
@@ -1319,7 +1321,7 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-003", null))
+                () -> notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-003", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("SUBMITTED");
 
@@ -1344,12 +1346,61 @@ class NotificationServiceTest {
 
             // When / Then
             assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, "trace-004", null))
+                () -> notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-004", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("DELETED");
 
             verify(notificationRepository, never()).save(any());
             verify(outboxService, never()).appendEvent(any(), any(), any(), any());
+        }
+
+        @Test
+        void submitNotification_shouldSaveAtTheExpectedConcurrencyToken() {
+            // Given — the stored notification has moved on to 8; the caller read it at 7
+            String referenceNumber = "GBN-AG-26-TOKEN1";
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .id("notif-id-token")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .concurrencyToken(8L)
+                .notification(Notification.builder().build())
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notificationAggregate));
+            ArgumentCaptor<NotificationAggregate> saved = ArgumentCaptor.forClass(NotificationAggregate.class);
+            when(notificationRepository.save(saved.capture()))
+                .thenThrow(new OptimisticLockingFailureException("stale"));
+
+            // When / Then — the save carries the caller's token, so @Version refuses it
+            assertThatThrownBy(
+                () -> notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-005", null))
+                .isInstanceOf(OptimisticLockingFailureException.class);
+
+            assertThat(saved.getValue().getConcurrencyToken()).isEqualTo(SUBMIT_TOKEN);
+            verify(outboxService, never()).appendEvent(any(), any(), any(), any());
+        }
+
+        @Test
+        void submitNotification_shouldThrowBadRequest_whenConcurrencyTokenNull() {
+            // Given
+            String referenceNumber = "GBN-AG-26-NOTOKN";
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .id("notif-id-no-token")
+                .referenceNumber(referenceNumber)
+                .status(DRAFT)
+                .notification(Notification.builder().build())
+                .build();
+            when(notificationRepository.findByReferenceNumber(referenceNumber))
+                .thenReturn(Optional.of(notificationAggregate));
+
+            // When / Then
+            assertThatThrownBy(
+                () -> notificationService.submitNotification(referenceNumber, null, "trace-006", null))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("concurrencyToken");
+
+            verify(notificationRepository, never()).save(any());
+            verify(lockProvider, never()).lock(any());
         }
     }
 
@@ -2440,7 +2491,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When — DRAFT -> SUBMITTED (first submit)
-            NotificationAggregate afterFirstSubmit = notificationService.submitNotification(ref, "t1", null);
+            NotificationAggregate afterFirstSubmit = notificationService.submitNotification(ref, SUBMIT_TOKEN, "t1", null);
             Instant firstSubmittedAt = afterFirstSubmit.getSubmittedAt();
             assertThat(firstSubmittedAt).isNotNull();
 
@@ -2449,7 +2500,7 @@ class NotificationServiceTest {
             assertThat(afterAmend.getSubmittedAt()).isEqualTo(firstSubmittedAt);
 
             // And — AMEND -> SUBMITTED (resubmit updates submittedAt to the new submission moment)
-            NotificationAggregate afterResubmit = notificationService.submitNotification(ref, "t3", null);
+            NotificationAggregate afterResubmit = notificationService.submitNotification(ref, SUBMIT_TOKEN, "t3", null);
 
             // Then — submittedAt reflects the RESUBMISSION, not the original submit.
             assertThat(afterResubmit.getSubmittedAt()).isNotNull();
@@ -2482,7 +2533,7 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             // When
-            NotificationAggregate result = notificationService.submitNotification(ref, "trace", null);
+            NotificationAggregate result = notificationService.submitNotification(ref, SUBMIT_TOKEN, "trace", null);
 
             // Then — pre-amend snapshot is cleared; fulfilments scratchpad is spent.
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);

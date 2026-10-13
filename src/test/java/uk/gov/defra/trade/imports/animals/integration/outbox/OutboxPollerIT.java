@@ -101,7 +101,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
 
         // direct status reset adds no outbox event; second submit → NOTIFICATION_SUBMITTED (v3)
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .header(HEADER_TRACE_ID, "trace-v2")
             .exchange()
             .expectStatus().isOk();
@@ -203,7 +203,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         String referenceNumber = createAndSaveNotification("trace-page-save");
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .header(HEADER_TRACE_ID, "trace-submit")
             .exchange()
             .expectStatus().isOk();
