@@ -97,25 +97,34 @@ public class NotificationController {
 
     @PostMapping("/{referenceNumber}/submit")
     @Operation(summary = "Submit notification",
-        description = "Transitions notification status to SUBMITTED. Accepts DRAFT or AMEND as the source state.")
+        description = "Transitions notification status to SUBMITTED. Accepts DRAFT or AMEND as the source state. "
+            + "Submits only if the notification is still at concurrencyToken, so the submitted content is exactly "
+            + "what the caller last read.")
     @ApiResponse(responseCode = "200", description = "Notification submitted",
         content = @Content(schema = @Schema(implementation = NotificationAggregate.class)))
     @ApiResponse(responseCode = "400",
-        description = "Notification not in a submittable state",
+        description = "Notification not in a submittable state, or concurrencyToken missing",
         content = @Content(
             mediaType = "application/problem+json",
             schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "401", description = "Unauthorised", content = @Content)
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
+    @ApiResponse(responseCode = "409", description = "concurrencyToken does not match the current notification",
+        content = @Content(
+            mediaType = "application/problem+json",
+            schema = @Schema(implementation = ProblemDetail.class)))
     @ApiResponse(responseCode = "500", description = "Submission failed", content = @Content)
     @Timed("controller.submitNotification.time")
     public ResponseEntity<NotificationAggregate> submit(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
+        @RequestParam Long concurrencyToken,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest) {
-        log.info("POST /notifications/{}/submit - Submitting notification", referenceNumber);
+        log.info("POST /notifications/{}/submit - Submitting notification at expectedConcurrencyToken={}",
+            referenceNumber, concurrencyToken);
         Actor actor = resolveActor(actorRequest);
-        return ResponseEntity.ok(notificationService.submitNotification(referenceNumber, traceId, actor));
+        return ResponseEntity.ok(
+            notificationService.submitNotification(referenceNumber, concurrencyToken, traceId, actor));
     }
 
     @PostMapping("/{referenceNumber}/amend")
