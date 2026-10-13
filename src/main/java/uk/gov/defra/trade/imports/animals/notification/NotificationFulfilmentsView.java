@@ -8,7 +8,10 @@ import org.bson.Document;
  * Spring Data interface projection over the {@code notification} collection backing
  * {@code GET /notifications/{ref}/fulfilments}. Server-only fields
  * ({@code preAmendNotification}, {@code preAmendFulfilments}, {@code expireAt}) are
- * intentionally omitted so they aren't loaded on read.
+ * intentionally omitted so they aren't loaded on read. It does carry
+ * {@code answersChangedSinceSubmission}: whether an amendment's content differs from its pre-amend
+ * snapshot, without exposing the snapshot itself. It also carries {@code outstandingItems}: what
+ * the latest submission still owed.
  */
 public interface NotificationFulfilmentsView {
 
@@ -23,4 +26,8 @@ public interface NotificationFulfilmentsView {
     Instant getSubmittedAt();
 
     List<Document> getFulfilments();
+
+    Boolean getAnswersChangedSinceSubmission();
+
+    List<OutstandingItem> getOutstandingItems();
 }

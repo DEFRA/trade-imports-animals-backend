@@ -1162,6 +1162,10 @@ class NotificationControllerTest {
                 @Override public java.util.List<org.bson.Document> getFulfilments() {
                     return java.util.List.of(new org.bson.Document("obligationId", "abc"));
                 }
+                @Override public Boolean getAnswersChangedSinceSubmission() { return true; }
+                @Override public java.util.List<OutstandingItem> getOutstandingItems() {
+                    return java.util.List.of(OutstandingItem.HEALTH_CERTIFICATE);
+                }
             };
             when(notificationService.findFulfilmentsView(REF_1)).thenReturn(view);
 
@@ -1175,7 +1179,9 @@ class NotificationControllerTest {
                 // instants this projection now carries goes red rather than passing an is-not-null.
                 .andExpect(jsonPath("$.created").value("2026-07-21T06:42:17.123Z"))
                 .andExpect(jsonPath("$.submittedAt").value("2026-07-21T14:09:05Z"))
-                .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"));
+                .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"))
+                .andExpect(jsonPath("$.answersChangedSinceSubmission").value(true))
+                .andExpect(jsonPath("$.outstandingItems[0]").value("HEALTH_CERTIFICATE"));
         }
 
         @Test
