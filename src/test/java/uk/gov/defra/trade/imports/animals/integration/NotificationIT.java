@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Updates;
@@ -41,6 +42,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.NotificationView;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
+import uk.gov.defra.trade.imports.animals.notification.OutstandingItem;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberPageResponse;
 import uk.gov.defra.trade.imports.animals.notification.Species;
@@ -472,9 +474,9 @@ class NotificationIT extends IntegrationBase {
             .containsExactlyInAnyOrder(
                 NotificationStatus.DRAFT,
                 NotificationStatus.DRAFT,
-                NotificationStatus.SUBMITTED);
+                NotificationStatus.SUBMITTED_ACTION_REQUIRED);
         assertThat(all.getFirst().getReferenceNumber()).isEqualTo(submittedRef);
-        assertThat(all.getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(all.getFirst().getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
         assertThat(all.getFirst().getTransport().getArrivalDate())
             .isEqualTo(LocalDate.parse("2026-06-15"));
         assertThat(all.get(1).getTransport().getArrivalDate())
@@ -863,14 +865,15 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submit_shouldTransitionStatusFromDraftToSubmitted() {
-        // Given — create a notification (starts as DRAFT)
+    void submit_shouldTransitionStatusFromDraftToSubmitted_whenACleanItahcIsUploaded() {
+        // Given — create a notification (starts as DRAFT) with a clean ITAHC
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
+        givenACleanItahc(referenceNumber);
 
         // When — submit the notification
         NotificationAggregate submitted = webClient("NoAuth")
@@ -884,7 +887,106 @@ class NotificationIT extends IntegrationBase {
         assertThat(submitted).isNotNull();
         assertThat(submitted.getReferenceNumber()).isEqualTo(referenceNumber);
         assertThat(submitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(submitted.getOutstandingItems()).isEmpty();
         assertThat(submitted.getUpdated()).isNotNull();
+    }
+
+    @Test
+    void submit_shouldRecordSubmittedActionRequiredAndTheOutstandingHealthCertificate_whenNoneIsUploaded() {
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .exchange().expectStatus().isOk();
+
+        NotificationAggregate stored = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
+        assertThat(stored.getOutstandingItems()).containsExactly(OutstandingItem.HEALTH_CERTIFICATE);
+
+        webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo("SUBMITTED_ACTION_REQUIRED")
+            .jsonPath("$.outstandingItems[0]").isEqualTo("HEALTH_CERTIFICATE")
+            .jsonPath("$.submittedAt").isEqualTo(stored.getSubmittedAt().toString());
+    }
+
+    @Test
+    void submit_shouldCarrySubmittedActionRequiredOnTheEvent_whenNoHealthCertificateIsUploaded() {
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .exchange().expectStatus().isOk();
+
+        OutboxEvent event = submittedOutboxEvent();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> exchangedDocument =
+            (Map<String, Object>) event.getData().get("exchangedDocument");
+        assertThat(exchangedDocument.get("notificationStatusCode"))
+            .isEqualTo("SUBMITTED_ACTION_REQUIRED");
+        assertThat(event.getStatusChanges().getLast().getStatus())
+            .isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
+    }
+
+    @Test
+    void cancelAmend_shouldRestoreSubmittedActionRequired_whenTheSubmissionOwedTheHealthCertificate() {
+        NotificationDto dto = createNotificationDto("GB", "Live cattle");
+        dto.setFulfilments(sampleFulfilments());
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(dto))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .exchange().expectStatus().isOk();
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/cancel-amend", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        NotificationAggregate restored = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow();
+        assertThat(restored.getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
+        assertThat(restored.getOutstandingItems()).containsExactly(OutstandingItem.HEALTH_CERTIFICATE);
+    }
+
+    @Test
+    void findAll_shouldListSubmittedActionRequiredNotifications() {
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .exchange().expectStatus().isOk();
+
+        NotificationPageResponse page = findAllNotificationsPage(1);
+
+        assertThat(page.content())
+            .extracting(NotificationView::getReferenceNumber, NotificationView::getStatus)
+            .containsExactly(tuple(
+                referenceNumber, NotificationStatus.SUBMITTED_ACTION_REQUIRED));
     }
 
     @Test
@@ -1009,7 +1111,7 @@ class NotificationIT extends IntegrationBase {
         // Then — the read ignores the unknown field and the event carries the literal
         NotificationAggregate stored = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow();
-        assertThat(stored.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(stored.getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
         assertThat(stored.getNotification().getConsignor()).isEqualTo(literalConsignor());
         assertThat(outboxConsignorParty(submittedOutboxEvent()))
             .containsEntry("name", "Astra Rosales");
@@ -1239,7 +1341,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getActor()).isNull();
         // statusChanges accumulates from DRAFT (v1 NOTIFICATION_CREATED) through SUBMITTED
         assertThat(event.getStatusChanges()).hasSize(2);
-        assertThat(event.getStatusChanges().getLast().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(event.getStatusChanges().getLast().getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
         assertThat(event.getStatusChanges().getLast().getDateChanged()).isNotNull();
         assertThat(event.getStatusChanges().getLast().getActor()).isNull();
         // No accompanying documents: the key is omitted rather than sent as an empty array
@@ -1343,7 +1445,7 @@ class NotificationIT extends IntegrationBase {
 
         // statusChanges: DRAFT (from NOTIFICATION_CREATED, no actor) + SUBMITTED (with actor)
         assertThat(event.getStatusChanges()).hasSize(2);
-        assertThat(event.getStatusChanges().getLast().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(event.getStatusChanges().getLast().getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
         assertThat(event.getStatusChanges().getLast().getActor()).isEqualTo(event.getActor());
     }
 
@@ -1387,7 +1489,7 @@ class NotificationIT extends IntegrationBase {
         OutboxEvent amendEvent = events.get(2);
         // statusChanges: DRAFT (NOTIFICATION_CREATED) + SUBMITTED (Alice) + AMEND (Bob)
         assertThat(amendEvent.getStatusChanges()).hasSize(3);
-        assertThat(amendEvent.getStatusChanges().get(1).getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(amendEvent.getStatusChanges().get(1).getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
         assertThat(amendEvent.getStatusChanges().get(1).getActor().getId()).isEqualTo("contact-sub-001");
         assertThat(amendEvent.getStatusChanges().get(2).getStatus()).isEqualTo(NotificationStatus.AMEND);
         assertThat(amendEvent.getStatusChanges().get(2).getActor().getId()).isEqualTo("contact-sub-002");
@@ -2316,6 +2418,24 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void findFulfilments_shouldReturnTheStoredSubmissionInstant_onceSubmitted() {
+        // Given — a notification submitted through the real endpoints
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
+        Instant stored = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow().getSubmittedAt();
+        assertThat(stored).isNotNull();
+
+        // When / Then — the fulfilments read carries that same instant
+        webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.status").isEqualTo("SUBMITTED")
+            .jsonPath("$.submittedAt").isEqualTo(stored.toString());
+    }
+
+    @Test
     void findFulfilments_shouldReturn404_whenReferenceNumberUnknown() {
         webClient("NoAuth")
             .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", NONEXISTENT_REF)
@@ -2324,6 +2444,55 @@ class NotificationIT extends IntegrationBase {
             .expectBody()
             .jsonPath("$.status").isEqualTo(404)
             .jsonPath("$.detail").value(Matchers.containsString(NONEXISTENT_REF));
+    }
+
+    @Test
+    void findFulfilments_shouldReportAnswersChangedSinceSubmission_onlyWhileAmendedContentDiffers() {
+        // Given — a submitted notification that is then amended
+        String ref = createAndSubmitNotificationWithFullContent();
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", ref)
+            .exchange().expectStatus().isOk();
+        expectAnswersChanged(ref, false);
+
+        // When — only the fulfilments change, then an answer changes, then it is put back
+        putAmendedContent(ref, sourceNotificationWithAllOperators(), List.of(new Document("obligationId", "other")));
+        expectAnswersChanged(ref, false);
+
+        NotificationDto changed = sourceNotificationWithAllOperators();
+        changed.getOrigin().setInternalReference("CHANGED-ANSWER");
+        putAmendedContent(ref, changed, sampleFulfilments());
+        expectAnswersChanged(ref, true);
+
+        putAmendedContent(ref, sourceNotificationWithAllOperators(), sampleFulfilments());
+        expectAnswersChanged(ref, false);
+
+        // Then — resubmission clears the signal
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", ref, currentConcurrencyToken(ref))
+            .exchange().expectStatus().isOk();
+        NotificationAggregate reloaded = notificationRepository.findByReferenceNumber(ref).orElseThrow();
+        assertThat(reloaded.getAnswersChangedSinceSubmission()).isNull();
+    }
+
+    private void putAmendedContent(String ref, NotificationDto content, List<Document> fulfilments) {
+        NotificationAggregate stored = notificationRepository.findByReferenceNumber(ref).orElseThrow();
+        content.setReferenceNumber(ref);
+        content.setConcurrencyToken(stored.getConcurrencyToken());
+        content.setFulfilments(fulfilments);
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", ref)
+            .bodyValue(SaveNotificationDto.of(content))
+            .exchange().expectStatus().isOk();
+    }
+
+    private void expectAnswersChanged(String ref, boolean expected) {
+        webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", ref)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody()
+            .jsonPath("$.answersChangedSinceSubmission").isEqualTo(expected);
     }
 
     @Test
@@ -2372,6 +2541,19 @@ class NotificationIT extends IntegrationBase {
         // And the stored notification reflects the first PUT's write, not the stale one.
         NotificationAggregate stored = notificationRepository.findByReferenceNumber(ref).orElseThrow();
         assertThat(stored.getNotification().getOrigin().getInternalReference()).isEqualTo("FIRST");
+    }
+
+    /** Saves an ITAHC that has passed its virus scan, so a submission owes no health certificate. */
+    private void givenACleanItahc(String referenceNumber) {
+        accompanyingDocumentRepository.save(AccompanyingDocument.builder()
+            .notificationReferenceNumber(referenceNumber)
+            .uploadId("upload-itahc-" + referenceNumber)
+            .correlationId("correlation-itahc-" + referenceNumber)
+            .documentType(DocumentType.ITAHC)
+            .documentReference("ITAHC-IT-1")
+            .dateOfIssue(LocalDate.parse("2026-09-01"))
+            .scanStatus(ScanStatus.COMPLETE)
+            .build());
     }
 
     @Test
@@ -2456,6 +2638,7 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk()
             .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
+        givenACleanItahc(referenceNumber);
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
