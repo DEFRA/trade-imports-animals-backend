@@ -33,6 +33,8 @@ import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.validation.BindingResult;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 class GlobalExceptionHandlerTest {
@@ -226,6 +228,86 @@ class GlobalExceptionHandlerTest {
             parserMessage,
             new MockHttpInputMessage(
                 "{\"arrivalDate\":\"1999-07-04T00:00:00Z\"}".getBytes(UTF_8)));
+    }
+
+    @Test
+    void handleMissingRequestParameter_shouldReturnBadRequestNamingTheParameter() {
+        // Given
+        String traceId = "test-trace-missing-param-1";
+        MDC.put("trace.id", traceId);
+        MissingServletRequestParameterException exception =
+            new MissingServletRequestParameterException("concurrencyToken", "Long");
+
+        // When
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleMissingRequestParameter(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getTitle()).isEqualTo("Validation Error");
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
+        assertThat(problemDetail.getProperties())
+            .containsEntry("traceId", traceId)
+            .containsEntry("errors", Map.of("concurrencyToken", List.of("Required request parameter is missing")));
+    }
+
+    @Test
+    void handleMissingRequestParameter_shouldHandleNullTraceId() {
+        MissingServletRequestParameterException exception =
+            new MissingServletRequestParameterException("concurrencyToken", "Long");
+
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleMissingRequestParameter(exception);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getProperties()).doesNotContainKey("traceId");
+    }
+
+    @Test
+    void handleRequestParameterTypeMismatch_shouldReturnBadRequest_withoutEchoingTheValue() {
+        // Given
+        String traceId = "test-trace-type-mismatch-1";
+        MDC.put("trace.id", traceId);
+        MethodArgumentTypeMismatchException exception = typeMismatchException("not-a-number");
+
+        // When
+        ResponseEntity<ProblemDetail> response = exceptionHandler.handleRequestParameterTypeMismatch(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        // Then
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getTitle()).isEqualTo("Validation Error");
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/validation-error"));
+        assertThat(problemDetail.getProperties())
+            .containsEntry("traceId", traceId)
+            .containsEntry("errors", Map.of("concurrencyToken", List.of("Request parameter has an invalid value")));
+        assertThat(problemDetail.getDetail()).doesNotContain("not-a-number");
+    }
+
+    @Test
+    void handleRequestParameterTypeMismatch_shouldHandleNullTraceId() {
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleRequestParameterTypeMismatch(typeMismatchException("abc"));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().getProperties()).doesNotContainKey("traceId");
+    }
+
+    private MethodArgumentTypeMismatchException typeMismatchException(String value) {
+        try {
+            MethodParameter methodParameter = new MethodParameter(this.getClass().getDeclaredMethod("setUp"), -1);
+            return new MethodArgumentTypeMismatchException(
+                value, Long.class, "concurrencyToken", methodParameter, new NumberFormatException(value));
+        } catch (NoSuchMethodException e) {
+            throw new RuntimeException("Failed to create test MethodParameter", e);
+        }
     }
 
     @Test
