@@ -205,12 +205,17 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
         String referenceNumber = createNewNotification(traceId).getReferenceNumber();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}",
+                referenceNumber, currentConcurrencyToken(referenceNumber))
             .header(HEADER_TRACE_ID, traceId)
             .exchange()
             .expectStatus().isOk();
 
         return referenceNumber;
+    }
+
+    protected Long currentConcurrencyToken(String referenceNumber) {
+        return notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow().getConcurrencyToken();
     }
 
     protected String createAndSaveNotification(String traceId) {
