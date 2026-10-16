@@ -3,6 +3,8 @@ package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -11,6 +13,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
@@ -766,7 +770,7 @@ class GbnAgMapperTest {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-WHL001")
             .notification(Notification.builder()
-                .origin(Origin.builder().countryCode("FR").requiresRegionCode("true").regionOfOriginCode("FR-12345").build())
+                .origin(Origin.builder().countryCode("FR").requiresRegionCode("yes").regionOfOriginCode("FR-12345").build())
                 .build())
             .build();
 
@@ -808,6 +812,49 @@ class GbnAgMapperTest {
             .specifiedConsignment().transitTradeCountry())
             .extracting(TradeCountry::subordinateTradeCountrySubDivision, TradeCountry::regionOfOriginCode)
             .containsOnly(tuple(null, null));
+    }
+
+    // The frontend keeps a code entered before the trader answered "no", so a stored code alone
+    // must not reach the event.
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"no", "No", "false"})
+    void shouldNotCarryStoredRegionOfOriginCode_whenRequirementIsNotYes(String requiresRegionCode) {
+        assertThat(originCountryFor(Origin.builder().countryCode("FR")
+            .requiresRegionCode(requiresRegionCode).regionOfOriginCode("FR-12345").build())
+            .regionOfOriginCode()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"yes", "YES"})
+    void shouldCarryRegionOfOriginCode_whenRequirementIsYesInAnyCase(String requiresRegionCode) {
+        assertThat(originCountryFor(Origin.builder().countryCode("FR")
+            .requiresRegionCode(requiresRegionCode).regionOfOriginCode("FR-12345").build())
+            .regionOfOriginCode()).isEqualTo("FR-12345");
+    }
+
+    @Test
+    void shouldOmitAbsentSubdivisionAndRegionOfOriginCode_whenSerialised() {
+        TradeCountry wholeCountry = originCountryFor(Origin.builder().countryCode("FR").requiresRegionCode("no").build());
+        TradeCountry subdivision = originCountryFor(Origin.builder().countryCode("ES").countrySubdivisionCode("ES-CN").build());
+
+        JsonNode wholeCountryJson = new ObjectMapper().valueToTree(wholeCountry);
+        JsonNode subdivisionJson = new ObjectMapper().valueToTree(subdivision);
+
+        assertThat(wholeCountryJson.has("subordinateTradeCountrySubDivision")).isFalse();
+        assertThat(wholeCountryJson.has("regionOfOriginCode")).isFalse();
+        assertThat(subdivisionJson.has("regionOfOriginCode")).isFalse();
+        assertThat(subdivisionJson.path("subordinateTradeCountrySubDivision").path(0).fieldNames())
+            .toIterable().containsExactlyInAnyOrder("identifier", "urlId", "functionTypeCode");
+    }
+
+    private TradeCountry originCountryFor(Origin origin) {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-ORG001")
+            .notification(Notification.builder().origin(origin).build())
+            .build();
+        return mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
+            .specifiedConsignment().originCountry();
     }
 
     private List<ReferencedDocument> transportDocumentsFor(Transport transport) {
@@ -877,7 +924,7 @@ class GbnAgMapperTest {
             .status(NotificationStatus.SUBMITTED)
             .updated(Instant.parse("2026-05-21T10:15:00Z"))
             .notification(Notification.builder()
-                .origin(Origin.builder().countryCode("ES").countrySubdivisionCode("ES-CN").requiresRegionCode("true").internalReference("Imports456_GB").regionOfOriginCode("ES-12345").build())
+                .origin(Origin.builder().countryCode("ES").countrySubdivisionCode("ES-CN").requiresRegionCode("yes").internalReference("Imports456_GB").regionOfOriginCode("ES-12345").build())
                 .reasonForImport("INTERNAL_MARKET")
                 .additionalDetails(new AdditionalDetails("BREEDING_AND_PRODUCTION", "true"))
                 .consignor(party("Astra Rosales",

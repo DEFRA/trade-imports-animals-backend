@@ -1,5 +1,8 @@
 package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public record TradeCountrySubDivision(
     String identifier,
     String urlId,
