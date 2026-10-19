@@ -57,7 +57,7 @@ public class AwsConfig {
 
             return response.webIdentityToken();
         } catch (StsException ex) {
-            throw new TradeImportsAnimalsBackendException("Sts connection error: " + ex.getMessage());
+            throw new TradeImportsAnimalsBackendException("Sts connection error: " + ex.getMessage(), ex);
         }
     }
 

@@ -58,7 +58,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ProblemDetail> handleValidationException(MethodArgumentNotValidException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Validation error (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Validation error (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST,
@@ -99,7 +99,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ProblemDetail> handleUnreadableRequestBody(HttpMessageNotReadableException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Unreadable request body (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Unreadable request body (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST,
@@ -127,7 +127,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ProblemDetail> handleConstraintViolationException(
         ConstraintViolationException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Constraint violation (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Constraint violation (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST,
@@ -159,14 +159,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ProblemDetail> handleMissingRequestParameter(
         MissingServletRequestParameterException ex) {
-        log.warn("Missing request parameter (trace: {}): {}", MDC.get(MDC_TRACE_ID), ex.getMessage());
+        log.warn("Missing request parameter (trace: {})", MDC.get(MDC_TRACE_ID), ex);
         return requestParameterProblem(ex.getParameterName(), "Required request parameter is missing");
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ProblemDetail> handleRequestParameterTypeMismatch(
         MethodArgumentTypeMismatchException ex) {
-        log.warn("Request parameter type mismatch (trace: {}): {}", MDC.get(MDC_TRACE_ID), ex.getMessage());
+        log.warn("Request parameter type mismatch (trace: {})", MDC.get(MDC_TRACE_ID), ex);
         return requestParameterProblem(ex.getName(), "Request parameter has an invalid value");
     }
 
@@ -197,7 +197,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ProblemDetail> handleBadRequestException(BadRequestException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Bad request (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Bad request (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST,
@@ -222,7 +222,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ProblemDetail> handleNotFoundException(NotFoundException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Resource not found (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Resource not found (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.NOT_FOUND,
@@ -247,7 +247,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ServiceUnavailableException.class)
     public ResponseEntity<ProblemDetail> handleServiceUnavailableException(ServiceUnavailableException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.error("Upstream service error (trace: {}): {}", traceId, ex.getMessage());
+        log.error("Upstream service error (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_GATEWAY,
@@ -272,7 +272,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ProblemDetail> handleConflictException(ConflictException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Resource conflict (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Resource conflict (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.CONFLICT,
@@ -298,7 +298,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ProblemDetail> handleOptimisticLockingFailure(
         OptimisticLockingFailureException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Stale-concurrencyToken conflict (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Stale-concurrencyToken conflict (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.CONFLICT,
@@ -323,7 +323,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ProblemDetail> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Upload size exceeded (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Upload size exceeded (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.PAYLOAD_TOO_LARGE,
