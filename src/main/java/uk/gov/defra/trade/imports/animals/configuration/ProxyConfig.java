@@ -10,30 +10,9 @@ import java.net.ProxySelector;
 import java.net.URI;
 
 /**
- * Configures HTTP proxy for all outbound HTTP/HTTPS requests.
- *
- * CDP Platform requirement: All egress traffic (except database connections)
- * must go through the platform's proxy server for security and access control.
- *
- * Configuration:
- * - Reads HTTP_PROXY environment variable (format: http://host:port)
- * - Sets Java system properties (http.proxyHost, http.proxyPort, https.proxyHost, https.proxyPort)
- * - Sets default ProxySelector for Java HttpClient
- *
- * This global configuration ensures:
- * - RestClient/RestTemplate automatically use the proxy
- * - Any other Java HTTP clients automatically use the proxy
- * - Internal CDP URLs are auto-routed by the proxy (no bypass needed)
- *
- * The CDP proxy:
- * - Runs on localhost:3128 when deployed
- * - Handles authentication automatically via sidecar
- * - Enforces ACLs (allowed_domains) per service
- * - Auto-routes internal *.cdp-int.defra.cloud URLs directly
- *
- * Local development:
- * - No HTTP_PROXY variable = direct connections (no proxy)
- * - Set HTTP_PROXY for testing proxy behavior locally
+ * Routes every outbound HTTP and HTTPS request through the proxy named by {@code HTTP_PROXY}
+ * ({@code http://host:port}), by setting the JVM proxy system properties and the default
+ * {@link ProxySelector}. With no {@code HTTP_PROXY}, connections are direct.
  */
 @Configuration
 @Slf4j
@@ -60,13 +39,11 @@ public class ProxyConfig {
                 return;
             }
 
-            // Set system properties for traditional Java HTTP clients
             System.setProperty("http.proxyHost", proxyHost);
             System.setProperty("http.proxyPort", String.valueOf(proxyPort));
             System.setProperty("https.proxyHost", proxyHost);
             System.setProperty("https.proxyPort", String.valueOf(proxyPort));
 
-            // Set default ProxySelector for modern Java HttpClient (Java 11+)
             ProxySelector.setDefault(ProxySelector.of(
                 new InetSocketAddress(proxyHost, proxyPort)
             ));

@@ -8,6 +8,7 @@ Core delivery Java Spring Boot backend template.
 * [Testing](#testing)
 * [Running](#running)
 * [Dependabot](#dependabot)
+* [Design notes](docs/design-notes.md)
 
 
 ### Running the local stack

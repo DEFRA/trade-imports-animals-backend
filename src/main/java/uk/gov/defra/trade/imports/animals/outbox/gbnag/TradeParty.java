@@ -28,22 +28,9 @@ public record TradeParty(
             null, TradeAddress.from(party.getAddress()), definedContactFrom(party));
     }
 
-    /**
-     * The party's telephone and email, as the GBNAG mapping table models them — one
-     * {@code definedContact} per party.
-     *
-     * <p>Null, not an empty list, when the party carries neither. The authoritative schema sample
-     * omits absent fields rather than emitting them empty, and the pending {@code NON_NULL}
-     * serialisation change turns a null into an omitted field — where an empty list would still be
-     * written as {@code "definedContact": []}. Absent is also how the rest of this record spells
-     * absent, so returning a collection here would make one field the exception.
-     *
-     * <p>{@code personName} is deliberately never set: the address book holds an organisation or
-     * address name — already mapped to {@link #name()} — and no separate contact person.
-     */
     private static List<DefinedContact> definedContactFrom(ConsignmentParty party) {
         if (party.getEmail() == null && party.getPhone() == null) {
-            return null; //NOSONAR — omitted, not empty; see above
+            return null; //NOSONAR
         }
         return List.of(new DefinedContact(null, party.getEmail(), party.getPhone()));
     }
@@ -52,7 +39,6 @@ public record TradeParty(
         if (transporter == null) {
             return null;
         }
-        // TODO: transporter type is passed through raw - confirm the operator_activity_type codelist mapping is correct. //NOSONAR
         List<CodedValue> partyTypeCode = transporter.getType() != null
             ? List.of(CodedValue.of(transporter.getType(), OPERATOR_ACTIVITY_TYPE))
             : null;

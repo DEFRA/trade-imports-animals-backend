@@ -1,6 +1,6 @@
 # trade-imports-animals-backend
 
-Spring Boot service that stores animals import notifications and publishes their outbox events. See `README.md` for set-up and running.
+Spring Boot service that stores animals import notifications and publishes their outbox events. See `README.md` for set-up and running, and `docs/design-notes.md` for why the code is shaped as it is. Rationale goes in `docs/design-notes.md`, not in code comments.
 
 ## Checks
 
@@ -9,7 +9,8 @@ Spring Boot service that stores animals import notifications and publishes their
 
 ## Code quality
 
-- A comment describes only the lines below it, and only when a name or extraction cannot. Never describe callers, other modules, a library, the UI or a test.
+- A comment describes only the lines below it, and only when a name or extraction cannot. Never describe callers, other modules, a library, the UI or a test. No counts ("the one", "the only").
+- Javadoc states only the contract of a public API. None on private helpers.
 - No ticket keys, backlog or ruling ids, release names or session words in code, comments or test names.
 - No history in code: no before/after narration, no `REMOVED_*`, no "renamed from".
 - A name predicts what the code returns and changes. No positional boolean flags, no metaphors. One concept keeps one name; a rename covers its whole vocabulary.

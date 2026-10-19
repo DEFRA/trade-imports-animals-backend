@@ -6,9 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Concrete carrier for {@link NotificationView} — flat, matching the on-wire JSON the projection
- * produces. Jackson deserializes into this on the client side; Spring Data returns proxy
- * instances of the interface on the server side.
+ * Flat implementation of {@link NotificationView}, with the same fields as its JSON form.
  */
 @Data
 @NoArgsConstructor

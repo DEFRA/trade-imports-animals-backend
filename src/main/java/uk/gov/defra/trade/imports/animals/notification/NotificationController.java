@@ -241,7 +241,7 @@ public class NotificationController {
 
     @PostMapping("/{referenceNumber}/soft-delete")
     @Operation(summary = "Soft-delete notification",
-        description = "Transitions notification status to DELETED (soft delete). Only DRAFT and SUBMITTED notifications can be deleted.")
+        description = "Transitions notification status to DELETED (soft delete). Only DRAFT, SUBMITTED and AMEND notifications can be deleted.")
     @ApiResponse(responseCode = "200", description = "Notification soft-deleted",
         content = @Content(schema = @Schema(implementation = NotificationAggregate.class)))
     @ApiResponse(responseCode = "400", description = "Notification not in a deletable state", content = @Content)
