@@ -52,9 +52,9 @@ public class NotificationController {
         @Valid @RequestBody SaveNotificationDto saveNotificationDto,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId) {
         NotificationDto notificationDto = saveNotificationDto.getNotification();
-        log.info("POST /notifications - referenceNumber={}", notificationDto.getReferenceNumber());
-        ActorRequest actorRequest = saveNotificationDto.getActor();
-        Actor actor = resolveActor(actorRequest);
+        Actor actor = resolveActor(saveNotificationDto.getActor());
+        log.info("POST /notifications - referenceNumber={} userId={}",
+            notificationDto.getReferenceNumber(), userIdOf(actor));
         return ResponseEntity.ok(notificationService.saveNotification(notificationDto, traceId, actor));
     }
 
@@ -70,9 +70,9 @@ public class NotificationController {
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @Valid @RequestBody SaveNotificationDto saveNotificationDto,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId) {
-        log.info("PUT /notifications/{} - Replacing notification content", referenceNumber);
-        ActorRequest actorRequest = saveNotificationDto.getActor();
-        Actor actor = resolveActor(actorRequest);
+        Actor actor = resolveActor(saveNotificationDto.getActor());
+        log.info("PUT /notifications/{} - Replacing notification content userId={}",
+            referenceNumber, userIdOf(actor));
         return ResponseEntity.ok(notificationService.replace(
             referenceNumber, saveNotificationDto.getNotification(), traceId, actor));
     }
@@ -90,8 +90,9 @@ public class NotificationController {
         @RequestParam Long concurrencyToken,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest) {
-        log.info("POST /notifications/{}/copy - Copying notification at expectedConcurrencyToken={}", referenceNumber, concurrencyToken);
         Actor actor = resolveActor(actorRequest);
+        log.info("POST /notifications/{}/copy - Copying notification at expectedConcurrencyToken={} userId={}",
+            referenceNumber, concurrencyToken, userIdOf(actor));
         return ResponseEntity.ok(notificationService.copyNotification(referenceNumber, concurrencyToken, traceId, actor));
     }
 
@@ -120,9 +121,9 @@ public class NotificationController {
         @RequestParam Long concurrencyToken,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest) {
-        log.info("POST /notifications/{}/submit - Submitting notification at expectedConcurrencyToken={}",
-            referenceNumber, concurrencyToken);
         Actor actor = resolveActor(actorRequest);
+        log.info("POST /notifications/{}/submit - Submitting notification at expectedConcurrencyToken={} userId={}",
+            referenceNumber, concurrencyToken, userIdOf(actor));
         return ResponseEntity.ok(
             notificationService.submitNotification(referenceNumber, concurrencyToken, traceId, actor));
     }
@@ -141,8 +142,8 @@ public class NotificationController {
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest) {
-        log.info("POST /notifications/{}/amend - Amending notification", referenceNumber);
         Actor actor = resolveActor(actorRequest);
+        log.info("POST /notifications/{}/amend - Amending notification userId={}", referenceNumber, userIdOf(actor));
         return ResponseEntity.ok(notificationService.amendNotification(referenceNumber, traceId, actor));
     }
 
@@ -159,8 +160,9 @@ public class NotificationController {
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest) {
-        log.info("POST /notifications/{}/cancel-amend - Cancelling amendment", referenceNumber);
         Actor actor = resolveActor(actorRequest);
+        log.info("POST /notifications/{}/cancel-amend - Cancelling amendment userId={}",
+            referenceNumber, userIdOf(actor));
         return ResponseEntity.ok(notificationService.cancelAmendNotification(referenceNumber, traceId, actor));
     }
 
@@ -250,13 +252,18 @@ public class NotificationController {
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest) {
-        log.info("POST /notifications/{}/soft-delete - Soft deleting notification", referenceNumber);
         Actor actor = resolveActor(actorRequest);
+        log.info("POST /notifications/{}/soft-delete - Soft deleting notification userId={}",
+            referenceNumber, userIdOf(actor));
         return ResponseEntity.ok(notificationService.softDeleteNotification(referenceNumber, traceId, actor));
     }
 
     private static Actor resolveActor(ActorRequest actorRequest) {
         return actorRequest != null ? actorRequest.toActor() : null;
+    }
+
+    private static String userIdOf(Actor actor) {
+        return actor != null ? actor.getId() : null;
     }
 
     @DeleteMapping
@@ -268,7 +275,8 @@ public class NotificationController {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return ResponseEntity.badRequest().build();
         }
-        log.info("DELETE /notifications - Deleting {} notifications", referenceNumbers.size());
+        log.info("DELETE /notifications - Deleting notifications referenceNumbers={} userId={}",
+            referenceNumbers, userId);
         notificationService.deleteByReferenceNumbers(referenceNumbers, new AuditContext(traceId, userId));
         return ResponseEntity.noContent().build();
     }
