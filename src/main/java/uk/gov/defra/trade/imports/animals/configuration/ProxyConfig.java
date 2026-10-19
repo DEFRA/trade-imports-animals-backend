@@ -56,7 +56,7 @@ public class ProxyConfig {
             int proxyPort = proxyUri.getPort();
 
             if (proxyHost == null || proxyPort == -1) {
-                log.warn("Invalid HTTP_PROXY format: {}. Expected http://host:port", httpProxy);
+                log.warn("Invalid HTTP_PROXY format: {}. Expected http://host:port", redactCredentials(httpProxy));
                 return;
             }
 
@@ -74,8 +74,11 @@ public class ProxyConfig {
             log.info("HTTP proxy configured: {}:{}", proxyHost, proxyPort);
 
         } catch (IllegalArgumentException e) {
-            log.error("Failed to parse HTTP_PROXY: {}. Error: {}",
-                httpProxy, e.getMessage());
+            log.error("Failed to parse HTTP_PROXY {}: {}", redactCredentials(httpProxy), e.getClass().getSimpleName());
         }
+    }
+
+    static String redactCredentials(String proxyUrl) {
+        return proxyUrl.replaceFirst("(?s)^([^/@]*//)?.*@", "$1***@");
     }
 }
