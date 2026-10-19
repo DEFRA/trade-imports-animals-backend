@@ -16,15 +16,6 @@ import org.testcontainers.lifecycle.Startables;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentUploadResponse;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 
-/**
- * Pins the cdp-uploader contract under {@code NODE_ENV=production} — the mode in which deployed
- * environments run — where the {@code relativeOnly} constraint on the {@code redirect} Joi
- * schema is enforced and the {@code callback} URL must be on the cdp-int.defra.cloud domain.
- *
- * <p>The companion {@link DocumentControllerIT} runs cdp-uploader in development mode (which is
- * what permits the mock virus scanner SQS listener to start) so the contract drift between local
- * CI and the deployed environments would otherwise go uncaught. This IT exists to catch it.
- */
 @Slf4j
 class DocumentInitiateProductionModeIT extends IntegrationBase {
 
@@ -37,9 +28,6 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
     private static final GenericContainer<?> REDIS_CONTAINER =
         CdpUploaderTestSupport.redisContainer(CONTAINER_NETWORK, REDIS_ALIAS);
 
-    // cdp-uploader running in production mode — flips on the prod-only Joi schema rules:
-    //   - redirect must be a relative URI
-    //   - callback must be on the cdp-int.defra.cloud domain
     private static final GenericContainer<?> CDP_UPLOADER_PROD_CONTAINER =
         CdpUploaderTestSupport.cdpUploaderContainer(
                 CONTAINER_NETWORK, CDP_UPLOADER_ALIAS, REDIS_ALIAS, CdpUploaderTestSupport.DOCUMENTS_BUCKET)
@@ -57,9 +45,6 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
         registry.add("cdp.uploader.base-url",
             () -> "http://" + CDP_UPLOADER_PROD_CONTAINER.getHost()
                 + ":" + CDP_UPLOADER_PROD_CONTAINER.getMappedPort(CdpUploaderTestSupport.CDP_UPLOADER_PORT));
-
-        // Callback URL must end in cdp-int.defra.cloud to satisfy prod-mode Joi schema.
-        // Reachability doesn't matter here — /initiate only validates the URL string.
         registry.add("app.base-url", () -> "https://backend.dev.cdp-int.defra.cloud");
     }
 
@@ -110,12 +95,6 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
         String body = result.getResponseBody() == null
             ? ""
             : new String(result.getResponseBody(), StandardCharsets.UTF_8);
-        // Pin to the literal Joi message fragment so a future cdp-uploader image bump that
-        // weakens or removes the relativeOnly() guard fails this test rather than silently
-        // passing on an unrelated structured-error shape that happens to contain both
-        // "redirect" and "relative". cdp-uploader returns the message JSON-escaped, so the
-        // raw bytes include backslash-escaped quotes around the field name; match them
-        // literally.
         assertThat(body).contains("\\\"redirect\\\" must be a valid relative uri");
     }
 }

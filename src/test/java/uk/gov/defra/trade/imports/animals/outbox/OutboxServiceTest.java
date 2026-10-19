@@ -163,9 +163,7 @@ class OutboxServiceTest {
             // When
             outboxService.appendEvent(notificationAggregate, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-001", null);
 
-            // Then — data is the GBN-AG payload (mapped from the NotificationAggregate), stored as
-            // Map<String, Object>. Field-level mapping is covered by GbnAgMapperTest; here we
-            // assert the service stores the GBN-AG shape rather than the raw notification.
+            // Then
             ArgumentCaptor<OutboxEvent> captor = ArgumentCaptor.forClass(OutboxEvent.class);
             verify(outboxEventRepository).save(captor.capture());
             Map<String, Object> data = captor.getValue().getData();
@@ -178,7 +176,7 @@ class OutboxServiceTest {
             assertThat(exchangedDocument)
                 .containsEntry("identifier", "GBN-AG-26-ABC123")
                 .containsEntry("notificationStatusCode", "SUBMITTED")
-                .doesNotContainKey("referenceDocument"); // no documents: key omitted, not an empty array
+                .doesNotContainKey("referenceDocument");
 
             Map<String, Object> specifiedConsignment =
                 (Map<String, Object>) data.get("specifiedConsignment");
@@ -511,15 +509,13 @@ class OutboxServiceTest {
         }
 
         @Test
-        void versionId_shouldBeNull_forNotificationCreated() {
-            // No count query needed — NOTIFICATION_CREATED is pre-submission, versionId always absent
+        void versionId_shouldBeAbsent_forNotificationCreated() {
             Map<String, Object> doc = exchangedDocumentFor(OutboxEventType.NOTIFICATION_CREATED, NotificationStatus.DRAFT);
             assertThat(doc).doesNotContainKey("versionId");
         }
 
         @Test
-        void versionId_shouldBeNull_forNotificationDeleted() {
-            // No count query needed — NOTIFICATION_DELETED is from DRAFT, versionId always absent
+        void versionId_shouldBeAbsent_forNotificationDeleted() {
             Map<String, Object> doc = exchangedDocumentFor(OutboxEventType.NOTIFICATION_DELETED, NotificationStatus.DELETED);
             assertThat(doc).doesNotContainKey("versionId");
         }
@@ -533,14 +529,14 @@ class OutboxServiceTest {
 
         @Test
         void versionId_shouldIncrementForNotificationSubmissionAmended() {
-            givenSubmissionCount(1); // one prior NOTIFICATION_SUBMITTED
+            givenSubmissionCount(1);
             Map<String, Object> doc = exchangedDocumentFor(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED, NotificationStatus.SUBMITTED);
             assertThat(doc.get("versionId")).isEqualTo(2);
         }
 
         @Test
         void versionId_shouldCarryForward_forNotificationAmendmentRequested() {
-            givenSubmissionCount(1); // one prior NOTIFICATION_SUBMITTED
+            givenSubmissionCount(1);
             Map<String, Object> doc = exchangedDocumentFor(OutboxEventType.NOTIFICATION_AMENDMENT_REQUESTED, NotificationStatus.AMEND);
             assertThat(doc.get("versionId")).isEqualTo(1);
         }
@@ -554,7 +550,7 @@ class OutboxServiceTest {
 
         @Test
         void versionId_shouldCarryForward_forNotificationSubmissionDeleted() {
-            givenSubmissionCount(2); // two prior submissions
+            givenSubmissionCount(2);
             Map<String, Object> doc = exchangedDocumentFor(OutboxEventType.NOTIFICATION_SUBMISSION_DELETED, NotificationStatus.DELETED);
             assertThat(doc.get("versionId")).isEqualTo(2);
         }

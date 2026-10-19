@@ -72,7 +72,6 @@ class NotificationServiceTest {
 
     private static final String TEST_TRACE_ID = "test-trace-id";
     private static final String TEST_USER_ID = "test-user-id";
-    /** The acting user's organisation, passed through to the outbox event. */
     private static final String ORG_ID = "5900002";
     private static final Long SUBMIT_TOKEN = 7L;
 
@@ -96,19 +95,14 @@ class NotificationServiceTest {
 
     private NotificationService notificationService;
 
-    // Real executor (its executeWithLock must actually run the locked task) built from the
-    // lockProvider mock; @InjectMocks does the wiring so we don't hand-construct it from a mock.
     @InjectMocks
     private DefaultLockingTaskExecutor lockingTaskExecutor;
 
     @BeforeEach
     void setUp() {
-        // Default: TTL unconfigured (days null) so create tests keep their original behaviour and
-        // stamp no expireAt. Expiry-specific tests rebuild the service with a bespoke config.
         notificationService = buildService(new NotificationTtlConfig(null, "local", sweep(false)));
     }
 
-    /** A party as the frontend stores it: a literal copy of the address the trader picked. */
     private static ConsignmentParty literalParty() {
         return ConsignmentParty.builder()
             .name("Astra Rosales")
@@ -352,7 +346,7 @@ class NotificationServiceTest {
 
         @Test
         void saveNotification_shouldPersistInlinePartyDetailsFromTheDto_byteFaithfully() {
-            // Given — the frontend sends each party as a literal copy; ingest stores it as sent.
+            // Given
             String referenceNumber = "GBN-AG-26-ORIG01";
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
@@ -485,8 +479,7 @@ class NotificationServiceTest {
 
         @Test
         void saveNotification_shouldThrowBadRequest_whenConcurrencyTokenIsNullOnUpdate() {
-            // Given — POST-with-referenceNumber routes through updateNotification, which now
-            // requires the client to send the concurrencyToken they last saw. Symmetric with replace().
+            // Given
             String referenceNumber = "GBN-AG-26-NULLVU";
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
@@ -624,7 +617,7 @@ class NotificationServiceTest {
 
         @Test
         void findAll_shouldExcludeDeletedNotifications() {
-            // Given — only DRAFT and SUBMITTED are passed as the allowlist; DELETED is excluded
+            // Given
             NotificationView draft = notificationView()
                 .referenceNumber("GBN-AG-26-000DFT")
                 .status(DRAFT)
@@ -644,7 +637,7 @@ class NotificationServiceTest {
             // When
             NotificationPageResponse result = notificationService.findAll(1, null);
 
-            // Then — only DRAFT and SUBMITTED are returned
+            // Then
             assertThat(result.content()).hasSize(2);
             assertThat(result.content()).extracting(NotificationView::getStatus)
                 .containsExactlyInAnyOrder(DRAFT, SUBMITTED);
@@ -957,11 +950,11 @@ class NotificationServiceTest {
 
         @Test
         void deleteByReferenceNumbers_shouldDoNothing_whenListIsEmpty() {
-            // When — empty list is passed (defensive guard; controller rejects this before reaching service)
+            // When
             notificationService.deleteByReferenceNumbers(Collections.emptyList(),
                 new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
-            // Then — repository is never called
+            // Then
             verify(notificationRepository, never()).findAllByReferenceNumberIn(anyList());
             verify(notificationRepository, never()).deleteAllByReferenceNumberIn(anyList());
             verify(auditRepository, never()).save(any(Audit.class));
@@ -981,7 +974,7 @@ class NotificationServiceTest {
             notificationService.deleteByReferenceNumbers(List.of(referenceNumber),
                 new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
-            // Then — notifications deleted first, then documents cascade deleted (order matters)
+            // Then
             InOrder inOrder = inOrder(notificationRepository, documentService);
             inOrder.verify(notificationRepository)
                 .deleteAllByReferenceNumberIn(List.of(referenceNumber));
@@ -1016,8 +1009,6 @@ class NotificationServiceTest {
 
         @Test
         void createNotification_neverStampsExpireAt_inProd_regardlessOfOtherConfig() {
-            // AC: in a prod-configured environment, notifications are never marked for automatic
-            // removal, regardless of other config values (days set, sweep enabled).
             NotificationAggregate result = create(new NotificationTtlConfig(7, "prod", sweep(true)));
 
             assertThat(result.getExpireAt()).isNull();
@@ -1055,7 +1046,6 @@ class NotificationServiceTest {
             InOrder inOrder = inOrder(notificationRepository, documentService);
             inOrder.verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
             inOrder.verify(documentService).deleteForNotificationRefs(List.of(ref1, ref2));
-            // A background sweep is not a user action — it writes no audit record.
             verify(auditRepository, never()).save(any(Audit.class));
         }
 
@@ -1126,7 +1116,7 @@ class NotificationServiceTest {
 
         @Test
         void submitNotification_shouldCarryEveryPartyOnTheOutboxEvent_exactlyAsStored() {
-            // Given — every party a literal copy, as the frontend stores it
+            // Given
             String referenceNumber = "GBN-AG-26-REF011";
             ConsignmentParty contact = ConsignmentParty.builder()
                 .name("Contact")
@@ -1239,7 +1229,6 @@ class NotificationServiceTest {
 
             verify(notificationRepository, never()).save(any());
             verify(outboxService, never()).appendEvent(any(), any(), any(), any());
-            // Lock must never be acquired — the notification lookup fails before the lock scope
             verify(lockProvider, never()).lock(any());
         }
 
@@ -1257,7 +1246,6 @@ class NotificationServiceTest {
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.of(notificationAggregate));
 
-            // Lock not available — executor returns wasExecuted() == false
             when(lockProvider.lock(any())).thenReturn(Optional.empty());
 
             // When / Then
@@ -1369,7 +1357,7 @@ class NotificationServiceTest {
             when(notificationRepository.save(saved.capture()))
                 .thenThrow(new OptimisticLockingFailureException("stale"));
 
-            // When / Then — the save carries the caller's token, so @Version refuses it
+            // When / Then
             assertThatThrownBy(
                 () -> notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-005", null))
                 .isInstanceOf(OptimisticLockingFailureException.class);
@@ -1436,7 +1424,6 @@ class NotificationServiceTest {
             // Then
             assertThat(result.getStatus()).isEqualTo(AMEND);
             assertThat(result.getUpdated()).isNotNull();
-            // Amend captures the notification content as it stood when the trader opened it.
             assertThat(result.getPreAmendNotification()).isNotNull();
             assertThat(result.getPreAmendNotification().getOrigin()).isNull();
             verify(notificationRepository).save(notificationAggregate);
@@ -1445,7 +1432,7 @@ class NotificationServiceTest {
 
         @Test
         void amendNotification_shouldCapturePreAmendSnapshotFromLiveContent() {
-            // Given — amend snapshots whatever is on the notification when the trader opens it.
+            // Given
             String referenceNumber = "GBN-AG-26-AMD008";
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("notif-id-amd-8")
@@ -1692,7 +1679,7 @@ class NotificationServiceTest {
         @Test
         void cancelAmend_shouldPutThePreAmendSnapshotOnTheOutboxEvent_notTheAmendedParty() {
             // Given — the in-flight amendment edited the origin; the snapshot holds the submitted one
-            Notification freeze = Notification.builder()
+            Notification preAmendSnapshot = Notification.builder()
                 .placeOfOrigin(ConsignmentParty.builder()
                     .name("Frozen Origin")
                     .build())
@@ -1704,7 +1691,7 @@ class NotificationServiceTest {
                 .notification(Notification.builder()
                     .placeOfOrigin(ConsignmentParty.builder().name("Amended Origin").build())
                     .build())
-                .preAmendNotification(freeze)
+                .preAmendNotification(preAmendSnapshot)
                 .build();
 
             when(notificationRepository.findByReferenceNumber("GBN-AG-26-CANF01"))
@@ -2058,9 +2045,7 @@ class NotificationServiceTest {
             when(notificationRepository.findByReferenceNumber(sourceRef))
                 .thenReturn(Optional.of(source));
 
-            // When / Then — a null expectedVersion is a caller-programming error; Spring
-            // rejects it at the HTTP boundary (@RequestParam Long is required), and the
-            // service defends the same invariant.
+            // When / Then
             assertThatThrownBy(() -> notificationService.copyNotification(sourceRef, null, "trace", null))
                 .isInstanceOf(IllegalStateException.class);
 
@@ -2150,14 +2135,11 @@ class NotificationServiceTest {
         }
     }
 
-    // Fulfilments handling. Covers the PUT/replace path, the amend/cancelAmend/submit snapshot
-    // semantics, and copy carrying fulfilments.
     @Nested
     class Fulfilments {
 
         @BeforeEach
         void setUp() {
-            // For tests that go through writeWithOutbox (submit path).
             lenient().when(lockProvider.lock(any()))
                 .thenReturn(Optional.of(mock(SimpleLock.class)));
         }
@@ -2285,7 +2267,7 @@ class NotificationServiceTest {
 
         @Test
         void replace_shouldThrowBadRequest_whenConcurrencyTokenIsNull() {
-            // Given — a notification
+            // Given
             String ref = "GBN-AG-26-NULLVR";
             NotificationAggregate existing = NotificationAggregate.builder()
                 .id("db-id-nv")
@@ -2297,13 +2279,12 @@ class NotificationServiceTest {
             when(notificationRepository.findByReferenceNumber(ref))
                 .thenReturn(Optional.of(existing));
 
-            //When a concurrency token is not supplied
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
                 .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("REF").build())
                 .build();
 
-            //Then the update should fail 
+            // When / Then
             assertThatThrownBy(() -> notificationService.replace(ref, dto, "trace", null))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("concurrencyToken");
@@ -2338,14 +2319,13 @@ class NotificationServiceTest {
             // Then
             assertThat(result.getStatus()).isEqualTo(AMEND);
             assertThat(result.getPreAmendFulfilments()).isEqualTo(fulfilments);
-            // Defensive copy — mutating source after snapshot must not affect baseline.
             fulfilments.add(new Document("obligationId", "post-snapshot"));
             assertThat(result.getPreAmendFulfilments()).hasSize(1);
         }
 
         @Test
         void amend_shouldCapturePreAmendSnapshot_withoutMutatingLiveEdits() {
-            // Given — a submitted notification whose live content may diverge during the amendment.
+            // Given
             String ref = "GBN-AG-26-AMD002";
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("db-id-b")
@@ -2357,7 +2337,7 @@ class NotificationServiceTest {
                     .reasonForImport("PERMANENT")
                     .cphNumber("12/345/6789")
                     .build())
-                .fulfilments(List.of(new Document("obligationId", "amd-freeze")))
+                .fulfilments(List.of(new Document("obligationId", "amd-snapshot")))
                 .build();
 
             when(notificationRepository.findByReferenceNumber(ref))
@@ -2368,15 +2348,14 @@ class NotificationServiceTest {
             // When
             NotificationAggregate result = notificationService.amendNotification(ref, "trace", null);
 
-            // Then — the pre-amend snapshot matches the notification at amend start.
+            // Then
             assertThat(result.getPreAmendNotification()).isNotNull();
             assertThat(result.getPreAmendNotification().getOrigin().getInternalReference())
                 .isEqualTo("LIVE-REF");
             assertThat(result.getPreAmendNotification().getCommodity().getName())
                 .isEqualTo("Cattle");
 
-            // And — the snapshot is a distinct object graph: mutating the live notification must
-            // not bleed through into the pre-amend snapshot.
+            // And
             result.getNotification().getOrigin().setInternalReference("EDITED");
             result.getNotification().getCommodity().setName("MutatedCattle");
             result.getNotification().setReasonForImport("CHANGED");
@@ -2394,9 +2373,7 @@ class NotificationServiceTest {
 
         @Test
         void cancelAmend_shouldRestoreFulfilmentsAndPreserveOriginalSubmittedAt() {
-            // Given — an in-flight amendment carries the original submittedAt (writeWithOutbox
-            // does not touch it on the SUBMITTED -> AMEND transition), so cancel-amend must
-            // return that same timestamp untouched.
+            // Given
             String ref = "GBN-AG-26-CAN001";
             Instant originalSubmittedAt = Instant.parse("2026-04-15T10:00:00Z");
             List<Document> priorFulfilments = List.of(new Document("obligationId", "prior"));
@@ -2435,10 +2412,7 @@ class NotificationServiceTest {
 
         @Test
         void deepCopyFulfilments_shouldProduceIndependentCopy_underNestedMutation() {
-            // Given — a fulfilments payload representative of what the frontend PUTs: an outer
-            // entry with an obligationId scalar plus a nested list of record Documents that carry
-            // their own fields. This is the shape a shallow copy would previously leave aliased
-            // at the inner-Document level, so mutating the original could surface on the baseline.
+            // Given
             Document nestedRecord = new Document("fulfilmentId", "line0").append("value", "5");
             Document outer = new Document("obligationId", "packages")
                 .append("records", new ArrayList<>(List.of(nestedRecord)));
@@ -2447,13 +2421,12 @@ class NotificationServiceTest {
             // When
             List<Document> copy = NotificationService.deepCopyFulfilments(source);
 
-            // And — mutate the original at every nesting level after the copy is taken
+            // And
             source.get(0).put("obligationId", "mutated");
             source.get(0).getList("records", Document.class).add(new Document("fulfilmentId", "line1"));
             source.get(0).getList("records", Document.class).get(0).put("value", "999");
 
-            // Then — the copy is a different list containing different Documents, and none of the
-            // post-copy mutations on the original bleed through at any nesting depth.
+            // Then
             assertThat(copy).isNotSameAs(source);
             Document copiedOuter = copy.get(0);
             assertThat(copiedOuter).isNotSameAs(outer);
@@ -2464,12 +2437,7 @@ class NotificationServiceTest {
 
         @Test
         void submittedAt_shouldReflectLatestSubmission_acrossFullAmendCycle() {
-            // Given — a fresh DRAFT that is submitted, amended, then re-submitted. This pins the
-            // agreed semantics for submittedAt: it tracks the LATEST submission event (see the
-            // Javadoc on NotificationAggregate#submittedAt), not the original submit time. That is what
-            // downstream consumers of the outbox event's submittedAt field see for a
-            // resubmitted notification. Cancel-amend, by contrast, preserves the original —
-            // covered by cancelAmend_shouldRestoreFulfilmentsAndPreserveOriginalSubmittedAt.
+            // Given
             String ref = "GBN-AG-26-SBMT02";
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("db-id-cycle")
@@ -2484,28 +2452,28 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
 
-            // When — DRAFT -> SUBMITTED (first submit)
+            // When
             NotificationAggregate afterFirstSubmit = notificationService.submitNotification(ref, SUBMIT_TOKEN, "t1", null);
             Instant firstSubmittedAt = afterFirstSubmit.getSubmittedAt();
             assertThat(firstSubmittedAt).isNotNull();
 
-            // And — SUBMITTED -> AMEND (submittedAt preserved through the transition)
+            // And
             NotificationAggregate afterAmend = notificationService.amendNotification(ref, "t2", null);
             assertThat(afterAmend.getSubmittedAt()).isEqualTo(firstSubmittedAt);
 
-            // And — AMEND -> SUBMITTED (resubmit updates submittedAt to the new submission moment)
+            // And
             NotificationAggregate afterResubmit = notificationService.submitNotification(ref, SUBMIT_TOKEN, "t3", null);
 
-            // Then — submittedAt reflects the RESUBMISSION, not the original submit.
+            // Then
             assertThat(afterResubmit.getSubmittedAt()).isNotNull();
             assertThat(afterResubmit.getSubmittedAt()).isAfterOrEqualTo(firstSubmittedAt);
         }
 
         @Test
-        void submit_shouldReplaceTheContentFreeze_andClearFulfilmentsBaseline_whenSubmittingFromAmend() {
+        void submit_shouldClearPreAmendSnapshots_andKeepAmendedFulfilments_whenSubmittingFromAmend() {
             // Given
             String ref = "GBN-AG-26-SBM001";
-            Notification priorFreeze = Notification.builder()
+            Notification preAmendSnapshot = Notification.builder()
                 .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("PRIOR").build())
                 .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
@@ -2515,7 +2483,7 @@ class NotificationServiceTest {
                 .notification(Notification.builder()
                     .origin(Origin.builder().countryCode("FR").requiresRegionCode("yes").internalReference("AMENDED").build())
                     .build())
-                .preAmendNotification(priorFreeze)
+                .preAmendNotification(preAmendSnapshot)
                 .preAmendFulfilments(new ArrayList<>(
                     List.of(new Document("obligationId", "prior"))))
                 .fulfilments(List.of(new Document("obligationId", "current")))
@@ -2529,12 +2497,11 @@ class NotificationServiceTest {
             // When
             NotificationAggregate result = notificationService.submitNotification(ref, SUBMIT_TOKEN, "trace", null);
 
-            // Then — pre-amend snapshot is cleared; fulfilments scratchpad is spent.
+            // Then
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getSubmittedAt()).isNotNull();
             assertThat(result.getPreAmendNotification()).isNull();
             assertThat(result.getPreAmendFulfilments()).isNull();
-            // Fulfilments are the in-flight edit, NOT the baseline (submit-from-amend accepts the edit).
             assertThat(result.getFulfilments()).extracting("obligationId").containsExactly("current");
         }
 
@@ -2554,7 +2521,7 @@ class NotificationServiceTest {
             // When
             NotificationAggregate result = notificationService.softDeleteNotification(ref, "trace", null);
 
-            // Then — returns the existing notification unchanged, no save.
+            // Then
             assertThat(result).isSameAs(alreadyDeleted);
             assertThat(result.getStatus()).isEqualTo(DELETED);
             verify(notificationRepository, never()).save(any());
@@ -2588,11 +2555,10 @@ class NotificationServiceTest {
             // When
             notificationService.copyNotification(sourceRef, 0L, "trace", null);
 
-            // Then — the saved (new) notification carries the source fulfilments.
+            // Then
             NotificationAggregate saved = captor.getValue();
             assertThat(saved.getReferenceNumber()).isEqualTo(newRef);
             assertThat(saved.getFulfilments()).isEqualTo(sourceFulfilments);
-            // Defensive copy — mutating the source after copy must not affect the new notification.
             sourceFulfilments.add(new Document("obligationId", "post-copy"));
             assertThat(saved.getFulfilments()).hasSize(1);
         }
@@ -2698,7 +2664,7 @@ class NotificationServiceTest {
             // When
             notificationService.softDeleteNotification(referenceNumber, "trace", null);
 
-            // Then — DRAFT → DELETED emits NOTIFICATION_DELETED (no prior submission)
+            // Then
             verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_DELETED), any(), any());
         }
 
@@ -2721,7 +2687,7 @@ class NotificationServiceTest {
             // When
             notificationService.softDeleteNotification(referenceNumber, "trace", null);
 
-            // Then — SUBMITTED → DELETED emits NOTIFICATION_SUBMISSION_DELETED
+            // Then
             verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_SUBMISSION_DELETED), any(), any());
         }
 
@@ -2744,12 +2710,9 @@ class NotificationServiceTest {
             // When
             notificationService.softDeleteNotification(referenceNumber, "trace", null);
 
-            // Then — AMEND → DELETED also emits NOTIFICATION_SUBMISSION_DELETED
+            // Then
             verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_SUBMISSION_DELETED), any(), any());
         }
-
-        // NB: soft-delete on an already-DELETED notification is idempotent — returns the existing
-        // notification unchanged. See Fulfilments.softDelete_shouldBeIdempotent_onAlreadyDeleted.
 
         @Test
         void softDeleteNotification_shouldThrowNotFoundException_whenReferenceNumberUnknown() {
@@ -2767,8 +2730,6 @@ class NotificationServiceTest {
         }
     }
 
-    // Small fluent builder over the {@link NotificationView} record so tests can construct
-    // view instances by naming only the fields they care about (nulls elsewhere).
     private static NotificationViewBuilder notificationView() {
         return new NotificationViewBuilder();
     }
