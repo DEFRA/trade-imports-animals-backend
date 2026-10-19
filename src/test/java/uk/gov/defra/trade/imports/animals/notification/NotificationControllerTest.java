@@ -402,13 +402,6 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.notification.origin.internalReference").value("UPDATE-REF"));
         }
 
-        /**
-         * {@code arrivalDate} and {@code exitDate} are calendar dates on the wire, so a value
-         * carrying a time or an offset must not bind. Jackson's {@code LocalDateDeserializer} is
-         * lenient by default and would keep the date part of {@code 2026-12-12T00:00:00Z};
-         * {@code StrictLocalDateModule} turns that off. What is pinned here is that the caller
-         * gets 400 rather than a silently trimmed value, and that nothing is saved.
-         */
         @ParameterizedTest
         @ValueSource(strings = {
             "{\"notification\":{\"transport\":{\"arrivalDate\":\"2026-12-12T00:00:00Z\"}}}",
@@ -428,11 +421,6 @@ class NotificationControllerTest {
             verify(notificationService, never()).saveNotification(any(), any(), any());
         }
 
-        /**
-         * The calendar date the caller sent is the date that binds. The two values differ from
-         * one another, so a transposition of the two fields surfaces as a failure rather than
-         * passing unnoticed.
-         */
         @Test
         void post_shouldBindTheCalendarDate_whenADateOnlyFieldIsADate() throws Exception {
             LocalDate arrivalDate = LocalDate.parse("2026-12-12");
@@ -925,11 +913,6 @@ class NotificationControllerTest {
     @Nested
     class FindAll {
 
-        /**
-         * Sub-second and well away from midnight, so an implementation that truncated
-         * {@code created} to a day — or serialised it as a numeric epoch — could not produce
-         * the string the assertion below pins.
-         */
         private static final Instant VIEW_CREATED = Instant.parse("2026-07-21T00:30:00.456Z");
 
         @Test
@@ -979,7 +962,6 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.content[0].status").value("DRAFT"))
                 .andExpect(jsonPath("$.content[0].origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$.content[0].commodity.name").value("Live cattle"))
-                // EUDPA-565 — created is an Instant on this projection; pin its RFC 3339 Z form.
                 .andExpect(jsonPath("$.content[0].created").value("2026-07-21T00:30:00.456Z"))
                 .andExpect(jsonPath("$.content[1].referenceNumber").value(REF_2))
                 .andExpect(jsonPath("$.content[1].status").value("SUBMITTED"))
@@ -1083,8 +1065,7 @@ class NotificationControllerTest {
                 "Cannot find notifications with reference numbers: " + NONEXISTENT_REF))
                 .when(notificationService).deleteByReferenceNumbers(eq(referenceNumbers), any(AuditContext.class));
 
-            // When & Then — also validates that NotFoundException resolves to 404 (not 500)
-            // through the full Spring dispatch chain (GlobalExceptionHandler handler priority check)
+            // When & Then
             mockMvc.perform(delete("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
@@ -1112,7 +1093,7 @@ class NotificationControllerTest {
 
         @Test
         void delete_shouldReturn400_whenTraceIdHeaderIsMissing() throws Exception {
-            // Given — x-cdp-request-id absent; Spring rejects with 400 before service is called
+            // Given
             List<String> referenceNumbers = List.of(REF_1);
 
             // When & Then
@@ -1128,7 +1109,7 @@ class NotificationControllerTest {
 
         @Test
         void delete_shouldReturn400_whenUserIdHeaderIsMissing() throws Exception {
-            // Given — User-Id absent; Spring rejects with 400 before service is called
+            // Given
             List<String> referenceNumbers = List.of(REF_1);
 
             // When & Then
@@ -1148,15 +1129,11 @@ class NotificationControllerTest {
 
         @Test
         void findFulfilments_shouldReturn200WithProjection() throws Exception {
-            // Given — a hand-rolled fulfilment view (Mockito mocks trip up Jackson via their
-            // bytecode fields; the real Spring Data proxy serializes cleanly in production and E2E).
+            // Given
             NotificationFulfilmentsView view = new NotificationFulfilmentsView() {
                 @Override public String getReferenceNumber() { return REF_1; }
                 @Override public Long getConcurrencyToken() { return 0L; }
                 @Override public NotificationStatus getStatus() { return NotificationStatus.SUBMITTED; }
-                // Deliberately neither midnight nor a whole second: a truncating or offset-less
-                // serialiser would still match a value like 2026-07-21T00:00:00Z, so those
-                // fixtures cannot tell a correct implementation from a broken one.
                 @Override public Instant getCreated() { return Instant.parse("2026-07-21T06:42:17.123Z"); }
                 @Override public Instant getSubmittedAt() { return Instant.parse("2026-07-21T14:09:05Z"); }
                 @Override public java.util.List<org.bson.Document> getFulfilments() {
@@ -1171,8 +1148,6 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.status").value("SUBMITTED"))
-                // EUDPA-565 — exact strings, so a numeric-epoch or offset-less regression on the
-                // instants this projection now carries goes red rather than passing an is-not-null.
                 .andExpect(jsonPath("$.created").value("2026-07-21T06:42:17.123Z"))
                 .andExpect(jsonPath("$.submittedAt").value("2026-07-21T14:09:05Z"))
                 .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"));

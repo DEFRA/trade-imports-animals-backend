@@ -11,15 +11,9 @@ import org.springframework.stereotype.Component;
 import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 
 /**
- * Scheduled sweep that deletes app-created notifications whose {@code expireAt} has passed, in
- * non-prod environments only (EUDPA-273). Follows the {@link
- * uk.gov.defra.trade.imports.animals.outbox.OutboxPoller} pattern: {@code @Scheduled} +
- * shedlock so only one instance sweeps at a time.
- *
- * <p>Deliberately <b>without</b> {@code matchIfMissing} — the bean exists only when
- * {@code notification.ttl.sweep.enabled=true} is set explicitly. Prod leaves it {@code false}, so
- * the sweeper never runs there (the sweeping safeguard). Coarse polling and a bounded batch suit
- * 7-day granularity and avoid large delete bursts.
+ * Deletes notifications whose {@code expireAt} has passed, one batch per scheduled run, holding a
+ * shedlock so one instance sweeps at a time. Exists only when
+ * {@code notification.ttl.sweep.enabled=true}.
  */
 @Component
 @Slf4j

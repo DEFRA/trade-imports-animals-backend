@@ -154,9 +154,6 @@ public class DocumentController {
    * @param payload  the scan result payload
    * @return 204 No Content
    */
-  // Security note (EUDPA-35): callback is currently unauthenticated; any caller able to reach
-  // this endpoint with a known correlationId can post a scan result. Add a shared secret or
-  // HMAC verification once cdp-uploader supports callback authentication.
   @PostMapping("/document-uploads/{upload-id}/scan-results")
   @Operation(
       summary = "Handle scan result",
@@ -167,8 +164,6 @@ public class DocumentController {
       @PathVariable("upload-id") String uploadId,
       @RequestBody CdpScanResultPayload payload) {
 
-    // The path variable is always the literal "pending" set at initiate time; document identity
-    // is resolved from metadata.correlationId in the payload, not from the URL.
     log.info("POST /document-uploads/{}/scan-results uploadStatus={}", uploadId,
         payload.uploadStatus());
     documentService.handleScanResult(uploadId, payload);
@@ -241,17 +236,6 @@ public class DocumentController {
     return URI.create(baseUrl + "/document-uploads/" + uploadId);
   }
 
-  /**
-   * Builds the streaming response body. Captures the current MDC context and reapplies it on
-   * the streaming thread so log lines emitted during S3 streaming carry the same trace IDs as
-   * the original request.
-   *
-   * <p>Known limitation: if S3 throws mid-stream after response headers are committed, the
-   * client receives a 200 with a truncated body and no error indication — inherent to
-   * {@link StreamingResponseBody}, since headers are sent before any body bytes are written.
-   * The pre-write failure case (e.g. NoSuchKey thrown before any bytes flow) still surfaces as
-   * a 500 because no headers have been committed yet.
-   */
   private StreamingResponseBody streamFromS3WithMdc(UploadedFile file) {
     Map<String, String> mdcContext = MDC.getCopyOfContextMap();
     return outputStream -> {

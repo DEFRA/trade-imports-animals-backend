@@ -11,12 +11,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import uk.gov.defra.trade.imports.animals.configuration.LocalDateStringConverters.LocalDateToStringConverter;
 import uk.gov.defra.trade.imports.animals.configuration.LocalDateStringConverters.StringToLocalDateConverter;
 
-/**
- * A calendar date must store and read back as the same {@code YYYY-MM-DD} string whatever the
- * JVM default zone. Each case runs under a zone either side of UTC, and uses a BST summer date —
- * the one Spring Data's built-in converter stored a day early under {@code Europe/London}
- * (EUDPA-282).
- */
 class LocalDateStringConvertersTest {
 
     private static final LocalDate DATE = LocalDate.of(2026, 7, 21);

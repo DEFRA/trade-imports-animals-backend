@@ -37,18 +37,8 @@ public class GlobalExceptionHandler {
     private static final String PROPERTY_ERRORS = "errors";
     private static final String TITLE_VALIDATION_ERROR = "Validation Error";
     private static final String DETAIL_VALIDATION_ERROR = "Validation failed for one or more fields";
-    /**
-     * RFC 7807 {@code type} for the field-validation 400s — {@link #handleValidationException},
-     * {@link #handleConstraintViolationException}, {@link #handleMissingRequestParameter} and
-     * {@link #handleRequestParameterTypeMismatch} — each of which carries an {@code errors} map
-     * naming the offending fields.
-     */
     private static final URI TYPE_VALIDATION_ERROR =
         URI.create("https://api.cdp.defra.cloud/problems/validation-error");
-    /**
-     * RFC 7807 {@code type} for a body the parser could not read at all. A problem type of its own,
-     * not field validation: nothing bound, so there is no {@code errors} map to name fields in.
-     */
     private static final URI TYPE_MALFORMED_REQUEST =
         URI.create("https://api.cdp.defra.cloud/problems/malformed-request");
 
@@ -58,7 +48,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ProblemDetail> handleValidationException(MethodArgumentNotValidException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Validation error (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Validation error (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST,
@@ -85,21 +75,12 @@ public class GlobalExceptionHandler {
 
     /**
      * Handle an unparseable request body (400 Bad Request) — malformed JSON, or a value that does
-     * not fit the field's type.
-     *
-     * <p>Without this the exception reaches the {@code RuntimeException} catch-all and the caller
-     * is told 500, blaming the server for the caller's payload. Dates make that reachable in an
-     * ordinary way: a date-only field is a {@code LocalDate} and a timestamp is an
-     * {@code Instant}, so {@code "2026-12-12T00:00:00Z"} where {@code "2026-12-12"} is required,
-     * or the reverse, lands here rather than binding.
-     *
-     * <p>The parser message is logged but deliberately not returned — it quotes the submitted
-     * value and names internal types.
+     * not fit the field's type. The parser message is logged, never returned.
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ProblemDetail> handleUnreadableRequestBody(HttpMessageNotReadableException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Unreadable request body (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Unreadable request body (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST,
@@ -127,7 +108,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ProblemDetail> handleConstraintViolationException(
         ConstraintViolationException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Constraint violation (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Constraint violation (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST,
@@ -159,14 +140,14 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ProblemDetail> handleMissingRequestParameter(
         MissingServletRequestParameterException ex) {
-        log.warn("Missing request parameter (trace: {}): {}", MDC.get(MDC_TRACE_ID), ex.getMessage());
+        log.warn("Missing request parameter (trace: {})", MDC.get(MDC_TRACE_ID), ex);
         return requestParameterProblem(ex.getParameterName(), "Required request parameter is missing");
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ProblemDetail> handleRequestParameterTypeMismatch(
         MethodArgumentTypeMismatchException ex) {
-        log.warn("Request parameter type mismatch (trace: {}): {}", MDC.get(MDC_TRACE_ID), ex.getMessage());
+        log.warn("Request parameter type mismatch (trace: {})", MDC.get(MDC_TRACE_ID), ex);
         return requestParameterProblem(ex.getName(), "Request parameter has an invalid value");
     }
 
@@ -197,7 +178,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BadRequestException.class)
     public ResponseEntity<ProblemDetail> handleBadRequestException(BadRequestException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Bad request (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Bad request (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_REQUEST,
@@ -222,7 +203,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ProblemDetail> handleNotFoundException(NotFoundException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Resource not found (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Resource not found (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.NOT_FOUND,
@@ -247,7 +228,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ServiceUnavailableException.class)
     public ResponseEntity<ProblemDetail> handleServiceUnavailableException(ServiceUnavailableException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.error("Upstream service error (trace: {}): {}", traceId, ex.getMessage());
+        log.error("Upstream service error (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.BAD_GATEWAY,
@@ -272,7 +253,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<ProblemDetail> handleConflictException(ConflictException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Resource conflict (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Resource conflict (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.CONFLICT,
@@ -298,7 +279,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ProblemDetail> handleOptimisticLockingFailure(
         OptimisticLockingFailureException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Stale-concurrencyToken conflict (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Stale-concurrencyToken conflict (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.CONFLICT,
@@ -323,7 +304,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ProblemDetail> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Upload size exceeded (trace: {}): {}", traceId, ex.getMessage());
+        log.warn("Upload size exceeded (trace: {})", traceId, ex);
 
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
             HttpStatus.PAYLOAD_TOO_LARGE,
@@ -343,10 +324,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handle outbox write failures (500 Internal Server Error).
-     *
-     * Logs full diagnostic detail server-side; returns a generic message to the client
-     * so no internal details (lock keys, mongo error codes, stack traces) are leaked.
+     * Handle outbox write failures (500 Internal Server Error) with a generic message.
      */
     @ExceptionHandler(OutboxWriteException.class)
     public ResponseEntity<ProblemDetail> handleOutboxWriteException(OutboxWriteException ex) {
@@ -372,12 +350,7 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handle unexpected errors (500 Internal Server Error).
-     *
-     * Note: Does NOT catch Spring framework exceptions like NoResourceFoundException
-     * (404) or other HTTP-related exceptions. Only catches application-level exceptions.
-     * This allows Spring to handle its own exceptions appropriately (e.g., 404 for
-     * missing endpoints).
+     * Handle any other {@link RuntimeException} (500 Internal Server Error).
      */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<ProblemDetail> handleException(RuntimeException ex) {

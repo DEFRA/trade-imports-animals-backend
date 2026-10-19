@@ -92,10 +92,8 @@ public class NotificationService {
     }
 
     /**
-     * Replace the notification content at the given reference. Backs {@code PUT /notifications/{ref}}.
-     * Requires DRAFT or AMEND — the state-transition entrypoints (submit / amend / cancelAmend /
-     * softDelete) handle other cases. Emits a {@code NOTIFICATION_EDITED} outbox event on every save
-     * (EUDPA-304), mirroring {@link #updateNotification}.
+     * Replaces the content of a DRAFT or AMEND notification and emits a {@code NOTIFICATION_EDITED}
+     * outbox event.
      */
     @Transactional
     public NotificationAggregate replace(String referenceNumber, NotificationDto dto,
@@ -147,14 +145,12 @@ public class NotificationService {
         return findAll(page, sort, null);
     }
 
-    /** Serves {@code GET /notifications/{ref}/fulfilments} — the frontend engine's rehydrate read. */
     public NotificationFulfilmentsView findFulfilmentsView(String referenceNumber) {
         return notificationRepository.findFulfilmentsViewByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
     }
 
-    /** Serves {@code GET /notifications?…} for the dashboard list. */
     public NotificationPageResponse findAll(int page, String sort, String referenceNumber) {
         List<NotificationStatus> dashboardStatuses = List.of(
             NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
@@ -196,11 +192,8 @@ public class NotificationService {
         if (expectedConcurrencyToken == null) {
             throw new BadRequestException("concurrencyToken is required to submit a notification");
         }
-        // Saving at the caller's token lets @Version refuse the submit atomically if anything changed since
-        // the caller read it - a Java comparison here would leave a gap before the save.
         notificationAggregate.setConcurrencyToken(expectedConcurrencyToken);
 
-        // AMEND -> SUBMITTED is a re-submission; DRAFT -> SUBMITTED is the first submission.
         OutboxEventType eventType = notificationAggregate.getStatus() == NotificationStatus.AMEND
             ? OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED
             : OutboxEventType.NOTIFICATION_SUBMITTED;
@@ -225,9 +218,6 @@ public class NotificationService {
                 "Cannot amend notification with status: " + notificationAggregate.getStatus());
         }
 
-        // The content baseline is captured here alongside fulfilments: a deep-clone of the
-        // notification as it stood when the trader opened the amendment, so cancel-amend can
-        // restore what was really submitted.
         notificationAggregate.setPreAmendNotification(
             notificationContentMapper.deepClone(notificationAggregate.getNotification()));
         List<Document> currentFulfilments = notificationAggregate.getFulfilments();
@@ -268,8 +258,6 @@ public class NotificationService {
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
         notificationAggregate.setPreAmendFulfilments(null);
         notificationAggregate.setPreAmendNotification(null);
-        // submittedAt is deliberately NOT reset — reverting to the previously-submitted state
-        // preserves the original submission timestamp.
         return writeWithOutbox(
             notificationAggregate,
             referenceNumber,
@@ -295,8 +283,6 @@ public class NotificationService {
                 }
                 notification.setStatus(targetStatus);
                 notification.setUpdated(Instant.now());
-                // Only actual submissions mint a new submittedAt; cancel-amend restores to SUBMITTED
-                // but must preserve the timestamp from the original submission.
                 if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)) {
                     notification.setSubmittedAt(Instant.now());
                 }
@@ -314,6 +300,8 @@ public class NotificationService {
         String lockName = "outbox-write:" + aggregateId;
         for (int attempt = 0; attempt <= MAX_LOCK_RETRIES; attempt++) {
             if (attempt > 0) {
+                log.warn("Outbox lock {} busy during {}, correlationId={}; retry {}/{}",
+                    lockName, operationLabel, correlationId, attempt, MAX_LOCK_RETRIES);
                 try {
                     Thread.sleep(lockAtLeastFor.toMillis());
                 } catch (InterruptedException ie) {
@@ -349,7 +337,6 @@ public class NotificationService {
         NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        // Idempotent per REST DELETE convention — a repeat call after a lost response is a no-op.
         if (notificationAggregate.getStatus() == NotificationStatus.DELETED) {
             return notificationAggregate;
         }
@@ -359,7 +346,6 @@ public class NotificationService {
             throw new BadRequestException(
                 "Cannot delete notification with status: " + notificationAggregate.getStatus());
         }
-        // DRAFT -> DELETED has no submission history; SUBMITTED/AMEND -> DELETED does.
         OutboxEventType eventType = notificationAggregate.getStatus() == NotificationStatus.DRAFT
             ? OutboxEventType.NOTIFICATION_DELETED
             : OutboxEventType.NOTIFICATION_SUBMISSION_DELETED;
@@ -405,12 +391,9 @@ public class NotificationService {
     }
 
     /**
-     * Deletes notifications whose {@code expireAt} has passed, cascading to their accompanying
-     * documents, up to {@code batchSize} per call. Called by the non-prod
-     * {@code NotificationExpirySweeper}; unlike {@link #deleteByReferenceNumbers} it writes no audit
-     * record and tolerates documents vanishing mid-batch (a background sweep should not fail because
-     * another actor removed a row concurrently). Notifications with a {@code null} {@code expireAt}
-     * — including everything created before this feature shipped — are never selected.
+     * Deletes up to {@code batchSize} notifications whose {@code expireAt} has passed, with their
+     * accompanying documents. Writes no audit record. Notifications with no {@code expireAt} are
+     * never selected.
      *
      * @param batchSize maximum number of notifications to remove in this run
      * @return the number of notifications deleted
@@ -430,22 +413,11 @@ public class NotificationService {
         return referenceNumbers.size();
     }
 
-    /**
-     * Removes the given notifications and their accompanying documents. Shared by the audited,
-     * strict-existence {@link #deleteByReferenceNumbers} path and the tolerant {@link #deleteExpired}
-     * sweep; carries no audit or existence semantics of its own.
-     */
     private void deleteNotificationsAndDocuments(List<String> referenceNumbers) {
         notificationRepository.deleteAllByReferenceNumberIn(referenceNumbers);
         documentService.deleteForNotificationRefs(referenceNumbers);
     }
 
-    /**
-     * Stamps {@code expireAt} on a freshly-created notification, but only when both prod safeguards
-     * pass: a TTL duration is configured (non-prod config) and the running environment is not prod.
-     * Anchored to {@code created}, so a notification expires a fixed window after creation
-     * regardless of later activity.
-     */
     private void stampExpiry(NotificationAggregate notificationAggregate) {
         Integer days = ttlConfig.days();
         if (days == null || ttlConfig.isProd()) {
@@ -540,13 +512,6 @@ public class NotificationService {
         auditRepository.save(auditRecord);
     }
 
-    /**
-     * BSON round-trip deep clone of a fulfilments list. Callers need independence from the source
-     * because amend snapshots the pre-amend fulfilments into {@code preAmendFulfilments}
-     * and cancel-amend restores from it; a shared reference at any nesting depth would let a
-     * later in-memory mutation on one list surface on the other before the notification is persisted.
-     * Callers are responsible for the {@code null} case — the helper always returns a fresh list.
-     */
     static List<Document> deepCopyFulfilments(List<Document> source) {
         return source.stream()
             .map(d -> Document.parse(d.toJson()))

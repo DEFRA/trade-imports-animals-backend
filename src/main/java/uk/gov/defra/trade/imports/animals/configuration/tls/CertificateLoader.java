@@ -2,8 +2,6 @@ package uk.gov.defra.trade.imports.animals.configuration.tls;
 
 import java.util.Base64;
 import lombok.extern.slf4j.Slf4j;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -45,7 +43,6 @@ public class CertificateLoader {
         try {
             cf = CertificateFactory.getInstance("X.509");
         } catch (CertificateException e) {
-            log.error("Failed to get X.509 CertificateFactory: {}", e.getMessage());
             throw new IllegalStateException("Cannot initialize certificate factory", e);
         }
         
@@ -57,7 +54,7 @@ public class CertificateLoader {
                 cert.getSubjectX500Principal().getName());
 
         } catch (CertificateException e) {
-            log.error("Failed to parse certificate: {}. Skipping.", e.getMessage());
+            log.error("Failed to parse certificate. Skipping.", e);
         }
         
         return cert;
