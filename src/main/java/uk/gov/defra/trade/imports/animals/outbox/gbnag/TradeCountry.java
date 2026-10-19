@@ -6,7 +6,7 @@ import uk.gov.defra.trade.imports.animals.notification.Origin;
 
 /**
  * A country on the consignment. Only the origin country carries the two facts that say where in
- * the country the animals came from: the subdivision, as the region of origin entry in
+ * the country the animals came from: the subdivision, as the 106 entry in
  * {@code subordinateTradeCountrySubDivision}, and the region of origin code from the health
  * certificate, which is a disease zone and cannot be derived from the subdivision.
  */
@@ -23,7 +23,7 @@ public record TradeCountry(
         }
         return new TradeCountry(
             CodedValue.of(origin.getCountryCode()),
-            subDivisions(TradeCountrySubDivision.regionOfOrigin(origin.getCountrySubdivisionCode())),
+            subDivisions(TradeCountrySubDivision.ofOrigin(origin.getCountrySubdivisionCode())),
             regionOfOriginCode(origin.getRequiresRegionCode(), origin.getRegionOfOriginCode()));
     }
 

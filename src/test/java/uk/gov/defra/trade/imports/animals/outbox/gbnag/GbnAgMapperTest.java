@@ -145,13 +145,13 @@ class GbnAgMapperTest {
         }
 
         @Test
-        void shouldMapCountrySubdivisionToRegionOfOriginEntry() {
+        void shouldMapCountrySubdivisionToTheSubdivisionOfOriginEntry() {
             TradeCountry originCountry = result.specifiedConsignment().originCountry();
             assertThat(originCountry.code().value()).isEqualTo("ES");
-            assertThat(originCountry.subordinateTradeCountrySubDivision()).singleElement().satisfies(region -> {
-                assertThat(region.identifier()).isEqualTo("ES-CN");
-                assertThat(region.urlId()).isEqualTo("https://refdata.tbc.defra.gov.uk/country_subdivisions");
-                assertThat(region.functionTypeCode().content()).isEqualTo("106"); // region of origin
+            assertThat(originCountry.subordinateTradeCountrySubDivision()).singleElement().satisfies(subdivision -> {
+                assertThat(subdivision.identifier()).isEqualTo("ES-CN");
+                assertThat(subdivision.urlId()).isEqualTo("https://refdata.tbc.defra.gov.uk/country_subdivisions");
+                assertThat(subdivision.functionTypeCode().content()).isEqualTo("106"); // subdivision of origin
             });
         }
 
