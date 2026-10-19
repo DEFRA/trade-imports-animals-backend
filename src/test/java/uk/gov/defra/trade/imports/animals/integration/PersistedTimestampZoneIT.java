@@ -33,8 +33,8 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 
 /**
  * The five persisted timestamps are stored as the instant they name, and the date-only fields as
- * the {@code YYYY-MM-DD} string they name, whatever the JVM's default zone. Documents whose
- * timestamps were written before EUDPA-565 still read back.
+ * the {@code YYYY-MM-DD} string they name, whatever the JVM's default zone. Timestamps
+ * inserted as raw BSON dates read back as the same instants.
  *
  * <p>Every storage assertion here reads the <em>raw BSON</em> rather than round-tripping through
  * the repository. A round trip decodes with the same zone that encoded it, so it cancels any drift
@@ -254,18 +254,9 @@ class PersistedTimestampZoneIT extends IntegrationBase {
         assertThat(stored.get("timestamp", Date.class).toInstant()).isEqualTo(AUDIT_TIMESTAMP);
     }
 
-    /**
-     * A document written before EUDPA-565 holds a plain BSON date in each of these fields, exactly
-     * as one written after it does — the encoding did not change, only the Java type that reads
-     * it. Written here as raw BSON rather than through the repository, because the repository can
-     * no longer produce the old shape.
-     *
-     * <p>The nested calendar dates are not seeded. They are stored as strings now, and with no
-     * live data there is no migration and no legacy shape to read.
-     */
     @Test
-    void findByReferenceNumber_shouldReadBackEveryTimestamp_whenTheDocumentWasWrittenBeforeTheChange() {
-        // Given — a document in the pre-change shape: BSON dates written by the old converters
+    void findByReferenceNumber_shouldReadBackEveryTimestamp_whenInsertedAsRawBsonDates() {
+        // Given
         mongoTemplate.getCollection(NOTIFICATION_COLLECTION).insertOne(new Document()
             .append("referenceNumber", REF)
             .append("status", NotificationStatus.SUBMITTED.name())

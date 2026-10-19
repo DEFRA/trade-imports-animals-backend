@@ -244,11 +244,6 @@ class OutboxServiceTest {
 
         @Test
         void appendEvent_shouldIncrementFromHighestVersion_whenPriorEventsExistForAmendedNotification() {
-            // Regression for the EUDPA-171 amend flow: a notification can have
-            // more than one outbox event (initial submit, then amend, etc.). The
-            // derived findTopBy…OrderBy…Desc method returns the single highest
-            // version (or empty); appendEvent must compute nextVersion from it
-            // without exception.
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .referenceNumber("GBN-AG-26-AMD007")
                 .status(NotificationStatus.SUBMITTED)

@@ -9,9 +9,6 @@ import lombok.NoArgsConstructor;
  * Concrete carrier for {@link NotificationView} — flat, matching the on-wire JSON the projection
  * produces. Jackson deserializes into this on the client side; Spring Data returns proxy
  * instances of the interface on the server side.
- *
- * <p>Lived inside {@code NotificationView} as a nested {@code Data} class until EUDPA-565, which
- * moved it out so the interface declares only behaviour.
  */
 @Data
 @NoArgsConstructor

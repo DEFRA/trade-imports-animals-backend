@@ -681,8 +681,6 @@ class NotificationServiceTest {
 
         @Test
         void findAll_shouldIncludeAmendNotifications() {
-            // Regression: notifications in AMEND were silently excluded from the
-            // dashboard before AMEND was added to the allow-list (EUDPA-171).
             NotificationView amend = notificationView()
                 .referenceNumber("GBN-AG-26-000AMD")
                 .status(AMEND)
@@ -1983,8 +1981,6 @@ class NotificationServiceTest {
 
         @Test
         void copyNotification_shouldCreateNewDraftFromAmendSource() {
-            // Regression: AMEND notifications were rejected by copyNotification's
-            // status guard before AMEND was added to the allow-list (EUDPA-171).
             String sourceRef = "GBN-AG-26-AMD001";
             String newRef = "GBN-AG-26-NEW-AMD";
             NotificationAggregate source = NotificationAggregate.builder()
@@ -2073,8 +2069,7 @@ class NotificationServiceTest {
 
         @Test
         void copyNotification_shouldThrowIllegalState_whenPersistedConcurrencyTokenIsNull() {
-            // Given — a source read back with no concurrencyToken (pre-EUDPA-314 shape). All
-            // notifications written after this ticket carry one; a null here means data-integrity trouble.
+            // Given
             String sourceRef = "GBN-AG-26-NULLPV";
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
@@ -2200,7 +2195,6 @@ class NotificationServiceTest {
             assertThat(result.getFulfilments()).isEqualTo(newFulfilments);
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(existing);
-            // Emits NOTIFICATION_EDITED on every save (EUDPA-304) — see replace() Javadoc.
             verify(outboxService).appendEvent(
                 any(NotificationAggregate.class), eq(OutboxEventType.NOTIFICATION_EDITED), eq("trace"), any());
         }
@@ -2665,9 +2659,6 @@ class NotificationServiceTest {
 
         @Test
         void softDeleteNotification_shouldSetStatusToDeletedAndSave_whenAmend() {
-            // Regression: AMEND notifications were rejected by softDelete's
-            // status guard before AMEND was added to the allow-list (EUDPA-171).
-            // The AMEND view page renders a Delete button (AC4) that reaches here.
             String referenceNumber = "GBN-AG-26-ABCAMD";
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("notif-id-amend-del")

@@ -154,7 +154,7 @@ public class DocumentController {
    * @param payload  the scan result payload
    * @return 204 No Content
    */
-  // Security note (EUDPA-35): callback is currently unauthenticated; any caller able to reach
+  // Security note: callback is currently unauthenticated; any caller able to reach
   // this endpoint with a known correlationId can post a scan result. Add a shared secret or
   // HMAC verification once cdp-uploader supports callback authentication.
   @PostMapping("/document-uploads/{upload-id}/scan-results")

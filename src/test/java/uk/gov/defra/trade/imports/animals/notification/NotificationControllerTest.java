@@ -979,7 +979,6 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.content[0].status").value("DRAFT"))
                 .andExpect(jsonPath("$.content[0].origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$.content[0].commodity.name").value("Live cattle"))
-                // EUDPA-565 — created is an Instant on this projection; pin its RFC 3339 Z form.
                 .andExpect(jsonPath("$.content[0].created").value("2026-07-21T00:30:00.456Z"))
                 .andExpect(jsonPath("$.content[1].referenceNumber").value(REF_2))
                 .andExpect(jsonPath("$.content[1].status").value("SUBMITTED"))
@@ -1171,8 +1170,6 @@ class NotificationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.status").value("SUBMITTED"))
-                // EUDPA-565 — exact strings, so a numeric-epoch or offset-less regression on the
-                // instants this projection now carries goes red rather than passing an is-not-null.
                 .andExpect(jsonPath("$.created").value("2026-07-21T06:42:17.123Z"))
                 .andExpect(jsonPath("$.submittedAt").value("2026-07-21T14:09:05Z"))
                 .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"));

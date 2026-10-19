@@ -12,7 +12,7 @@ import org.springframework.data.convert.WritingConverter;
  * <p>MongoDB has no date-only type. Its {@code Date} is a moment, so storing a calendar date as
  * one means choosing a zone, and Spring Data's built-in JSR-310 converter chooses
  * {@link java.time.ZoneId#systemDefault()} — under {@code Europe/London} during BST,
- * {@code 2026-07-21} lands on {@code 2026-07-20T23:00:00Z}, a calendar day early (EUDPA-282).
+ * {@code 2026-07-21} lands on {@code 2026-07-20T23:00:00Z}, a calendar day early.
  * These converters store the date as its ISO-8601 string, {@code 2026-07-21}, so no zone takes
  * part in either direction and the value reads back as the same date on any host.
  *

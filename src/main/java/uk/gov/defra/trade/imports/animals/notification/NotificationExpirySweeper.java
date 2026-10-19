@@ -12,7 +12,7 @@ import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 
 /**
  * Scheduled sweep that deletes app-created notifications whose {@code expireAt} has passed, in
- * non-prod environments only (EUDPA-273). Follows the {@link
+ * non-prod environments only. Follows the {@link
  * uk.gov.defra.trade.imports.animals.outbox.OutboxPoller} pattern: {@code @Scheduled} +
  * shedlock so only one instance sweeps at a time.
  *

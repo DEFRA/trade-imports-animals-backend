@@ -142,7 +142,7 @@ notification:
     page-size: 25
   submit:
     lock-at-least-for: 50ms
-  # Automatic expiry of app-created notifications in non-prod environments (EUDPA-273).
+  # Automatic expiry of app-created notifications in non-prod environments.
   # Defaults here are the prod-safe values: days unset (no stamping) and sweep disabled.
   # Non-prod environments opt in via NOTIFICATION_TTL_DAYS and NOTIFICATION_TTL_SWEEP_ENABLED.
   ttl:

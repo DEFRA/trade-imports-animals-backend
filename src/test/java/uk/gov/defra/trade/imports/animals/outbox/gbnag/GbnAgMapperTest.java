@@ -95,8 +95,6 @@ class GbnAgMapperTest {
             assertThat(address.lineTwo()).isEqualTo("Delectus sit odio p");
             assertThat(address.cityName()).isEqualTo("Quas occaecat ut ear");
             assertThat(address.countryId()).isEqualTo("CH");
-            // EUDPA-294 added postcode and county to the domain model, so these two are no
-            // longer the hardcoded nulls they were when the fields did not exist.
             assertThat(address.postcodeCode()).isEqualTo("2051");
             assertThat(address.countrySubDivisionName()).isEqualTo("Soleure");
             assertThat(address.countryName()).isNull(); // still a gap - the domain holds the code only

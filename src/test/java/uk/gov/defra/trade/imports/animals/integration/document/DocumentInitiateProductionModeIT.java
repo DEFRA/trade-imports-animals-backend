@@ -80,19 +80,9 @@ class DocumentInitiateProductionModeIT extends IntegrationBase {
         assertThat(body).isNotNull();
         assertThat(body.uploadId()).isNotBlank();
         assertThat(body.uploadUrl()).contains("/document-uploads/" + body.uploadId() + "/file");
-        // Directly pin the absoluteness property the EUDPA-35 fix introduces: the named
-        // regression test would otherwise catch the path-only bug only indirectly (via
-        // cdp-uploader 400'ing the buggy absolute redirect and isCreated() failing).
         assertThat(body.uploadUrl()).startsWith("https://");
     }
 
-    /**
-     * Pins the cdp-uploader contract that the original EUDPA-35 bug tripped over: in
-     * production mode the {@code redirect} field is validated as relative-only. Bypasses our
-     * backend (which now hard-codes a relative path) and posts directly to cdp-uploader's
-     * {@code /initiate} so a future cdp-uploader image bump that relaxes
-     * {@code relativeOnly} would fail this test rather than silently weaken the guard.
-     */
     @Test
     void cdpUploaderInitiate_shouldReject400_whenRedirectIsAbsoluteUrl() {
         String cdpUploaderUrl = "http://" + CDP_UPLOADER_PROD_CONTAINER.getHost()

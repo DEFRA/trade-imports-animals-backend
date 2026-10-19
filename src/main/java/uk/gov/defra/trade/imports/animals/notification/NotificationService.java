@@ -94,8 +94,8 @@ public class NotificationService {
     /**
      * Replace the notification content at the given reference. Backs {@code PUT /notifications/{ref}}.
      * Requires DRAFT or AMEND — the state-transition entrypoints (submit / amend / cancelAmend /
-     * softDelete) handle other cases. Emits a {@code NOTIFICATION_EDITED} outbox event on every save
-     * (EUDPA-304), mirroring {@link #updateNotification}.
+     * softDelete) handle other cases. Emits a {@code NOTIFICATION_EDITED} outbox event on every save,
+     * mirroring {@link #updateNotification}.
      */
     @Transactional
     public NotificationAggregate replace(String referenceNumber, NotificationDto dto,

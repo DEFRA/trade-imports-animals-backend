@@ -8,8 +8,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Configuration for automatic expiry of app-created notifications in non-prod environments
- * (EUDPA-273).
+ * Configuration for automatic expiry of app-created notifications in non-prod environments.
  *
  * <p>Prod is protected by two independent safeguards. Deleting a notification in prod would require
  * both to fail together:
