@@ -22,6 +22,7 @@ RUN mvn dependency:go-offline -B
 
 # Copy source code
 COPY src ./src
+COPY config ./config
 
 # Build without running tests
 # Tests are run separately in CI/CD pipeline and locally
@@ -85,6 +86,7 @@ COPY pom.xml .
 
 # Source is volume-mounted at runtime; copy here only so the image builds
 COPY src ./src
+COPY config ./config
 
 # Hot-reload entrypoint: mtime-poll compile loop + `mvn spring-boot:run`
 COPY docker/dev-run.sh /usr/local/bin/dev-run.sh
