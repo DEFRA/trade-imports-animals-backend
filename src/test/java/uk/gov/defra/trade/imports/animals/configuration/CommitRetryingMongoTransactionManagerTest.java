@@ -17,7 +17,12 @@ import org.springframework.data.mongodb.MongoDatabaseFactory;
 
 class CommitRetryingMongoTransactionManagerTest {
 
-    private static final long TIMEOUT_MS = 50;
+    /**
+     * Wide enough that one scheduling stall on a loaded machine cannot exhaust the window before
+     * the first retry. At 50ms a stall left the retrying tests asserting against a single attempt.
+     * A retrying test still finishes as soon as a commit succeeds; only the deadline test waits.
+     */
+    private static final long TIMEOUT_MS = 1000;
     private static final long BACKOFF_MS = 10;
 
     @Test
