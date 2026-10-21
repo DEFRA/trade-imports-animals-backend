@@ -15,6 +15,8 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocum
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSession;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 
@@ -50,8 +52,12 @@ class DocumentScanCallbackIT extends IntegrationBase {
     @Autowired
     private AccompanyingDocumentRepository accompanyingDocumentRepository;
 
+    @Autowired
+    private UploadSessionRepository uploadSessionRepository;
+
     @BeforeEach
     void resetState() {
+        uploadSessionRepository.deleteAll();
         accompanyingDocumentRepository.deleteAll();
     }
 
@@ -263,12 +269,19 @@ class DocumentScanCallbackIT extends IntegrationBase {
     }
 
     /**
-     * Persists a PENDING {@link AccompanyingDocument} with a generated correlationId and uploadId
-     * — the minimum state needed to drive the scan-callback handler against this seed.
+     * Persists a PENDING {@link AccompanyingDocument} and the upload session it came through, with
+     * a generated correlationId and uploadId — the minimum state needed to drive the scan-callback
+     * handler against this seed. The session is what the callback resolves on, so a document
+     * without one is unreachable.
      */
     private AccompanyingDocument persistPendingDocument() {
         String correlationId = UUID.randomUUID().toString();
         String uploadId = UUID.randomUUID().toString();
+        uploadSessionRepository.save(UploadSession.builder()
+            .notificationReferenceNumber(NOTIFICATION_REF)
+            .uploadId(uploadId)
+            .correlationId(correlationId)
+            .build());
         AccompanyingDocument doc = AccompanyingDocument.builder()
             .notificationReferenceNumber(NOTIFICATION_REF)
             .uploadId(uploadId)

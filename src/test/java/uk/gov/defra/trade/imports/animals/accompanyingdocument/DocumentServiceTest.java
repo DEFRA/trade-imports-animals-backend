@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -38,11 +39,15 @@ class DocumentServiceTest {
   @Mock
   private AccompanyingDocumentRepository accompanyingDocumentRepository;
 
+  @Mock
+  private UploadSessionRepository uploadSessionRepository;
+
   private DocumentService documentService;
 
   @BeforeEach
   void setUp() {
-    documentService = new DocumentService(accompanyingDocumentRepository);
+    documentService =
+        new DocumentService(accompanyingDocumentRepository, uploadSessionRepository);
   }
 
   private void saveReturnsWhatItWasGiven() {
@@ -50,32 +55,53 @@ class DocumentServiceTest {
         .thenAnswer(invocation -> invocation.getArgument(0));
   }
 
+  private static UploadSession sessionOf(
+      String notificationRef, String uploadId, String correlationId) {
+    return UploadSession.builder()
+        .notificationReferenceNumber(notificationRef)
+        .uploadId(uploadId)
+        .correlationId(correlationId)
+        .build();
+  }
+
   @Nested
   class RegisterUpload {
 
     @Test
-    void registerUpload_shouldSaveAnUnclaimedPendingDocumentCarryingBothIdentifiers() {
+    void registerUpload_shouldSaveASessionCarryingBothIdentifiers() {
       String notificationRef = "GBN-AG-26-ABC123";
       String uploadId = UUID.randomUUID().toString();
       String correlationId = UUID.randomUUID().toString();
-      saveReturnsWhatItWasGiven();
+      when(uploadSessionRepository.save(any(UploadSession.class)))
+          .thenAnswer(invocation -> invocation.getArgument(0));
 
-      AccompanyingDocument registered = documentService.registerUpload(
+      UploadSession registered = documentService.registerUpload(
           notificationRef, new RegisterUploadRequest(uploadId, correlationId));
 
       assertThat(registered.getNotificationReferenceNumber()).isEqualTo(notificationRef);
       assertThat(registered.getUploadId()).isEqualTo(uploadId);
       assertThat(registered.getCorrelationId()).isEqualTo(correlationId);
-      assertThat(registered.getScanStatus()).isEqualTo(ScanStatus.PENDING);
-      assertThat(registered.isClaimed()).isFalse();
-      assertThat(registered.getDocumentType()).isNull();
-      assertThat(registered.getDocumentReference()).isNull();
-      assertThat(registered.getDateOfIssue()).isNull();
+    }
+
+    /**
+     * The page opens a session every time it is painted, so registering one must not leave the
+     * notification holding a document that nobody uploaded.
+     */
+    @Test
+    void registerUpload_shouldNotWriteADocument() {
+      when(uploadSessionRepository.save(any(UploadSession.class)))
+          .thenAnswer(invocation -> invocation.getArgument(0));
+
+      documentService.registerUpload(
+          "GBN-AG-26-NODOC0",
+          new RegisterUploadRequest("upload-id-nodoc", "correlation-id-nodoc"));
+
+      verify(accompanyingDocumentRepository, never()).save(any());
     }
 
     @Test
     void registerUpload_shouldThrowConflict_whenTheIdentifiersAreAlreadyRegistered() {
-      when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
+      when(uploadSessionRepository.save(any(UploadSession.class)))
           .thenThrow(new DuplicateKeyException("duplicate key: uploadId"));
       RegisterUploadRequest request =
           new RegisterUploadRequest("upload-id-dup", "correlation-id-dup");
@@ -87,24 +113,65 @@ class DocumentServiceTest {
   }
 
   @Nested
+  class FindSession {
+
+    @Test
+    void findSession_shouldReturnTheSessionTheNotificationOpened() {
+      UploadSession session = sessionOf("GBN-AG-26-SES001", "upload-id-ses", "correlation-id-ses");
+      when(uploadSessionRepository.findByNotificationReferenceNumberAndCorrelationId(
+          "GBN-AG-26-SES001", "correlation-id-ses")).thenReturn(Optional.of(session));
+
+      assertThat(documentService.findSession("GBN-AG-26-SES001", "correlation-id-ses"))
+          .isSameAs(session);
+    }
+
+    /**
+     * Scoped to the notification: a handle on its own must not reach a session another
+     * notification opened.
+     */
+    @Test
+    void findSession_shouldThrowNotFound_whenTheHandleBelongsToAnotherNotification() {
+      when(uploadSessionRepository.findByNotificationReferenceNumberAndCorrelationId(
+          "GBN-AG-26-OTHER0", "correlation-id-ses")).thenReturn(Optional.empty());
+
+      assertThatThrownBy(
+          () -> documentService.findSession("GBN-AG-26-OTHER0", "correlation-id-ses"))
+          .isInstanceOf(NotFoundException.class)
+          .hasMessageContaining("correlation-id-ses");
+    }
+  }
+
+  @Nested
   class ClaimUpload {
 
     private static final String UPLOAD_ID = "upload-id-claim";
+    private static final String CORRELATION_ID = "correlation-id-claim";
+    private static final String NOTIFICATION_REF = "GBN-AG-26-CLM001";
 
-    private AccompanyingDocument registered() {
+    private void sessionIsOpen() {
+      when(uploadSessionRepository.findByUploadId(UPLOAD_ID))
+          .thenReturn(Optional.of(sessionOf(NOTIFICATION_REF, UPLOAD_ID, CORRELATION_ID)));
+    }
+
+    private AccompanyingDocument scanned() {
       return AccompanyingDocument.builder()
-          .notificationReferenceNumber("GBN-AG-26-CLM001")
+          .notificationReferenceNumber(NOTIFICATION_REF)
           .uploadId(UPLOAD_ID)
-          .correlationId("correlation-id-claim")
-          .scanStatus(ScanStatus.PENDING)
+          .correlationId(CORRELATION_ID)
+          .scanStatus(ScanStatus.COMPLETE)
           .files(new ArrayList<>())
           .build();
     }
 
+    /**
+     * The details normally arrive before the scan callback, so there is nothing to add them to and
+     * the claim is what brings the document into being.
+     */
     @Test
-    void claimUpload_shouldStoreTheSuppliedDetailsAndMarkTheDocumentClaimed() {
-      when(accompanyingDocumentRepository.findByUploadId(UPLOAD_ID))
-          .thenReturn(Optional.of(registered()));
+    void claimUpload_shouldCreateTheDocument_whenNothingHasArrivedForTheSessionYet() {
+      sessionIsOpen();
+      when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
+          .thenReturn(Optional.empty());
       saveReturnsWhatItWasGiven();
 
       AccompanyingDocument claimed = documentService.claimUpload(
@@ -112,18 +179,43 @@ class DocumentServiceTest {
           new ClaimUploadRequest(
               DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15")));
 
+      assertThat(claimed.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+      assertThat(claimed.getUploadId()).isEqualTo(UPLOAD_ID);
+      assertThat(claimed.getCorrelationId()).isEqualTo(CORRELATION_ID);
       assertThat(claimed.isClaimed()).isTrue();
       assertThat(claimed.getDocumentType()).isEqualTo(DocumentType.ITAHC);
       assertThat(claimed.getDocumentReference()).isEqualTo("UKGB2026001");
       assertThat(claimed.getDateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
     }
 
+    /**
+     * Where the scan got in first, the claim must add to what it recorded rather than start a
+     * second document for the same upload.
+     */
+    @Test
+    void claimUpload_shouldKeepTheScanResult_whenTheCallbackArrivedFirst() {
+      sessionIsOpen();
+      when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
+          .thenReturn(Optional.of(scanned()));
+      saveReturnsWhatItWasGiven();
+
+      AccompanyingDocument claimed = documentService.claimUpload(
+          UPLOAD_ID,
+          new ClaimUploadRequest(
+              DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15")));
+
+      assertThat(claimed.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+      assertThat(claimed.isClaimed()).isTrue();
+      verify(accompanyingDocumentRepository, times(1)).save(any(AccompanyingDocument.class));
+    }
+
     @Test
     void claimUpload_shouldReplaceTheDetails_whenTheDocumentIsAlreadyClaimed() {
-      AccompanyingDocument alreadyClaimed = registered();
+      AccompanyingDocument alreadyClaimed = scanned();
       alreadyClaimed.setClaimed(true);
       alreadyClaimed.setDocumentReference("UKGBFIRST");
-      when(accompanyingDocumentRepository.findByUploadId(UPLOAD_ID))
+      sessionIsOpen();
+      when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
           .thenReturn(Optional.of(alreadyClaimed));
       saveReturnsWhatItWasGiven();
 
@@ -138,9 +230,8 @@ class DocumentServiceTest {
     }
 
     @Test
-    void claimUpload_shouldThrowNotFound_whenNoUploadIsRegisteredUnderThatId() {
-      when(accompanyingDocumentRepository.findByUploadId("missing"))
-          .thenReturn(Optional.empty());
+    void claimUpload_shouldThrowNotFound_whenNoSessionWasOpenedUnderThatId() {
+      when(uploadSessionRepository.findByUploadId("missing")).thenReturn(Optional.empty());
       ClaimUploadRequest request = new ClaimUploadRequest(
           DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"));
 
@@ -189,9 +280,9 @@ class DocumentServiceTest {
 
     @Test
     void handleScanResult_shouldThrowNotFound_whenCorrelationIdUnknown() {
-      // Given — correlationId is present but no document matches
+      // Given — correlationId is present but no session was opened under it
       String correlationId = "unknown-correlation-id";
-      when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
+      when(uploadSessionRepository.findByCorrelationId(correlationId))
           .thenReturn(Optional.empty());
 
       CdpScanResultForm form = new CdpScanResultForm();
@@ -217,6 +308,8 @@ class DocumentServiceTest {
           .scanStatus(ScanStatus.PENDING)
           .files(new ArrayList<>())
           .build();
+      when(uploadSessionRepository.findByCorrelationId(correlationId)).thenReturn(
+          Optional.of(sessionOf("GBN-AG-26-NLR000", "upload-id-null-rejected", correlationId)));
       when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
           .thenReturn(Optional.of(document));
 
@@ -265,6 +358,8 @@ class DocumentServiceTest {
           .files(new ArrayList<>())
           .build();
 
+      when(uploadSessionRepository.findByCorrelationId(targetCorrelationId)).thenReturn(
+          Optional.of(sessionOf(notificationRef, "upload-target", targetCorrelationId)));
       when(accompanyingDocumentRepository.findByCorrelationId(targetCorrelationId))
           .thenReturn(Optional.of(target));
 
@@ -292,6 +387,35 @@ class DocumentServiceTest {
       assertThat(sibling.getScanStatus()).isEqualTo(ScanStatus.PENDING);
       assertThat(sibling.getFiles()).isEmpty();
     }
+
+    /**
+     * A scanned file is a file that exists, so the callback brings the document into being where
+     * the trader's details have not arrived yet. It stays unclaimed, which keeps it off the
+     * notification's events until they do.
+     */
+    @Test
+    void handleScanResult_shouldCreateAnUnclaimedDocument_whenItArrivesBeforeTheDetails() {
+      String correlationId = "corr-scan-first";
+      when(uploadSessionRepository.findByCorrelationId(correlationId)).thenReturn(
+          Optional.of(sessionOf("GBN-AG-26-SCN001", "upload-scan-first", correlationId)));
+      when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
+          .thenReturn(Optional.empty());
+      saveReturnsWhatItWasGiven();
+
+      CdpScanResultPayload payload = new CdpScanResultPayload(
+          "ready", Map.of("correlationId", correlationId), new CdpScanResultForm(), 0);
+
+      documentService.handleScanResult("upload-scan-first", payload);
+
+      ArgumentCaptor<AccompanyingDocument> captor =
+          ArgumentCaptor.forClass(AccompanyingDocument.class);
+      verify(accompanyingDocumentRepository).save(captor.capture());
+      AccompanyingDocument saved = captor.getValue();
+      assertThat(saved.getNotificationReferenceNumber()).isEqualTo("GBN-AG-26-SCN001");
+      assertThat(saved.getUploadId()).isEqualTo("upload-scan-first");
+      assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+      assertThat(saved.isClaimed()).isFalse();
+    }
   }
 
 
@@ -308,6 +432,7 @@ class DocumentServiceTest {
 
       // Then
       verify(accompanyingDocumentRepository).deleteAllByNotificationReferenceNumberIn(referenceNumbers);
+      verify(uploadSessionRepository).deleteAllByNotificationReferenceNumberIn(referenceNumbers);
     }
 
     @Test

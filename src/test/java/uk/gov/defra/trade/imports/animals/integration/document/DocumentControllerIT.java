@@ -49,6 +49,8 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentListRespo
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionDto;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 
 /**
@@ -166,10 +168,14 @@ class DocumentControllerIT extends IntegrationBase {
     private AccompanyingDocumentRepository accompanyingDocumentRepository;
 
     @Autowired
+    private UploadSessionRepository uploadSessionRepository;
+
+    @Autowired
     private MongoTemplate mongoTemplate;
 
     @BeforeEach
     void setUpDocuments() {
+        uploadSessionRepository.deleteAll();
         accompanyingDocumentRepository.deleteAll();
         assertThat(port).isEqualTo(BACKEND_PORT);
     }
@@ -177,11 +183,15 @@ class DocumentControllerIT extends IntegrationBase {
     @Nested
     class Register {
 
+        /**
+         * The page opens a session every time it is painted, so registering one records the
+         * session and leaves the notification with no document until a real one arrives.
+         */
         @Test
-        void shouldReturn201AndPersistAnUnclaimedPendingDocument() {
-            UploadSession session = openUploadSession();
+        void shouldReturn201AndPersistTheSessionWithoutADocument() {
+            OpenedSession session = openUploadSession();
 
-            EntityExchangeResult<AccompanyingDocumentDto> result = webClient("NoAuth")
+            EntityExchangeResult<UploadSessionDto> result = webClient("NoAuth")
                 .post()
                 .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -190,36 +200,56 @@ class DocumentControllerIT extends IntegrationBase {
                     """.formatted(session.uploadId(), session.correlationId()))
                 .exchange()
                 .expectStatus().isCreated()
-                .expectBody(AccompanyingDocumentDto.class)
+                .expectBody(UploadSessionDto.class)
                 .returnResult();
 
-            AccompanyingDocumentDto responseBody = result.getResponseBody();
+            UploadSessionDto responseBody = result.getResponseBody();
             assertThat(responseBody).isNotNull();
             assertThat(responseBody.uploadId()).isEqualTo(session.uploadId());
-            assertThat(responseBody.claimed()).isFalse();
+            assertThat(responseBody.correlationId()).isEqualTo(session.correlationId());
+            assertThat(responseBody.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
 
             assertThat(result.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
                 .endsWith("/document-uploads/" + session.uploadId());
 
-            List<AccompanyingDocument> persisted =
-                accompanyingDocumentRepository.findAllByNotificationReferenceNumber(NOTIFICATION_REF);
-            assertThat(persisted).hasSize(1);
-            AccompanyingDocument doc = persisted.get(0);
-            assertThat(doc.getUploadId()).isEqualTo(session.uploadId());
-            assertThat(doc.getCorrelationId()).isEqualTo(session.correlationId());
-            assertThat(doc.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
-            assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.PENDING);
-            assertThat(doc.isClaimed()).isFalse();
-            assertThat(doc.getDocumentType()).isNull();
-            assertThat(doc.getDocumentReference()).isNull();
-            assertThat(doc.getFiles()).isEmpty();
-            assertThat(doc.getId()).isNotNull();
-            assertThat(doc.getCreated()).isNotNull();
+            assertThat(uploadSessionRepository.findByUploadId(session.uploadId())).isPresent();
+            assertThat(accompanyingDocumentRepository
+                .findAllByNotificationReferenceNumber(NOTIFICATION_REF)).isEmpty();
+        }
+
+        @Test
+        void shouldReturnTheSessionByItsCorrelationHandle() {
+            OpenedSession session = registeredSession();
+
+            webClient("NoAuth")
+                .get()
+                .uri("/notifications/" + NOTIFICATION_REF + "/document-upload-sessions/"
+                    + session.correlationId())
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody(UploadSessionDto.class)
+                .value(dto -> assertThat(dto.uploadId()).isEqualTo(session.uploadId()));
+        }
+
+        /**
+         * The handle is scoped to its notification, so it cannot be used to reach a session another
+         * notification opened.
+         */
+        @Test
+        void shouldReturn404_whenTheHandleBelongsToAnotherNotification() {
+            OpenedSession session = registeredSession();
+
+            webClient("NoAuth")
+                .get()
+                .uri("/notifications/GBN-AG-26-OTHER0/document-upload-sessions/"
+                    + session.correlationId())
+                .exchange()
+                .expectStatus().isNotFound();
         }
 
         @Test
         void shouldReturn409_whenTheSessionIsAlreadyRegistered() {
-            UploadSession session = registeredSession();
+            OpenedSession session = registeredSession();
 
             webClient("NoAuth")
                 .post()
@@ -276,7 +306,7 @@ class DocumentControllerIT extends IntegrationBase {
 
         @Test
         void shouldEndUpAsCompleteViaRealScan() throws IOException {
-            UploadSession session = registeredSession();
+            OpenedSession session = registeredSession();
             byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
             uploadFile(session.uploadId(), pdfBytes, "clean.pdf", "application/pdf");
@@ -300,7 +330,7 @@ class DocumentControllerIT extends IntegrationBase {
 
         @Test
         void shouldEndUpAsRejectedViaRealScan() throws IOException {
-            UploadSession session = registeredSession();
+            OpenedSession session = registeredSession();
             byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
             uploadFile(session.uploadId(), pdfBytes, "virus.pdf", "application/pdf");
@@ -361,6 +391,7 @@ class DocumentControllerIT extends IntegrationBase {
         @Test
         void shouldReturn200WithCorrectDto() {
             String uploadId = registeredUploadId();
+            claimUpload(uploadId);
 
             EntityExchangeResult<AccompanyingDocumentDto> result = webClient("NoAuth")
                 .get()
@@ -377,6 +408,18 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(dto.scanStatus()).isEqualTo(ScanStatus.PENDING);
             assertThat(dto.id()).isNotNull();
             assertThat(dto.created()).isNotNull();
+        }
+
+        /** Nothing is stored for a session the trader never put a document through. */
+        @Test
+        void shouldReturn404_whenTheSessionWasOnlyOpened() {
+            String uploadId = registeredUploadId();
+
+            webClient("NoAuth")
+                .get()
+                .uri("/document-uploads/" + uploadId)
+                .exchange()
+                .expectStatus().isNotFound();
         }
 
         @Test
@@ -398,7 +441,7 @@ class DocumentControllerIT extends IntegrationBase {
 
         @Test
         void shouldStreamFileFromS3WithCorrectHeaders() throws IOException {
-            UploadSession session = registeredSession();
+            OpenedSession session = registeredSession();
             byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
             uploadFile(session.uploadId(), pdfBytes, "clean.pdf", "application/pdf");
 
@@ -424,6 +467,7 @@ class DocumentControllerIT extends IntegrationBase {
         @Test
         void shouldReturn404_whenNoFilesPresent() {
             String uploadId = registeredUploadId();
+            claimUpload(uploadId);
 
             webClient("NoAuth")
                 .get()
@@ -438,7 +482,7 @@ class DocumentControllerIT extends IntegrationBase {
 
         @Test
         void shouldReturn404_whenFileRejected() throws IOException {
-            UploadSession session = registeredSession();
+            OpenedSession session = registeredSession();
             byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
             uploadFile(session.uploadId(), pdfBytes, "virus.pdf", "application/pdf");
 
@@ -456,7 +500,7 @@ class DocumentControllerIT extends IntegrationBase {
 
         @Test
         void shouldReturn500_whenS3ObjectMissing() throws IOException {
-            UploadSession session = registeredSession();
+            OpenedSession session = registeredSession();
             byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
             uploadFile(session.uploadId(), pdfBytes, "clean.pdf", "application/pdf");
 
@@ -507,6 +551,7 @@ class DocumentControllerIT extends IntegrationBase {
         @Test
         void shouldReturn204AndRemoveDocument() {
             String uploadId = registeredUploadId();
+            claimUpload(uploadId);
 
             webClient("NoAuth")
                 .delete()
@@ -528,13 +573,13 @@ class DocumentControllerIT extends IntegrationBase {
     }
 
     /** An upload session as the frontend holds it: cdp-uploader's id and the caller's own. */
-    private record UploadSession(String uploadId, String correlationId) {}
+    private record OpenedSession(String uploadId, String correlationId) {}
 
     /**
      * Opens a cdp-uploader session the way the frontend does — a relative redirect, the backend's
      * callback URL, and a correlationId in the metadata for the callback to come back with.
      */
-    private UploadSession openUploadSession() {
+    private OpenedSession openUploadSession() {
         String correlationId = UUID.randomUUID().toString();
         String callbackUrl = "http://host.testcontainers.internal:" + BACKEND_PORT
             + "/document-uploads/pending/scan-results";
@@ -560,11 +605,11 @@ class DocumentControllerIT extends IntegrationBase {
         assertThat(response).isNotNull();
         String uploadId = JsonPath.read(new String(response, StandardCharsets.UTF_8), "$.uploadId");
         assertThat(uploadId).isNotBlank();
-        return new UploadSession(uploadId, correlationId);
+        return new OpenedSession(uploadId, correlationId);
     }
 
-    private UploadSession registeredSession() {
-        UploadSession session = openUploadSession();
+    private OpenedSession registeredSession() {
+        OpenedSession session = openUploadSession();
         webClient("NoAuth")
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")

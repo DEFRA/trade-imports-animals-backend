@@ -36,10 +36,13 @@ Two independent safeguards keep expiry out of prod; both must fail before prod l
 
 ## Accompanying documents and cdp-uploader
 
-The browser uploads straight to cdp-uploader, so this service never sees the bytes. The frontend opens the upload session; the three calls that reach here register that session, claim its document once the user's answers are in, and receive the scan result.
+The browser uploads straight to cdp-uploader, so this service never sees the bytes. The frontend opens the upload session; the calls that reach here record that session, look it up again when the browser returns, claim its document once the user's answers are in, and receive the scan result.
 
-- Registering carries both the `uploadId` and the `correlationId`, because the callback body carries neither, and the callback URL is fixed inside the `/initiate` request — before cdp-uploader has assigned an `uploadId`. The caller that opened the session is the only party holding both, so it has to hand them over.
-- A registered document is unclaimed and has no details until the frontend claims it. `claimed` separates a document the user attached from an upload they walked away from, and only claimed documents reach a notification's events. Without it, a clean scan on an abandoned upload would ship on the next GBN-AG event as a document nobody attached.
+- A session and a document are separate records in separate collections. The frontend opens a session every time it paints the upload page — a trader who loads it, reloads it or comes back to it opens several — so writing a document then would leave a notification holding a document per page view, with nothing to tell them apart from the real ones. A document is written by whichever of the claim and the scan callback arrives first, both of which mean a file genuinely exists.
+- Registering a session carries both the `uploadId` and the `correlationId`, because the callback body carries neither, and the callback URL is fixed inside the `/initiate` request — before cdp-uploader has assigned an `uploadId`. The caller that opened the session is the only party holding both, so it has to hand them over.
+- Sessions expire 24 hours after they are created, which is how the ones nobody uploaded through are cleared out. Documents do not expire.
+- Looking a session up is scoped to its notification, so a correlation handle cannot reach a session another notification opened. The handle arrives back from the browser, so it is not trusted on its own.
+- A document the scan callback created is unclaimed and has no details until the frontend claims it. `claimed` separates a document the user attached from an upload they walked away from, and only claimed documents reach a notification's events. Without it, a clean scan on an abandoned upload would ship on the next GBN-AG event as a document nobody attached.
 - Claiming is repeatable: it replaces the details, so a repeated claim cannot produce a second document.
 - The scan-result callback is unauthenticated: anyone who can reach it with a known `correlationId` can post a result. Add a shared secret or HMAC check when cdp-uploader supports callback authentication.
 - The callback path variable is always the literal `pending` set when the session is opened. The document is found by `metadata.correlationId` in the payload.

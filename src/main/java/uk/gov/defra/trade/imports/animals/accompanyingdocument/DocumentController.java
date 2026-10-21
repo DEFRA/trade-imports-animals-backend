@@ -61,28 +61,54 @@ public class DocumentController {
    *
    * @param ref     the notification reference number
    * @param request the upload session's identifiers
-   * @return 201 Created with the registered document and a Location header
+   * @return 201 Created with the recorded session and a Location header
    */
   @PostMapping("/notifications/{ref}/document-uploads")
   @Operation(
       summary = "Register document upload",
-      description = "Records a cdp-uploader upload session so its scan result can be matched")
+      description = "Records an upload session so what arrives through it can be matched")
   @ApiResponse(responseCode = "201", description = "Upload session registered",
-      content = @Content(schema = @Schema(implementation = AccompanyingDocumentDto.class)))
+      content = @Content(schema = @Schema(implementation = UploadSessionDto.class)))
   @ApiResponse(responseCode = "400", description = "Validation error", content = @Content)
   @ApiResponse(responseCode = "409", description = "Upload session already registered",
       content = @Content)
   @Timed("document.register")
-  public ResponseEntity<AccompanyingDocumentDto> register(
+  public ResponseEntity<UploadSessionDto> register(
       @PathVariable String ref,
       @Valid @RequestBody RegisterUploadRequest request) {
 
     log.info("POST /notifications/{}/document-uploads uploadId={}", ref, request.uploadId());
 
-    AccompanyingDocument document = documentService.registerUpload(ref, request);
-    URI location = buildLocationUri(document.getUploadId());
+    UploadSession session = documentService.registerUpload(ref, request);
+    URI location = buildLocationUri(session.getUploadId());
 
-    return ResponseEntity.created(location).body(AccompanyingDocumentDto.from(document));
+    return ResponseEntity.created(location).body(UploadSessionDto.from(session));
+  }
+
+  /**
+   * Look up the upload session a notification opened under a correlation handle, which is how the
+   * uploading journey recovers the session it opened once the browser returns to it.
+   *
+   * @param ref           the notification reference number
+   * @param correlationId the handle the session was opened under
+   * @return 200 OK with the session
+   */
+  @GetMapping("/notifications/{ref}/document-upload-sessions/{correlation-id}")
+  @Operation(
+      summary = "Get document upload session",
+      description = "Returns the upload session a notification opened under a correlation handle")
+  @ApiResponse(responseCode = "200", description = "Session returned",
+      content = @Content(schema = @Schema(implementation = UploadSessionDto.class)))
+  @ApiResponse(responseCode = "404", description = "Session not found", content = @Content)
+  @Timed("document.session")
+  public ResponseEntity<UploadSessionDto> session(
+      @PathVariable String ref,
+      @PathVariable("correlation-id") String correlationId) {
+
+    log.info("GET /notifications/{}/document-upload-sessions/{}", ref, correlationId);
+
+    return ResponseEntity.ok(
+        UploadSessionDto.from(documentService.findSession(ref, correlationId)));
   }
 
   /**

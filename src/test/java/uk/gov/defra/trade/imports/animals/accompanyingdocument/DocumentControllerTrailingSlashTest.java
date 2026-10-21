@@ -48,10 +48,10 @@ class DocumentControllerTrailingSlashTest {
         new RegisterUploadRequest("upload-abc-123", "correlation-abc-123");
 
     when(documentService.registerUpload(eq(ref), any(RegisterUploadRequest.class)))
-        .thenReturn(AccompanyingDocument.builder()
+        .thenReturn(UploadSession.builder()
+            .notificationReferenceNumber(ref)
             .uploadId("upload-abc-123")
             .correlationId("correlation-abc-123")
-            .scanStatus(ScanStatus.PENDING)
             .build());
 
     mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
