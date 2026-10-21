@@ -8,10 +8,10 @@ import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
 /**
- * Request body for initiating an accompanying document upload.
+ * Request body for claiming an uploaded document into a notification.
  */
-@Schema(description = "Request to initiate an accompanying document upload")
-public record DocumentUploadRequest(
+@Schema(description = "Request to claim an uploaded document into a notification")
+public record ClaimUploadRequest(
     @NotNull
     @Schema(description = "Type of accompanying document",
         requiredMode = Schema.RequiredMode.REQUIRED,

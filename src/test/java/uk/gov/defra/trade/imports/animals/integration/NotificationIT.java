@@ -1247,9 +1247,9 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submit_shouldReferenceOnlyTheDocumentsThatPassedTheVirusScan() {
-        // Given — a notification with one scanned document, one still being scanned and one the
-        // scan rejected
+    void submit_shouldReferenceOnlyTheScannedCleanDocumentsTheJourneyClaimed() {
+        // Given — a notification with a claimed clean document, one still being scanned, one the
+        // scan rejected, and one scanned clean that no journey ever claimed
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
@@ -1263,6 +1263,16 @@ class NotificationIT extends IntegrationBase {
             .documentType(DocumentType.LETTER_OF_AUTHORITY)
             .documentReference("LOA-778")
             .dateOfIssue(LocalDate.parse("2026-09-01"))
+            .scanStatus(ScanStatus.COMPLETE)
+            .claimed(true)
+            .build());
+        accompanyingDocumentRepository.save(AccompanyingDocument.builder()
+            .notificationReferenceNumber(referenceNumber)
+            .uploadId("upload-refdoc-unclaimed")
+            .correlationId("correlation-refdoc-unclaimed")
+            .documentType(DocumentType.LETTER_OF_AUTHORITY)
+            .documentReference("LOA-ABANDONED")
+            .dateOfIssue(LocalDate.parse("2026-09-04"))
             .scanStatus(ScanStatus.COMPLETE)
             .build());
         accompanyingDocumentRepository.save(AccompanyingDocument.builder()

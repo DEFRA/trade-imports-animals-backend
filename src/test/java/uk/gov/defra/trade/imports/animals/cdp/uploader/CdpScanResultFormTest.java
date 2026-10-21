@@ -113,19 +113,54 @@ class CdpScanResultFormTest {
       assertThat(form.getFiles()).isNotNull();
       assertThat(form.getFiles()).isEmpty();
     }
+
+    /**
+     * The browser submits its text fields alongside the file, and cdp-uploader echoes every one of
+     * them under {@code form}. They have to deserialise without failing the callback, and they are
+     * not file entries.
+     */
+    @Test
+    void deserialize_shouldKeepOnlyTheFileEntries_whenTextFieldsAreSubmittedAlongsideTheFile()
+        throws JsonProcessingException {
+      String json = """
+          {
+            "documentType": "ITAHC",
+            "documentReference": "UKGB2026001234",
+            "accompanyingDocumentDateOfIssue-day": "15",
+            "file": {
+              "fileId": "file-uuid-4",
+              "filename": "cert.pdf",
+              "contentType": "application/pdf",
+              "fileStatus": "complete",
+              "contentLength": 2048,
+              "checksumSha256": "abc123",
+              "detectedContentType": "application/pdf",
+              "s3Key": "upload-uuid/file-uuid-4",
+              "s3Bucket": "my-bucket",
+              "hasError": false,
+              "errorMessage": null
+            }
+          }
+          """;
+
+      CdpScanResultForm form = objectMapper.readValue(json, CdpScanResultForm.class);
+
+      assertThat(form.getFiles()).containsOnlyKeys("file");
+      assertThat(form.getFiles().get("file").filename()).isEqualTo("cert.pdf");
+    }
   }
 
   @Nested
-  class AddFileMutability {
+  class FilesMapMutability {
 
     @Test
-    void addFile_shouldAddEntryToFilesMap() {
+    void putting_shouldAddEntryToFilesMap() {
       CdpScanResultForm form = new CdpScanResultForm();
       CdpScanResultFile file = new CdpScanResultFile(
           "file-id", "doc.pdf", "application/pdf", FileStatus.COMPLETE,
           1024L, "sha256", "application/pdf", "s3key", "bucket", false, null);
 
-      form.addFile("docFile", file);
+      form.getFiles().put("docFile", file);
 
       assertThat(form.getFiles()).containsEntry("docFile", file);
     }
@@ -143,22 +178,22 @@ class CdpScanResultFormTest {
 
       CdpScanResultForm form = new CdpScanResultForm(unmodifiable);
 
-      // addFile must not throw UnsupportedOperationException even though the source map was
+      // Putting must not throw UnsupportedOperationException even though the source map was
       // unmodifiable — the constructor must have taken a defensive copy.
-      assertThatCode(() -> form.addFile("extraFile", file)).doesNotThrowAnyException();
+      assertThatCode(() -> form.getFiles().put("extraFile", file)).doesNotThrowAnyException();
       assertThat(form.getFiles()).containsKey("extraFile");
       assertThat(form.getFiles()).containsKey("doc");
     }
 
     @Test
-    void constructor_shouldNotMutateOriginalMap_whenAddFileIsCalled() {
+    void constructor_shouldNotMutateOriginalMap_whenTheFilesMapIsAddedTo() {
       CdpScanResultFile file = new CdpScanResultFile(
           "file-id", "doc.pdf", "application/pdf", FileStatus.COMPLETE,
           1024L, "sha256", "application/pdf", "s3key", "bucket", false, null);
       Map<String, CdpScanResultFile> original = new java.util.LinkedHashMap<>(Map.of("doc", file));
 
       CdpScanResultForm form = new CdpScanResultForm(original);
-      form.addFile("extraFile", file);
+      form.getFiles().put("extraFile", file);
 
       // The defensive copy means mutations to form.files do not affect the original map.
       assertThat(original).doesNotContainKey("extraFile");

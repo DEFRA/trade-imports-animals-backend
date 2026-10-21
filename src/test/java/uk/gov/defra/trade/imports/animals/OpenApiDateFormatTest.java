@@ -11,7 +11,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentListResponse;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentUploadRequest;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.ClaimUploadRequest;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationFulfilmentsView;
@@ -36,7 +36,7 @@ class OpenApiDateFormatTest {
         NotificationAggregate.class,
         NotificationView.class,
         NotificationFulfilmentsView.class,
-        DocumentUploadRequest.class,
+        ClaimUploadRequest.class,
         AccompanyingDocumentDto.class,
         DocumentListResponse.class);
 

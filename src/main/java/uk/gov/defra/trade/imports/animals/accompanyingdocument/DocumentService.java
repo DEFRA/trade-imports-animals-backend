@@ -2,135 +2,84 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import org.springframework.web.util.UriComponentsBuilder;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
-import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateRequest;
-import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderInitiateResponse;
-import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpUploaderClient;
-import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
-import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
-import org.springframework.web.multipart.MultipartFile;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
-import uk.gov.defra.trade.imports.animals.exceptions.ServiceUnavailableException;
 
 /**
- * Business logic for accompanying document uploads.
- *
- * <p>Orchestrates calls to the cdp-uploader service and persists the resulting
- * {@link AccompanyingDocument} entities.
+ * Business logic for accompanying documents: registering an upload session, claiming its document
+ * into a notification, recording the scan result, and reading or removing what was stored.
  */
 @Service
 @Slf4j
 public class DocumentService {
 
   private final AccompanyingDocumentRepository accompanyingDocumentRepository;
-  private final CdpUploaderClient cdpUploaderClient;
-  private final String backendBaseUrl;
-  private final CdpConfig cdpConfig;
 
-  public DocumentService(
-      AccompanyingDocumentRepository accompanyingDocumentRepository,
-      CdpUploaderClient cdpUploaderClient,
-      AppConfig appConfig,
-      CdpConfig cdpConfig) {
+  public DocumentService(AccompanyingDocumentRepository accompanyingDocumentRepository) {
     this.accompanyingDocumentRepository = accompanyingDocumentRepository;
-    this.cdpUploaderClient = cdpUploaderClient;
-    this.backendBaseUrl = appConfig.baseUrl();
-    this.cdpConfig = cdpConfig;
   }
 
   /**
-   * cdp-uploader's {@code /initiate} schema requires {@code xor('redirect', 'downloadUrls')}, so
-   * we always pass a redirect path. Our flow is server-proxied (the frontend POSTs the file to
-   * cdp-uploader on the user's behalf and ignores cdp-uploader's 302 response), so the value is
-   * never user-visible — anything cdp-uploader accepts as a relative URI works. Hard-coded
-   * because nothing in the caller's payload meaningfully affects it.
-   */
-  private static final String CDP_UPLOADER_REDIRECT_PATH = "/";
-
-  /**
-   * Initiates a new document upload session via cdp-uploader and persists a pending
-   * {@link AccompanyingDocument}.
+   * Records an upload session the caller has opened with cdp-uploader, so the scan callback has a
+   * document to resolve when it arrives. The document carries no details yet and is unclaimed:
+   * both arrive from {@link #claimUpload}, once the user has submitted the form and their answers
+   * have been validated.
    *
-   * <p>This method is <strong>not idempotent</strong>. cdp-uploader is always called to create a
-   * new upload session. Multiple PENDING documents are deliberately permitted per notification —
-   * the UX supports adding a second document while the first is still being scanned.
-   *
-   * <p>The {@code uploadId} returned by cdp-uploader is enforced as globally unique by a Mongo
-   * unique index on the field. A duplicate would imply a cdp-uploader UUID collision; the
-   * defensive catch below re-throws as {@link ConflictException} (HTTP 409). In that scenario the
-   * cdp-uploader session is orphaned — no database record is saved for it.
+   * <p>Several pending documents per notification are deliberately allowed — a user may add a
+   * second document while the first is still being checked.
    *
    * @param notificationRef the parent notification reference number
-   * @param request         the document metadata supplied by the user
-   * @return the upload session details (upload ID and upload URL)
+   * @param request         the upload session's identifiers
+   * @return the registered document
+   * @throws ConflictException if either identifier is already registered
    */
-  public DocumentUploadResponse initiate(
-      String notificationRef, DocumentUploadRequest request) {
+  public AccompanyingDocument registerUpload(
+      String notificationRef, RegisterUploadRequest request) {
 
-    // Mint a backend-side correlationId before /initiate so it can ride in the metadata map
-    // and come back to us on the scan callback. cdp-uploader assigns its own uploadId during
-    // /initiate and locks the callback URL at that point; the callback payload doesn't echo
-    // uploadId back, so correlationId is the only handle we control end-to-end.
-    String correlationId = UUID.randomUUID().toString();
+    AccompanyingDocument document = AccompanyingDocument.builder()
+        .notificationReferenceNumber(notificationRef)
+        .uploadId(request.uploadId())
+        .correlationId(request.correlationId())
+        .scanStatus(ScanStatus.PENDING)
+        .files(new ArrayList<>())
+        .build();
 
-    CdpUploaderInitiateRequest initiateRequest = new CdpUploaderInitiateRequest(
-        CDP_UPLOADER_REDIRECT_PATH,
-        buildCallbackUrl(),
-        cdpConfig.s3().documentsBucket(),
-        notificationRef,
-        cdpConfig.uploader().maxFileSize(),
-        cdpConfig.uploader().mimeTypes(),
-        buildMetadata(notificationRef, request, correlationId));
-
-    log.info("Initiating cdp-uploader session for notification {}", notificationRef);
-    CdpUploaderInitiateResponse response = cdpUploaderClient.initiate(initiateRequest);
-    String uploadUrl = buildUploadUrl(response.uploadId());
-
-    AccompanyingDocument document = buildPendingDocument(
-        notificationRef, request, response, correlationId);
-    saveOrThrowOnDuplicate(document, notificationRef);
-
-    return new DocumentUploadResponse(response.uploadId(), uploadUrl);
+    return saveOrThrowOnDuplicate(document, notificationRef);
   }
 
   /**
-   * Constructs the file-proxy URL returned to the client in {@link DocumentUploadResponse}.
-   * Points at this backend's own {@code POST /document-uploads/{uploadId}/file} endpoint so
-   * the frontend (and the IT test assertions) use the backend as the upload target rather than
-   * reaching cdp-uploader directly.
+   * Attaches a user's validated answers to a registered upload and claims it for the notification.
+   * Only claimed documents are published on a notification's events, so an upload the user walked
+   * away from never reaches one.
    *
-   * <p>{@link UriComponentsBuilder#pathSegment} percent-encodes each segment individually and
-   * appends to any existing path on {@code app.base-url}, preserving path prefixes.
-   */
-  private String buildUploadUrl(String uploadId) {
-    return UriComponentsBuilder.fromUriString(backendBaseUrl)
-        .pathSegment("document-uploads", uploadId, "file")
-        .build()
-        .toUriString();
-  }
-
-  /**
-   * Proxies the uploaded file to cdp-uploader on behalf of the frontend.
+   * <p>Claiming an already-claimed document replaces its details with the ones supplied, so a
+   * repeated request cannot produce a second document.
    *
    * @param uploadId the upload session identifier
-   * @param file     the multipart file received from the frontend
-   * @throws NotFoundException           if no session exists for {@code uploadId}
-   * @throws ServiceUnavailableException if cdp-uploader is unreachable or returns an error
+   * @param request  the document details the user gave
+   * @return the claimed document
+   * @throws NotFoundException if no document is registered under {@code uploadId}
    */
-  public void proxyFileToUploader(String uploadId, MultipartFile file) {
-    findByUploadId(uploadId);
-    cdpUploaderClient.uploadFile(uploadId, file);
+  public AccompanyingDocument claimUpload(String uploadId, ClaimUploadRequest request) {
+    AccompanyingDocument document = findByUploadId(uploadId);
+
+    document.setDocumentType(request.documentType());
+    document.setDocumentReference(request.documentReference());
+    document.setDateOfIssue(request.dateOfIssue());
+    document.setClaimed(true);
+
+    AccompanyingDocument claimed = accompanyingDocumentRepository.save(document);
+    log.info("Claimed uploadId {} for notification {}", uploadId,
+        document.getNotificationReferenceNumber());
+    return claimed;
   }
 
   /**
@@ -230,58 +179,20 @@ public class DocumentService {
     return file;
   }
 
-  /**
-   * Callback URL is fixed at initiate time — cdp-uploader validates it as a URI and posts to it
-   * verbatim, with no template substitution. The path's "pending" segment is a static marker;
-   * document identity is carried via {@code metadata.correlationId}, not the URL.
-   */
-  private String buildCallbackUrl() {
-    return backendBaseUrl + "/document-uploads/pending/scan-results";
-  }
-
-  /**
-   * Builds the metadata map for a cdp-uploader initiate request. {@code documentType} and
-   * {@code documentReference} are non-null per {@link DocumentUploadRequest}'s {@code @NotNull} /
-   * {@code @NotBlank} constraints (validated at the controller boundary), so no null-fallback is
-   * needed here.
-   */
-  private static Map<String, String> buildMetadata(
-      String notificationRef, DocumentUploadRequest request, String correlationId) {
-    return Map.of(
-        "notificationReferenceNumber", notificationRef,
-        "documentType", request.documentType().name(),
-        "documentReference", request.documentReference(),
-        "correlationId", correlationId);
-  }
-
-  private static AccompanyingDocument buildPendingDocument(
-      String notificationRef,
-      DocumentUploadRequest request,
-      CdpUploaderInitiateResponse response,
-      String correlationId) {
-    return AccompanyingDocument.builder()
-        .notificationReferenceNumber(notificationRef)
-        .uploadId(response.uploadId())
-        .correlationId(correlationId)
-        .documentType(request.documentType())
-        .documentReference(request.documentReference())
-        .dateOfIssue(request.dateOfIssue())
-        .scanStatus(ScanStatus.PENDING)
-        .files(new ArrayList<>())
-        .build();
-  }
-
-  private void saveOrThrowOnDuplicate(AccompanyingDocument document, String notificationRef) {
+  private AccompanyingDocument saveOrThrowOnDuplicate(
+      AccompanyingDocument document, String notificationRef) {
     try {
-      accompanyingDocumentRepository.save(document);
+      AccompanyingDocument saved = accompanyingDocumentRepository.save(document);
       log.info(
-          "Saved AccompanyingDocument with uploadId {} for notification {}",
+          "Registered uploadId {} for notification {}",
           document.getUploadId(),
           notificationRef);
+      return saved;
     } catch (DuplicateKeyException _) {
       log.warn(
-          "Duplicate uploadId {} from cdp-uploader for notification {} — UUID collision",
+          "Duplicate uploadId {} or correlationId {} for notification {}",
           document.getUploadId(),
+          document.getCorrelationId(),
           notificationRef);
       throw new ConflictException(
           "Upload session with id " + document.getUploadId() + " already exists");

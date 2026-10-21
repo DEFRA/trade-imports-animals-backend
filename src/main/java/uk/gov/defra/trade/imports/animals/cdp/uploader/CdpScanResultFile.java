@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.cdp.uploader;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.annotation.Nullable;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 
@@ -7,7 +8,8 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
  * Represents a single file entry within a cdp-uploader scan result callback payload.
  *
  * <p>Field names intentionally use camelCase to align with the cdp-uploader JSON contract;
- * no {@code @JsonProperty} annotations are required.
+ * no {@code @JsonProperty} annotations are required. cdp-uploader owns this shape and sends
+ * fields this service has no use for, which must not fail the callback.
  *
  * @param fileId              identifier assigned by cdp-uploader; retained for contract
  *                            completeness but not persisted
@@ -25,6 +27,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
  * @param hasError            {@code true} if the scan reported an error for this file
  * @param errorMessage        human-readable error description; {@code null} when there is no error
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record CdpScanResultFile(
     String fileId,
     String filename,

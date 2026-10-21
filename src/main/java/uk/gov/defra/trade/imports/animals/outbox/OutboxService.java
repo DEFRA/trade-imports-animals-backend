@@ -84,10 +84,9 @@ public class OutboxService {
 
         Integer versionId = computeVersionId(aggregateId, eventType);
 
-        // Only documents that passed the virus scan are referenced; read inside the outbox write so
-        // the event and the documents it lists are consistent.
+        // Read inside the outbox write so the event and the documents it lists are consistent.
         List<AccompanyingDocument> accompanyingDocuments = accompanyingDocumentRepository
-            .findAllByNotificationReferenceNumberAndScanStatusOrderByCreatedAsc(
+            .findAllByNotificationReferenceNumberAndScanStatusAndClaimedIsTrueOrderByCreatedAsc(
                 notificationAggregate.getReferenceNumber(), ScanStatus.COMPLETE);
 
         Map<String, Object> data = objectMapper.convertValue(

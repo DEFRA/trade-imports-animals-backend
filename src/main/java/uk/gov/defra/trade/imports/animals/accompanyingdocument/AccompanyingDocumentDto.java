@@ -20,6 +20,7 @@ public record AccompanyingDocumentDto(
     String documentReference,
     LocalDate dateOfIssue,
     ScanStatus scanStatus,
+    boolean claimed,
     List<UploadedFileDto> files,
     Instant created,
     Instant updated) {
@@ -40,6 +41,7 @@ public record AccompanyingDocumentDto(
         entity.getDocumentReference(),
         entity.getDateOfIssue(),
         entity.getScanStatus(),
+        entity.isClaimed(),
         entity.getFiles().stream().map(UploadedFileDto::from).toList(),
         entity.getCreated(),
         entity.getUpdated());

@@ -68,24 +68,94 @@ class DocumentControllerTest {
   private S3DocumentService s3DocumentService;
 
   @Nested
-  class Initiate {
+  class Register {
+
+    private static final String REF = "GBN-AG-26-000001";
 
     @Test
-    void shouldReturn201WithLocationHeader() throws Exception {
-      String ref = "GBN-AG-26-000001";
-      DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"));
-      DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
+    void shouldReturn201WithLocationHeaderAndTheRegisteredDocument() throws Exception {
+      RegisterUploadRequest request =
+          new RegisterUploadRequest("upload-abc-123", "correlation-abc-123");
 
-      when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class)))
-          .thenReturn(serviceResponse);
+      when(documentService.registerUpload(eq(REF), any(RegisterUploadRequest.class)))
+          .thenReturn(AccompanyingDocument.builder()
+              .uploadId("upload-abc-123")
+              .correlationId("correlation-abc-123")
+              .scanStatus(ScanStatus.PENDING)
+              .build());
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
               .contentType(MediaType.APPLICATION_JSON)
               .content(objectMapper.writeValueAsString(request)))
           .andExpect(status().isCreated())
-          .andExpect(header().string("Location", "http://localhost:8085/document-uploads/upload-abc-123"))
+          .andExpect(header().string(
+              "Location", "http://localhost:8085/document-uploads/upload-abc-123"))
           .andExpect(jsonPath("$.uploadId").value("upload-abc-123"))
-          .andExpect(jsonPath("$.uploadUrl").value("http://localhost:8085/document-uploads/upload-abc-123/file"));
+          .andExpect(jsonPath("$.claimed").value(false));
+    }
+
+    @Test
+    void shouldReturn400_whenUploadIdIsBlank() throws Exception {
+      String body = """
+          {"uploadId":"","correlationId":"correlation-abc-123"}
+          """;
+
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.errors.uploadId").exists());
+
+      verify(documentService, never()).registerUpload(any(), any());
+    }
+
+    @Test
+    void shouldReturn400_whenCorrelationIdIsMissing() throws Exception {
+      String body = """
+          {"uploadId":"upload-abc-123"}
+          """;
+
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.errors.correlationId").exists());
+
+      verify(documentService, never()).registerUpload(any(), any());
+    }
+  }
+
+  @Nested
+  class Claim {
+
+    private static final String UPLOAD_ID = "upload-abc-123";
+
+    private AccompanyingDocument claimedWith(DocumentType documentType) {
+      return AccompanyingDocument.builder()
+          .uploadId(UPLOAD_ID)
+          .documentType(documentType)
+          .documentReference("UKGB2026001")
+          .dateOfIssue(LocalDate.parse("2026-01-15"))
+          .scanStatus(ScanStatus.PENDING)
+          .claimed(true)
+          .build();
+    }
+
+    @Test
+    void shouldReturn200WithTheClaimedDocument() throws Exception {
+      ClaimUploadRequest request = new ClaimUploadRequest(
+          DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"));
+
+      when(documentService.claimUpload(eq(UPLOAD_ID), any(ClaimUploadRequest.class)))
+          .thenReturn(claimedWith(DocumentType.ITAHC));
+
+      mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(objectMapper.writeValueAsString(request)))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.uploadId").value(UPLOAD_ID))
+          .andExpect(jsonPath("$.claimed").value(true))
+          .andExpect(jsonPath("$.documentReference").value("UKGB2026001"));
     }
 
     @ParameterizedTest
@@ -95,11 +165,8 @@ class DocumentControllerTest {
         mode = EnumSource.Mode.EXCLUDE)
     void shouldAcceptEveryPreviouslyRejectedDocumentType(DocumentType documentType)
         throws Exception {
-      String ref = "GBN-AG-26-000001";
-      DocumentUploadRequest expectedRequest = new DocumentUploadRequest(
+      ClaimUploadRequest expectedRequest = new ClaimUploadRequest(
           documentType, "UKGB2026001", LocalDate.parse("2026-01-15"));
-      DocumentUploadResponse serviceResponse = new DocumentUploadResponse(
-          "upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
       String body = """
           {
             "documentType":"%s",
@@ -108,14 +175,15 @@ class DocumentControllerTest {
           }
           """.formatted(documentType.name());
 
-      when(documentService.initiate(ref, expectedRequest)).thenReturn(serviceResponse);
+      when(documentService.claimUpload(UPLOAD_ID, expectedRequest))
+          .thenReturn(claimedWith(documentType));
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
+      mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
-          .andExpect(status().isCreated());
+          .andExpect(status().isOk());
 
-      verify(documentService).initiate(ref, expectedRequest);
+      verify(documentService).claimUpload(UPLOAD_ID, expectedRequest);
     }
 
     @Test
@@ -124,7 +192,7 @@ class DocumentControllerTest {
           {"documentType":"ITAHC","documentReference":"","dateOfIssue":"2026-01-15"}
           """;
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
+      mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -138,7 +206,7 @@ class DocumentControllerTest {
           "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
           longRef);
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
+      mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -151,7 +219,7 @@ class DocumentControllerTest {
           {"documentReference":"UKGB2026001","dateOfIssue":"2026-01-15"}
           """;
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
+      mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -161,10 +229,10 @@ class DocumentControllerTest {
     /**
      * {@code dateOfIssue} is a calendar date, so a value carrying a time or an offset must not
      * bind. Jackson's {@code LocalDateDeserializer} is lenient by default and would keep the date
-     * part of {@code 2026-01-15T00:00:00Z}; {@code StrictLocalDateModule} turns that off. What this pins
-     * is the contract the caller sees — 400 rather than a silently trimmed value, a problem+json
-     * body carrying the malformed-request type, and a detail naming the form the caller must
-     * send. Nothing is saved.
+     * part of {@code 2026-01-15T00:00:00Z}; {@code StrictLocalDateModule} turns that off. What
+     * this pins is the contract the caller sees — 400 rather than a silently trimmed value, a
+     * problem+json body carrying the malformed-request type, and a detail naming the form the
+     * caller must send. Nothing is saved.
      */
     @ParameterizedTest
     @ValueSource(strings = {
@@ -175,7 +243,7 @@ class DocumentControllerTest {
           {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"%s"}
           """.formatted(dateOfIssue);
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
+      mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -186,7 +254,7 @@ class DocumentControllerTest {
           .andExpect(jsonPath("$.detail")
               .value(Matchers.containsString("each date-only field is a date, for example 2026-12-12")));
 
-      verify(documentService, never()).initiate(any(), any());
+      verify(documentService, never()).claimUpload(any(), any());
     }
 
     @Test
@@ -195,7 +263,7 @@ class DocumentControllerTest {
           {"documentType":"ITAHC","documentReference":"UKGB2026001"}
           """;
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", "GBN-AG-26-000001")
+      mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -204,31 +272,27 @@ class DocumentControllerTest {
 
     @Test
     void shouldIgnoreUnknownFieldsLikeRedirectUrl() throws Exception {
-      String ref = "GBN-AG-26-000001";
       String body = """
           {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"/anything"}
           """;
-      DocumentUploadResponse serviceResponse = new DocumentUploadResponse(
-          "upload-abc-123", "https://cdp-uploader.example/upload/abc");
 
-      when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class)))
-          .thenReturn(serviceResponse);
+      when(documentService.claimUpload(eq(UPLOAD_ID), any(ClaimUploadRequest.class)))
+          .thenReturn(claimedWith(DocumentType.ITAHC));
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
+      mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
-          .andExpect(status().isCreated());
+          .andExpect(status().isOk());
 
-      ArgumentCaptor<DocumentUploadRequest> requestCaptor =
-          ArgumentCaptor.forClass(DocumentUploadRequest.class);
-      verify(documentService).initiate(eq(ref), requestCaptor.capture());
-      DocumentUploadRequest captured = requestCaptor.getValue();
+      ArgumentCaptor<ClaimUploadRequest> requestCaptor =
+          ArgumentCaptor.forClass(ClaimUploadRequest.class);
+      verify(documentService).claimUpload(eq(UPLOAD_ID), requestCaptor.capture());
+      ClaimUploadRequest captured = requestCaptor.getValue();
       assertThat(captured.documentType()).isEqualTo(DocumentType.ITAHC);
       assertThat(captured.documentReference()).isEqualTo("UKGB2026001");
       assertThat(captured.dateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
     }
   }
-
   @Nested
   class ListDocuments {
 
@@ -435,51 +499,6 @@ class DocumentControllerTest {
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.detail").value(
               "No accompanying document found with uploadId: " + unknownId));
-    }
-  }
-
-  @Nested
-  class UploadFile {
-
-    @Test
-    void shouldReturn202() throws Exception {
-      String uploadId = "upload-abc-123";
-      MockMultipartFile file = new MockMultipartFile("file", "doc.pdf", "application/pdf", "PDF content".getBytes());
-      doNothing().when(documentService).proxyFileToUploader(eq(uploadId), any());
-
-      mockMvc.perform(multipart("/document-uploads/{id}/file", uploadId)
-              .file(file))
-          .andExpect(status().isAccepted());
-
-      verify(documentService).proxyFileToUploader(eq(uploadId), any());
-    }
-
-    @Test
-    void shouldReturn404_whenServiceThrowsNotFound() throws Exception {
-      String uploadId = "upload-unknown";
-      MockMultipartFile file = new MockMultipartFile("file", "doc.pdf", "application/pdf", "PDF content".getBytes());
-      doThrow(new NotFoundException("No accompanying document found with uploadId: " + uploadId))
-          .when(documentService).proxyFileToUploader(eq(uploadId), any());
-
-      mockMvc.perform(multipart("/document-uploads/{id}/file", uploadId)
-              .file(file))
-          .andExpect(status().isNotFound())
-          .andExpect(jsonPath("$.detail").value(
-              "No accompanying document found with uploadId: " + uploadId));
-    }
-
-    @Test
-    void shouldReturn502_whenServiceThrowsServiceUnavailable() throws Exception {
-      String uploadId = "upload-abc-123";
-      MockMultipartFile file = new MockMultipartFile("file", "doc.pdf", "application/pdf", "PDF content".getBytes());
-      doThrow(new ServiceUnavailableException("cdp-uploader file upload failed at transport level"))
-          .when(documentService).proxyFileToUploader(eq(uploadId), any());
-
-      mockMvc.perform(multipart("/document-uploads/{id}/file", uploadId)
-              .file(file))
-          .andExpect(status().isBadGateway())
-          .andExpect(jsonPath("$.title").value("Upstream Service Error"))
-          .andExpect(jsonPath("$.detail").value("cdp-uploader file upload failed at transport level"));
     }
   }
 

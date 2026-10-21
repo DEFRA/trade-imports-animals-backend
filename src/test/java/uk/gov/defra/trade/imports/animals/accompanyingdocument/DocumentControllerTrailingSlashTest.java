@@ -44,11 +44,15 @@ class DocumentControllerTrailingSlashTest {
   @Test
   void shouldNormaliseTrailingSlashInLocationHeader() throws Exception {
     String ref = "GBN-AG-26-000001";
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"));
-    DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
+    RegisterUploadRequest request =
+        new RegisterUploadRequest("upload-abc-123", "correlation-abc-123");
 
-    when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class)))
-        .thenReturn(serviceResponse);
+    when(documentService.registerUpload(eq(ref), any(RegisterUploadRequest.class)))
+        .thenReturn(AccompanyingDocument.builder()
+            .uploadId("upload-abc-123")
+            .correlationId("correlation-abc-123")
+            .scanStatus(ScanStatus.PENDING)
+            .build());
 
     mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
             .contentType(MediaType.APPLICATION_JSON)

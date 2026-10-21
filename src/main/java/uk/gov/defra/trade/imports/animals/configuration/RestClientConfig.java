@@ -122,15 +122,4 @@ public class RestClientConfig {
     return builder.build();
   }
 
-  /**
-   * RestClient pre-configured with the cdp-uploader base URL.
-   *
-   * <p>Uses a prototype-scoped {@link RestClient.Builder} so calling {@code baseUrl} here does not
-   * affect other consumers of the shared builder bean.
-   */
-  @Bean
-  public RestClient cdpUploaderRestClient(RestClient.Builder builder, CdpConfig cdpConfig) {
-    log.debug("Creating cdpUploaderRestClient with base URL: {}", cdpConfig.uploader().baseUrl());
-    return builder.baseUrl(cdpConfig.uploader().baseUrl()).build();
-  }
 }

@@ -36,10 +36,14 @@ Two independent safeguards keep expiry out of prod; both must fail before prod l
 
 ## Accompanying documents and cdp-uploader
 
+The browser uploads straight to cdp-uploader, so this service never sees the bytes. The frontend opens the upload session; the three calls that reach here register that session, claim its document once the user's answers are in, and receive the scan result.
+
+- Registering carries both the `uploadId` and the `correlationId`, because the callback body carries neither, and the callback URL is fixed inside the `/initiate` request — before cdp-uploader has assigned an `uploadId`. The caller that opened the session is the only party holding both, so it has to hand them over.
+- A registered document is unclaimed and has no details until the frontend claims it. `claimed` separates a document the user attached from an upload they walked away from, and only claimed documents reach a notification's events. Without it, a clean scan on an abandoned upload would ship on the next GBN-AG event as a document nobody attached.
+- Claiming is repeatable: it replaces the details, so a repeated claim cannot produce a second document.
 - The scan-result callback is unauthenticated: anyone who can reach it with a known `correlationId` can post a result. Add a shared secret or HMAC check when cdp-uploader supports callback authentication.
-- The callback path variable is always the literal `pending` set at initiate time. The document is found by `metadata.correlationId` in the payload.
+- The callback path variable is always the literal `pending` set when the session is opened. The document is found by `metadata.correlationId` in the payload.
 - A download streams from S3. If S3 fails mid-stream after the headers are sent, the client gets a 200 with a truncated body; a failure before the first byte is still a 500.
-- `DocumentInitiateProductionModeIT` runs cdp-uploader with `NODE_ENV=production`, the mode deployed environments use, where `redirect` must be relative and `callback` must be on `cdp-int.defra.cloud`. `DocumentControllerIT` runs it in development mode so the mock virus scanner can start, so without this test the production-only rules would go untested.
 
 ## Outbound proxy
 

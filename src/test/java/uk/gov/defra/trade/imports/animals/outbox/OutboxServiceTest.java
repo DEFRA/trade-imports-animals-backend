@@ -194,13 +194,14 @@ class OutboxServiceTest {
             when(outboxEventRepository.findTopByAggregateIdOrderByAggregateVersionDesc(any()))
                 .thenReturn(Optional.empty());
             when(accompanyingDocumentRepository
-                .findAllByNotificationReferenceNumberAndScanStatusOrderByCreatedAsc(
+                .findAllByNotificationReferenceNumberAndScanStatusAndClaimedIsTrueOrderByCreatedAsc(
                     "GBN-AG-26-ABC123", ScanStatus.COMPLETE))
                 .thenReturn(List.of(AccompanyingDocument.builder()
                     .documentType(DocumentType.VETERINARY_HEALTH_CERTIFICATE)
                     .documentReference("GBHC1234567890")
                     .dateOfIssue(LocalDate.parse("2026-09-10"))
                     .scanStatus(ScanStatus.COMPLETE)
+                    .claimed(true)
                     .build()));
             when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 

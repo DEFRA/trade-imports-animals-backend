@@ -23,9 +23,8 @@ import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 
 /**
- * Testcontainer factories and Floci wiring shared between document-area ITs that exercise
- * cdp-uploader (currently {@link DocumentControllerIT} for the dev-mode real-scan flow and
- * {@link DocumentInitiateProductionModeIT} for the production-mode contract pin).
+ * Testcontainer factories and Floci wiring for the document-area ITs that exercise cdp-uploader,
+ * currently {@link DocumentControllerIT} for the dev-mode real-scan flow.
  *
  * <p>Each IT owns its own Docker {@link Network} and container instances — these helpers exist
  * to remove the boilerplate of constructing them, not to share container state across classes.

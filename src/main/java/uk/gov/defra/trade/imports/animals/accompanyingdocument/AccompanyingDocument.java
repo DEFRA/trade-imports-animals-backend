@@ -54,10 +54,10 @@ public class AccompanyingDocument {
   private String uploadId;
 
   /**
-   * Backend-minted opaque identifier for this document, threaded through cdp-uploader's
-   * {@code metadata} map at initiate time and echoed back verbatim in the scan callback. Used to
-   * resolve which document a callback refers to, since cdp-uploader does not include
-   * {@code uploadId} in the callback payload body.
+   * Opaque identifier for this document, threaded through cdp-uploader's {@code metadata} map at
+   * initiate time and echoed back verbatim in the scan callback. Used to resolve which document a
+   * callback refers to, since cdp-uploader does not include {@code uploadId} in the callback
+   * payload body.
    */
   @Indexed(unique = true)
   private String correlationId;
@@ -70,6 +70,14 @@ public class AccompanyingDocument {
   private LocalDate dateOfIssue;
 
   private ScanStatus scanStatus;
+
+  /**
+   * Whether the uploading journey has taken this document on, which is when its details arrive. An
+   * upload the user walked away from stays unclaimed, and only claimed documents reach a
+   * notification's events.
+   */
+  @Builder.Default
+  private boolean claimed = false;
 
   /** Individual file entries populated by cdp-uploader callbacks. Initialised to empty list. */
   @Builder.Default
