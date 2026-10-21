@@ -77,9 +77,10 @@ class DocumentServiceTest {
     void registerUpload_shouldThrowConflict_whenTheIdentifiersAreAlreadyRegistered() {
       when(accompanyingDocumentRepository.save(any(AccompanyingDocument.class)))
           .thenThrow(new DuplicateKeyException("duplicate key: uploadId"));
+      RegisterUploadRequest request =
+          new RegisterUploadRequest("upload-id-dup", "correlation-id-dup");
 
-      assertThatThrownBy(() -> documentService.registerUpload(
-          "GBN-AG-26-CNCR00", new RegisterUploadRequest("upload-id-dup", "correlation-id-dup")))
+      assertThatThrownBy(() -> documentService.registerUpload("GBN-AG-26-CNCR00", request))
           .isInstanceOf(ConflictException.class)
           .hasMessageContaining("upload-id-dup");
     }
@@ -140,11 +141,10 @@ class DocumentServiceTest {
     void claimUpload_shouldThrowNotFound_whenNoUploadIsRegisteredUnderThatId() {
       when(accompanyingDocumentRepository.findByUploadId("missing"))
           .thenReturn(Optional.empty());
+      ClaimUploadRequest request = new ClaimUploadRequest(
+          DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"));
 
-      assertThatThrownBy(() -> documentService.claimUpload(
-          "missing",
-          new ClaimUploadRequest(
-              DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"))))
+      assertThatThrownBy(() -> documentService.claimUpload("missing", request))
           .isInstanceOf(NotFoundException.class)
           .hasMessageContaining("missing");
     }
