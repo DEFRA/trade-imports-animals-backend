@@ -246,14 +246,6 @@ class DocumentControllerTest {
           .andExpect(jsonPath("$.errors.documentType").exists());
     }
 
-    /**
-     * {@code dateOfIssue} is a calendar date, so a value carrying a time or an offset must not
-     * bind. Jackson's {@code LocalDateDeserializer} is lenient by default and would keep the date
-     * part of {@code 2026-01-15T00:00:00Z}; {@code StrictLocalDateModule} turns that off. What
-     * this pins is the contract the caller sees — 400 rather than a silently trimmed value, a
-     * problem+json body carrying the malformed-request type, and a detail naming the form the
-     * caller must send. Nothing is saved.
-     */
     @ParameterizedTest
     @ValueSource(strings = {
         "2026-01-15T00:00:00Z", "2026-01-15T00:00:00", "2026-01-15T00:00:00+01:00"})
