@@ -120,6 +120,34 @@ class DocumentControllerTest {
 
       verify(documentService, never()).registerUpload(any(), any());
     }
+
+    @Test
+    void shouldReturn400_whenUploadIdExceeds100Chars() throws Exception {
+      String body = String.format(
+          "{\"uploadId\":\"%s\",\"correlationId\":\"correlation-abc-123\"}", "A".repeat(101));
+
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.errors.uploadId").exists());
+
+      verify(documentService, never()).registerUpload(any(), any());
+    }
+
+    @Test
+    void shouldReturn400_whenCorrelationIdExceeds100Chars() throws Exception {
+      String body = String.format(
+          "{\"uploadId\":\"upload-abc-123\",\"correlationId\":\"%s\"}", "A".repeat(101));
+
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.errors.correlationId").exists());
+
+      verify(documentService, never()).registerUpload(any(), any());
+    }
   }
 
   @Nested
