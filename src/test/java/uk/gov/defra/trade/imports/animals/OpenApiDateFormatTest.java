@@ -18,16 +18,6 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationFulfilmentsVi
 import uk.gov.defra.trade.imports.animals.notification.NotificationView;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 
-/**
- * The OpenAPI schema tells a caller which form each date takes: {@code format: date} for a
- * calendar date and {@code format: date-time} for a moment. Both are derived from the Java type,
- * so this fails if a date-only field is typed as a moment again, or the reverse.
- *
- * <p>The schemas are resolved with the swagger model converters springdoc itself uses, rather
- * than read from {@code /v3/api-docs}. Every schema reachable from the request and response
- * types is searched by property name, so each one that carries the field is held to the same
- * format.
- */
 class OpenApiDateFormatTest {
 
     private static final List<Class<?>> API_TYPES = List.of(

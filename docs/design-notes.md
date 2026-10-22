@@ -11,6 +11,7 @@ Why the code is shaped the way it is. Code states what it does; this file holds 
 - BSON dates hold milliseconds, so sub-millisecond digits on a stored `Instant` are dropped.
 - `PersistedTimestampZoneIT` asserts the raw BSON, not a repository round trip, because a round trip decodes in the zone that encoded it and hides any drift. It pins the JVM to `Europe/London`, because under UTC there is no drift to detect.
 - The GBN-AG event emits `issueDateTime` with every sub-second digit, and emits an arrival date as UTC midnight of that date, never the JVM zone's midnight.
+- The OpenAPI schema derives each date field's `format` from its Java type, so `format: date` tells a caller the value is a calendar date and `format: date-time` tells it the value is a moment. `OpenApiDateFormatTest` holds the two apart by resolving the schemas through the swagger model converters springdoc uses, which needs no running server.
 
 ## Request validation
 
