@@ -228,11 +228,9 @@ class DocumentServiceTest {
 
     @Test
     void handleScanResult_shouldThrowBadRequest_whenCorrelationIdMissing() {
-      // Given — payload metadata has no correlationId entry
       CdpScanResultForm form = new CdpScanResultForm();
       CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
 
-      // When / Then
       assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
           .isInstanceOf(BadRequestException.class)
           .hasMessageContaining("correlationId");
@@ -242,12 +240,10 @@ class DocumentServiceTest {
 
     @Test
     void handleScanResult_shouldThrowBadRequest_whenCorrelationIdBlank() {
-      // Given — correlationId is present but blank (whitespace only)
       CdpScanResultForm form = new CdpScanResultForm();
       CdpScanResultPayload payload = new CdpScanResultPayload(
           "ready", Map.of("correlationId", "   "), form, 0);
 
-      // When / Then
       assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
           .isInstanceOf(BadRequestException.class)
           .hasMessageContaining("correlationId");
@@ -257,7 +253,6 @@ class DocumentServiceTest {
 
     @Test
     void handleScanResult_shouldThrowNotFound_whenCorrelationIdUnknown() {
-      // Given — correlationId is present but no session was opened under it
       String correlationId = "unknown-correlation-id";
       when(uploadSessionRepository.findByCorrelationId(correlationId))
           .thenReturn(Optional.empty());
@@ -266,7 +261,6 @@ class DocumentServiceTest {
       CdpScanResultPayload payload = new CdpScanResultPayload(
           "ready", Map.of("correlationId", correlationId), form, 0);
 
-      // When / Then
       assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
           .isInstanceOf(NotFoundException.class)
           .hasMessageContaining(correlationId);
@@ -276,7 +270,6 @@ class DocumentServiceTest {
 
     @Test
     void handleScanResult_shouldSetStatusToRejected_whenNumberOfRejectedFilesIsNull() {
-      // Given — null numberOfRejectedFiles must fail-closed to REJECTED (not silently COMPLETE)
       String correlationId = "corr-null-rejected";
 
       AccompanyingDocument document = AccompanyingDocument.builder()
@@ -296,10 +289,8 @@ class DocumentServiceTest {
 
       ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
 
-      // When
       documentService.handleScanResult("pending", payload);
 
-      // Then — fail-closed: null count → REJECTED, never COMPLETE
       verify(accompanyingDocumentRepository).save(captor.capture());
       assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.REJECTED);
     }
@@ -315,7 +306,6 @@ class DocumentServiceTest {
      */
     @Test
     void handleScanResult_updatesOnlyMatchingDocument_whenMultiplePendingForSameRef() {
-      // Given — two PENDING docs for the same notification ref, each with a distinct correlationId
       String notificationRef = "GBN-AG-26-MXST00";
       String targetCorrelationId = "corr-target";
       String siblingCorrelationId = "corr-sibling";
@@ -348,10 +338,8 @@ class DocumentServiceTest {
           form,
           0);
 
-      // When — fire callback for the target only
       documentService.handleScanResult("pending", payload);
 
-      // Then — only the target is saved, transitioning to COMPLETE
       ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
       verify(accompanyingDocumentRepository).save(captor.capture());
       AccompanyingDocument saved = captor.getValue();
@@ -359,7 +347,6 @@ class DocumentServiceTest {
       assertThat(saved.getUploadId()).isEqualTo("upload-target");
       assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
 
-      // And — the sibling was never looked up nor saved; its in-memory state is unchanged
       verify(accompanyingDocumentRepository, never()).findByCorrelationId(siblingCorrelationId);
       assertThat(sibling.getScanStatus()).isEqualTo(ScanStatus.PENDING);
       assertThat(sibling.getFiles()).isEmpty();
@@ -395,20 +382,16 @@ class DocumentServiceTest {
 
     @Test
     void deleteForNotificationRefs_shouldDeleteAllDocumentsForGivenRefs() {
-      // Given
       List<String> referenceNumbers = List.of("GBN-AG-26-000111", "GBN-AG-26-000222");
 
-      // When
       documentService.deleteForNotificationRefs(referenceNumbers);
 
-      // Then
       verify(accompanyingDocumentRepository).deleteAllByNotificationReferenceNumberIn(referenceNumbers);
       verify(uploadSessionRepository).deleteAllByNotificationReferenceNumberIn(referenceNumbers);
     }
 
     @Test
     void deleteForNotificationRefs_shouldThrowNullPointerException_whenReferenceNumbersIsNull() {
-      // When / Then
       assertThatThrownBy(() -> documentService.deleteForNotificationRefs(null))
           .isInstanceOf(NullPointerException.class)
           .hasMessageContaining("referenceNumbers must not be null");
@@ -420,7 +403,6 @@ class DocumentServiceTest {
 
     @Test
     void findFile_shouldThrowNotFoundException_whenNoFilesPresent() {
-      // Given
       String uploadId = "upload-id-004";
 
       AccompanyingDocument document = AccompanyingDocument.builder()
@@ -430,7 +412,6 @@ class DocumentServiceTest {
       when(accompanyingDocumentRepository.findByUploadId(uploadId))
           .thenReturn(Optional.of(document));
 
-      // When / Then
       assertThatThrownBy(() -> documentService.findFile(uploadId))
           .isInstanceOf(NotFoundException.class)
           .hasMessageContaining(uploadId);
@@ -438,14 +419,13 @@ class DocumentServiceTest {
 
     @Test
     void findFile_shouldThrowNotFoundException_whenFileIsRejected() {
-      // Given — a file whose s3Key is null indicates it was rejected by the virus scanner
       String uploadId = "upload-id-rejected";
 
       UploadedFile rejectedFile = new UploadedFile(
           "document.pdf",
           "application/pdf",
           1024L,
-          null, // s3Key is null for rejected files
+          null,
           "documents-bucket",
           FileStatus.REJECTED,
           null,
@@ -460,7 +440,6 @@ class DocumentServiceTest {
       when(accompanyingDocumentRepository.findByUploadId(uploadId))
           .thenReturn(Optional.of(document));
 
-      // When / Then
       assertThatThrownBy(() -> documentService.findFile(uploadId))
           .isInstanceOf(NotFoundException.class)
           .hasMessageContaining(uploadId);
