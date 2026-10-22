@@ -123,12 +123,8 @@ class DocumentServiceTest {
           .isSameAs(session);
     }
 
-    /**
-     * Scoped to the notification: a handle on its own must not reach a session another
-     * notification opened.
-     */
     @Test
-    void findSession_shouldThrowNotFound_whenTheHandleBelongsToAnotherNotification() {
+    void findSession_shouldThrowNotFound_whenThatNotificationHasNoSessionUnderTheHandle() {
       when(uploadSessionRepository.findByNotificationReferenceNumberAndCorrelationId(
           "GBN-AG-26-OTHER0", "correlation-id-ses")).thenReturn(Optional.empty());
 
