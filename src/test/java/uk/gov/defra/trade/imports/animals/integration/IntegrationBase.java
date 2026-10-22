@@ -13,6 +13,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -57,9 +58,11 @@ public abstract class IntegrationBase {
 
     static final List<String> SERVICES_TO_MOCK = List.of();
 
+    private static final Duration FIRST_REQUEST_WARM_UP_ALLOWANCE = Duration.ofSeconds(30);
+
     @LocalServerPort
     protected int port;
-    
+
 
     private MockServerClient mockServerClient;
 
@@ -134,6 +137,7 @@ public abstract class IntegrationBase {
             .defaultHeader("Authorization", "Bearer " + getToken(clientType))
             .defaultHeader("Content-Type", "application/json")
             .defaultHeader("INS-ConversationId", UUID.randomUUID().toString())
+            .responseTimeout(FIRST_REQUEST_WARM_UP_ALLOWANCE)
             .build();
     }
 
