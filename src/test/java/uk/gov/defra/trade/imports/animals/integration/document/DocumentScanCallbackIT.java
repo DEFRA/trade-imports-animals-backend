@@ -13,7 +13,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSession;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
@@ -36,9 +35,6 @@ class DocumentScanCallbackIT extends IntegrationBase {
         "44f1a20e-0a27-4d61-9aa7-7afa7fb82d85/c1ec2432-54ed-4153-bd6f-d69a35f598f4";
     private static final String FILE_ID_FROM_FIXTURE = "c1ec2432-54ed-4153-bd6f-d69a35f598f4";
 
-    /**
-     * Registers the S3 bucket and STS token properties the application context needs.
-     */
     @DynamicPropertySource
     static void registerStubProperties(DynamicPropertyRegistry registry) {
         registry.add("cdp.s3.documents-bucket", () -> DOCUMENTS_BUCKET);
@@ -104,13 +100,9 @@ class DocumentScanCallbackIT extends IntegrationBase {
             .isEqualTo("Scan callback missing required correlationId in metadata");
     }
 
-    /**
-     * cdp-uploader posts to {@code /document-uploads/pending/scan-results} (the path's
-     * "pending" segment is informational; identity comes from {@code metadata.correlationId}).
-     */
     @Test
     void scanResult_viaPendingAlias_shouldResolveByCorrelationId() {
-        AccompanyingDocument seed = persistPendingDocument();
+        AccompanyingDocument seed = persistSessionWithPendingDocument();
         String correlationId = seed.getCorrelationId();
         String uploadId = seed.getUploadId();
 
@@ -156,7 +148,7 @@ class DocumentScanCallbackIT extends IntegrationBase {
 
     @Test
     void scanResult_mixedCompleteAndRejected_shouldSetAggregateStatusToRejected() {
-        AccompanyingDocument seed = persistPendingDocument();
+        AccompanyingDocument seed = persistSessionWithPendingDocument();
         String correlationId = seed.getCorrelationId();
         String uploadId = seed.getUploadId();
 
@@ -222,13 +214,9 @@ class DocumentScanCallbackIT extends IntegrationBase {
         assertThat(virusFile.s3Key()).isNull();
     }
 
-    /**
-     * Defensive: if cdp-uploader omits {@code numberOfRejectedFiles}, the resolver must treat the
-     * absent value as REJECTED rather than silently accepting the file.
-     */
     @Test
     void scanResult_nullNumberOfRejectedFiles_shouldSetStatusToRejected() {
-        AccompanyingDocument seed = persistPendingDocument();
+        AccompanyingDocument seed = persistSessionWithPendingDocument();
         String correlationId = seed.getCorrelationId();
         String uploadId = seed.getUploadId();
 
@@ -265,13 +253,7 @@ class DocumentScanCallbackIT extends IntegrationBase {
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
     }
 
-    /**
-     * Persists a PENDING {@link AccompanyingDocument} and the upload session it came through, with
-     * a generated correlationId and uploadId — the minimum state needed to drive the scan-callback
-     * handler against this seed. The session is what the callback resolves on, so a document
-     * without one is unreachable.
-     */
-    private AccompanyingDocument persistPendingDocument() {
+    private AccompanyingDocument persistSessionWithPendingDocument() {
         String correlationId = UUID.randomUUID().toString();
         String uploadId = UUID.randomUUID().toString();
         uploadSessionRepository.save(UploadSession.builder()
@@ -283,8 +265,6 @@ class DocumentScanCallbackIT extends IntegrationBase {
             .notificationReferenceNumber(NOTIFICATION_REF)
             .uploadId(uploadId)
             .correlationId(correlationId)
-            .documentType(DocumentType.ITAHC)
-            .documentReference("UKGB2026001234")
             .scanStatus(ScanStatus.PENDING)
             .files(new ArrayList<>())
             .build();

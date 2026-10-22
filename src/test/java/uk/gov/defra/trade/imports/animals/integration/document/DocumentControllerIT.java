@@ -273,6 +273,7 @@ class DocumentControllerIT extends IntegrationBase {
             AccompanyingDocument doc =
                 accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
             assertThat(doc.isClaimed()).isTrue();
+            assertThat(doc.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
             assertThat(doc.getDocumentType()).isEqualTo(DocumentType.ITAHC);
             assertThat(doc.getDocumentReference()).isEqualTo("UKGB2026001234");
             assertThat(doc.getDateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
@@ -332,6 +333,44 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(file.filename()).isEqualTo("virus.pdf");
             assertThat(file.fileStatus()).isEqualTo(FileStatus.REJECTED);
             assertThat(file.s3Key()).isNull();
+        }
+    }
+
+    @Nested
+    class TwoOpenSessions {
+
+        @Test
+        void shouldScanEachSessionOnOneNotificationIntoItsOwnDocument() throws IOException {
+            OpenedSession cleanSession = registeredSession();
+            OpenedSession infectedSession = registeredSession();
+            byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
+
+            uploadFile(cleanSession.uploadId(), pdfBytes, "clean.pdf", "application/pdf");
+            uploadFile(infectedSession.uploadId(), pdfBytes, "virus.pdf", "application/pdf");
+
+            awaitScanCallback(cleanSession.uploadId());
+            awaitScanCallback(infectedSession.uploadId());
+
+            assertThat(accompanyingDocumentRepository
+                .findAllByNotificationReferenceNumber(NOTIFICATION_REF)).hasSize(2);
+
+            assertThat(accompanyingDocumentRepository
+                .findByCorrelationId(cleanSession.correlationId()))
+                .isPresent()
+                .get()
+                .satisfies(doc -> {
+                    assertThat(doc.getUploadId()).isEqualTo(cleanSession.uploadId());
+                    assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+                });
+
+            assertThat(accompanyingDocumentRepository
+                .findByCorrelationId(infectedSession.correlationId()))
+                .isPresent()
+                .get()
+                .satisfies(doc -> {
+                    assertThat(doc.getUploadId()).isEqualTo(infectedSession.uploadId());
+                    assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
+                });
         }
     }
 
