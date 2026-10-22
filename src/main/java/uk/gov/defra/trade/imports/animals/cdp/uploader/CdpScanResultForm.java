@@ -1,51 +1,74 @@
 package uk.gov.defra.trade.imports.animals.cdp.uploader;
 
-import com.fasterxml.jackson.annotation.JsonAnySetter;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationContext;
+import com.fasterxml.jackson.databind.JsonDeserializer;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
- * Represents the {@code form} section of a cdp-uploader scan result callback.
- *
- * <p>Must be a mutable POJO (not a record) so that Jackson can use {@link JsonAnySetter} to
- * populate the dynamic {@code files} map, where each key is the form field name and the value is a
- * {@link CdpScanResultFile}.
+ * Represents the {@code form} section of a cdp-uploader scan result callback, holding the scanned
+ * file entries keyed by multipart field name.
  */
 @Data
 @NoArgsConstructor
+@JsonDeserialize(using = CdpScanResultForm.Deserializer.class)
 public class CdpScanResultForm {
-
-  private static final ObjectMapper MAPPER = new ObjectMapper();
 
   private Map<String, CdpScanResultFile> files = new LinkedHashMap<>();
 
   /**
-   * Constructs a {@code CdpScanResultForm} with a defensive copy of the supplied files map so
-   * that callers passing an unmodifiable map do not cause {@link
-   * java.lang.UnsupportedOperationException} when {@link #addField} is later invoked.
+   * Creates a form holding a mutable copy of the supplied file entries.
    *
-   * @param files the initial file entries; must not be {@code null}
+   * @param files the initial file entries, keyed by multipart field name; must not be {@code null}
    */
   public CdpScanResultForm(Map<String, CdpScanResultFile> files) {
     this.files = new LinkedHashMap<>(files);
   }
 
   /**
-   * Jackson entry point, called once per key under {@code form}. The browser submits its text
-   * fields alongside the file and cdp-uploader echoes every one of them here, so a value that is
-   * not a file entry is skipped: a document's details reach this service when its upload is
-   * claimed, not from the scan callback.
+   * Records a scanned file entry under its multipart field name.
    *
    * @param fieldName the multipart field name
-   * @param value     the field's value — a file entry, or a text value to skip
+   * @param file      the scanned file entry
    */
-  @JsonAnySetter
-  public void addField(String fieldName, Object value) {
-    if (value instanceof Map<?, ?> entry && entry.containsKey("fileId")) {
-      files.put(fieldName, MAPPER.convertValue(entry, CdpScanResultFile.class));
+  public void addFileEntry(String fieldName, CdpScanResultFile file) {
+    files.put(fieldName, file);
+  }
+
+  @Slf4j
+  static class Deserializer extends JsonDeserializer<CdpScanResultForm> {
+
+    private static final String FILE_ENTRY_MARKER = "fileId";
+
+    @Override
+    public CdpScanResultForm deserialize(JsonParser parser, DeserializationContext context)
+        throws IOException {
+      JsonNode root = parser.readValueAsTree();
+      CdpScanResultForm form = new CdpScanResultForm();
+      for (Map.Entry<String, JsonNode> formValue : root.properties()) {
+        String fieldName = formValue.getKey();
+        JsonNode value = formValue.getValue();
+        if (isFileEntry(value)) {
+          form.addFileEntry(fieldName, context.readTreeAsValue(value, CdpScanResultFile.class));
+        } else if (value.isObject()) {
+          log.warn(
+              "Scan result form field {} is an object with no fileId, so no file entry was"
+                  + " recorded for it",
+              fieldName);
+        }
+      }
+      return form;
+    }
+
+    private static boolean isFileEntry(JsonNode value) {
+      return value.isObject() && value.has(FILE_ENTRY_MARKER);
     }
   }
 }

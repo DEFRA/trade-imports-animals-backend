@@ -7,12 +7,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 /**
  * Represents a single file entry within a cdp-uploader scan result callback payload.
  *
- * <p>Field names intentionally use camelCase to align with the cdp-uploader JSON contract;
- * no {@code @JsonProperty} annotations are required. cdp-uploader owns this shape and sends
- * fields this service has no use for, which must not fail the callback.
- *
- * @param fileId              identifier assigned by cdp-uploader; retained for contract
- *                            completeness but not persisted
+ * @param fileId              identifier assigned to the file by cdp-uploader
  * @param filename            original filename as supplied by the uploader
  * @param contentType         MIME type declared by the client at upload time
  * @param fileStatus          scan outcome status (e.g. {@code complete} or {@code rejected})

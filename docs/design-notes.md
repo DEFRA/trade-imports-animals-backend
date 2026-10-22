@@ -46,6 +46,7 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 - Claiming is repeatable: it replaces the details, so a repeated claim cannot produce a second document.
 - The scan-result callback is unauthenticated: anyone who can reach it with a known `correlationId` can post a result. The `correlationId` is minted by the frontend and travels in a browser-visible return URL (`?upload=<uuid>`), so the handle is user-supplied and has to be treated as such. Add a shared secret or HMAC check when cdp-uploader supports callback authentication.
 - The callback path variable is always the literal `pending` set when the session is opened. The document is found by `metadata.correlationId` in the payload.
+- cdp-uploader owns the callback body's shape and echoes back every field the browser submitted, including ones this service has no use for, so the body is read leniently: the `form` section keeps only the values carrying a `fileId`, and a file entry tolerates fields this service does not know. An object-shaped `form` value without a `fileId` is not a file entry; it is dropped with a warning naming the field, because a document saved with no files can still finish as `COMPLETE` and support needs something to search on.
 - A download streams the file through this service's response. If S3 fails mid-stream after the headers are sent, the client gets a 200 with a truncated body; a failure before the first byte is still a 500.
 
 ## Outbound proxy
