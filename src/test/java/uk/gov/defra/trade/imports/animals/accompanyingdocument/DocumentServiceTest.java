@@ -235,11 +235,6 @@ class DocumentServiceTest {
     }
   }
 
-  /**
-   * Status transitions and file list population are covered end-to-end in {@code DocumentIT}
-   * (real MongoDB, real HTTP). Unit tests here only cover error paths and resolution semantics
-   * that the IT tests cannot exercise cheaply.
-   */
   @Nested
   class HandleScanResult {
 
