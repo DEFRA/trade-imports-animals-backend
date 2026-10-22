@@ -100,10 +100,9 @@ class DocumentControllerIT extends IntegrationBase {
         CdpUploaderTestSupport.redisContainer(CONTAINER_NETWORK, "redis");
 
     static final GenericContainer<?> CDP_UPLOADER_CONTAINER =
-        CdpUploaderTestSupport.withDevModeUploaderEnv(
-            CdpUploaderTestSupport.cdpUploaderContainer(
-                CONTAINER_NETWORK, "cdp-uploader", "redis",
-                CdpUploaderTestSupport.DOCUMENTS_BUCKET + "," + CdpUploaderTestSupport.QUARANTINE_BUCKET),
+        CdpUploaderTestSupport.cdpUploaderContainer(
+            CONTAINER_NETWORK, "cdp-uploader", "redis",
+            CdpUploaderTestSupport.DOCUMENTS_BUCKET + "," + CdpUploaderTestSupport.QUARANTINE_BUCKET,
             AWS_REGION);
 
     private static final S3Client flociS3Client;

@@ -55,11 +55,23 @@ final class CdpUploaderTestSupport {
     }
 
     /**
-     * cdp-uploader Testcontainer carrying its port, its Redis host, single-instance caching, the
-     * consumer buckets it will accept uploads for, and a {@code /health} readiness probe.
+     * cdp-uploader Testcontainer in dev mode against Floci with the mock virus scanner, carrying
+     * its port, its Redis host, single-instance caching, the consumer buckets it will accept
+     * uploads for, and a {@code /health} readiness probe.
+     *
+     * <ul>
+     *   <li>{@code NODE_ENV=development} switches cdp-uploader into dev mode, which relaxes
+     *       redirect handling and enables the mock-scanner code paths.</li>
+     *   <li>{@code MOCK_VIRUS_SCAN_ENABLED} and {@code MOCK_VIRUS_RESULT_DELAY=0} turn the
+     *       in-process mock scanner on and drop its artificial delay.</li>
+     *   <li>The {@code SQS_*_WAIT_TIME_SECONDS} values cut long-poll waits from the 20-second
+     *       default so an upload, scan and callback round trip finishes inside a test timeout.</li>
+     *   <li>{@code S3_ENDPOINT}, {@code AWS_REGION} and the static credentials point the
+     *       uploader's AWS SDK clients at Floci, signing for the region it is pinned to.</li>
+     * </ul>
      */
     static GenericContainer<?> cdpUploaderContainer(
-        Network network, String alias, String redisAlias, String consumerBuckets) {
+        Network network, String alias, String redisAlias, String consumerBuckets, String region) {
         return new GenericContainer<>(DockerImageName.parse(CDP_UPLOADER_IMAGE))
             .withExposedPorts(CDP_UPLOADER_PORT)
             .withNetwork(network)
@@ -68,6 +80,17 @@ final class CdpUploaderTestSupport {
             .withEnv("REDIS_HOST", redisAlias)
             .withEnv("USE_SINGLE_INSTANCE_CACHE", "true")
             .withEnv("CONSUMER_BUCKETS", consumerBuckets)
+            .withEnv("NODE_ENV", "development")
+            .withEnv("MOCK_VIRUS_SCAN_ENABLED", "true")
+            .withEnv("MOCK_VIRUS_RESULT_DELAY", "0")
+            .withEnv("SQS_SCAN_RESULTS_WAIT_TIME_SECONDS", "1")
+            .withEnv("SQS_SCAN_RESULTS_CALLBACK_WAIT_TIME_SECONDS", "1")
+            .withEnv("SQS_DOWNLOAD_REQUESTS_WAIT_TIME_SECONDS", "1")
+            .withEnv("SQS_MOCK_CLAMAV_WAIT_TIME_SECONDS", "1")
+            .withEnv("S3_ENDPOINT", "http://" + FLOCI_ALIAS + ":4566")
+            .withEnv("AWS_REGION", region)
+            .withEnv("AWS_ACCESS_KEY_ID", "test")
+            .withEnv("AWS_SECRET_ACCESS_KEY", "test")
             .withLogConsumer(new Slf4jLogConsumer(LoggerFactory.getLogger("cdp-uploader")))
             .waitingFor(Wait.forHttp("/health").forPort(CDP_UPLOADER_PORT)
                 .withStartupTimeout(Duration.ofSeconds(60)));
@@ -148,40 +171,6 @@ final class CdpUploaderTestSupport {
                         .build())
                     .build())
                 .build());
-    }
-
-    /**
-     * Adds the full cluster of env vars required to run cdp-uploader in dev mode against
-     * Floci with the mock virus scanner end-to-end. Specifically sets:
-     *
-     * <ul>
-     *   <li>{@code NODE_ENV=development} — switches cdp-uploader into dev mode (e.g. relaxed
-     *       redirect handling, mock-scanner code paths enabled).</li>
-     *   <li>{@code MOCK_VIRUS_SCAN_ENABLED=true} and {@code MOCK_VIRUS_RESULT_DELAY=0} —
-     *       turn on the in-process mock scanner and short-circuit its artificial delay.</li>
-     *   <li>{@code SQS_*_WAIT_TIME_SECONDS=1} for scan-results, scan-results-callback,
-     *       download-requests, and mock-clamav queues — cranks SQS long-poll waits down from
-     *       the 20s default so the upload→scan→callback round-trip completes inside a normal
-     *       IT timeout.</li>
-     *   <li>{@code S3_ENDPOINT} pointing at the Floci network alias, plus
-     *       {@code AWS_REGION} matching the {@link #flociContainer} region pin, plus
-     *       static {@code AWS_ACCESS_KEY_ID}/{@code AWS_SECRET_ACCESS_KEY=test} credentials —
-     *       so the uploader's AWS SDK clients reach Floci and sign for the right region.</li>
-     * </ul>
-     */
-    static GenericContainer<?> withDevModeUploaderEnv(GenericContainer<?> container, String region) {
-        return container
-            .withEnv("NODE_ENV", "development")
-            .withEnv("MOCK_VIRUS_SCAN_ENABLED", "true")
-            .withEnv("MOCK_VIRUS_RESULT_DELAY", "0")
-            .withEnv("SQS_SCAN_RESULTS_WAIT_TIME_SECONDS", "1")
-            .withEnv("SQS_SCAN_RESULTS_CALLBACK_WAIT_TIME_SECONDS", "1")
-            .withEnv("SQS_DOWNLOAD_REQUESTS_WAIT_TIME_SECONDS", "1")
-            .withEnv("SQS_MOCK_CLAMAV_WAIT_TIME_SECONDS", "1")
-            .withEnv("S3_ENDPOINT", "http://" + FLOCI_ALIAS + ":4566")
-            .withEnv("AWS_REGION", region)
-            .withEnv("AWS_ACCESS_KEY_ID", "test")
-            .withEnv("AWS_SECRET_ACCESS_KEY", "test");
     }
 
     private static String flociSqsArn(String region, String queueName) {
