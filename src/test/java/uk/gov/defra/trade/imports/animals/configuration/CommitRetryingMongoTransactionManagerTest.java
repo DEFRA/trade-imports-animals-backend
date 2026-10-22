@@ -17,17 +17,12 @@ import org.springframework.data.mongodb.MongoDatabaseFactory;
 
 class CommitRetryingMongoTransactionManagerTest {
 
-    /**
-     * Wide enough that one scheduling stall on a loaded machine cannot exhaust the window before
-     * the first retry. At 50ms a stall left the retrying tests asserting against a single attempt.
-     * A retrying test still finishes as soon as a commit succeeds; only the deadline test waits.
-     */
-    private static final long TIMEOUT_MS = 1000;
+    private static final long RETRY_WINDOW_MS = 1000;
     private static final long BACKOFF_MS = 10;
 
     @Test
     void doCommit_shouldCommitOnce_whenTheCommitSucceeds() throws Exception {
-        CommitProbe probe = new CommitProbe(TIMEOUT_MS);
+        CommitProbe probe = new CommitProbe(RETRY_WINDOW_MS);
 
         probe.commit();
 
@@ -36,7 +31,7 @@ class CommitRetryingMongoTransactionManagerTest {
 
     @Test
     void doCommit_shouldReCommitAndSucceed_whenTheFirstCommitResultIsUnknown() throws Exception {
-        CommitProbe probe = new CommitProbe(TIMEOUT_MS);
+        CommitProbe probe = new CommitProbe(RETRY_WINDOW_MS);
         probe.failNextCommits(1, unknownCommitResultOnServerShutdown());
 
         probe.commit();
@@ -47,7 +42,7 @@ class CommitRetryingMongoTransactionManagerTest {
     @Test
     void doCommit_shouldPropagate_whenTheCommitFailsWithoutTheUnknownResultLabel() {
         MongoException failure = writeConflictOnOutboxCreation();
-        CommitProbe probe = new CommitProbe(TIMEOUT_MS);
+        CommitProbe probe = new CommitProbe(RETRY_WINDOW_MS);
         probe.failNextCommits(Integer.MAX_VALUE, failure);
 
         assertThatThrownBy(probe::commit).isSameAs(failure);
@@ -65,7 +60,7 @@ class CommitRetryingMongoTransactionManagerTest {
         logger.setLevel(Level.OFF);
         try {
             MongoException failure = unknownCommitResultOnServerShutdown();
-            CommitProbe probe = new CommitProbe(TIMEOUT_MS);
+            CommitProbe probe = new CommitProbe(RETRY_WINDOW_MS);
             probe.failNextCommits(Integer.MAX_VALUE, failure);
 
             assertThatThrownBy(probe::commit).isSameAs(failure);
