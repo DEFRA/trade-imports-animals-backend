@@ -65,8 +65,9 @@ class UploadSessionRepositoryIT extends IntegrationBase {
   @Test
   void save_shouldThrowDuplicateKeyException_whenUploadIdAlreadyExists() {
     repository.save(session("dup-upload", "uniq-corr-A", "GBN-AG-26-USR001"));
+    UploadSession sameUploadId = session("dup-upload", "uniq-corr-B", "GBN-AG-26-USR002");
 
-    assertThatThrownBy(() -> repository.save(session("dup-upload", "uniq-corr-B", "GBN-AG-26-USR002")))
+    assertThatThrownBy(() -> repository.save(sameUploadId))
         .isInstanceOf(DuplicateKeyException.class);
 
     assertThat(repository.findByUploadId("dup-upload"))
@@ -79,8 +80,9 @@ class UploadSessionRepositoryIT extends IntegrationBase {
   @Test
   void save_shouldThrowDuplicateKeyException_whenCorrelationIdAlreadyExists() {
     repository.save(session("uniq-upload-A", "dup-corr", "GBN-AG-26-USR003"));
+    UploadSession sameCorrelationId = session("uniq-upload-B", "dup-corr", "GBN-AG-26-USR004");
 
-    assertThatThrownBy(() -> repository.save(session("uniq-upload-B", "dup-corr", "GBN-AG-26-USR004")))
+    assertThatThrownBy(() -> repository.save(sameCorrelationId))
         .isInstanceOf(DuplicateKeyException.class);
 
     assertThat(repository.findByCorrelationId("dup-corr"))
