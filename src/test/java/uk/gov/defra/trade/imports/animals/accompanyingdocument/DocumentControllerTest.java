@@ -249,7 +249,7 @@ class DocumentControllerTest {
     @ParameterizedTest
     @ValueSource(strings = {
         "2026-01-15T00:00:00Z", "2026-01-15T00:00:00", "2026-01-15T00:00:00+01:00"})
-    void post_shouldReturn400_whenDateOfIssueCarriesATimeOrAnOffset(String dateOfIssue)
+    void shouldReturn400_whenDateOfIssueCarriesATimeOrAnOffset(String dateOfIssue)
         throws Exception {
       String body = """
           {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"%s"}
