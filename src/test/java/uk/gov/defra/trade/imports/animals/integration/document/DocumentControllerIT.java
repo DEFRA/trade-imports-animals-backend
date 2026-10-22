@@ -180,10 +180,6 @@ class DocumentControllerIT extends IntegrationBase {
     @Nested
     class Register {
 
-        /**
-         * The page opens a session every time it is painted, so registering one records the
-         * session and leaves the notification with no document until a real one arrives.
-         */
         @Test
         void shouldReturn201AndPersistTheSessionWithoutADocument() {
             OpenedSession session = openUploadSession();
@@ -226,10 +222,6 @@ class DocumentControllerIT extends IntegrationBase {
                 .value(dto -> assertThat(dto.uploadId()).isEqualTo(session.uploadId()));
         }
 
-        /**
-         * The handle is scoped to its notification, so it cannot be used to reach a session another
-         * notification opened.
-         */
         @Test
         void shouldReturn404_whenTheHandleBelongsToAnotherNotification() {
             OpenedSession session = registeredSession();
@@ -403,7 +395,6 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(dto.created()).isNotNull();
         }
 
-        /** Nothing is stored for a session the trader never put a document through. */
         @Test
         void shouldReturn404_whenTheSessionWasOnlyOpened() {
             String uploadId = registeredUploadId();
@@ -565,13 +556,8 @@ class DocumentControllerIT extends IntegrationBase {
         return WebTestClient.bindToServer().baseUrl(cdpUploaderUrl()).build();
     }
 
-    /** An upload session as the frontend holds it: cdp-uploader's id and the caller's own. */
     private record OpenedSession(String uploadId, String correlationId) {}
 
-    /**
-     * Opens a cdp-uploader session the way the frontend does — a relative redirect, the backend's
-     * callback URL, and a correlationId in the metadata for the callback to come back with.
-     */
     private OpenedSession openUploadSession() {
         String correlationId = UUID.randomUUID().toString();
         String callbackUrl = "http://host.testcontainers.internal:" + BACKEND_PORT
@@ -639,7 +625,6 @@ class DocumentControllerIT extends IntegrationBase {
             """.formatted(session.uploadId(), session.correlationId());
     }
 
-    /** Uploads the file the way the browser does: straight to cdp-uploader, form fields alongside. */
     private void uploadFile(
         String uploadId, byte[] bytes, String filename, String contentType) {
 
