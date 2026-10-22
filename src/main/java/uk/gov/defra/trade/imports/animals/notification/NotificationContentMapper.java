@@ -11,6 +11,7 @@ import org.mapstruct.control.DeepClone;
 public interface NotificationContentMapper {
 
     @Mapping(target = "commodity", source = "commodity", qualifiedByName = "copyCommodity")
+    @Mapping(target = "commodities", source = "commodities", qualifiedByName = "copyCommodities")
     Notification deepClone(Notification source);
 
     // Normalise commodityComplement null to empty list so snapshots never hold null collections.
@@ -30,6 +31,11 @@ public interface NotificationContentMapper {
             return List.of();
         }
         return mapCommodityComplementList(source);
+    }
+
+    @Named("copyCommodities")
+    default List<CommodityComplement> copyCommodities(List<CommodityComplement> source) {
+        return commodityComplements(source);
     }
 
     List<CommodityComplement> mapCommodityComplementList(List<CommodityComplement> source);

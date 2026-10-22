@@ -20,46 +20,57 @@ public record TradeLineItem(
      * One line per species on the complement, each carrying that species' own counts. A complement
      * with no species still gets one line, from the complement totals.
      */
-    static List<TradeLineItem> linesFrom(String commodityName, CommodityComplement complement) {
-        List<Species> species = complement.getSpecies();
+    static List<TradeLineItem> linesFrom(CommodityComplement entry) {
+        List<Species> species = entry.getSpecies();
         if (species == null || species.isEmpty()) {
-            return List.of(fromComplementTotals(commodityName, complement));
+            return List.of(fromComplementTotals(entry));
         }
         return species.stream()
-            .map(s -> fromSpecies(commodityName, complement, s))
+            .map(s -> fromSpecies(entry, s))
             .toList();
     }
 
-    private static TradeLineItem fromSpecies(String commodityName, CommodityComplement complement, Species species) {
+    private static TradeLineItem fromSpecies(CommodityComplement entry, Species species) {
         return new TradeLineItem(
-            classificationOf(complement),
-            descriptionOf(commodityName),
+            classificationOf(entry),
+            descriptionOf(entry.getName()),
             species.getText(),
-            commodityName,
-            null,
+            entry.getName(),
+            typeCodeFor(species, entry),
             null,
             LineTradeDelivery.headCount(species.getNoOfAnimals()),
             LogisticsPackage.packageCount(species.getNoOfPackages()),
             TradeProductInstance.instancesFrom(species));
     }
 
-    private static TradeLineItem fromComplementTotals(String commodityName, CommodityComplement complement) {
+    private static TradeLineItem fromComplementTotals(CommodityComplement entry) {
         return new TradeLineItem(
-            classificationOf(complement),
-            descriptionOf(commodityName),
+            classificationOf(entry),
+            descriptionOf(entry.getName()),
             null,
-            commodityName,
+            entry.getName(),
+            entry.getTypeOfCommodity(),
             null,
-            null,
-            LineTradeDelivery.headCount(complement.getTotalNoOfAnimals()),
-            LogisticsPackage.packageCount(complement.getTotalNoOfPackages()),
+            LineTradeDelivery.headCount(entry.getTotalNoOfAnimals()),
+            LogisticsPackage.packageCount(entry.getTotalNoOfPackages()),
             null);
     }
 
+    private static String typeCodeFor(Species species, CommodityComplement entry) {
+        if (species.getTypeOfCommodity() != null && !species.getTypeOfCommodity().isBlank()) {
+            return species.getTypeOfCommodity();
+        }
+        return entry.getTypeOfCommodity();
+    }
+
     @SuppressWarnings("java:S1168")
-    private static List<ApplicableClassification> classificationOf(CommodityComplement complement) {
-        ApplicableClassification cn = ApplicableClassification.cn(complement.getTypeOfCommodity());
-        return cn != null ? List.of(cn) : null;
+    private static List<ApplicableClassification> classificationOf(CommodityComplement entry) {
+        String cn = entry.getCommodityCode();
+        if (cn == null || cn.isBlank()) {
+            cn = entry.getTypeOfCommodity();
+        }
+        ApplicableClassification classification = ApplicableClassification.cn(cn);
+        return classification != null ? List.of(classification) : null;
     }
 
     @SuppressWarnings("java:S1168")

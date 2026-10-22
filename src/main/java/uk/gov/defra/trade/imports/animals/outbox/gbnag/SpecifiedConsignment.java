@@ -42,6 +42,6 @@ public record SpecifiedConsignment(
             LogisticsTransportMovement.from(transport),
             TradeCountry.fromCountryCodes(transport != null ? transport.getTransitedCountries() : null),
             isOrHasUnweanedAnimals,
-            ConsignmentItem.from(notification.getCommodity()));
+            ConsignmentItem.from(notification));
     }
 }

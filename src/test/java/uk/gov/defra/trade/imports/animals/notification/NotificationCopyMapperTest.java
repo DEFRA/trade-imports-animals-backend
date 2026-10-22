@@ -62,10 +62,9 @@ class NotificationCopyMapperTest {
 
             NotificationDto result = mapper.toCopyDto(source);
 
-            assertThat(result.getCommodity().getName()).isEqualTo("Live bovine animals");
-            assertThat(result.getCommodity().getCommodityComplement()).hasSize(1);
-            assertThat(result.getCommodity().getCommodityComplement().getFirst().getTypeOfCommodity())
-                .isEqualTo("LIVE");
+            assertThat(result.getCommodities()).hasSize(1);
+            assertThat(result.getCommodities().getFirst().getName()).isEqualTo("Live bovine animals");
+            assertThat(result.getCommodities().getFirst().getTypeOfCommodity()).isEqualTo("LIVE");
         }
 
         @Test
@@ -264,7 +263,7 @@ class NotificationCopyMapperTest {
 
             NotificationDto result = mapper.toCopyDto(source);
 
-            CommodityComplement copied = result.getCommodity().getCommodityComplement().getFirst();
+            CommodityComplement copied = result.getCommodities().getFirst();
             assertThat(copied.getTotalNoOfAnimals()).isNull();
             assertThat(copied.getTotalNoOfPackages()).isNull();
             assertThat(copied.getSpecies()).isNull();
@@ -282,7 +281,7 @@ class NotificationCopyMapperTest {
 
             NotificationDto result = mapper.toCopyDto(source);
 
-            result.getCommodity().getCommodityComplement().forEach(cc -> {
+            result.getCommodities().forEach(cc -> {
                 assertThat(cc.getTotalNoOfAnimals()).isNull();
                 assertThat(cc.getTotalNoOfPackages()).isNull();
                 assertThat(cc.getSpecies()).isNull();
@@ -352,7 +351,7 @@ class NotificationCopyMapperTest {
 
             NotificationDto result = mapper.toCopyDto(source);
 
-            assertThat(result.getCommodity().getCommodityComplement().getFirst().getSpecies()).isNull();
+            assertThat(result.getCommodities().getFirst().getSpecies()).isNull();
         }
     }
 
@@ -383,7 +382,7 @@ class NotificationCopyMapperTest {
 
             NotificationDto result = mapper.toCopyDto(source);
 
-            assertThat(result.getCommodity()).isNull();
+            assertThat(result.getCommodities()).isNullOrEmpty();
         }
 
         @Test
@@ -394,7 +393,7 @@ class NotificationCopyMapperTest {
 
             NotificationDto result = mapper.toCopyDto(source);
 
-            assertThat(result.getCommodity().getCommodityComplement()).isNullOrEmpty();
+            assertThat(result.getCommodities()).isNullOrEmpty();
         }
 
         @Test
