@@ -9,6 +9,10 @@ import java.time.LocalDate;
 
 /**
  * Request body for claiming an uploaded document into a notification.
+ *
+ * @param documentType      the kind of accompanying document; never null
+ * @param documentReference the reference printed on the document; never null
+ * @param dateOfIssue       the date of issue on the document; never null
  */
 @Schema(description = "Request to claim an uploaded document into a notification")
 public record ClaimUploadRequest(
@@ -31,3 +35,4 @@ public record ClaimUploadRequest(
         requiredMode = Schema.RequiredMode.REQUIRED,
         example = "2026-01-15")
     LocalDate dateOfIssue) {}
+

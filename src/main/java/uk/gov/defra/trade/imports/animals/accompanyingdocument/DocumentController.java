@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -27,19 +28,24 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
+import org.springframework.validation.annotation.Validated;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
 /**
  * REST controller for accompanying document upload endpoints.
- *
- * <p>Exposes endpoints covering the full upload lifecycle: initiation, listing, retrieval,
- * deletion, scan-result callback, file upload (proxied to cdp-uploader), and file download.
  */
 @RestController
+@Validated
 @Tag(name = "Document Uploads", description = "Operations for accompanying document upload sessions")
 @Slf4j
 public class DocumentController {
+
+  /** A notification reference as the service mints them, e.g. {@code GBN-AG-26-000001}. */
+  private static final String NOTIFICATION_REF_PATTERN = "^[A-Za-z0-9.-]{1,50}$";
+
+  /** An upload or correlation handle: cdp-uploader's ids and the UUIDs the frontend mints. */
+  private static final String UPLOAD_HANDLE_PATTERN = "^[A-Za-z0-9._-]{1,100}$";
 
   private final DocumentService documentService;
   private final S3DocumentService s3DocumentService;
@@ -72,7 +78,7 @@ public class DocumentController {
       content = @Content)
   @Timed("document.register")
   public ResponseEntity<UploadSessionDto> register(
-      @PathVariable String ref,
+      @PathVariable @Pattern(regexp = NOTIFICATION_REF_PATTERN) String ref,
       @Valid @RequestBody RegisterUploadRequest request) {
 
     log.info("POST /notifications/{}/document-uploads uploadId={}", ref, request.uploadId());
@@ -84,8 +90,7 @@ public class DocumentController {
   }
 
   /**
-   * Look up the upload session a notification opened under a correlation handle, which is how the
-   * uploading journey recovers the session it opened once the browser returns to it.
+   * Look up the upload session a notification opened under a correlation handle.
    *
    * @param ref           the notification reference number
    * @param correlationId the handle the session was opened under
@@ -100,8 +105,9 @@ public class DocumentController {
   @ApiResponse(responseCode = "404", description = "Session not found", content = @Content)
   @Timed("document.session")
   public ResponseEntity<UploadSessionDto> session(
-      @PathVariable String ref,
-      @PathVariable("correlation-id") String correlationId) {
+      @PathVariable @Pattern(regexp = NOTIFICATION_REF_PATTERN) String ref,
+      @PathVariable("correlation-id")
+      @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String correlationId) {
 
     log.info("GET /notifications/{}/document-upload-sessions/{}", ref, correlationId);
 
@@ -110,7 +116,7 @@ public class DocumentController {
   }
 
   /**
-   * Claim a registered upload into its notification, with the details the user gave.
+   * Claim a registered upload into its notification, recording the submitted document details.
    *
    * @param uploadId the upload session identifier
    * @param request  the document details
@@ -126,7 +132,8 @@ public class DocumentController {
   @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
   @Timed("document.claim")
   public ResponseEntity<AccompanyingDocumentDto> claim(
-      @PathVariable("upload-id") String uploadId,
+      @PathVariable("upload-id")
+      @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String uploadId,
       @Valid @RequestBody ClaimUploadRequest request) {
 
     log.info("POST /document-uploads/{}/claim", uploadId);

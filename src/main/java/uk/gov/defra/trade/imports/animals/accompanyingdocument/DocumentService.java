@@ -6,6 +6,7 @@ import java.util.Objects;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
@@ -17,10 +18,7 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
  * Business logic for accompanying documents: recording an upload session, taking the document that
  * comes through it on, recording the scan result, and reading or removing what was stored.
  *
- * <p>A session and a document are separate things here. The uploading journey opens a session every
- * time it paints its page, so writing a document then would leave a notification holding one per
- * page view. The document is written by whichever of the trader's details and the scan callback
- * arrives first, both of which mean a real file exists.
+ * <p>Why a session and a document are separate records is in {@code docs/design-notes.md}.
  */
 @Service
 @Slf4j
@@ -93,11 +91,12 @@ public class DocumentService {
    * @return the claimed document
    * @throws NotFoundException if no session was ever opened under {@code uploadId}
    */
+  @Transactional
   public AccompanyingDocument claimUpload(String uploadId, ClaimUploadRequest request) {
     UploadSession session = uploadSessionRepository.findByUploadId(uploadId)
         .orElseThrow(() -> new NotFoundException(
             "No upload session found with uploadId: " + uploadId));
-    AccompanyingDocument document = documentOfSession(session);
+    AccompanyingDocument document = existingOrNewDocumentFor(session);
 
     document.setDocumentType(request.documentType());
     document.setDocumentReference(request.documentReference());
@@ -105,44 +104,47 @@ public class DocumentService {
     document.setClaimed(true);
 
     AccompanyingDocument claimed = accompanyingDocumentRepository.save(document);
-    log.info("Claimed uploadId {} for notification {}", uploadId,
+    log.info("Claimed uploadId {} correlationId {} for notification {}", uploadId,
+        session.getCorrelationId(),
         session.getNotificationReferenceNumber());
     return claimed;
   }
 
   /**
-   * Processes a cdp-uploader scan result callback, updating the document's scan status and file
-   * list. The document is resolved via {@code metadata.correlationId} — cdp-uploader echoes the
-   * metadata map back verbatim and does not include {@code uploadId} in the callback body, so a
-   * backend-minted correlationId is the only safe disambiguator when multiple PENDING uploads
-   * share a notification reference.
+   * Records a cdp-uploader scan result against the document the session opened under
+   * {@code metadata.correlationId}, creating the document when neither the claim nor an earlier
+   * callback has written it yet.
    *
-   * <p>A scanned file is a file that exists, so the document is created here where the trader's
-   * details have not arrived yet. It stays unclaimed until they do, and an unclaimed document
-   * reaches no notification event.
-   *
-   * @param uploadId the upload session identifier from the callback path; informational only
-   *                 (kept for log breadcrumbs — resolution is via {@code metadata.correlationId})
-   * @param payload  the callback payload from cdp-uploader
+   * @param uploadId the upload session identifier from the callback path, used only in logs
+   * @param payload  the callback payload
    * @throws BadRequestException if the payload metadata does not include a correlationId
-   * @throws NotFoundException   if no session was opened under the given correlationId
+   * @throws NotFoundException   if no session was opened under that correlationId
    */
+  @Transactional
   public void handleScanResult(String uploadId, CdpScanResultPayload payload) {
     String correlationId = extractCorrelationId(payload);
     UploadSession session = uploadSessionRepository.findByCorrelationId(correlationId)
         .orElseThrow(() -> new NotFoundException(
             "No upload session found with correlationId: " + correlationId));
-    AccompanyingDocument document = documentOfSession(session);
+    AccompanyingDocument document = existingOrNewDocumentFor(session);
+    boolean documentExisted = document.getId() != null;
 
     document.setFiles(mapUploadedFiles(payload));
     document.setScanStatus(resolveScanStatus(payload));
 
     accompanyingDocumentRepository.save(document);
-    log.info("Updated uploadId {} scanStatus to {}", document.getUploadId(), document.getScanStatus());
+    log.info(
+        "Scan result for uploadId {} correlationId {} notification {}: scanStatus {}, document {}",
+        document.getUploadId(),
+        document.getCorrelationId(),
+        document.getNotificationReferenceNumber(),
+        document.getScanStatus(),
+        documentExisted ? "already existed" : "created by this callback");
   }
 
   /**
-   * Deletes the accompanying document with the given upload ID.
+   * Deletes the accompanying document with the given upload ID, and the session it was uploaded
+   * through, so a scan result arriving afterwards cannot bring the document back.
    *
    * @param uploadId the upload session identifier
    * @throws NotFoundException if not found
@@ -150,7 +152,9 @@ public class DocumentService {
   public void deleteByUploadId(String uploadId) {
     AccompanyingDocument document = findByUploadId(uploadId);
     accompanyingDocumentRepository.delete(document);
-    log.info("Deleted AccompanyingDocument with uploadId {}", uploadId);
+    uploadSessionRepository.findByUploadId(uploadId).ifPresent(uploadSessionRepository::delete);
+    log.info("Deleted AccompanyingDocument and its session, uploadId {} correlationId {}",
+        uploadId, document.getCorrelationId());
   }
 
   /**
@@ -216,11 +220,11 @@ public class DocumentService {
   }
 
   /**
-   * The document belonging to a session, whichever of the claim and the scan callback got here
-   * first. Both identify the same document by the session's correlation handle, so the second to
-   * arrive adds to what the first wrote rather than creating a second document.
+   * The document recorded for a session, creating an unsaved one when neither the claim nor the
+   * scan callback has written it yet. Both resolve the same document by the session's correlation
+   * handle, so the second to arrive adds to what the first wrote.
    */
-  private AccompanyingDocument documentOfSession(UploadSession session) {
+  private AccompanyingDocument existingOrNewDocumentFor(UploadSession session) {
     return accompanyingDocumentRepository
         .findByCorrelationId(session.getCorrelationId())
         .orElseGet(() -> AccompanyingDocument.builder()
@@ -236,8 +240,9 @@ public class DocumentService {
     try {
       UploadSession saved = uploadSessionRepository.save(session);
       log.info(
-          "Registered uploadId {} for notification {}",
+          "Registered uploadId {} correlationId {} for notification {}",
           session.getUploadId(),
+          session.getCorrelationId(),
           notificationRef);
       return saved;
     } catch (DuplicateKeyException _) {
@@ -247,7 +252,8 @@ public class DocumentService {
           session.getCorrelationId(),
           notificationRef);
       throw new ConflictException(
-          "Upload session with id " + session.getUploadId() + " already exists");
+          "An upload session already exists for uploadId " + session.getUploadId()
+              + " or correlationId " + session.getCorrelationId());
     }
   }
 

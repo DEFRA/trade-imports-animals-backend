@@ -1,10 +1,10 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Objects;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFileDto;
 
 /**
@@ -16,11 +16,18 @@ public record AccompanyingDocumentDto(
     String id,
     String notificationReferenceNumber,
     String uploadId,
+
+    @Schema(description = "The handle the upload session was opened under",
+        requiredMode = Schema.RequiredMode.REQUIRED)
     String correlationId,
     DocumentType documentType,
     String documentReference,
     LocalDate dateOfIssue,
     ScanStatus scanStatus,
+
+    @Schema(description = "Whether the trader's document details have been supplied; an upload the "
+        + "user walked away from stays unclaimed",
+        requiredMode = Schema.RequiredMode.REQUIRED)
     boolean claimed,
     List<UploadedFileDto> files,
     Instant created,

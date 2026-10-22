@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
@@ -10,6 +11,7 @@ import jakarta.validation.constraints.Size;
 @Schema(description = "Request to register a cdp-uploader upload session against a notification")
 public record RegisterUploadRequest(
     @NotBlank
+    @Pattern(regexp = "^[A-Za-z0-9._-]+$")
     @Size(max = 100)
     @Schema(description = "Identifier cdp-uploader assigned to the upload session",
         requiredMode = Schema.RequiredMode.REQUIRED,
@@ -17,6 +19,7 @@ public record RegisterUploadRequest(
     String uploadId,
 
     @NotBlank
+    @Pattern(regexp = "^[A-Za-z0-9._-]+$")
     @Size(max = 100)
     @Schema(description = "Identifier the caller threaded through cdp-uploader's metadata, "
         + "which the scan callback echoes back so the result can be matched to this session",

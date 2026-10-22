@@ -27,6 +27,8 @@ class AccompanyingDocumentDtoTest {
           .id("doc-id-1")
           .notificationReferenceNumber("GBN-AG-26-ABC123")
           .uploadId("upload-uuid-1")
+          .correlationId("correlation-uuid-1")
+          .claimed(true)
           .documentType(DocumentType.ITAHC)
           .documentReference("ITAHC/2026/001")
           .dateOfIssue(dateOfIssue)
@@ -40,6 +42,8 @@ class AccompanyingDocumentDtoTest {
       assertThat(dto.id()).isEqualTo("doc-id-1");
       assertThat(dto.notificationReferenceNumber()).isEqualTo("GBN-AG-26-ABC123");
       assertThat(dto.uploadId()).isEqualTo("upload-uuid-1");
+      assertThat(dto.correlationId()).isEqualTo("correlation-uuid-1");
+      assertThat(dto.claimed()).isTrue();
       assertThat(dto.documentType()).isEqualTo(DocumentType.ITAHC);
       assertThat(dto.documentReference()).isEqualTo("ITAHC/2026/001");
       assertThat(dto.dateOfIssue()).isEqualTo(dateOfIssue);

@@ -13,7 +13,7 @@ public interface UploadSessionRepository extends MongoRepository<UploadSession, 
   Optional<UploadSession> findByCorrelationId(String correlationId);
 
   Optional<UploadSession> findByNotificationReferenceNumberAndCorrelationId(
-      String referenceNumber, String correlationId);
+      String notificationReferenceNumber, String correlationId);
 
-  void deleteAllByNotificationReferenceNumberIn(List<String> referenceNumbers);
+  void deleteAllByNotificationReferenceNumberIn(List<String> notificationReferenceNumbers);
 }
