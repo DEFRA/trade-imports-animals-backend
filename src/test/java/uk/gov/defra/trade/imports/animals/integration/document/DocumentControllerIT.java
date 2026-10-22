@@ -209,6 +209,23 @@ class DocumentControllerIT extends IntegrationBase {
         }
 
         @Test
+        void shouldReturn409_whenTheSessionIsAlreadyRegistered() {
+            OpenedSession session = registeredSession();
+
+            webClient("NoAuth")
+                .post()
+                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(registerBody(session))
+                .exchange()
+                .expectStatus().isEqualTo(409);
+        }
+    }
+
+    @Nested
+    class GetSessionByCorrelationId {
+
+        @Test
         void shouldReturnTheSessionByItsCorrelationHandle() {
             OpenedSession session = registeredSession();
 
@@ -232,19 +249,6 @@ class DocumentControllerIT extends IntegrationBase {
                     + session.correlationId())
                 .exchange()
                 .expectStatus().isNotFound();
-        }
-
-        @Test
-        void shouldReturn409_whenTheSessionIsAlreadyRegistered() {
-            OpenedSession session = registeredSession();
-
-            webClient("NoAuth")
-                .post()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
-                .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue(registerBody(session))
-                .exchange()
-                .expectStatus().isEqualTo(409);
         }
     }
 
