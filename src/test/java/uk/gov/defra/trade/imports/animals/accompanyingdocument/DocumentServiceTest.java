@@ -416,7 +416,6 @@ class DocumentServiceTest {
     }
   }
 
-
   @Nested
   class DeleteForNotificationRefs {
 
