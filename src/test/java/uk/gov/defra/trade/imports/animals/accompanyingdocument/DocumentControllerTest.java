@@ -15,6 +15,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registerUploadRequest;
+import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registeredSession;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
@@ -70,24 +72,18 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn201WithLocationHeaderAndTheRegisteredSession() throws Exception {
-      RegisterUploadRequest request =
-          new RegisterUploadRequest("upload-abc-123", "correlation-abc-123");
-
       when(documentService.registerUpload(eq(REF), any(RegisterUploadRequest.class)))
-          .thenReturn(UploadSession.builder()
-              .notificationReferenceNumber(REF)
-              .uploadId("upload-abc-123")
-              .correlationId("correlation-abc-123")
-              .build());
+          .thenReturn(registeredSession(REF));
 
       mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
               .contentType(MediaType.APPLICATION_JSON)
-              .content(objectMapper.writeValueAsString(request)))
+              .content(objectMapper.writeValueAsString(registerUploadRequest())))
           .andExpect(status().isCreated())
           .andExpect(header().string(
-              "Location", "http://localhost:8085/document-uploads/upload-abc-123"))
-          .andExpect(jsonPath("$.uploadId").value("upload-abc-123"))
-          .andExpect(jsonPath("$.correlationId").value("correlation-abc-123"))
+              "Location",
+              "http://localhost:8085/document-uploads/" + UploadSessionFixtures.UPLOAD_ID))
+          .andExpect(jsonPath("$.uploadId").value(UploadSessionFixtures.UPLOAD_ID))
+          .andExpect(jsonPath("$.correlationId").value(UploadSessionFixtures.CORRELATION_ID))
           .andExpect(jsonPath("$.notificationReferenceNumber").value(REF));
     }
 
