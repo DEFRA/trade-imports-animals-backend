@@ -353,6 +353,42 @@ class DocumentServiceTest {
     }
 
     @Test
+    void handleScanResult_shouldKeepTheClaimOnTheStoredDocument_whenTheDetailsArrivedFirst() {
+      String correlationId = "corr-claim-first";
+      AccompanyingDocument claimedDocument = AccompanyingDocument.builder()
+          .id("doc-claim-first")
+          .notificationReferenceNumber("GBN-AG-26-CLF001")
+          .uploadId("upload-claim-first")
+          .correlationId(correlationId)
+          .documentType(DocumentType.ITAHC)
+          .documentReference("UKGB2026001")
+          .dateOfIssue(LocalDate.parse("2026-01-15"))
+          .scanStatus(ScanStatus.PENDING)
+          .claimed(true)
+          .files(new ArrayList<>())
+          .build();
+      when(uploadSessionRepository.findByCorrelationId(correlationId)).thenReturn(
+          Optional.of(sessionOf("GBN-AG-26-CLF001", "upload-claim-first", correlationId)));
+      when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
+          .thenReturn(Optional.of(claimedDocument));
+
+      CdpScanResultPayload payload = new CdpScanResultPayload(
+          "ready", Map.of("correlationId", correlationId), new CdpScanResultForm(), 0);
+
+      documentService.handleScanResult("upload-claim-first", payload);
+
+      ArgumentCaptor<AccompanyingDocument> captor =
+          ArgumentCaptor.forClass(AccompanyingDocument.class);
+      verify(accompanyingDocumentRepository, times(1)).save(captor.capture());
+      AccompanyingDocument saved = captor.getValue();
+      assertThat(saved.getId()).isEqualTo("doc-claim-first");
+      assertThat(saved.isClaimed()).isTrue();
+      assertThat(saved.getDocumentType()).isEqualTo(DocumentType.ITAHC);
+      assertThat(saved.getDocumentReference()).isEqualTo("UKGB2026001");
+      assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
+    }
+
+    @Test
     void handleScanResult_shouldCreateAnUnclaimedDocument_whenItArrivesBeforeTheDetails() {
       String correlationId = "corr-scan-first";
       when(uploadSessionRepository.findByCorrelationId(correlationId)).thenReturn(
