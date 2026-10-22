@@ -22,13 +22,6 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.CreateQueueRequest;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 
-/**
- * Testcontainer factories and Floci wiring for the document-area ITs that exercise cdp-uploader,
- * currently {@link DocumentControllerIT} for the dev-mode real-scan flow.
- *
- * <p>Each IT owns its own Docker {@link Network} and container instances — these helpers exist
- * to remove the boilerplate of constructing them, not to share container state across classes.
- */
 final class CdpUploaderTestSupport {
 
     static final String CDP_UPLOADER_IMAGE = "defradigital/cdp-uploader:latest";
@@ -62,10 +55,8 @@ final class CdpUploaderTestSupport {
     }
 
     /**
-     * Pre-configured cdp-uploader Testcontainer with the env vars common to all IT shapes
-     * (PORT, REDIS_HOST, USE_SINGLE_INSTANCE_CACHE, CONSUMER_BUCKETS) and a /health-based
-     * readiness probe. Callers chain {@code .withEnv(...)} for NODE_ENV and any mode-specific
-     * scanner/AWS config.
+     * cdp-uploader Testcontainer carrying its port, its Redis host, single-instance caching, the
+     * consumer buckets it will accept uploads for, and a {@code /health} readiness probe.
      */
     static GenericContainer<?> cdpUploaderContainer(
         Network network, String alias, String redisAlias, String consumerBuckets) {
@@ -83,10 +74,9 @@ final class CdpUploaderTestSupport {
     }
 
     /**
-     * Floci Testcontainer with the AWS region pinned. Region pinning is load-bearing: SQS queues
-     * are scoped per region, so a queue created via one region's SDK client is invisible to a
-     * client signing as another. Match this to the cdp-uploader container's {@code AWS_REGION}.
-     * Floci enables all emulated AWS services by default, so no per-service selector is needed.
+     * Floci Testcontainer with the AWS region pinned. SQS queues are scoped per region, so a queue
+     * created through one region's SDK client is invisible to a client signing as another. Floci
+     * enables every emulated AWS service by default, so no per-service selector is needed.
      */
     static FlociContainer flociContainer(Network network, String region) {
         return new FlociContainer(DockerImageName.parse(FLOCI_IMAGE))
@@ -133,8 +123,7 @@ final class CdpUploaderTestSupport {
      *       {@code mock-clamav} queue.</li>
      * </ol>
      *
-     * Caller is responsible for pre-creating the buckets — we don't create them here because
-     * each IT has its own additional buckets (e.g. the consumer bucket).
+     * Expects the quarantine bucket to exist already.
      */
     static void wireScanQueuesAndBucketNotification(
         SqsClient sqsClient, S3Client s3Client, String region) {
