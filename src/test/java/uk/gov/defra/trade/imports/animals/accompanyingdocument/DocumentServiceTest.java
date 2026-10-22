@@ -81,10 +81,6 @@ class DocumentServiceTest {
       assertThat(registered.getCorrelationId()).isEqualTo(correlationId);
     }
 
-    /**
-     * The page opens a session every time it is painted, so registering one must not leave the
-     * notification holding a document that nobody uploaded.
-     */
     @Test
     void registerUpload_shouldNotWriteADocument() {
       when(uploadSessionRepository.save(any(UploadSession.class)))
@@ -157,10 +153,6 @@ class DocumentServiceTest {
           .build();
     }
 
-    /**
-     * The details normally arrive before the scan callback, so there is nothing to add them to and
-     * the claim is what brings the document into being.
-     */
     @Test
     void claimUpload_shouldCreateTheDocument_whenNothingHasArrivedForTheSessionYet() {
       sessionIsOpen();
@@ -182,12 +174,8 @@ class DocumentServiceTest {
       assertThat(claimed.getDateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
     }
 
-    /**
-     * Where the scan got in first, the claim must add to what it recorded rather than start a
-     * second document for the same upload.
-     */
     @Test
-    void claimUpload_shouldKeepTheScanResult_whenTheCallbackArrivedFirst() {
+    void claimUpload_shouldKeepTheScanResultAndWriteNoSecondDocument_whenTheCallbackArrivedFirst() {
       sessionIsOpen();
       when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
           .thenReturn(Optional.of(scanned()));
@@ -377,11 +365,6 @@ class DocumentServiceTest {
       assertThat(sibling.getFiles()).isEmpty();
     }
 
-    /**
-     * A scanned file is a file that exists, so the callback brings the document into being where
-     * the trader's details have not arrived yet. It stays unclaimed, which keeps it off the
-     * notification's events until they do.
-     */
     @Test
     void handleScanResult_shouldCreateAnUnclaimedDocument_whenItArrivesBeforeTheDetails() {
       String correlationId = "corr-scan-first";
