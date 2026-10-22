@@ -55,6 +55,12 @@ On CDP all egress except the database goes through the platform proxy named by `
 
 `RestClientConfig` keeps a single `RestClient.Builder` bean that nothing in this service injects. It is retained because it is the only place the CDP trust store and the `x-cdp-request-id` interceptor are wired together, and because deleting it would orphan `TraceIdPropagationInterceptor` and its test as well. The `RestTemplate` beans beside it went when the cdp-uploader client did: nothing injected them, and `RestTemplate` is not for new code. The next outbound HTTP client injects the builder; it should not re-wire the trust store itself.
 
+## Outbox writes
+
+- `appendEvent` reads the claimed, scan-complete documents itself rather than taking them from its caller, so the documents an event lists are the ones committed with it. The callers in `NotificationService.writeWithOutbox` are `@Transactional` and hold the outbox lock across the append, so a claim or a scan result landing alongside a submit either joins that event or waits for the next one.
+- `SUBMISSION_EVENT_WIRE_VALUES` is derived from `OutboxEventType.SUBMISSION_EVENTS` rather than listed again, so the set the version count queries on cannot drift from the set the enum declares.
+- `versionId` is absent on created, edited and deleted events because the schema mints `V1` on first submission. A notification edited before it has ever been submitted would otherwise emit `versionId: 0`, a value the schema's semantics never produce.
+
 ## GBN-AG event mapping
 
 Each party's email and telephone map to one `definedContact`. With neither, `definedContact` is null rather than an empty list, so it is omitted like every other absent field. `personName` is never set: the address book holds an organisation or address name, already mapped to the party name, and no contact person.

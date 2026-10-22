@@ -11,7 +11,7 @@ public class GbnAgEventDataMapper {
     public GbnAgEventData toGbnAgEventData(
         NotificationAggregate notificationAggregate,
         Integer versionId,
-        List<AccompanyingDocument> accompanyingDocuments) {
-        return GbnAgEventData.from(notificationAggregate, versionId, accompanyingDocuments);
+        List<AccompanyingDocument> claimedScannedDocuments) {
+        return GbnAgEventData.from(notificationAggregate, versionId, claimedScannedDocuments);
     }
 }

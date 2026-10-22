@@ -18,14 +18,14 @@ public record GbnAgEventData(
     public static GbnAgEventData from(
         NotificationAggregate notificationAggregate,
         Integer versionId,
-        List<AccompanyingDocument> accompanyingDocuments) {
+        List<AccompanyingDocument> claimedScannedDocuments) {
         if (notificationAggregate == null) {
             return null;
         }
         return new GbnAgEventData(
             MODEL_VALUE,
             TYPE_VALUE,
-            ExchangedDocument.from(notificationAggregate, versionId, accompanyingDocuments),
+            ExchangedDocument.from(notificationAggregate, versionId, claimedScannedDocuments),
             SpecifiedConsignment.from(notificationAggregate.requireNotification()));
     }
 }
