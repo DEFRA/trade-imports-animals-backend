@@ -192,9 +192,7 @@ class DocumentControllerIT extends IntegrationBase {
                 .post()
                 .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("""
-                    {"uploadId":"%s","correlationId":"%s"}
-                    """.formatted(session.uploadId(), session.correlationId()))
+                .bodyValue(registerBody(session))
                 .exchange()
                 .expectStatus().isCreated()
                 .expectBody(UploadSessionDto.class)
@@ -252,9 +250,7 @@ class DocumentControllerIT extends IntegrationBase {
                 .post()
                 .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
                 .contentType(MediaType.APPLICATION_JSON)
-                .bodyValue("""
-                    {"uploadId":"%s","correlationId":"%s"}
-                    """.formatted(session.uploadId(), session.correlationId()))
+                .bodyValue(registerBody(session))
                 .exchange()
                 .expectStatus().isEqualTo(409);
         }
@@ -611,9 +607,7 @@ class DocumentControllerIT extends IntegrationBase {
             .post()
             .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
             .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue("""
-                {"uploadId":"%s","correlationId":"%s"}
-                """.formatted(session.uploadId(), session.correlationId()))
+            .bodyValue(registerBody(session))
             .exchange()
             .expectStatus().isCreated();
         return session;
@@ -637,6 +631,12 @@ class DocumentControllerIT extends IntegrationBase {
         return """
             {"documentType":"ITAHC","documentReference":"UKGB2026001234","dateOfIssue":"2026-01-15"}
             """;
+    }
+
+    private static String registerBody(OpenedSession session) {
+        return """
+            {"uploadId":"%s","correlationId":"%s"}
+            """.formatted(session.uploadId(), session.correlationId());
     }
 
     /** Uploads the file the way the browser does: straight to cdp-uploader, form fields alongside. */
