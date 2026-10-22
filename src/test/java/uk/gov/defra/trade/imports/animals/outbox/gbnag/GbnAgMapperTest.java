@@ -901,6 +901,45 @@ class GbnAgMapperTest {
             .includedTradeLineItem().getFirst();
     }
 
+    @Test
+    void shouldMapEachCommodityEntryToTradeLinesWithMatchingNameAndCnCode() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-MULTI")
+            .notification(Notification.builder()
+                .commodities(List.of(
+                    CommodityComplement.builder()
+                        .name("Cow")
+                        .commodityCode("0102")
+                        .species(List.of(Species.builder()
+                            .value("1148346")
+                            .text("Bos taurus")
+                            .noOfAnimals(1)
+                            .noOfPackages(1)
+                            .build()))
+                        .build(),
+                    CommodityComplement.builder()
+                        .name("Cat")
+                        .commodityCode("01061900")
+                        .species(List.of(Species.builder()
+                            .value("923501")
+                            .text("Felis catus")
+                            .noOfAnimals(1)
+                            .noOfPackages(1)
+                            .build()))
+                        .build()))
+                .build())
+            .build();
+
+        List<TradeLineItem> lines = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
+            .specifiedConsignment().includedConsignmentItem().getFirst().includedTradeLineItem();
+
+        assertThat(lines).hasSize(2);
+        assertThat(lines.get(0).commonName()).isEqualTo("Cow");
+        assertThat(lines.get(0).applicableClassification().getFirst().classCode().value()).isEqualTo("0102");
+        assertThat(lines.get(1).commonName()).isEqualTo("Cat");
+        assertThat(lines.get(1).applicableClassification().getFirst().classCode().value()).isEqualTo("01061900");
+    }
+
     private static NotificationAggregate fullyPopulatedNotification() {
         return NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-7K8M2P")
@@ -925,27 +964,25 @@ class GbnAgMapperTest {
                 .placeOfOrigin(party("Granja del Valle de Tenerife", simpleAddress("Camino La Hornera 12", "ES")))
                 .consignment(party("Animal and Plant Health Agency", simpleAddress("Woodham Lane", "GB")))
                 .cphNumber("CPH19876")
-                .commodity(Commodity.builder()
+                .commodities(List.of(CommodityComplement.builder()
                     .name("Cow")
-                    .commodityComplement(List.of(CommodityComplement.builder()
-                        .typeOfCommodity("01020000")
-                        .totalNoOfAnimals(20)
-                        .totalNoOfPackages(1)
-                        .species(List.of(Species.builder()
-                            .value("1148346")
-                            .text("Bos taurus")
-                            .noOfAnimals(20)
-                            .noOfPackages(1)
-                            .earTag("UK01234567890")
-                            .passport("UK0123456700999")
-                            .animalIdentifiers(List.of(
-                                AnimalIdentifier.builder()
-                                    .earTag("UK01234567890").passport("UK0123456700999").build(),
-                                AnimalIdentifier.builder()
-                                    .earTag("UK01234567891").passport("UK0123456700998").build()))
-                            .build()))
+                    .commodityCode("01020000")
+                    .totalNoOfAnimals(20)
+                    .totalNoOfPackages(1)
+                    .species(List.of(Species.builder()
+                        .value("1148346")
+                        .text("Bos taurus")
+                        .noOfAnimals(20)
+                        .noOfPackages(1)
+                        .earTag("UK01234567890")
+                        .passport("UK0123456700999")
+                        .animalIdentifiers(List.of(
+                            AnimalIdentifier.builder()
+                                .earTag("UK01234567890").passport("UK0123456700999").build(),
+                            AnimalIdentifier.builder()
+                                .earTag("UK01234567891").passport("UK0123456700998").build()))
                         .build()))
-                    .build())
+                    .build()))
                 .transport(Transport.builder()
                     .portOfEntry("GBDVR")
                     .arrivalDate(LocalDate.parse("2026-05-06"))
