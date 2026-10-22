@@ -35,7 +35,6 @@ import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 class GlobalExceptionHandlerTest {
 
@@ -550,53 +549,6 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void handleMaxUploadSizeExceededException_shouldReturnPayloadTooLarge() {
-        // Given
-        String traceId = "test-trace-oversize";
-        MDC.put("trace.id", traceId);
-        MaxUploadSizeExceededException exception =
-            new MaxUploadSizeExceededException(50 * 1024 * 1024);
-
-        // When
-        ResponseEntity<ProblemDetail> response =
-            exceptionHandler.handleMaxUploadSizeExceededException(exception);
-        ProblemDetail problemDetail = response.getBody();
-
-        // Then
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
-        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
-        assertThat(problemDetail).isNotNull();
-        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE.value());
-        assertThat(problemDetail.getTitle()).isEqualTo("Payload Too Large");
-        assertThat(problemDetail.getDetail())
-            .isEqualTo("Uploaded file exceeds the maximum permitted size");
-        assertThat(problemDetail.getType())
-            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/payload-too-large"));
-        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
-    }
-
-    @Test
-    void handleMaxUploadSizeExceededException_shouldHandleNullTraceId() {
-        // Given - no trace ID in MDC
-        MaxUploadSizeExceededException exception =
-            new MaxUploadSizeExceededException(50 * 1024 * 1024);
-
-        // When
-        ResponseEntity<ProblemDetail> response =
-            exceptionHandler.handleMaxUploadSizeExceededException(exception);
-        ProblemDetail problemDetail = response.getBody();
-
-        // Then
-        assertThat(problemDetail).isNotNull();
-        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE.value());
-        Map<String, Object> properties = problemDetail.getProperties();
-        assertThat(properties).satisfiesAnyOf(
-            p -> assertThat(p).isNull(),
-            p -> assertThat(p).doesNotContainKey("traceId")
-        );
-    }
-
-    @Test
     void handleOutboxWriteException_shouldReturn500_withGenericMessage_andNoInternalDetailsLeaked() {
         // Given
         String traceId = "test-trace-outbox-1";
@@ -644,53 +596,6 @@ class GlobalExceptionHandlerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
         assertThat(problemDetail).isNotNull();
         assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
-        Map<String, Object> properties = problemDetail.getProperties();
-        assertThat(properties).satisfiesAnyOf(
-            p -> assertThat(p).isNull(),
-            p -> assertThat(p).doesNotContainKey("traceId")
-        );
-    }
-
-    @Test
-    void handleServiceUnavailableException_shouldReturnBadGateway() {
-        // Given
-        String traceId = "test-trace-svc-unavail";
-        MDC.put("trace.id", traceId);
-        ServiceUnavailableException exception =
-            new ServiceUnavailableException("cdp-uploader returned an error response: HTTP 503");
-
-        // When
-        ResponseEntity<ProblemDetail> response =
-            exceptionHandler.handleServiceUnavailableException(exception);
-        ProblemDetail problemDetail = response.getBody();
-
-        // Then
-        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_GATEWAY);
-        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
-        assertThat(problemDetail).isNotNull();
-        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY.value());
-        assertThat(problemDetail.getTitle()).isEqualTo("Upstream Service Error");
-        assertThat(problemDetail.getDetail())
-            .isEqualTo("cdp-uploader returned an error response: HTTP 503");
-        assertThat(problemDetail.getType())
-            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/upstream-error"));
-        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
-    }
-
-    @Test
-    void handleServiceUnavailableException_shouldHandleNullTraceId() {
-        // Given - no trace ID in MDC
-        ServiceUnavailableException exception =
-            new ServiceUnavailableException("cdp-uploader returned an error response: HTTP 503");
-
-        // When
-        ResponseEntity<ProblemDetail> response =
-            exceptionHandler.handleServiceUnavailableException(exception);
-        ProblemDetail problemDetail = response.getBody();
-
-        // Then
-        assertThat(problemDetail).isNotNull();
-        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY.value());
         Map<String, Object> properties = problemDetail.getProperties();
         assertThat(properties).satisfiesAnyOf(
             p -> assertThat(p).isNull(),

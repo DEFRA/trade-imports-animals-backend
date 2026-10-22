@@ -52,6 +52,8 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 
 On CDP all egress except the database goes through the platform proxy named by `HTTP_PROXY`. `ProxyConfig` sets the JVM proxy properties and the default `ProxySelector`, so every HTTP client uses it; the proxy routes internal `*.cdp-int.defra.cloud` URLs itself. A malformed `HTTP_PROXY` is logged with any credentials replaced by `***`.
 
+`RestClientConfig` keeps a single `RestClient.Builder` bean that nothing in this service injects. It is retained because it is the only place the CDP trust store and the `x-cdp-request-id` interceptor are wired together, and because deleting it would orphan `TraceIdPropagationInterceptor` and its test as well. The `RestTemplate` beans beside it went when the cdp-uploader client did: nothing injected them, and `RestTemplate` is not for new code. The next outbound HTTP client injects the builder; it should not re-wire the trust store itself.
+
 ## GBN-AG event mapping
 
 Each party's email and telephone map to one `definedContact`. With neither, `definedContact` is null rather than an empty list, so it is omitted like every other absent field. `personName` is never set: the address book holds an organisation or address name, already mapped to the party name, and no contact person.

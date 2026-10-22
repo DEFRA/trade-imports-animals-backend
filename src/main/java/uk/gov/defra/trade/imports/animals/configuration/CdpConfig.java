@@ -9,8 +9,8 @@ import org.springframework.validation.annotation.Validated;
 /**
  * Configuration properties for CDP platform integrations.
  *
- * <p>Bound to the {@code cdp} prefix in {@code application.yml}. Covers S3 document storage and
- * the backend's own public base URL (used for callback construction).
+ * <p>Bound to the {@code cdp} prefix in {@code application.yml}. Covers the CDP platform values
+ * and S3 document storage.
  *
  * @param certificate    the CDP platform TLS certificate (PEM-encoded)
  * @param metrics        metrics-publishing configuration

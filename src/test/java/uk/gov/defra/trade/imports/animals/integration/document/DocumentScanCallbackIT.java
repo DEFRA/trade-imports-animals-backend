@@ -37,13 +37,10 @@ class DocumentScanCallbackIT extends IntegrationBase {
     private static final String FILE_ID_FROM_FIXTURE = "c1ec2432-54ed-4153-bd6f-d69a35f598f4";
 
     /**
-     * No real cdp-uploader call is exercised here, but the controller needs a non-blank
-     * {@code cdp.uploader.base-url} to start the application context. Point it at a clearly
-     * unreachable address so any accidental outbound call fails fast and visibly.
+     * Registers the S3 bucket and STS token properties the application context needs.
      */
     @DynamicPropertySource
     static void registerStubProperties(DynamicPropertyRegistry registry) {
-        registry.add("cdp.uploader.base-url", () -> "http://127.0.0.1:1");
         registry.add("cdp.s3.documents-bucket", () -> DOCUMENTS_BUCKET);
         registry.add("aws.sts.token.audience", () -> "test-audience");
         registry.add("aws.sts.token.expiration", () -> "3600");

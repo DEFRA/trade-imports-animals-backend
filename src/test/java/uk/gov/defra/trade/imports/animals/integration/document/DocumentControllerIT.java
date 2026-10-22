@@ -8,7 +8,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -150,7 +149,6 @@ class DocumentControllerIT extends IntegrationBase {
 
         registry.add("app.base-url",
             () -> "http://host.testcontainers.internal:" + BACKEND_PORT);
-
 
         registry.add("app.aws.endpoint-override",
             FLOCI_CONTAINER::getEndpoint);
@@ -372,7 +370,7 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(item.id()).isNotNull();
             assertThat(item.documentType()).isEqualTo(DocumentType.ITAHC);
             assertThat(item.documentReference()).isEqualTo("UKGB2026001234");
-            assertThat(item.dateOfIssue()).isEqualTo(java.time.LocalDate.parse("2026-01-15"));
+            assertThat(item.dateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
 
             // The typed read above would accept any shape Jackson can decode; this pins the wire.
             webClient("NoAuth")
