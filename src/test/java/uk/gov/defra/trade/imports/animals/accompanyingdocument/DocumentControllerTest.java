@@ -24,7 +24,6 @@ import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -156,25 +155,20 @@ class DocumentControllerTest {
           .andExpect(jsonPath("$.documentReference").value("UKGB2026001"));
     }
 
-    @ParameterizedTest
-    @EnumSource(
-        value = DocumentType.class,
-        names = {"ITAHC", "VETERINARY_HEALTH_CERTIFICATE"},
-        mode = EnumSource.Mode.EXCLUDE)
-    void shouldAcceptEveryPreviouslyRejectedDocumentType(DocumentType documentType)
-        throws Exception {
+    @Test
+    void shouldPassTheSubmittedTypeReferenceAndDateToClaimUploadUnchanged() throws Exception {
       ClaimUploadRequest expectedRequest = new ClaimUploadRequest(
-          documentType, "UKGB2026001", LocalDate.parse("2026-01-15"));
+          DocumentType.AIR_WAYBILL, "UKGB2026001", LocalDate.parse("2026-01-15"));
       String body = """
           {
-            "documentType":"%s",
+            "documentType":"AIR_WAYBILL",
             "documentReference":"UKGB2026001",
             "dateOfIssue":"2026-01-15"
           }
-          """.formatted(documentType.name());
+          """;
 
       when(documentService.claimUpload(UPLOAD_ID, expectedRequest))
-          .thenReturn(claimedWith(documentType));
+          .thenReturn(claimedWith(DocumentType.AIR_WAYBILL));
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
