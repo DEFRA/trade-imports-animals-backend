@@ -202,6 +202,42 @@ class DocumentControllerTest {
       verify(documentService).claimUpload(UPLOAD_ID, expectedRequest);
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "125-12345675",
+        "CHEDA.GB.2026.1234567",
+        "INV 2026/0042",
+        "UKGB2026001234"
+    })
+    void shouldAcceptAReferenceCarryingTheSeparatorsRealDocumentsUse(String reference)
+        throws Exception {
+      when(documentService.claimUpload(eq(UPLOAD_ID), any(ClaimUploadRequest.class)))
+          .thenReturn(claimedWith(DocumentType.ITAHC));
+      String body = String.format(
+          "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
+          reference);
+
+      mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isOk());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"REF<script>", "REF;DROP", "REF|pipe", "REF\\\\back"})
+    void shouldReturn400_whenAReferenceCarriesACharacterOutsideTheRule(String reference)
+        throws Exception {
+      String body = String.format(
+          "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
+          reference);
+
+      mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.errors.documentReference").exists());
+    }
+
     @Test
     void shouldReturn400_whenDocumentReferenceIsBlank() throws Exception {
       String body = """

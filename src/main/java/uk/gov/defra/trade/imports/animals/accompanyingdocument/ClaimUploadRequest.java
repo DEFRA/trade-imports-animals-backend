@@ -24,15 +24,24 @@ public record ClaimUploadRequest(
 
     @NotBlank
     @Size(max = 100)
-    @Pattern(regexp = "^[a-zA-Z0-9]*$")
+    @Pattern(regexp = ClaimUploadRequest.REFERENCE_PATTERN)
     @Schema(description = "Reference number printed on the document",
         requiredMode = Schema.RequiredMode.REQUIRED,
-        example = "UKGB2026001234")
+        example = "125-12345675")
     String documentReference,
 
     @NotNull
     @Schema(description = "Date of issue on the physical document",
         requiredMode = Schema.RequiredMode.REQUIRED,
         example = "2026-01-15")
-    LocalDate dateOfIssue) {}
+    LocalDate dateOfIssue) {
+
+  /**
+   * Characters a document reference may carry. Alphanumerics plus the separators real references
+   * use: an air waybill is written {@code 125-12345675}, a TRACES certificate
+   * {@code CHEDA.GB.2026.1234567}, and a commercial invoice whatever the exporter prints. Length
+   * is {@code @Size}'s to enforce, so this rule says nothing about it.
+   */
+  static final String REFERENCE_PATTERN = "^[A-Za-z0-9 ./-]*$";
+}
 
