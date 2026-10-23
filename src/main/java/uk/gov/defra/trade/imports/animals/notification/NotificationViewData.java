@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import java.time.Instant;
+import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,6 +19,7 @@ public class NotificationViewData implements NotificationView {
     private Instant created;
     private Origin origin;
     private Commodity commodity;
+    private List<CommodityComplement> commodities;
     private ConsignmentParty consignor;
     private ConsignmentParty consignee;
     private Transport transport;

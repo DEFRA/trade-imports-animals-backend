@@ -17,6 +17,11 @@ public final class NotificationCommodities {
         return fromLegacyCommodity(notification.getCommodity());
     }
 
+    /**
+     * Expands legacy {@code commodity.commodityComplement[]} using the root {@code name} when a
+     * complement has no name. Multi-commodity journeys that were saved under one root name stay
+     * best-effort until the notification is saved again with {@code commodities[]}.
+     */
     private static List<CommodityComplement> fromLegacyCommodity(Commodity commodity) {
         if (commodity == null || commodity.getCommodityComplement() == null) {
             return List.of();
