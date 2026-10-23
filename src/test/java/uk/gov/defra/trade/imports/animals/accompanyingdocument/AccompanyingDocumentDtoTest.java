@@ -14,6 +14,9 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile
 
 class AccompanyingDocumentDtoTest {
 
+  private static final String FILE_VIRUS = "FILE_VIRUS";
+  private static final String VIRUS_MESSAGE = "The selected file contains a virus";
+
   @Nested
   class FullFieldMapping {
 
@@ -118,6 +121,7 @@ class AccompanyingDocumentDtoTest {
       assertThat(fileDto.checksumSha256()).isEqualTo("abc123sha");
       assertThat(fileDto.detectedContentType()).isEqualTo("application/pdf");
       assertThat(fileDto.hasError()).isFalse();
+      assertThat(fileDto.errorCode()).isNull();
       assertThat(fileDto.errorMessage()).isNull();
     }
 
@@ -138,6 +142,28 @@ class AccompanyingDocumentDtoTest {
 
       UploadedFileDto fileDto = dto.files().get(0);
       assertThat(fileDto.hasError()).isFalse();
+    }
+
+    @Test
+    void from_shouldExposeErrorCode_whenFileWasRefused() {
+      UploadedFile file = UploadedFile.builder()
+          .filename("eicar.pdf")
+          .fileStatus(FileStatus.REJECTED)
+          .hasError(true)
+          .errorCode(FILE_VIRUS)
+          .errorMessage(VIRUS_MESSAGE)
+          .build();
+
+      AccompanyingDocument entity = AccompanyingDocument.builder()
+          .uploadId("upload-uuid-refused")
+          .files(List.of(file))
+          .build();
+
+      AccompanyingDocumentDto dto = AccompanyingDocumentDto.from(entity);
+
+      UploadedFileDto fileDto = dto.files().get(0);
+      assertThat(fileDto.errorCode()).isEqualTo(FILE_VIRUS);
+      assertThat(fileDto.errorMessage()).isEqualTo(VIRUS_MESSAGE);
     }
 
     @Test

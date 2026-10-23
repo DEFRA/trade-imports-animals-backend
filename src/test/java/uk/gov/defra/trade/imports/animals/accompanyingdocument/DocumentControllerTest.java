@@ -497,6 +497,7 @@ class DocumentControllerTest {
           "sha256abc",
           "application/pdf",
           false,
+          null,
           null);
 
       when(documentService.findFile(uploadId)).thenReturn(uploadedFile);
@@ -524,6 +525,7 @@ class DocumentControllerTest {
           "sha256abc",
           "application/octet-stream",
           false,
+          null,
           null);
       when(documentService.findFile(uploadId)).thenReturn(uploadedFile);
       doNothing().when(s3DocumentService).streamToOutput(any(String.class), any());

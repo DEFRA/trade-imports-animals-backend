@@ -182,7 +182,8 @@ class DocumentScanCallbackIT extends IntegrationBase {
                   "s3Key": null,
                   "s3Bucket": null,
                   "hasError": true,
-                  "errorMessage": "Virus detected"
+                  "errorCode": "FILE_VIRUS",
+                  "errorMessage": "The selected file contains a virus"
                 }
               }
             }
@@ -212,6 +213,8 @@ class DocumentScanCallbackIT extends IntegrationBase {
             .findFirst()
             .orElseThrow(() -> new AssertionError("virus file not found"));
         assertThat(virusFile.s3Key()).isNull();
+        assertThat(virusFile.errorCode()).isEqualTo("FILE_VIRUS");
+        assertThat(virusFile.errorMessage()).isEqualTo("The selected file contains a virus");
     }
 
     @Test

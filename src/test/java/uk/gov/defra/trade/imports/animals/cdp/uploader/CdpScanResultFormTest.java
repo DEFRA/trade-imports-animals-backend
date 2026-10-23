@@ -31,7 +31,7 @@ class CdpScanResultFormTest {
   private static CdpScanResultFile scannedFile() {
     return new CdpScanResultFile(
         "file-id", "doc.pdf", "application/pdf", FileStatus.COMPLETE,
-        1024L, "sha256", "application/pdf", "s3key", "bucket", false, null);
+        1024L, "sha256", "application/pdf", "s3key", "bucket", false, null, null);
   }
 
   @Nested

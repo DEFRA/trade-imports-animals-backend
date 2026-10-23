@@ -20,6 +20,8 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
  * @param s3Bucket            S3 bucket name where the file is stored; {@code null} when the
  *                            file was rejected or an error occurred
  * @param hasError            {@code true} if the scan reported an error for this file
+ * @param errorCode           machine-readable reason the file was refused, one of cdp-uploader's
+ *                            {@code FILE_*} codes; {@code null} when there is no error
  * @param errorMessage        human-readable error description; {@code null} when there is no error
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -34,4 +36,5 @@ public record CdpScanResultFile(
     @Nullable String s3Key,
     @Nullable String s3Bucket,
     Boolean hasError,
+    @Nullable String errorCode,
     @Nullable String errorMessage) {}

@@ -467,7 +467,8 @@ class DocumentServiceTest {
           null,
           null,
           true,
-          "File rejected by virus scanner");
+          "FILE_VIRUS",
+          "The selected file contains a virus");
 
       AccompanyingDocument document = AccompanyingDocument.builder()
           .uploadId(uploadId)
