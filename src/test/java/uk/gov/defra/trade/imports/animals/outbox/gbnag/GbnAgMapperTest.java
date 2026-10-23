@@ -940,6 +940,32 @@ class GbnAgMapperTest {
         assertThat(lines.get(1).applicableClassification().getFirst().classCode().value()).isEqualTo("01061900");
     }
 
+    @Test
+    void shouldUseTypeOfCommodityAsCnWhenLegacyComplementHasNoCommodityCode() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-LEGACY")
+            .notification(Notification.builder()
+                .commodity(Commodity.builder()
+                    .name("Cow")
+                    .commodityComplement(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("01020000")
+                        .totalNoOfAnimals(1)
+                        .totalNoOfPackages(1)
+                        .species(List.of(Species.builder()
+                            .value("1148346")
+                            .text("Bos taurus")
+                            .noOfAnimals(1)
+                            .noOfPackages(1)
+                            .build()))
+                        .build()))
+                    .build())
+                .build())
+            .build();
+
+        TradeLineItem line = firstLineOf(notificationAggregate);
+        assertThat(line.applicableClassification().getFirst().classCode().value()).isEqualTo("01020000");
+    }
+
     private static NotificationAggregate fullyPopulatedNotification() {
         return NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-7K8M2P")

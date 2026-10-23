@@ -2740,6 +2740,7 @@ class NotificationServiceTest {
         private Instant created;
         private Origin origin;
         private Commodity commodity;
+        private List<CommodityComplement> commodities;
         private ConsignmentParty consignor;
         private ConsignmentParty consignee;
         private Transport transport;
@@ -2749,6 +2750,7 @@ class NotificationServiceTest {
         NotificationViewBuilder created(Instant v) { this.created = v; return this; }
         NotificationViewBuilder origin(Origin v) { this.origin = v; return this; }
         NotificationViewBuilder commodity(Commodity v) { this.commodity = v; return this; }
+        NotificationViewBuilder commodities(List<CommodityComplement> v) { this.commodities = v; return this; }
         NotificationViewBuilder consignor(ConsignmentParty v) { this.consignor = v; return this; }
         NotificationViewBuilder consignee(ConsignmentParty v) { this.consignee = v; return this; }
         NotificationViewBuilder transport(Transport v) { this.transport = v; return this; }
@@ -2756,7 +2758,7 @@ class NotificationServiceTest {
         NotificationView build() {
             return new NotificationViewData(
                 referenceNumber, 0L, status, created,
-                origin, commodity, consignor, consignee, transport);
+                origin, commodity, commodities, consignor, consignee, transport);
         }
     }
 }

@@ -66,6 +66,7 @@ public record TradeLineItem(
     @SuppressWarnings("java:S1168")
     private static List<ApplicableClassification> classificationOf(CommodityComplement entry) {
         String cn = entry.getCommodityCode();
+        // Legacy Mongo rows often lack commodityCode; type text was the old CN stand-in.
         if (cn == null || cn.isBlank()) {
             cn = entry.getTypeOfCommodity();
         }
