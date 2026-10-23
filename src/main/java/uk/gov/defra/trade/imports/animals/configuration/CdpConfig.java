@@ -3,16 +3,14 @@ package uk.gov.defra.trade.imports.animals.configuration;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
-import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 /**
  * Configuration properties for CDP platform integrations.
  *
- * <p>Bound to the {@code cdp} prefix in {@code application.yml}. Covers the cdp-uploader service,
- * S3 document storage, and the backend's own public base URL (used for callback construction).
+ * <p>Bound to the {@code cdp} prefix in {@code application.yml}. Covers the CDP platform values
+ * and S3 document storage.
  *
  * @param certificate    the CDP platform TLS certificate (PEM-encoded)
  * @param metrics        metrics-publishing configuration
@@ -20,7 +18,6 @@ import org.springframework.validation.annotation.Validated;
  * @param tracing        distributed tracing configuration
  * @param cloudwatch     CloudWatch logging endpoint configuration
  * @param proxyUrl       the outbound HTTP proxy URL used to reach CDP services
- * @param uploader       cdp-uploader service configuration; required
  * @param s3             S3 document storage configuration
  */
 @Validated
@@ -32,20 +29,7 @@ public record CdpConfig(
     TracingConfig tracing,
     CloudwatchConfig cloudwatch,
     String proxyUrl,
-    @Valid @NotNull UploaderConfig uploader,
     @Valid @NotNull S3Config s3) {
-
-  /**
-   * Configuration for the CDP uploader service.
-   *
-   * @param baseUrl     the base URL of the cdp-uploader endpoint
-   * @param maxFileSize the maximum permitted file size in bytes; must be a positive value
-   * @param mimeTypes   the list of permitted MIME types for uploads
-   */
-  public record UploaderConfig(
-      @NotBlank String baseUrl,
-      @NotNull @Positive Long maxFileSize,
-      List<String> mimeTypes) {}
 
   /**
    * S3 document storage configuration.

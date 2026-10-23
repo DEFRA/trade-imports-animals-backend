@@ -17,12 +17,12 @@ import org.springframework.data.mongodb.MongoDatabaseFactory;
 
 class CommitRetryingMongoTransactionManagerTest {
 
-    private static final long TIMEOUT_MS = 50;
+    private static final long RETRY_WINDOW_MS = 1000;
     private static final long BACKOFF_MS = 10;
 
     @Test
     void doCommit_shouldCommitOnce_whenTheCommitSucceeds() throws Exception {
-        CommitProbe probe = new CommitProbe(TIMEOUT_MS);
+        CommitProbe probe = new CommitProbe(RETRY_WINDOW_MS);
 
         probe.commit();
 
@@ -31,7 +31,7 @@ class CommitRetryingMongoTransactionManagerTest {
 
     @Test
     void doCommit_shouldReCommitAndSucceed_whenTheFirstCommitResultIsUnknown() throws Exception {
-        CommitProbe probe = new CommitProbe(TIMEOUT_MS);
+        CommitProbe probe = new CommitProbe(RETRY_WINDOW_MS);
         probe.failNextCommits(1, unknownCommitResultOnServerShutdown());
 
         probe.commit();
@@ -42,7 +42,7 @@ class CommitRetryingMongoTransactionManagerTest {
     @Test
     void doCommit_shouldPropagate_whenTheCommitFailsWithoutTheUnknownResultLabel() {
         MongoException failure = writeConflictOnOutboxCreation();
-        CommitProbe probe = new CommitProbe(TIMEOUT_MS);
+        CommitProbe probe = new CommitProbe(RETRY_WINDOW_MS);
         probe.failNextCommits(Integer.MAX_VALUE, failure);
 
         assertThatThrownBy(probe::commit).isSameAs(failure);
@@ -52,20 +52,24 @@ class CommitRetryingMongoTransactionManagerTest {
 
     @Test
     void doCommit_shouldRethrowTheFailure_whenTheRetryDeadlinePasses() {
-        // The manager logs ERROR when the deadline passes. That is production-correct, but the
-        // fixture is a synthetic ShutdownInProgress on 127.0.0.1:27017 — leaving the logger on
-        // makes the suite look as if Mongo itself died. Mute only this case.
-        Logger logger = (Logger) LoggerFactory.getLogger(CommitRetryingMongoTransactionManager.class);
-        Level previous = logger.getLevel();
-        logger.setLevel(Level.OFF);
-        try {
+        withCommitRetryLoggingMuted(() -> {
             MongoException failure = unknownCommitResultOnServerShutdown();
-            CommitProbe probe = new CommitProbe(TIMEOUT_MS);
+            CommitProbe probe = new CommitProbe(RETRY_WINDOW_MS);
             probe.failNextCommits(Integer.MAX_VALUE, failure);
 
             assertThatThrownBy(probe::commit).isSameAs(failure);
 
             assertThat(probe.commits()).isGreaterThan(1);
+        });
+    }
+
+    private static void withCommitRetryLoggingMuted(Runnable test) {
+        Logger logger =
+            (Logger) LoggerFactory.getLogger(CommitRetryingMongoTransactionManager.class);
+        Level previous = logger.getLevel();
+        logger.setLevel(Level.OFF);
+        try {
+            test.run();
         } finally {
             logger.setLevel(previous);
         }

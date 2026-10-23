@@ -34,6 +34,10 @@ public record UploadedFileDto(
         + "always non-null (defaults to false when unknown)")
     Boolean hasError,
 
+    @Schema(description = "Machine-readable reason the file was refused, one of cdp-uploader's "
+        + "FILE_* codes; null when there is no error")
+    String errorCode,
+
     @Schema(description = "Human-readable error message if hasError is true; null otherwise")
     String errorMessage) {
 
@@ -63,6 +67,7 @@ public record UploadedFileDto(
         file.checksumSha256(),
         file.detectedContentType(),
         file.hasError(),
+        file.errorCode(),
         file.errorMessage());
   }
 }

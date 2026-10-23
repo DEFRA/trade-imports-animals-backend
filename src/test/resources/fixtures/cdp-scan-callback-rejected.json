@@ -16,7 +16,8 @@
       "detectedContentType": "application/pdf",
       "s3Key": null,
       "hasError": true,
-      "errorMessage": "File rejected by antivirus scan"
+      "errorCode": "FILE_VIRUS",
+      "errorMessage": "The selected file contains a virus"
     }
   }
 }

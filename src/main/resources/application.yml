@@ -24,10 +24,6 @@ spring:
         enabled: true
   lifecycle:
     timeout-per-shutdown-phase: 30s
-  servlet:
-    multipart:
-      max-file-size: ${SPRING_MULTIPART_MAX_FILE_SIZE:50MB}
-      max-request-size: ${SPRING_MULTIPART_MAX_REQUEST_SIZE:51MB}
   jackson:
     serialization:
       # Timestamps on this API are Instants and date-only fields are LocalDates. Enabling this
@@ -47,10 +43,6 @@ cdp:
   cloudwatch:
     endpoint: ${AWS_EMF_AGENT_ENDPOINT:http://localhost:4566}
   proxyUrl: ${HTTP_PROXY:}
-  uploader:
-    base-url: ${CDP_UPLOADER_BASE_URL:http://localhost:7337}
-    max-file-size: ${CDP_UPLOADER_MAX_FILE_SIZE:52428800}
-    mime-types: ${CDP_UPLOADER_MIME_TYPES:application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet}
   s3:
     documents-bucket: ${CDP_DOCUMENTS_BUCKET:trade-imports-animals-documents}
 

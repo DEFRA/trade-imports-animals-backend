@@ -13,8 +13,9 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSession;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 
@@ -34,14 +35,8 @@ class DocumentScanCallbackIT extends IntegrationBase {
         "44f1a20e-0a27-4d61-9aa7-7afa7fb82d85/c1ec2432-54ed-4153-bd6f-d69a35f598f4";
     private static final String FILE_ID_FROM_FIXTURE = "c1ec2432-54ed-4153-bd6f-d69a35f598f4";
 
-    /**
-     * No real cdp-uploader call is exercised here, but the controller needs a non-blank
-     * {@code cdp.uploader.base-url} to start the application context. Point it at a clearly
-     * unreachable address so any accidental outbound call fails fast and visibly.
-     */
     @DynamicPropertySource
     static void registerStubProperties(DynamicPropertyRegistry registry) {
-        registry.add("cdp.uploader.base-url", () -> "http://127.0.0.1:1");
         registry.add("cdp.s3.documents-bucket", () -> DOCUMENTS_BUCKET);
         registry.add("aws.sts.token.audience", () -> "test-audience");
         registry.add("aws.sts.token.expiration", () -> "3600");
@@ -50,8 +45,12 @@ class DocumentScanCallbackIT extends IntegrationBase {
     @Autowired
     private AccompanyingDocumentRepository accompanyingDocumentRepository;
 
+    @Autowired
+    private UploadSessionRepository uploadSessionRepository;
+
     @BeforeEach
     void resetState() {
+        uploadSessionRepository.deleteAll();
         accompanyingDocumentRepository.deleteAll();
     }
 
@@ -101,13 +100,9 @@ class DocumentScanCallbackIT extends IntegrationBase {
             .isEqualTo("Scan callback missing required correlationId in metadata");
     }
 
-    /**
-     * cdp-uploader posts to {@code /document-uploads/pending/scan-results} (the path's
-     * "pending" segment is informational; identity comes from {@code metadata.correlationId}).
-     */
     @Test
     void scanResult_viaPendingAlias_shouldResolveByCorrelationId() {
-        AccompanyingDocument seed = persistPendingDocument();
+        AccompanyingDocument seed = persistSessionWithPendingDocument();
         String correlationId = seed.getCorrelationId();
         String uploadId = seed.getUploadId();
 
@@ -153,7 +148,7 @@ class DocumentScanCallbackIT extends IntegrationBase {
 
     @Test
     void scanResult_mixedCompleteAndRejected_shouldSetAggregateStatusToRejected() {
-        AccompanyingDocument seed = persistPendingDocument();
+        AccompanyingDocument seed = persistSessionWithPendingDocument();
         String correlationId = seed.getCorrelationId();
         String uploadId = seed.getUploadId();
 
@@ -187,7 +182,8 @@ class DocumentScanCallbackIT extends IntegrationBase {
                   "s3Key": null,
                   "s3Bucket": null,
                   "hasError": true,
-                  "errorMessage": "Virus detected"
+                  "errorCode": "FILE_VIRUS",
+                  "errorMessage": "The selected file contains a virus"
                 }
               }
             }
@@ -217,15 +213,13 @@ class DocumentScanCallbackIT extends IntegrationBase {
             .findFirst()
             .orElseThrow(() -> new AssertionError("virus file not found"));
         assertThat(virusFile.s3Key()).isNull();
+        assertThat(virusFile.errorCode()).isEqualTo("FILE_VIRUS");
+        assertThat(virusFile.errorMessage()).isEqualTo("The selected file contains a virus");
     }
 
-    /**
-     * Defensive: if cdp-uploader omits {@code numberOfRejectedFiles}, the resolver must treat the
-     * absent value as REJECTED rather than silently accepting the file.
-     */
     @Test
     void scanResult_nullNumberOfRejectedFiles_shouldSetStatusToRejected() {
-        AccompanyingDocument seed = persistPendingDocument();
+        AccompanyingDocument seed = persistSessionWithPendingDocument();
         String correlationId = seed.getCorrelationId();
         String uploadId = seed.getUploadId();
 
@@ -262,19 +256,18 @@ class DocumentScanCallbackIT extends IntegrationBase {
         assertThat(persisted.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
     }
 
-    /**
-     * Persists a PENDING {@link AccompanyingDocument} with a generated correlationId and uploadId
-     * — the minimum state needed to drive the scan-callback handler against this seed.
-     */
-    private AccompanyingDocument persistPendingDocument() {
+    private AccompanyingDocument persistSessionWithPendingDocument() {
         String correlationId = UUID.randomUUID().toString();
         String uploadId = UUID.randomUUID().toString();
+        uploadSessionRepository.save(UploadSession.builder()
+            .notificationReferenceNumber(NOTIFICATION_REF)
+            .uploadId(uploadId)
+            .correlationId(correlationId)
+            .build());
         AccompanyingDocument doc = AccompanyingDocument.builder()
             .notificationReferenceNumber(NOTIFICATION_REF)
             .uploadId(uploadId)
             .correlationId(correlationId)
-            .documentType(DocumentType.ITAHC)
-            .documentReference("UKGB2026001234")
             .scanStatus(ScanStatus.PENDING)
             .files(new ArrayList<>())
             .build();

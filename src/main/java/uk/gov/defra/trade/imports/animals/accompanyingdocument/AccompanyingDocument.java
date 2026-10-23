@@ -18,17 +18,16 @@ import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
-
 /**
  * MongoDB document representing an accompanying document submitted alongside an import
- * notification. One record exists per upload initiation; the embedded {@code files} list is
- * populated by cdp-uploader callbacks.
+ * notification. One record exists per upload that produced either the trader's details or a scan
+ * result, written by whichever of the two arrives first.
  *
  * <p>{@code dateOfIssue} is a calendar date, so it is a {@link LocalDate}: {@code YYYY-MM-DD} on
  * the wire and a string in MongoDB, written and read by {@code LocalDateStringConverters}. The
  * moments {@code created} and {@code updated} are {@link Instant}, which MongoDB stores natively.
  */
-@CompoundIndex(def = "{'notificationReferenceNumber': 1, 'scanStatus': 1}")
+@CompoundIndex(def = "{'notificationReferenceNumber': 1, 'scanStatus': 1, 'claimed': 1, 'created': 1}")
 @Document(collection = "accompanying_documents")
 @Data
 @EqualsAndHashCode(onlyExplicitlyIncluded = true)
@@ -53,12 +52,7 @@ public class AccompanyingDocument {
   @Indexed(unique = true)
   private String uploadId;
 
-  /**
-   * Backend-minted opaque identifier for this document, threaded through cdp-uploader's
-   * {@code metadata} map at initiate time and echoed back verbatim in the scan callback. Used to
-   * resolve which document a callback refers to, since cdp-uploader does not include
-   * {@code uploadId} in the callback payload body.
-   */
+  /** The handle the upload session was opened under. */
   @Indexed(unique = true)
   private String correlationId;
 
@@ -70,6 +64,10 @@ public class AccompanyingDocument {
   private LocalDate dateOfIssue;
 
   private ScanStatus scanStatus;
+
+  /** Whether the trader's document details have been supplied for this upload. */
+  @Builder.Default
+  private boolean claimed = false;
 
   /** Individual file entries populated by cdp-uploader callbacks. Initialised to empty list. */
   @Builder.Default
