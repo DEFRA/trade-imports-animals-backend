@@ -212,8 +212,8 @@ class GbnAgMapperTest {
             assertThat(items).hasSize(1);
             TradeLineItem line = items.getFirst().includedTradeLineItem().getFirst();
 
-            assertThat(line.description()).containsExactly("Cow");
-            assertThat(line.commonName()).isEqualTo("Cow");
+            assertThat(line.description()).containsExactly("Live bovine animals");
+            assertThat(line.commonName()).isEqualTo("Domestic cattle");
             assertThat(line.scientificName()).isEqualTo("Bos taurus");
             assertThat(line.typeCode()).isNull();
             assertThat(line.urlId()).isNull();
@@ -910,9 +910,11 @@ class GbnAgMapperTest {
                     CommodityComplement.builder()
                         .name("Cow")
                         .commodityCode("0102")
+                        .description("Live bovine animals")
                         .species(List.of(Species.builder()
                             .value("1148346")
                             .text("Bos taurus")
+                            .commonName("Domestic cattle")
                             .noOfAnimals(1)
                             .noOfPackages(1)
                             .build()))
@@ -920,9 +922,11 @@ class GbnAgMapperTest {
                     CommodityComplement.builder()
                         .name("Cat")
                         .commodityCode("01061900")
+                        .description("Other live animals")
                         .species(List.of(Species.builder()
                             .value("923501")
                             .text("Felis catus")
+                            .commonName("Cat")
                             .noOfAnimals(1)
                             .noOfPackages(1)
                             .build()))
@@ -934,9 +938,11 @@ class GbnAgMapperTest {
             .specifiedConsignment().includedConsignmentItem().getFirst().includedTradeLineItem();
 
         assertThat(lines).hasSize(2);
-        assertThat(lines.get(0).commonName()).isEqualTo("Cow");
+        assertThat(lines.get(0).commonName()).isEqualTo("Domestic cattle");
+        assertThat(lines.get(0).description()).containsExactly("Live bovine animals");
         assertThat(lines.get(0).applicableClassification().getFirst().classCode().value()).isEqualTo("0102");
         assertThat(lines.get(1).commonName()).isEqualTo("Cat");
+        assertThat(lines.get(1).description()).containsExactly("Other live animals");
         assertThat(lines.get(1).applicableClassification().getFirst().classCode().value()).isEqualTo("01061900");
     }
 
@@ -993,11 +999,13 @@ class GbnAgMapperTest {
                 .commodities(List.of(CommodityComplement.builder()
                     .name("Cow")
                     .commodityCode("01020000")
+                    .description("Live bovine animals")
                     .totalNoOfAnimals(20)
                     .totalNoOfPackages(1)
                     .species(List.of(Species.builder()
                         .value("1148346")
                         .text("Bos taurus")
+                        .commonName("Domestic cattle")
                         .noOfAnimals(20)
                         .noOfPackages(1)
                         .earTag("UK01234567890")

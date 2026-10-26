@@ -33,9 +33,9 @@ public record TradeLineItem(
     private static TradeLineItem fromSpecies(CommodityComplement entry, Species species) {
         return new TradeLineItem(
             classificationOf(entry),
-            descriptionOf(entry.getName()),
+            descriptionOf(tradeLineDescription(entry)),
             species.getText(),
-            entry.getName(),
+            tradeLineCommonName(entry, species),
             typeCodeFor(species, entry),
             null,
             LineTradeDelivery.headCount(species.getNoOfAnimals()),
@@ -46,7 +46,7 @@ public record TradeLineItem(
     private static TradeLineItem fromComplementTotals(CommodityComplement entry) {
         return new TradeLineItem(
             classificationOf(entry),
-            descriptionOf(entry.getName()),
+            descriptionOf(tradeLineDescription(entry)),
             null,
             entry.getName(),
             entry.getTypeOfCommodity(),
@@ -74,8 +74,22 @@ public record TradeLineItem(
         return classification != null ? List.of(classification) : null;
     }
 
+    private static String tradeLineDescription(CommodityComplement entry) {
+        if (entry.getDescription() != null && !entry.getDescription().isBlank()) {
+            return entry.getDescription();
+        }
+        return entry.getName();
+    }
+
+    private static String tradeLineCommonName(CommodityComplement entry, Species species) {
+        if (species.getCommonName() != null && !species.getCommonName().isBlank()) {
+            return species.getCommonName();
+        }
+        return entry.getName();
+    }
+
     @SuppressWarnings("java:S1168")
-    private static List<String> descriptionOf(String commodityName) {
-        return commodityName != null ? List.of(commodityName) : null;
+    private static List<String> descriptionOf(String commodityDescription) {
+        return commodityDescription != null ? List.of(commodityDescription) : null;
     }
 }

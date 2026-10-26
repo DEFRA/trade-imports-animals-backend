@@ -16,6 +16,8 @@ public class CommodityComplement {
 
     private String commodityCode;
 
+    private String description;
+
     private String typeOfCommodity;
     private Integer totalNoOfAnimals;
     private Integer totalNoOfPackages;
@@ -26,6 +28,6 @@ public class CommodityComplement {
         Integer totalNoOfAnimals,
         Integer totalNoOfPackages,
         List<Species> species) {
-        this(null, null, typeOfCommodity, totalNoOfAnimals, totalNoOfPackages, species);
+        this(null, null, null, typeOfCommodity, totalNoOfAnimals, totalNoOfPackages, species);
     }
 }
