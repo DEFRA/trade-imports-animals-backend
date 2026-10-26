@@ -6,9 +6,10 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registerUploadRequest;
+import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registeredSession;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -44,16 +45,16 @@ class DocumentControllerTrailingSlashTest {
   @Test
   void shouldNormaliseTrailingSlashInLocationHeader() throws Exception {
     String ref = "GBN-AG-26-000001";
-    DocumentUploadRequest request = new DocumentUploadRequest(DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"));
-    DocumentUploadResponse serviceResponse = new DocumentUploadResponse("upload-abc-123", "http://localhost:8085/document-uploads/upload-abc-123/file");
 
-    when(documentService.initiate(eq(ref), any(DocumentUploadRequest.class)))
-        .thenReturn(serviceResponse);
+    when(documentService.registerUpload(eq(ref), any(RegisterUploadRequest.class)))
+        .thenReturn(registeredSession(ref));
 
     mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
             .contentType(MediaType.APPLICATION_JSON)
-            .content(objectMapper.writeValueAsString(request)))
+            .content(objectMapper.writeValueAsString(registerUploadRequest())))
         .andExpect(status().isCreated())
-        .andExpect(header().string("Location", "http://localhost:8085/document-uploads/upload-abc-123"));
+        .andExpect(header().string(
+            "Location",
+            "http://localhost:8085/document-uploads/" + UploadSessionFixtures.UPLOAD_ID));
   }
 }

@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -23,25 +24,28 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
+import org.springframework.validation.annotation.Validated;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
 /**
  * REST controller for accompanying document upload endpoints.
- *
- * <p>Exposes endpoints covering the full upload lifecycle: initiation, listing, retrieval,
- * deletion, scan-result callback, file upload (proxied to cdp-uploader), and file download.
  */
 @RestController
+@Validated
 @Tag(name = "Document Uploads", description = "Operations for accompanying document upload sessions")
 @Slf4j
 public class DocumentController {
+
+  /** A notification reference as the service mints them, e.g. {@code GBN-AG-26-000001}. */
+  private static final String NOTIFICATION_REF_PATTERN = "^[A-Za-z0-9.-]{1,50}$";
+
+  /** An upload or correlation handle: cdp-uploader's ids and the UUIDs the frontend mints. */
+  private static final String UPLOAD_HANDLE_PATTERN = "^[A-Za-z0-9._-]{1,100}$";
 
   private final DocumentService documentService;
   private final S3DocumentService s3DocumentService;
@@ -57,31 +61,86 @@ public class DocumentController {
   }
 
   /**
-   * Initiate a new document upload session for a notification.
+   * Register an upload session the caller has opened with cdp-uploader.
    *
    * @param ref     the notification reference number
-   * @param request the document metadata
-   * @return 201 Created with the upload session details and a Location header
+   * @param request the upload session's identifiers
+   * @return 201 Created with the recorded session and a Location header
    */
   @PostMapping("/notifications/{ref}/document-uploads")
   @Operation(
-      summary = "Initiate document upload",
-      description = "Creates a new upload session via cdp-uploader and returns the upload URL")
-  @ApiResponse(responseCode = "201", description = "Upload session created",
-      content = @Content(schema = @Schema(implementation = DocumentUploadResponse.class)))
+      summary = "Register document upload",
+      description = "Records an upload session so what arrives through it can be matched")
+  @ApiResponse(responseCode = "201", description = "Upload session registered",
+      content = @Content(schema = @Schema(implementation = UploadSessionDto.class)))
   @ApiResponse(responseCode = "400", description = "Validation error", content = @Content)
-  @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
-  @Timed("document.initiate")
-  public ResponseEntity<DocumentUploadResponse> initiate(
-      @PathVariable String ref,
-      @Valid @RequestBody DocumentUploadRequest request) {
+  @ApiResponse(responseCode = "409", description = "Upload session already registered",
+      content = @Content)
+  @Timed("document.register")
+  public ResponseEntity<UploadSessionDto> register(
+      @PathVariable @Pattern(regexp = NOTIFICATION_REF_PATTERN) String ref,
+      @Valid @RequestBody RegisterUploadRequest request) {
 
-    log.info("POST /notifications/{}/document-uploads", ref);
+    log.info("POST /notifications/{}/document-uploads uploadId={}", ref, request.uploadId());
 
-    DocumentUploadResponse response = documentService.initiate(ref, request);
-    URI location = buildLocationUri(response.uploadId());
+    UploadSession session = documentService.registerUpload(ref, request);
+    URI location = buildLocationUri(session.getUploadId());
 
-    return ResponseEntity.created(location).body(response);
+    return ResponseEntity.created(location).body(UploadSessionDto.from(session));
+  }
+
+  /**
+   * Look up the upload session a notification opened under a correlation handle.
+   *
+   * @param ref           the notification reference number
+   * @param correlationId the handle the session was opened under
+   * @return 200 OK with the session
+   */
+  @GetMapping("/notifications/{ref}/document-upload-sessions/{correlation-id}")
+  @Operation(
+      summary = "Get document upload session",
+      description = "Returns the upload session a notification opened under a correlation handle")
+  @ApiResponse(responseCode = "200", description = "Session returned",
+      content = @Content(schema = @Schema(implementation = UploadSessionDto.class)))
+  @ApiResponse(responseCode = "404", description = "Session not found", content = @Content)
+  @Timed("document.session")
+  public ResponseEntity<UploadSessionDto> session(
+      @PathVariable @Pattern(regexp = NOTIFICATION_REF_PATTERN) String ref,
+      @PathVariable("correlation-id")
+      @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String correlationId) {
+
+    log.info("GET /notifications/{}/document-upload-sessions/{}", ref, correlationId);
+
+    return ResponseEntity.ok(
+        UploadSessionDto.from(documentService.findSession(ref, correlationId)));
+  }
+
+  /**
+   * Claim a registered upload into its notification, recording the submitted document details.
+   *
+   * @param uploadId the upload session identifier
+   * @param request  the document details
+   * @return 200 OK with the claimed document
+   */
+  @PostMapping("/document-uploads/{upload-id}/claim")
+  @Operation(
+      summary = "Claim document upload",
+      description = "Attaches the user's document details to a registered upload and claims it")
+  @ApiResponse(responseCode = "200", description = "Document claimed",
+      content = @Content(schema = @Schema(implementation = AccompanyingDocumentDto.class)))
+  @ApiResponse(responseCode = "400", description = "Validation error", content = @Content)
+  @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
+  @Timed("document.claim")
+  public ResponseEntity<AccompanyingDocumentDto> claim(
+      @PathVariable("upload-id")
+      @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String uploadId,
+      @Valid @RequestBody ClaimUploadRequest request) {
+
+    log.info("POST /document-uploads/{}/claim", uploadId);
+
+    AccompanyingDocument document = documentService.claimUpload(uploadId, request);
+
+    return ResponseEntity.ok(AccompanyingDocumentDto.from(document));
   }
 
   /**
@@ -168,33 +227,6 @@ public class DocumentController {
         payload.uploadStatus());
     documentService.handleScanResult(uploadId, payload);
     return ResponseEntity.noContent().build();
-  }
-
-  /**
-   * Upload the file for a document session, proxying it to cdp-uploader.
-   *
-   * @param uploadId the upload session identifier
-   * @param file     the multipart file to proxy
-   * @return 202 Accepted — the scan is asynchronous; poll GET /document-uploads/{uploadId} for status
-   */
-  @PostMapping(
-      value = "/document-uploads/{upload-id}/file",
-      consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-  @Operation(
-      summary = "Upload file for document session",
-      description = "Proxies the multipart file to cdp-uploader. Scan is asynchronous.")
-  @ApiResponse(responseCode = "202", description = "File accepted for scanning", content = @Content)
-  @ApiResponse(responseCode = "404", description = "Upload session not found", content = @Content)
-  @ApiResponse(responseCode = "413", description = "File exceeds maximum size", content = @Content)
-  @ApiResponse(responseCode = "502", description = "cdp-uploader unavailable", content = @Content)
-  @Timed("document.uploadFile")
-  public ResponseEntity<Void> uploadFile(
-      @PathVariable("upload-id") String uploadId,
-      @RequestParam("file") MultipartFile file) {
-
-    log.info("POST /document-uploads/{}/file size={}B", uploadId, file.getSize());
-    documentService.proxyFileToUploader(uploadId, file);
-    return ResponseEntity.accepted().build();
   }
 
   /**

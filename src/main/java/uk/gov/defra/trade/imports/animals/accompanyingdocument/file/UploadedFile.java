@@ -45,6 +45,10 @@ public record UploadedFile(
     @Schema(description = "Whether the file was rejected due to a scan or validation error")
     Boolean hasError,
 
+    @Schema(description = "Machine-readable reason the file was refused, one of cdp-uploader's "
+        + "FILE_* codes; null when there is no error")
+    String errorCode,
+
     @Schema(description = "Human-readable error message if hasError is true; null otherwise")
     String errorMessage) {
 
@@ -65,6 +69,7 @@ public record UploadedFile(
         .checksumSha256(f.checksumSha256())
         .detectedContentType(f.detectedContentType())
         .hasError(f.hasError())
+        .errorCode(f.errorCode())
         .errorMessage(f.errorMessage())
         .build();
   }

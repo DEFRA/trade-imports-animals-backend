@@ -84,7 +84,7 @@ class AccompanyingDocumentTest {
       UploadedFile file = new UploadedFile(
           "test.pdf", "application/pdf", 1024L,
           "upload-uuid-1/some-internal-file-id", "my-bucket", FileStatus.COMPLETE,
-          "sha256hash", "application/pdf", false, null);
+          "sha256hash", "application/pdf", false, null, null);
 
       AccompanyingDocument doc = AccompanyingDocument.builder()
           .files(List.of(file))

@@ -35,14 +35,9 @@ public class OutboxService {
     static final String SCHEMA_VERSION = "1";
     static final String AGGREGATE_ID_PREFIX = "Imports.Notification.GBN-AG.";
 
-    // Wire values of submission events — derived from OutboxEventType.SUBMISSION_EVENTS so the two
-    // definitions cannot drift.
     private static final Set<String> SUBMISSION_EVENT_WIRE_VALUES = OutboxEventType.SUBMISSION_EVENTS
         .stream().map(OutboxEventType::value).collect(Collectors.toUnmodifiableSet());
 
-    // Event types where versionId is absent: notification has never been submitted.
-    // NOTIFICATION_EDITED covers draft/amend saves before a first submission — emitting versionId: 0
-    // there would be a value the schema's semantics ('V1 on first submission') never produce.
     private static final Set<OutboxEventType> NO_VERSION_ID_EVENTS = Set.of(
         OutboxEventType.NOTIFICATION_CREATED,
         OutboxEventType.NOTIFICATION_EDITED,
@@ -84,14 +79,12 @@ public class OutboxService {
 
         Integer versionId = computeVersionId(aggregateId, eventType);
 
-        // Only documents that passed the virus scan are referenced; read inside the outbox write so
-        // the event and the documents it lists are consistent.
-        List<AccompanyingDocument> accompanyingDocuments = accompanyingDocumentRepository
-            .findAllByNotificationReferenceNumberAndScanStatusOrderByCreatedAsc(
+        List<AccompanyingDocument> claimedScannedDocuments = accompanyingDocumentRepository
+            .findAllByNotificationReferenceNumberAndScanStatusAndClaimedIsTrueOrderByCreatedAsc(
                 notificationAggregate.getReferenceNumber(), ScanStatus.COMPLETE);
 
         Map<String, Object> data = objectMapper.convertValue(
-            gbnAgEventDataMapper.toGbnAgEventData(notificationAggregate, versionId, accompanyingDocuments),
+            gbnAgEventDataMapper.toGbnAgEventData(notificationAggregate, versionId, claimedScannedDocuments),
             MAP_TYPE);
 
         OutboxEvent event = OutboxEvent.builder()

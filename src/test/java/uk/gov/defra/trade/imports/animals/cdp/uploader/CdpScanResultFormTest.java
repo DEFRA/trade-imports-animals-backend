@@ -3,13 +3,20 @@ package uk.gov.defra.trade.imports.animals.cdp.uploader;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 
 class CdpScanResultFormTest {
@@ -21,8 +28,14 @@ class CdpScanResultFormTest {
     objectMapper = new ObjectMapper();
   }
 
+  private static CdpScanResultFile scannedFile() {
+    return new CdpScanResultFile(
+        "file-id", "doc.pdf", "application/pdf", FileStatus.COMPLETE,
+        1024L, "sha256", "application/pdf", "s3key", "bucket", false, null, null);
+  }
+
   @Nested
-  class JsonAnySetterDeserialization {
+  class Deserialization {
 
     @Test
     void deserialize_shouldPopulateFilesMap_whenJsonContainsFileField()
@@ -113,19 +126,125 @@ class CdpScanResultFormTest {
       assertThat(form.getFiles()).isNotNull();
       assertThat(form.getFiles()).isEmpty();
     }
+
+    @Test
+    void deserialize_shouldKeepOnlyTheFileEntries_whenOtherFormValuesAreSubmittedAlongsideTheFile()
+        throws JsonProcessingException {
+      String json = """
+          {
+            "documentType": "ITAHC",
+            "documentReference": "UKGB2026001234",
+            "accompanyingDocumentDateOfIssue-day": "15",
+            "declaration": {
+              "signedBy": "A Trader"
+            },
+            "file": {
+              "fileId": "file-uuid-4",
+              "filename": "cert.pdf",
+              "contentType": "application/pdf",
+              "fileStatus": "complete",
+              "contentLength": 2048,
+              "checksumSha256": "abc123",
+              "detectedContentType": "application/pdf",
+              "s3Key": "upload-uuid/file-uuid-4",
+              "s3Bucket": "my-bucket",
+              "hasError": false,
+              "errorMessage": null
+            }
+          }
+          """;
+
+      CdpScanResultForm form = objectMapper.readValue(json, CdpScanResultForm.class);
+
+      assertThat(form.getFiles()).containsOnlyKeys("file");
+      assertThat(form.getFiles().get("file").filename()).isEqualTo("cert.pdf");
+    }
+
+    @Test
+    void deserialize_shouldWarnNamingTheField_whenAFormValueIsAnObjectWithNoFileId()
+        throws JsonProcessingException {
+      String json = """
+          {
+            "declaration": {
+              "signedBy": "A Trader"
+            },
+            "file": {
+              "fileId": "file-uuid-5",
+              "filename": "cert.pdf",
+              "contentType": "application/pdf",
+              "fileStatus": "complete",
+              "contentLength": 2048,
+              "checksumSha256": "abc123",
+              "detectedContentType": "application/pdf",
+              "s3Key": "upload-uuid/file-uuid-5",
+              "s3Bucket": "my-bucket",
+              "hasError": false,
+              "errorMessage": null
+            }
+          }
+          """;
+
+      List<ILoggingEvent> events = logEventsWhileDeserializing(json);
+
+      assertThat(events).singleElement().satisfies(event -> {
+        assertThat(event.getLevel()).isEqualTo(Level.WARN);
+        assertThat(event.getFormattedMessage()).contains("declaration");
+      });
+    }
+
+    @Test
+    void deserialize_shouldBindTheKnownComponents_whenAFileEntryCarriesAnUnknownField()
+        throws JsonProcessingException {
+      String json = """
+          {
+            "file": {
+              "fileId": "file-uuid-6",
+              "filename": "cert.pdf",
+              "contentType": "application/pdf",
+              "fileStatus": "rejected",
+              "contentLength": 2048,
+              "checksumSha256": "abc123",
+              "detectedContentType": "application/pdf",
+              "s3Key": "upload-uuid/file-uuid-6",
+              "s3Bucket": "my-bucket",
+              "hasError": true,
+              "errorMessage": "Virus detected",
+              "quarantineKey": "quarantine/file-uuid-6"
+            }
+          }
+          """;
+
+      CdpScanResultForm form = objectMapper.readValue(json, CdpScanResultForm.class);
+
+      assertThat(form.getFiles()).containsOnlyKeys("file");
+      assertThat(form.getFiles().get("file").filename()).isEqualTo("cert.pdf");
+      assertThat(form.getFiles().get("file").fileStatus()).isEqualTo(FileStatus.REJECTED);
+    }
+
+    private List<ILoggingEvent> logEventsWhileDeserializing(String json)
+        throws JsonProcessingException {
+      Logger logger = (Logger) LoggerFactory.getLogger(CdpScanResultForm.Deserializer.class);
+      ListAppender<ILoggingEvent> appender = new ListAppender<>();
+      appender.start();
+      logger.addAppender(appender);
+      try {
+        objectMapper.readValue(json, CdpScanResultForm.class);
+      } finally {
+        logger.detachAppender(appender);
+      }
+      return appender.list;
+    }
   }
 
   @Nested
-  class AddFileMutability {
+  class FilesMapIsMutable {
 
     @Test
-    void addFile_shouldAddEntryToFilesMap() {
+    void addFileEntry_shouldAddEntryToFilesMap() {
       CdpScanResultForm form = new CdpScanResultForm();
-      CdpScanResultFile file = new CdpScanResultFile(
-          "file-id", "doc.pdf", "application/pdf", FileStatus.COMPLETE,
-          1024L, "sha256", "application/pdf", "s3key", "bucket", false, null);
+      CdpScanResultFile file = scannedFile();
 
-      form.addFile("docFile", file);
+      form.addFileEntry("docFile", file);
 
       assertThat(form.getFiles()).containsEntry("docFile", file);
     }
@@ -136,31 +255,24 @@ class CdpScanResultFormTest {
 
     @Test
     void constructor_shouldDefensivelyCopy_whenPassedUnmodifiableMap() {
-      CdpScanResultFile file = new CdpScanResultFile(
-          "file-id", "doc.pdf", "application/pdf", FileStatus.COMPLETE,
-          1024L, "sha256", "application/pdf", "s3key", "bucket", false, null);
+      CdpScanResultFile file = scannedFile();
       Map<String, CdpScanResultFile> unmodifiable = Collections.unmodifiableMap(Map.of("doc", file));
 
       CdpScanResultForm form = new CdpScanResultForm(unmodifiable);
 
-      // addFile must not throw UnsupportedOperationException even though the source map was
-      // unmodifiable — the constructor must have taken a defensive copy.
-      assertThatCode(() -> form.addFile("extraFile", file)).doesNotThrowAnyException();
+      assertThatCode(() -> form.addFileEntry("extraFile", file)).doesNotThrowAnyException();
       assertThat(form.getFiles()).containsKey("extraFile");
       assertThat(form.getFiles()).containsKey("doc");
     }
 
     @Test
-    void constructor_shouldNotMutateOriginalMap_whenAddFileIsCalled() {
-      CdpScanResultFile file = new CdpScanResultFile(
-          "file-id", "doc.pdf", "application/pdf", FileStatus.COMPLETE,
-          1024L, "sha256", "application/pdf", "s3key", "bucket", false, null);
-      Map<String, CdpScanResultFile> original = new java.util.LinkedHashMap<>(Map.of("doc", file));
+    void constructor_shouldNotMutateOriginalMap_whenAFileEntryIsAddedAfterwards() {
+      CdpScanResultFile file = scannedFile();
+      Map<String, CdpScanResultFile> original = new LinkedHashMap<>(Map.of("doc", file));
 
       CdpScanResultForm form = new CdpScanResultForm(original);
-      form.addFile("extraFile", file);
+      form.addFileEntry("extraFile", file);
 
-      // The defensive copy means mutations to form.files do not affect the original map.
       assertThat(original).doesNotContainKey("extraFile");
     }
   }

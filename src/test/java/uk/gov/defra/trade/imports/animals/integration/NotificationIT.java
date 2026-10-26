@@ -1247,50 +1247,27 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submit_shouldReferenceOnlyTheDocumentsThatPassedTheVirusScan() {
-        // Given — a notification with one scanned document, one still being scanned and one the
-        // scan rejected
+    void submit_shouldReferenceOnlyTheScannedCleanDocumentsTheJourneyClaimed() {
         String referenceNumber = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
             .exchange().expectStatus().isOk()
             .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
-        accompanyingDocumentRepository.save(AccompanyingDocument.builder()
-            .notificationReferenceNumber(referenceNumber)
-            .uploadId("upload-refdoc-clean")
-            .correlationId("correlation-refdoc-clean")
-            .documentType(DocumentType.LETTER_OF_AUTHORITY)
-            .documentReference("LOA-778")
-            .dateOfIssue(LocalDate.parse("2026-09-01"))
-            .scanStatus(ScanStatus.COMPLETE)
-            .build());
-        accompanyingDocumentRepository.save(AccompanyingDocument.builder()
-            .notificationReferenceNumber(referenceNumber)
-            .uploadId("upload-refdoc-pending")
-            .correlationId("correlation-refdoc-pending")
-            .documentType(DocumentType.COMMERCIAL_INVOICE)
-            .documentReference("INV-9912")
-            .dateOfIssue(LocalDate.parse("2026-09-02"))
-            .scanStatus(ScanStatus.PENDING)
-            .build());
-        accompanyingDocumentRepository.save(AccompanyingDocument.builder()
-            .notificationReferenceNumber(referenceNumber)
-            .uploadId("upload-refdoc-rejected")
-            .correlationId("correlation-refdoc-rejected")
-            .documentType(DocumentType.VETERINARY_HEALTH_CERTIFICATE)
-            .documentReference("VHC-REJ-1")
-            .dateOfIssue(LocalDate.parse("2026-09-03"))
-            .scanStatus(ScanStatus.REJECTED)
-            .build());
+        saveClaimedCleanDocument(referenceNumber, "refdoc-clean",
+            DocumentType.LETTER_OF_AUTHORITY, "LOA-778", LocalDate.parse("2026-09-01"));
+        saveUnclaimedCleanDocument(referenceNumber, "refdoc-unclaimed",
+            DocumentType.LETTER_OF_AUTHORITY, "LOA-ABANDONED", LocalDate.parse("2026-09-04"));
+        saveClaimedPendingDocument(referenceNumber, "refdoc-pending",
+            DocumentType.COMMERCIAL_INVOICE, "INV-9912", LocalDate.parse("2026-09-02"));
+        saveClaimedRejectedDocument(referenceNumber, "refdoc-rejected",
+            DocumentType.VETERINARY_HEALTH_CERTIFICATE, "VHC-REJ-1", LocalDate.parse("2026-09-03"));
 
-        // When
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange()
             .expectStatus().isOk();
 
-        // Then
         OutboxEvent event = outboxEventRepository.findAll().stream()
             .filter(e -> e.getEventType().endsWith("NotificationSubmitted"))
             .findFirst().orElseThrow();
@@ -1299,6 +1276,54 @@ class NotificationIT extends IntegrationBase {
             "urlId", "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types",
             "identifier", "LOA-778",
             "issueDateTime", "2026-09-01"));
+    }
+
+    private void saveClaimedCleanDocument(String referenceNumber, String handle,
+        DocumentType documentType, String documentReference, LocalDate dateOfIssue) {
+        accompanyingDocumentRepository.save(
+            documentFor(referenceNumber, handle, documentType, documentReference, dateOfIssue)
+                .scanStatus(ScanStatus.COMPLETE)
+                .claimed(true)
+                .build());
+    }
+
+    private void saveUnclaimedCleanDocument(String referenceNumber, String handle,
+        DocumentType documentType, String documentReference, LocalDate dateOfIssue) {
+        accompanyingDocumentRepository.save(
+            documentFor(referenceNumber, handle, documentType, documentReference, dateOfIssue)
+                .scanStatus(ScanStatus.COMPLETE)
+                .claimed(false)
+                .build());
+    }
+
+    private void saveClaimedPendingDocument(String referenceNumber, String handle,
+        DocumentType documentType, String documentReference, LocalDate dateOfIssue) {
+        accompanyingDocumentRepository.save(
+            documentFor(referenceNumber, handle, documentType, documentReference, dateOfIssue)
+                .scanStatus(ScanStatus.PENDING)
+                .claimed(true)
+                .build());
+    }
+
+    private void saveClaimedRejectedDocument(String referenceNumber, String handle,
+        DocumentType documentType, String documentReference, LocalDate dateOfIssue) {
+        accompanyingDocumentRepository.save(
+            documentFor(referenceNumber, handle, documentType, documentReference, dateOfIssue)
+                .scanStatus(ScanStatus.REJECTED)
+                .claimed(true)
+                .build());
+    }
+
+    private static AccompanyingDocument.AccompanyingDocumentBuilder documentFor(
+        String referenceNumber, String handle, DocumentType documentType,
+        String documentReference, LocalDate dateOfIssue) {
+        return AccompanyingDocument.builder()
+            .notificationReferenceNumber(referenceNumber)
+            .uploadId("upload-" + handle)
+            .correlationId("correlation-" + handle)
+            .documentType(documentType)
+            .documentReference(documentReference)
+            .dateOfIssue(dateOfIssue);
     }
 
     @Test
@@ -1793,14 +1818,9 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
 
-        // And persist an accompanying document directly
-        AccompanyingDocument document = AccompanyingDocument.builder()
-            .notificationReferenceNumber(referenceNumber)
-            .uploadId("upload-cascade-test-001")
-            .documentType(DocumentType.VETERINARY_HEALTH_CERTIFICATE)
-            .scanStatus(ScanStatus.COMPLETE)
-            .build();
-        accompanyingDocumentRepository.save(document);
+        saveClaimedCleanDocument(referenceNumber, "cascade-test-001",
+            DocumentType.VETERINARY_HEALTH_CERTIFICATE, "VHC-CASCADE-1",
+            LocalDate.parse("2026-09-05"));
         assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(referenceNumber))
             .hasSize(1);
 

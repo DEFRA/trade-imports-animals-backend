@@ -21,7 +21,6 @@ import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.web.multipart.MaxUploadSizeExceededException;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -223,31 +222,6 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * Handle upstream service errors (502 Bad Gateway).
-     */
-    @ExceptionHandler(ServiceUnavailableException.class)
-    public ResponseEntity<ProblemDetail> handleServiceUnavailableException(ServiceUnavailableException ex) {
-        String traceId = MDC.get(MDC_TRACE_ID);
-        log.error("Upstream service error (trace: {})", traceId, ex);
-
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-            HttpStatus.BAD_GATEWAY,
-            ex.getMessage()
-        );
-
-        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/upstream-error"));
-        problemDetail.setTitle("Upstream Service Error");
-
-        if (traceId != null) {
-            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
-        }
-
-        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-            .body(problemDetail);
-    }
-
-    /**
      * Handle conflict errors (409 Conflict).
      */
     @ExceptionHandler(ConflictException.class)
@@ -294,31 +268,6 @@ public class GlobalExceptionHandler {
         }
 
         return ResponseEntity.status(HttpStatus.CONFLICT)
-            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-            .body(problemDetail);
-    }
-
-    /**
-     * Handle oversized multipart uploads (413 Payload Too Large).
-     */
-    @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<ProblemDetail> handleMaxUploadSizeExceededException(MaxUploadSizeExceededException ex) {
-        String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Upload size exceeded (trace: {})", traceId, ex);
-
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-            HttpStatus.PAYLOAD_TOO_LARGE,
-            "Uploaded file exceeds the maximum permitted size"
-        );
-
-        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/payload-too-large"));
-        problemDetail.setTitle("Payload Too Large");
-
-        if (traceId != null) {
-            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
-        }
-
-        return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE)
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
             .body(problemDetail);
     }

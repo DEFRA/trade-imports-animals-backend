@@ -23,7 +23,7 @@ public record ExchangedDocument(
     static ExchangedDocument from(
         NotificationAggregate notificationAggregate,
         Integer versionId,
-        List<AccompanyingDocument> accompanyingDocuments) {
+        List<AccompanyingDocument> claimedScannedDocuments) {
         Notification notification = notificationAggregate.requireNotification();
         Origin origin = notification.getOrigin();
         return new ExchangedDocument(
@@ -34,16 +34,16 @@ public record ExchangedDocument(
             toUtcDateTime(notificationAggregate.getUpdated()),
             null,
             Authentication.from(notification),
-            referenceDocuments(accompanyingDocuments));
+            referenceDocuments(claimedScannedDocuments));
     }
 
     // No documents means no referenceDocument key, never an empty array.
     @SuppressWarnings("java:S1168")
-    private static List<ReferencedDocument> referenceDocuments(List<AccompanyingDocument> accompanyingDocuments) {
-        if (accompanyingDocuments == null || accompanyingDocuments.isEmpty()) {
+    private static List<ReferencedDocument> referenceDocuments(List<AccompanyingDocument> claimedScannedDocuments) {
+        if (claimedScannedDocuments == null || claimedScannedDocuments.isEmpty()) {
             return null;
         }
-        return accompanyingDocuments.stream().map(ReferencedDocument::accompanyingDocument).toList();
+        return claimedScannedDocuments.stream().map(ReferencedDocument::accompanyingDocument).toList();
     }
 
     /**
