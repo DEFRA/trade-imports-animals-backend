@@ -1947,6 +1947,48 @@ class NotificationIT extends IntegrationBase {
                 List.of("FR", "DE"));
     }
 
+    private void assertCopiedNotificationDraft(NotificationAggregate copy, String sourceRef) {
+        assertThat(copy).isNotNull();
+        assertThat(copy.getReferenceNumber()).isNotEqualTo(sourceRef);
+        assertThat(copy.getReferenceNumber()).matches(REF_FORMAT_REGEX);
+        assertThat(copy.getStatus()).isEqualTo(NotificationStatus.DRAFT);
+    }
+
+    private void assertCopyRetainsIdentificationFields(NotificationAggregate copy) {
+        Notification notification = copy.getNotification();
+        assertThat(notification.getOrigin())
+            .extracting(Origin::getCountryCode, Origin::getRequiresRegionCode)
+            .containsExactly("DE", "yes");
+        assertThat(notification.getReasonForImport()).isEqualTo("internalMarket");
+        assertThat(notification.getCommodity()).isNull();
+        assertThat(notification.getCommodities()).hasSize(1);
+        assertThat(notification.getCommodities().getFirst().getName()).isEqualTo("Live bovine animals");
+        assertThat(notification.getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
+        assertThat(notification.getCphNumber()).isEqualTo("12/345/6789");
+    }
+
+    private void assertCopyClearsExcludedFields(NotificationAggregate copy) {
+        Notification notification = copy.getNotification();
+        assertThat(notification.getOrigin().getInternalReference()).isNull();
+        assertThat(notification.getAdditionalDetails().getUnweanedAnimals()).isNull();
+        assertThat(notification.getTransport()).isNull();
+        assertThat(notification.getConsignment()).isNull();
+        assertThat(notification.getCommodities().getFirst())
+            .extracting(
+                CommodityComplement::getTypeOfCommodity,
+                CommodityComplement::getTotalNoOfAnimals,
+                CommodityComplement::getTotalNoOfPackages,
+                CommodityComplement::getSpecies)
+            .containsExactly("LIVE", null, null, null);
+    }
+
+    private void assertSourceUnchangedAfterCopy(String sourceRef) {
+        NotificationAggregate original = notificationRepository.findByReferenceNumber(sourceRef).orElseThrow();
+        assertThat(original.getNotification().getOrigin().getInternalReference()).isEqualTo("INTERNAL-DO-NOT-COPY");
+        assertThat(original.getNotification().getAdditionalDetails().getUnweanedAnimals()).isEqualTo("yes");
+        assertThat(original.getNotification().getTransport().getPortOfEntry()).isEqualTo("GBDVR");
+    }
+
     private void assertAmendableContentMatches(Notification expected, Notification actual) {
         assertThat(actual.getOrigin()).isEqualTo(expected.getOrigin());
         assertThat(actual.getReasonForImport()).isEqualTo(expected.getReasonForImport());
@@ -2057,38 +2099,10 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody();
 
-        // Then — new reference number, DRAFT status
-        assertThat(copy).isNotNull();
-        assertThat(copy.getReferenceNumber()).isNotEqualTo(sourceRef);
-        assertThat(copy.getReferenceNumber()).matches(REF_FORMAT_REGEX);
-        assertThat(copy.getStatus()).isEqualTo(NotificationStatus.DRAFT);
-
-        // Retained fields
-        assertThat(copy.getNotification().getOrigin().getCountryCode()).isEqualTo("DE");
-        assertThat(copy.getNotification().getOrigin().getRequiresRegionCode()).isEqualTo("yes");
-        assertThat(copy.getNotification().getReasonForImport()).isEqualTo("internalMarket");
-        assertThat(copy.getNotification().getCommodity()).isNull();
-        assertThat(copy.getNotification().getCommodities()).hasSize(1);
-        assertThat(copy.getNotification().getCommodities().getFirst().getName()).isEqualTo("Live bovine animals");
-        assertThat(copy.getNotification().getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
-        assertThat(copy.getNotification().getCphNumber()).isEqualTo("12/345/6789");
-
-        // Excluded fields
-        assertThat(copy.getNotification().getOrigin().getInternalReference()).isNull();
-        assertThat(copy.getNotification().getAdditionalDetails().getUnweanedAnimals()).isNull();
-        assertThat(copy.getNotification().getTransport()).isNull();
-        assertThat(copy.getNotification().getConsignment()).isNull();
-        CommodityComplement cc = copy.getNotification().getCommodities().getFirst();
-        assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
-        assertThat(cc.getTotalNoOfAnimals()).isNull();
-        assertThat(cc.getTotalNoOfPackages()).isNull();
-        assertThat(cc.getSpecies()).isNull();
-
-        // Original unchanged
-        NotificationAggregate original = notificationRepository.findByReferenceNumber(sourceRef).orElseThrow();
-        assertThat(original.getNotification().getOrigin().getInternalReference()).isEqualTo("INTERNAL-DO-NOT-COPY");
-        assertThat(original.getNotification().getAdditionalDetails().getUnweanedAnimals()).isEqualTo("yes");
-        assertThat(original.getNotification().getTransport().getPortOfEntry()).isEqualTo("GBDVR");
+        assertCopiedNotificationDraft(copy, sourceRef);
+        assertCopyRetainsIdentificationFields(copy);
+        assertCopyClearsExcludedFields(copy);
+        assertSourceUnchangedAfterCopy(sourceRef);
     }
 
     @Test
