@@ -926,8 +926,8 @@ class NotificationIT extends IntegrationBase {
         assertThat(reloaded.getPreAmendNotification().getOrigin().getInternalReference())
             .isEqualTo("INTERNAL-DO-NOT-COPY");
         assertThat(reloaded.getPreAmendNotification().getOrigin()).isNotSameAs(reloaded.getNotification().getOrigin());
-        assertThat(reloaded.getPreAmendNotification().getCommodity().getName())
-            .isEqualTo(beforeAmend.getNotification().getCommodity().getName());
+        assertThat(reloaded.getPreAmendNotification().getCommodities().getFirst().getName())
+            .isEqualTo(beforeAmend.getNotification().getCommodities().getFirst().getName());
     }
 
     @Test
@@ -1073,7 +1073,7 @@ class NotificationIT extends IntegrationBase {
         // Simulate trader edits persisted to Mongo during AMEND
         inAmendInMongo.getNotification().getOrigin().setInternalReference("EDITED-REF");
         inAmendInMongo.getNotification().getOrigin().setCountryCode("FR");
-        inAmendInMongo.getNotification().getCommodity().setName("Changed commodity");
+        inAmendInMongo.getNotification().getCommodities().getFirst().setName("Changed commodity");
         inAmendInMongo.getNotification().setReasonForImport("changedReason");
         inAmendInMongo.getNotification().setCphNumber("99/999/9999");
         notificationRepository.save(inAmendInMongo);
@@ -1951,6 +1951,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(actual.getOrigin()).isEqualTo(expected.getOrigin());
         assertThat(actual.getReasonForImport()).isEqualTo(expected.getReasonForImport());
         assertThat(actual.getCommodity()).isEqualTo(expected.getCommodity());
+        assertThat(actual.getCommodities()).isEqualTo(expected.getCommodities());
         assertThat(actual.getAdditionalDetails()).isEqualTo(expected.getAdditionalDetails());
         assertThat(actual.getPlaceOfOrigin()).isEqualTo(expected.getPlaceOfOrigin());
         assertThat(actual.getConsignor()).isEqualTo(expected.getConsignor());

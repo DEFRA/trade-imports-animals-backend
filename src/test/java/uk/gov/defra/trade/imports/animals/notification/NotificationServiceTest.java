@@ -2335,7 +2335,7 @@ class NotificationServiceTest {
                 .status(SUBMITTED)
                 .notification(Notification.builder()
                     .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("LIVE-REF").build())
-                    .commodity(Commodity.builder().name("Cattle").build())
+                    .commodities(List.of(CommodityComplement.builder().name("Cattle").build()))
                     .reasonForImport("PERMANENT")
                     .cphNumber("12/345/6789")
                     .build())
@@ -2354,18 +2354,18 @@ class NotificationServiceTest {
             assertThat(result.getPreAmendNotification()).isNotNull();
             assertThat(result.getPreAmendNotification().getOrigin().getInternalReference())
                 .isEqualTo("LIVE-REF");
-            assertThat(result.getPreAmendNotification().getCommodity().getName())
+            assertThat(result.getPreAmendNotification().getCommodities().getFirst().getName())
                 .isEqualTo("Cattle");
 
             // And
             result.getNotification().getOrigin().setInternalReference("EDITED");
-            result.getNotification().getCommodity().setName("MutatedCattle");
+            result.getNotification().getCommodities().getFirst().setName("MutatedCattle");
             result.getNotification().setReasonForImport("CHANGED");
             result.getNotification().setCphNumber("99/999/9999");
 
             assertThat(result.getPreAmendNotification().getOrigin().getInternalReference())
                 .isEqualTo("LIVE-REF");
-            assertThat(result.getPreAmendNotification().getCommodity().getName())
+            assertThat(result.getPreAmendNotification().getCommodities().getFirst().getName())
                 .isEqualTo("Cattle");
             assertThat(result.getPreAmendNotification().getReasonForImport())
                 .isEqualTo("PERMANENT");
