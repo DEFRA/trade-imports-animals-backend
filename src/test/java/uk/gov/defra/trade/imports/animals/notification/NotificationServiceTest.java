@@ -1907,7 +1907,8 @@ class NotificationServiceTest {
             assertThat(saved.getNotification().getOrigin().getCountryCode()).isEqualTo("DE");
             assertThat(saved.getNotification().getOrigin().getRequiresRegionCode()).isEqualTo("yes");
             assertThat(saved.getNotification().getReasonForImport()).isEqualTo("internalMarket");
-            assertThat(saved.getNotification().getCommodity().getName()).isEqualTo("Live bovine animals");
+            assertThat(saved.getNotification().getCommodity()).isNull();
+            assertThat(saved.getNotification().getCommodities().getFirst().getName()).isEqualTo("Live bovine animals");
             assertThat(saved.getNotification().getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
             assertThat(saved.getNotification().getConsignor()).isEqualTo(consignors().getFirst());
             assertThat(saved.getNotification().getDestination()).isEqualTo(destinations().getFirst());
@@ -1958,8 +1959,9 @@ class NotificationServiceTest {
             assertThat(saved.getNotification().getAdditionalDetails().getUnweanedAnimals()).isNull();
             assertThat(saved.getNotification().getTransport()).isNull();
             assertThat(saved.getNotification().getConsignment()).isNull();
-            // Commodity complement strips per-animal data
-            CommodityComplement cc = saved.getNotification().getCommodity().getCommodityComplement().getFirst();
+            // Commodities list strips per-animal data; legacy commodity is not persisted on copy
+            assertThat(saved.getNotification().getCommodity()).isNull();
+            CommodityComplement cc = saved.getNotification().getCommodities().getFirst();
             assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
             assertThat(cc.getTotalNoOfAnimals()).isNull();
             assertThat(cc.getTotalNoOfPackages()).isNull();
