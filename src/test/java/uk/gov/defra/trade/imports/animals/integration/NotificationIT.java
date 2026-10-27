@@ -2066,7 +2066,9 @@ class NotificationIT extends IntegrationBase {
         assertThat(copy.getNotification().getOrigin().getCountryCode()).isEqualTo("DE");
         assertThat(copy.getNotification().getOrigin().getRequiresRegionCode()).isEqualTo("yes");
         assertThat(copy.getNotification().getReasonForImport()).isEqualTo("internalMarket");
-        assertThat(copy.getNotification().getCommodity().getName()).isEqualTo("Live bovine animals");
+        assertThat(copy.getNotification().getCommodity()).isNull();
+        assertThat(copy.getNotification().getCommodities()).hasSize(1);
+        assertThat(copy.getNotification().getCommodities().getFirst().getName()).isEqualTo("Live bovine animals");
         assertThat(copy.getNotification().getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
         assertThat(copy.getNotification().getCphNumber()).isEqualTo("12/345/6789");
 
@@ -2075,7 +2077,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(copy.getNotification().getAdditionalDetails().getUnweanedAnimals()).isNull();
         assertThat(copy.getNotification().getTransport()).isNull();
         assertThat(copy.getNotification().getConsignment()).isNull();
-        CommodityComplement cc = copy.getNotification().getCommodity().getCommodityComplement().getFirst();
+        CommodityComplement cc = copy.getNotification().getCommodities().getFirst();
         assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
         assertThat(cc.getTotalNoOfAnimals()).isNull();
         assertThat(cc.getTotalNoOfPackages()).isNull();
@@ -2562,14 +2564,16 @@ class NotificationIT extends IntegrationBase {
     }
 
     private NotificationDto sourceNotificationWithAllOperators() {
-        CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
-            List.of(NotificationTestData.species()));
+        CommodityComplement complement = CommodityComplement.builder()
+            .name("Live bovine animals")
+            .typeOfCommodity("LIVE")
+            .totalNoOfAnimals(10)
+            .totalNoOfPackages(5)
+            .species(List.of(NotificationTestData.species()))
+            .build();
         return NotificationDto.builder()
             .origin(Origin.builder().countryCode("DE").requiresRegionCode("yes").internalReference("INTERNAL-DO-NOT-COPY").build())
-            .commodity(Commodity.builder()
-                .name("Live bovine animals")
-                .commodityComplement(List.of(complement))
-                .build())
+            .commodities(List.of(complement))
             .reasonForImport("internalMarket")
             .additionalDetails(new AdditionalDetails("Breeding", "yes"))
             .placeOfOrigin(NotificationTestData.placesOfOrigin().getFirst())
