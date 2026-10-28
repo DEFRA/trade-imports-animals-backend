@@ -15,6 +15,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.CORRELATION_ID;
+import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.UPLOAD_ID;
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registerUploadRequest;
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registeredSession;
 
@@ -81,9 +83,9 @@ class DocumentControllerTest {
           .andExpect(status().isCreated())
           .andExpect(header().string(
               "Location",
-              "http://localhost:8085/document-uploads/" + UploadSessionFixtures.UPLOAD_ID))
-          .andExpect(jsonPath("$.uploadId").value(UploadSessionFixtures.UPLOAD_ID))
-          .andExpect(jsonPath("$.correlationId").value(UploadSessionFixtures.CORRELATION_ID))
+              "http://localhost:8085/document-uploads/" + UPLOAD_ID))
+          .andExpect(jsonPath("$.uploadId").value(UPLOAD_ID))
+          .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID))
           .andExpect(jsonPath("$.notificationReferenceNumber").value(REF));
     }
 
@@ -149,8 +151,6 @@ class DocumentControllerTest {
   @Nested
   class Claim {
 
-    private static final String UPLOAD_ID = "upload-abc-123";
-
     private AccompanyingDocument claimedWith(DocumentType documentType) {
       return AccompanyingDocument.builder()
           .uploadId(UPLOAD_ID)
@@ -162,13 +162,24 @@ class DocumentControllerTest {
           .build();
     }
 
+    private void givenClaimAccepted() {
+      when(documentService.claimUpload(eq(UPLOAD_ID), any(ClaimUploadRequest.class)))
+          .thenReturn(claimedWith(DocumentType.ITAHC));
+    }
+
+    private String claimBody(String documentReference) {
+      return String.format(
+          "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\","
+              + "\"dateOfIssue\":\"2026-01-15\"}",
+          documentReference);
+    }
+
     @Test
     void shouldReturn200WithTheClaimedDocument() throws Exception {
       ClaimUploadRequest request = new ClaimUploadRequest(
           DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"));
 
-      when(documentService.claimUpload(eq(UPLOAD_ID), any(ClaimUploadRequest.class)))
-          .thenReturn(claimedWith(DocumentType.ITAHC));
+      givenClaimAccepted();
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
@@ -211,11 +222,9 @@ class DocumentControllerTest {
     })
     void shouldAcceptAReferenceCarryingTheSeparatorsRealDocumentsUse(String reference)
         throws Exception {
-      when(documentService.claimUpload(eq(UPLOAD_ID), any(ClaimUploadRequest.class)))
-          .thenReturn(claimedWith(DocumentType.ITAHC));
-      String body = String.format(
-          "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
-          reference);
+      givenClaimAccepted();
+
+      String body = claimBody(reference);
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
@@ -227,9 +236,7 @@ class DocumentControllerTest {
     @ValueSource(strings = {"REF<script>", "REF;DROP", "REF|pipe", "REF\\\\back"})
     void shouldReturn400_whenAReferenceCarriesACharacterOutsideTheRule(String reference)
         throws Exception {
-      String body = String.format(
-          "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
-          reference);
+      String body = claimBody(reference);
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
@@ -240,9 +247,7 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn400_whenDocumentReferenceIsBlank() throws Exception {
-      String body = """
-          {"documentType":"ITAHC","documentReference":"","dateOfIssue":"2026-01-15"}
-          """;
+      String body = claimBody("");
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
@@ -253,12 +258,9 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn200_whenDocumentReferenceIs58Chars() throws Exception {
-      String body = String.format(
-          "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
-          "A".repeat(58));
+      String body = claimBody("A".repeat(58));
 
-      when(documentService.claimUpload(eq(UPLOAD_ID), any(ClaimUploadRequest.class)))
-          .thenReturn(claimedWith(DocumentType.ITAHC));
+      givenClaimAccepted();
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
@@ -268,9 +270,7 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn400_whenDocumentReferenceIs59Chars() throws Exception {
-      String body = String.format(
-          "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
-          "A".repeat(59));
+      String body = claimBody("A".repeat(59));
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
@@ -334,8 +334,7 @@ class DocumentControllerTest {
           {"documentType":"ITAHC","documentReference":"UKGB2026001","dateOfIssue":"2026-01-15","redirectUrl":"/anything"}
           """;
 
-      when(documentService.claimUpload(eq(UPLOAD_ID), any(ClaimUploadRequest.class)))
-          .thenReturn(claimedWith(DocumentType.ITAHC));
+      givenClaimAccepted();
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
