@@ -32,8 +32,8 @@ public record ExchangedDocument(
             notificationAggregate.getStatus() != null ? notificationAggregate.getStatus().name() : null,
             versionId,
             toUtcDateTime(notificationAggregate.getUpdated()),
-            null,
-            Authentication.from(notification),
+            TradeParty.from(notification.getConsignment()),
+            Authentication.from(notification, notificationAggregate.getReferenceNumber()),
             referenceDocuments(claimedScannedDocuments));
     }
 
@@ -46,11 +46,6 @@ public record ExchangedDocument(
         return claimedScannedDocuments.stream().map(ReferencedDocument::accompanyingDocument).toList();
     }
 
-    /**
-     * {@code Instant.toString()} is ISO-8601 UTC, which is byte-identical to what the previous
-     * {@code LocalDateTime.toInstant(ZoneOffset.UTC).toString()} produced for the same moment.
-     * Sub-millisecond digits are deliberately preserved — PIMS receives the value unchanged.
-     */
     private static String toUtcDateTime(Instant dateTime) {
         return dateTime != null ? dateTime.toString() : null;
     }

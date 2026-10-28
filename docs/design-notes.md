@@ -69,10 +69,12 @@ Each party's email and telephone map to one `definedContact`. With neither, `def
 
 Document type codes follow `schemas/codelists/gbn-ag-document-types.json` in trade-imports-schemas.
 
+The `PURPOSE`, `INTERNAL_MARKET_PURPOSE` and `GOODS_CERTIFIED_AS` clauses carry CAPITAL_CASE codes from `gbn-ag-purposes.json`, `gbn-ag-internal-market-purposes.json` and `gbn-ag-goods-certified-as.json` in trade-imports-schemas, each with its list's `urlId`. The frontend stores its own keys, so `Clause` translates them when the event is built and stored notifications keep the keys. A stored key with no code in `Clause` is sent unchanged and logged at warn, so the value still reaches PIMS and the missing code shows in the logs; a value added to a frontend list needs its code added to the schemas list and to `Clause`. Animal identifiers carry the `animal_identifier_types` list's `urlId`.
+
+`exchangedDocument.issuer` is the consignment contact: the person responsible for the consignment. PIMS name the person from the submitting actor on the event.
+
 Open gaps, where the event leaves a field empty until the source data or a decision exists:
 
-- `exchangedDocument.issuer`: where the consignment contact belongs is undecided.
-- The `INTERNAL_MARKET_PURPOSE` clause has no content: the sub-purpose is not collected.
 - Party `identifier` and `partyRoleCode` are not set.
 - `carrier.partyTypeCode` passes the transporter type through unchanged; the `operator_activity_type` codelist mapping is unconfirmed.
 - `applicableClassification` `urlId` values are not set.
