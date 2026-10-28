@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
 permissions:
   id-token: write
   contents: write
@@ -15,26 +19,25 @@ env:
   AWS_ACCOUNT_ID: "094954420758"
 
 jobs:
+  sonarcloud:
+    name: SonarCloud Scan
+    uses: ./.github/workflows/sonarcloud.yml
+    secrets: inherit
+
+  # Publishing an image whose tests never ran is worse than a slow publish.
   build:
+    needs: sonarcloud
     if: github.run_number != 1
     name: CDP-build-workflow
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Build and Publish
         uses: DEFRA/cdp-build-action/build@main
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'corretto'
-          java-version-file: '.java-version'
-          cache: 'maven'
-      - run: mvn clean verify
 
   # Adds linux/arm64 to the Docker Hub tags the build job has just published.
   # Runs after it, never gates it, and never touches ECR.
@@ -43,10 +46,3 @@ jobs:
     uses: DEFRA/trade-imports-workspace/.github/workflows/publish-multiarch.yml@main
     with:
       image-name: trade-imports-animals-backend
-
-  sonarcloud:
-    name: SonarCloud Scan
-    needs: build
-    if: github.actor != 'dependabot[bot]'
-    uses: ./.github/workflows/sonarcloud.yml
-    secrets: inherit

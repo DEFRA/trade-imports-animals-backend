@@ -5,7 +5,7 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: read
 
 jobs:
   build:
@@ -33,6 +33,10 @@ jobs:
           path: ~/.sonar/cache
           key: ${{ runner.os }}-sonar
           restore-keys: ${{ runner.os }}-sonar
+
+      - name: Build and test
+        if: github.actor == 'dependabot[bot]'
+        run: mvn -B -e clean verify
 
       - name: Build, test, and Sonar analyze
         if: github.actor != 'dependabot[bot]'
