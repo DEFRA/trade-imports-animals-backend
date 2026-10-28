@@ -252,11 +252,10 @@ class DocumentControllerTest {
     }
 
     @Test
-    void shouldReturn200_whenDocumentReferenceIsAtTheMaximumLength() throws Exception {
-      String reference = "A".repeat(ClaimUploadRequest.REFERENCE_MAX_LENGTH);
+    void shouldReturn200_whenDocumentReferenceIs58Chars() throws Exception {
       String body = String.format(
           "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
-          reference);
+          "A".repeat(58));
 
       when(documentService.claimUpload(eq(UPLOAD_ID), any(ClaimUploadRequest.class)))
           .thenReturn(claimedWith(DocumentType.ITAHC));
@@ -268,12 +267,10 @@ class DocumentControllerTest {
     }
 
     @Test
-    void shouldReturn400_whenDocumentReferenceIsOneCharacterOverTheMaximumLength()
-        throws Exception {
-      String reference = "A".repeat(ClaimUploadRequest.REFERENCE_MAX_LENGTH + 1);
+    void shouldReturn400_whenDocumentReferenceIs59Chars() throws Exception {
       String body = String.format(
           "{\"documentType\":\"ITAHC\",\"documentReference\":\"%s\",\"dateOfIssue\":\"2026-01-15\"}",
-          reference);
+          "A".repeat(59));
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
               .contentType(MediaType.APPLICATION_JSON)
