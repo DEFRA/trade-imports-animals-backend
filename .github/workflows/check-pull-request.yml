@@ -6,38 +6,29 @@ on:
       - main
     types:
       - opened
-      - edited
       - reopened
       - synchronize
       - ready_for_review
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  pr-validator:
-    name: Run Pull Request Checks
+  sonarcloud:
+    name: SonarCloud Scan
+    uses: ./.github/workflows/sonarcloud.yml
+    secrets: inherit
+
+  docker-build-without-branch-image:
+    name: Test Docker Image Build
+    if: >
+      github.actor == 'dependabot[bot]' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'corretto'
-          java-version-file: '.java-version'
-          cache: 'maven'
-
-      - name: Run tests with Testcontainers
-        run: mvn clean verify
-
       - name: Test Docker Image Build
-        run: |
-          set +e
-          docker build --no-cache --tag trade-imports-animals-backend .
-          exit $?
-
-  sonarcloud:
-    name: SonarCloud Scan
-    needs: pr-validator
-    if: github.actor != 'dependabot[bot]'
-    uses: ./.github/workflows/sonarcloud.yml
-    secrets: inherit
+        run: docker build --no-cache --tag trade-imports-animals-backend .
