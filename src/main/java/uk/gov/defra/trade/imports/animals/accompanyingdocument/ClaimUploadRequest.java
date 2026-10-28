@@ -23,7 +23,7 @@ public record ClaimUploadRequest(
     DocumentType documentType,
 
     @NotBlank
-    @Size(max = 100)
+    @Size(max = ClaimUploadRequest.REFERENCE_MAX_LENGTH)
     @Pattern(regexp = ClaimUploadRequest.REFERENCE_PATTERN)
     @Schema(description = "Reference number printed on the document",
         requiredMode = Schema.RequiredMode.REQUIRED,
@@ -43,5 +43,7 @@ public record ClaimUploadRequest(
    * is {@code @Size}'s to enforce, so this rule says nothing about it.
    */
   static final String REFERENCE_PATTERN = "^[A-Za-z0-9 ./-]*$";
+
+  static final int REFERENCE_MAX_LENGTH = 58;
 }
 
