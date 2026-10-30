@@ -33,9 +33,9 @@ public record TradeLineItem(
     private static TradeLineItem fromSpecies(CommodityComplement entry, Species species) {
         return new TradeLineItem(
             classificationOf(entry),
-            descriptionOf(tradeLineDescription(entry)),
+            descriptionOf(entry.getDescription()),
             species.getText(),
-            tradeLineCommonName(entry, species),
+            commonNameOf(species),
             typeCodeFor(species, entry),
             null,
             LineTradeDelivery.headCount(species.getNoOfAnimals()),
@@ -46,9 +46,9 @@ public record TradeLineItem(
     private static TradeLineItem fromComplementTotals(CommodityComplement entry) {
         return new TradeLineItem(
             classificationOf(entry),
-            descriptionOf(tradeLineDescription(entry)),
+            descriptionOf(entry.getDescription()),
             null,
-            entry.getName(),
+            null,
             entry.getTypeOfCommodity(),
             null,
             LineTradeDelivery.headCount(entry.getTotalNoOfAnimals()),
@@ -66,30 +66,25 @@ public record TradeLineItem(
     @SuppressWarnings("java:S1168")
     private static List<ApplicableClassification> classificationOf(CommodityComplement entry) {
         String cn = entry.getCommodityCode();
-        // Legacy Mongo rows often lack commodityCode; type text was the old CN stand-in.
         if (cn == null || cn.isBlank()) {
-            cn = entry.getTypeOfCommodity();
+            return null;
         }
-        ApplicableClassification classification = ApplicableClassification.cn(cn);
-        return classification != null ? List.of(classification) : null;
+        return List.of(ApplicableClassification.cn(cn));
     }
 
-    private static String tradeLineDescription(CommodityComplement entry) {
-        if (entry.getDescription() != null && !entry.getDescription().isBlank()) {
-            return entry.getDescription();
+    private static String commonNameOf(Species species) {
+        String commonName = species.getCommonName();
+        if (commonName == null || commonName.isBlank()) {
+            return null;
         }
-        return entry.getName();
-    }
-
-    private static String tradeLineCommonName(CommodityComplement entry, Species species) {
-        if (species.getCommonName() != null && !species.getCommonName().isBlank()) {
-            return species.getCommonName();
-        }
-        return entry.getName();
+        return commonName;
     }
 
     @SuppressWarnings("java:S1168")
     private static List<String> descriptionOf(String commodityDescription) {
-        return commodityDescription != null ? List.of(commodityDescription) : null;
+        if (commodityDescription == null || commodityDescription.isBlank()) {
+            return null;
+        }
+        return List.of(commodityDescription);
     }
 }

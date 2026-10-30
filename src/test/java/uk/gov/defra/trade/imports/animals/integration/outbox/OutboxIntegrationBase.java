@@ -28,7 +28,7 @@ import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
-import uk.gov.defra.trade.imports.animals.notification.Commodity;
+import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
@@ -228,7 +228,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
                 .referenceNumber(created.getReferenceNumber())
                 .concurrencyToken(created.getConcurrencyToken())
                 .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF123").build())
-                .commodity(Commodity.builder().name("Live cattle").build())
+                .commodities(List.of(CommodityComplement.builder().name("Live cattle").build()))
                 .build()))
             .exchange()
             .expectStatus().isOk();
@@ -249,7 +249,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     protected static NotificationDto minimalNotificationDto() {
         return NotificationDto.builder()
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF123").build())
-            .commodity(Commodity.builder().name("Live cattle").build())
+            .commodities(List.of(CommodityComplement.builder().name("Live cattle").build()))
             .build();
     }
 

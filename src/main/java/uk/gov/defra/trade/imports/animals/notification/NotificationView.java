@@ -31,9 +31,6 @@ public interface NotificationView {
     @Value("#{target.notification?.origin}")
     Origin getOrigin();
 
-    @Value("#{target.notification?.commodity}")
-    Commodity getCommodity();
-
     @Value("#{target.notification?.commodities}")
     List<CommodityComplement> getCommodities();
 

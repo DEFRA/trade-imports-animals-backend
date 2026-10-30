@@ -23,7 +23,7 @@ public class NotificationCopyMapper {
         Notification source = notificationAggregate.requireNotification();
         return NotificationDto.builder()
             .origin(mapOrigin(source.getOrigin()))
-            .commodities(mapCommoditiesForCopy(NotificationCommodities.entries(source)))
+            .commodities(mapCommoditiesForCopy(source.getCommodities()))
             .reasonForImport(source.getReasonForImport())
             .additionalDetails(mapAdditionalDetails(source.getAdditionalDetails()))
             .placeOfOrigin(mapConsignmentParty(source.getPlaceOfOrigin()))

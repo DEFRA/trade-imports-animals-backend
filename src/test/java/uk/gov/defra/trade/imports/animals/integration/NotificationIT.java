@@ -26,7 +26,6 @@ import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
-import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.Address;
 import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
@@ -89,10 +88,12 @@ class NotificationIT extends IntegrationBase {
     void post_shouldMapAllFieldsToNotificationAndSave() {
         // Given
         Species species = NotificationTestData.species();
-        CommodityComplement complement = new CommodityComplement("LIVE", 10, 5, List.of(species));
-        Commodity commodity = Commodity.builder()
+        CommodityComplement complement = CommodityComplement.builder()
             .name("Live bovine animals")
-            .commodityComplement(List.of(complement))
+            .typeOfCommodity("LIVE")
+            .totalNoOfAnimals(10)
+            .totalNoOfPackages(5)
+            .species(List.of(species))
             .build();
         Transport transport = Transport.builder()
             .portOfEntry("GBFXT")
@@ -104,7 +105,7 @@ class NotificationIT extends IntegrationBase {
             .build();
         NotificationDto notificationDto = NotificationDto.builder()
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-001").regionOfOriginCode("GB-ENG").build())
-            .commodity(commodity)
+            .commodities(List.of(complement))
             .reasonForImport("PERMANENT")
             .additionalDetails(new AdditionalDetails("HUMAN_CONSUMPTION", "true"))
             .cphNumber("22/123/4567")
@@ -140,7 +141,7 @@ class NotificationIT extends IntegrationBase {
     void post_shouldPersistCountrySubdivisionCode() {
         NotificationDto notificationDto = NotificationDto.builder()
             .origin(Origin.builder().countryCode("ES").requiresRegionCode("no").internalReference("REF-CN").countrySubdivisionCode("ES-CN").build())
-            .commodity(Commodity.builder().name("Live animals").build())
+            .commodities(List.of(CommodityComplement.builder().name("Live animals").build()))
             .build();
 
         NotificationAggregate created = webClient("NoAuth")
@@ -585,10 +586,7 @@ class NotificationIT extends IntegrationBase {
         CommodityComplement initialComplement = new CommodityComplement("LIVE", 5, 2, List.of(initialSpecies));
         NotificationDto initial = NotificationDto.builder()
             .origin(Origin.builder().countryCode("IE").requiresRegionCode("false").internalReference("REF-initial").build())
-            .commodity(Commodity.builder()
-                .name("Live ovine animals")
-                .commodityComplement(List.of(initialComplement))
-                .build())
+            .commodities(List.of(initialComplement))
             .reasonForImport("TRANSIT")
             .additionalDetails(new AdditionalDetails("OTHER", "false"))
             .cphNumber("11/111/1111")
@@ -604,15 +602,18 @@ class NotificationIT extends IntegrationBase {
 
         // When — update every field with new values
         Species updatedSpecies = NotificationTestData.species();
-        CommodityComplement updatedComplement = new CommodityComplement("LIVE", 10, 5, List.of(updatedSpecies));
+        CommodityComplement updatedComplement = CommodityComplement.builder()
+            .name("Live bovine animals")
+            .typeOfCommodity("LIVE")
+            .totalNoOfAnimals(10)
+            .totalNoOfPackages(5)
+            .species(List.of(updatedSpecies))
+            .build();
         NotificationDto updateDto = NotificationDto.builder()
             .referenceNumber(referenceNumber)
             .concurrencyToken(created.getConcurrencyToken())
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-updated").build())
-            .commodity(Commodity.builder()
-                .name("Live bovine animals")
-                .commodityComplement(List.of(updatedComplement))
-                .build())
+            .commodities(List.of(updatedComplement))
             .reasonForImport("PERMANENT")
             .additionalDetails(new AdditionalDetails("HUMAN_CONSUMPTION", "true"))
             .cphNumber("22/123/4567")
@@ -649,7 +650,7 @@ class NotificationIT extends IntegrationBase {
     void post_shouldClearTransitedCountries_whenUpdatedToMeansThatDoesNotRequireTransit() {
         NotificationDto initial = NotificationDto.builder()
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-001").build())
-            .commodity(Commodity.builder().name("Live bovine animals").build())
+            .commodities(List.of(CommodityComplement.builder().name("Live bovine animals").build()))
             .transport(Transport.builder()
                 .portOfEntry("GBFXT")
                 .arrivalDate(LocalDate.parse("2026-04-22"))
@@ -671,7 +672,7 @@ class NotificationIT extends IntegrationBase {
             .referenceNumber(referenceNumber)
             .concurrencyToken(created.getConcurrencyToken())
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-001").build())
-            .commodity(Commodity.builder().name("Live bovine animals").build())
+            .commodities(List.of(CommodityComplement.builder().name("Live bovine animals").build()))
             .transport(Transport.builder()
                 .portOfEntry("GBFXT")
                 .arrivalDate(LocalDate.parse("2026-04-22"))
@@ -1897,17 +1898,14 @@ class NotificationIT extends IntegrationBase {
             .extracting(Origin::getCountryCode, Origin::getRequiresRegionCode, Origin::getInternalReference)
             .containsExactly("GB", "true", internalReference);
 
-        assertThat(notificationAggregate.getNotification().getCommodity())
-            .extracting(Commodity::getName)
-            .isEqualTo("Live bovine animals");
-
-        CommodityComplement complement = notificationAggregate.getNotification().getCommodity().getCommodityComplement().getFirst();
+        CommodityComplement complement = notificationAggregate.getNotification().getCommodities().getFirst();
         assertThat(complement)
             .extracting(
+                CommodityComplement::getName,
                 CommodityComplement::getTypeOfCommodity,
                 CommodityComplement::getTotalNoOfAnimals,
                 CommodityComplement::getTotalNoOfPackages)
-            .containsExactly("LIVE", 10, 5);
+            .containsExactly("Live bovine animals", "LIVE", 10, 5);
 
         Species species = complement.getSpecies().getFirst();
         assertThat(species)
@@ -1960,7 +1958,6 @@ class NotificationIT extends IntegrationBase {
             .extracting(Origin::getCountryCode, Origin::getRequiresRegionCode)
             .containsExactly("DE", "yes");
         assertThat(notification.getReasonForImport()).isEqualTo("internalMarket");
-        assertThat(notification.getCommodity()).isNull();
         assertThat(notification.getCommodities()).hasSize(1);
         assertThat(notification.getCommodities().getFirst().getName()).isEqualTo("Live bovine animals");
         assertThat(notification.getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
@@ -1992,7 +1989,6 @@ class NotificationIT extends IntegrationBase {
     private void assertAmendableContentMatches(Notification expected, Notification actual) {
         assertThat(actual.getOrigin()).isEqualTo(expected.getOrigin());
         assertThat(actual.getReasonForImport()).isEqualTo(expected.getReasonForImport());
-        assertThat(actual.getCommodity()).isEqualTo(expected.getCommodity());
         assertThat(actual.getCommodities()).isEqualTo(expected.getCommodities());
         assertThat(actual.getAdditionalDetails()).isEqualTo(expected.getAdditionalDetails());
         assertThat(actual.getPlaceOfOrigin()).isEqualTo(expected.getPlaceOfOrigin());
@@ -2209,7 +2205,7 @@ class NotificationIT extends IntegrationBase {
         NotificationDto newVersion = NotificationDto.builder()
             .referenceNumber(oldVersion.getReferenceNumber())
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("EDITED").build())
-            .commodity(Commodity.builder().name("Live cattle").build())
+            .commodities(List.of(CommodityComplement.builder().name("Live cattle").build()))
             .concurrencyToken(oldVersion.getConcurrencyToken())
             .build();
         webClient("NoAuth")
@@ -2378,7 +2374,7 @@ class NotificationIT extends IntegrationBase {
         NotificationDto firstEdit = NotificationDto.builder()
             .referenceNumber(ref)
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("FIRST").build())
-            .commodity(Commodity.builder().name("Live cattle").build())
+            .commodities(List.of(CommodityComplement.builder().name("Live cattle").build()))
             .concurrencyToken(staleVersion)
             .build();
         webClient("NoAuth")
@@ -2391,7 +2387,7 @@ class NotificationIT extends IntegrationBase {
         NotificationDto staleEdit = NotificationDto.builder()
             .referenceNumber(ref)
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("STALE").build())
-            .commodity(Commodity.builder().name("Live cattle").build())
+            .commodities(List.of(CommodityComplement.builder().name("Live cattle").build()))
             .concurrencyToken(staleVersion)
             .build();
 
@@ -2429,7 +2425,7 @@ class NotificationIT extends IntegrationBase {
             .bodyValue(SaveNotificationDto.of(NotificationDto.builder()
                 .referenceNumber(ref)
                 .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("EDITED").build())
-                .commodity(Commodity.builder().name("Live cattle").build())
+                .commodities(List.of(CommodityComplement.builder().name("Live cattle").build()))
                 .concurrencyToken(reviewedToken)
                 .build()))
             .exchange()
@@ -2507,7 +2503,7 @@ class NotificationIT extends IntegrationBase {
 
         return NotificationDto.builder()
             .origin(origin)
-            .commodity(Commodity.builder().name(commodity).build())
+            .commodities(List.of(CommodityComplement.builder().name(commodity).build()))
             .build();
     }
 
@@ -2561,7 +2557,7 @@ class NotificationIT extends IntegrationBase {
     private NotificationDto notificationDtoWithArrivalDate(String countryCode, LocalDate arrivalDate) {
         return NotificationDto.builder()
             .origin(Origin.builder().countryCode(countryCode).build())
-            .commodity(Commodity.builder().name("Live animals").build())
+            .commodities(List.of(CommodityComplement.builder().name("Live animals").build()))
             .transport(Transport.builder().arrivalDate(arrivalDate).build())
             .build();
     }
@@ -2569,7 +2565,7 @@ class NotificationIT extends IntegrationBase {
     private NotificationDto notificationDtoWithTransportButNoArrivalDate(String countryCode) {
         return NotificationDto.builder()
             .origin(Origin.builder().countryCode(countryCode).build())
-            .commodity(Commodity.builder().name("Live animals").build())
+            .commodities(List.of(CommodityComplement.builder().name("Live animals").build()))
             .transport(Transport.builder().portOfEntry("GBFXT").build())
             .build();
     }

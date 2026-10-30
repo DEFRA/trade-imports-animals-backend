@@ -10,32 +10,15 @@ import org.mapstruct.control.DeepClone;
 @Mapper(componentModel = "spring", unmappedTargetPolicy = ReportingPolicy.ERROR, mappingControl = DeepClone.class)
 public interface NotificationContentMapper {
 
-    @Mapping(target = "commodity", source = "commodity", qualifiedByName = "copyCommodity")
     @Mapping(target = "commodities", source = "commodities", qualifiedByName = "copyCommodities")
     Notification deepClone(Notification source);
 
-    // Normalise commodityComplement null to empty list so snapshots never hold null collections.
-    @Named("copyCommodity")
-    default Commodity copyCommodity(Commodity source) {
-        if (source == null) {
-            return null;
-        }
-        return Commodity.builder()
-            .name(source.getName())
-            .commodityComplement(commodityComplements(source.getCommodityComplement()))
-            .build();
-    }
-
-    default List<CommodityComplement> commodityComplements(List<CommodityComplement> source) {
+    @Named("copyCommodities")
+    default List<CommodityComplement> copyCommodities(List<CommodityComplement> source) {
         if (source == null) {
             return List.of();
         }
         return mapCommodityComplementList(source);
-    }
-
-    @Named("copyCommodities")
-    default List<CommodityComplement> copyCommodities(List<CommodityComplement> source) {
-        return commodityComplements(source);
     }
 
     List<CommodityComplement> mapCommodityComplementList(List<CommodityComplement> source);
