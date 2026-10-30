@@ -71,6 +71,21 @@ class NotificationCopyMapperTest {
         }
 
         @Test
+        void toCopyDto_shouldRetainCommodityCode() {
+            NotificationAggregate source = aggregateOf(Notification.builder()
+                .commodities(List.of(CommodityComplement.builder()
+                    .name("Cow")
+                    .commodityCode("0102")
+                    .typeOfCommodity("LIVE")
+                    .build()))
+                .build());
+
+            NotificationDto result = mapper.toCopyDto(source);
+
+            assertThat(result.getCommodities().getFirst().getCommodityCode()).isEqualTo("0102");
+        }
+
+        @Test
         void toCopyDto_shouldRetainCertifiedFor() {
             NotificationAggregate source = aggregateOf(Notification.builder()
                 .additionalDetails(new AdditionalDetails("Breeding", "yes"))

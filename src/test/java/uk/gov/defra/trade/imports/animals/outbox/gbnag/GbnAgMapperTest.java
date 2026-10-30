@@ -509,6 +509,83 @@ class GbnAgMapperTest {
     }
 
     @Test
+    void shouldMapIncludedConsignmentItemToNull_whenCommoditiesEmpty() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-EMPTY")
+            .notification(Notification.builder()
+                .commodities(List.of())
+                .build())
+            .build();
+
+        assertThat(mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
+            .specifiedConsignment().includedConsignmentItem()).isNull();
+    }
+
+    @Test
+    void shouldPreferSpeciesTypeOfCommodityAsTradeLineTypeCode() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-TYPE")
+            .notification(Notification.builder()
+                .commodities(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("COMPLEMENT-TYPE")
+                        .species(List.of(Species.builder()
+                            .value("1148346")
+                            .text("Bos taurus")
+                            .typeOfCommodity("SPECIES-TYPE")
+                            .build()))
+                        .build()))
+                .build())
+            .build();
+
+        TradeLineItem line = firstLineOf(notificationAggregate);
+
+        assertThat(line.typeCode()).isEqualTo("SPECIES-TYPE");
+    }
+
+    @Test
+    void shouldFallBackToComplementTypeOfCommodity_whenSpeciesTypeBlank() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-TYPE2")
+            .notification(Notification.builder()
+                .commodities(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("COMPLEMENT-TYPE")
+                        .species(List.of(Species.builder()
+                            .value("1148346")
+                            .text("Bos taurus")
+                            .typeOfCommodity("  ")
+                            .build()))
+                        .build()))
+                .build())
+            .build();
+
+        assertThat(firstLineOf(notificationAggregate).typeCode()).isEqualTo("COMPLEMENT-TYPE");
+    }
+
+    @Test
+    void shouldOmitBlankCommonNameDescriptionAndClassification() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-BLANK")
+            .notification(Notification.builder()
+                .commodities(List.of(CommodityComplement.builder()
+                        .commodityCode("   ")
+                        .description("   ")
+                        .species(List.of(Species.builder()
+                            .value("1148346")
+                            .text("Bos taurus")
+                            .commonName("   ")
+                            .build()))
+                        .build()))
+                .build())
+            .build();
+
+        TradeLineItem line = firstLineOf(notificationAggregate);
+
+        assertThat(line.applicableClassification()).isNull();
+        assertThat(line.description()).isNull();
+        assertThat(line.commonName()).isNull();
+    }
+
+    @Test
     void shouldMapCommonNameToNull_whenCommodityNameAbsent() {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-CMD001")
