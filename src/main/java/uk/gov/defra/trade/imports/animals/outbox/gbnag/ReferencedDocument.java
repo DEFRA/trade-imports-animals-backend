@@ -56,23 +56,22 @@ public record ReferencedDocument(
     }
 
     // Exhaustive on purpose: a new document type fails to compile until someone decides its code.
-    // 916 (Related document) is only for a notifier who chooses "Other", never a default.
+    // 916 (Related document) is only for OTHER, never a default.
     private static String accompanyingDocumentTypeCode(DocumentType documentType) {
         return switch (documentType) {
             case VETERINARY_HEALTH_CERTIFICATE -> "853";
-            case HEALTH_CERTIFICATE -> "636";
             case AIR_WAYBILL -> "740";
             case SEA_WAYBILL -> "710";
             case RAIL_WAYBILL -> "720";
             case BILL_OF_LADING -> "705";
             case COMMERCIAL_INVOICE -> "380";
-            case ITAHC -> "856";                                    // Inspection certificate, as TRACES codes the EU INTRA certificate
-            case IMPORT_PERMIT -> "911";                            // Import licence
-            case LETTER_OF_AUTHORITY -> "GBN1";
-            case CATCH_CERTIFICATE -> "GBN2";
-            case LABORATORY_SAMPLING_RESULTS_FOR_AFLATOXIN -> "4";  // Test report
+            case ITAHC -> "856";                        // Inspection certificate, as TRACES codes the EU INTRA certificate
+            case IMPORT_PERMIT -> "911";                // Import licence
             case JOURNEY_LOG -> "GBN3";
-            case OTHER -> "916";                                    // Related document
+            case SELF_DECLARATION -> "GBN4";
+            case CITES_PERMIT_OR_CERTIFICATE -> "GBN5";
+            case PACKING_OR_SPECIES_LIST -> "GBN6";
+            case OTHER -> "916";                        // Related document
         };
     }
 
