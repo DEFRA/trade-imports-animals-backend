@@ -62,6 +62,31 @@ class NotificationContentMapperTest {
     }
 
     @Test
+    void deepClone_shouldCopyCommodityIdentityFields() {
+        CommodityComplement complement = CommodityComplement.builder()
+            .name("Cow")
+            .commodityCode("0102")
+            .description("Live cattle")
+            .typeOfCommodity("LIVE")
+            .totalNoOfAnimals(10)
+            .build();
+        Notification source = Notification.builder()
+            .commodities(List.of(complement))
+            .build();
+
+        Notification clone = mapper.deepClone(source);
+
+        assertThat(clone.getCommodities()).singleElement()
+            .satisfies(c -> {
+                assertThat(c.getName()).isEqualTo("Cow");
+                assertThat(c.getCommodityCode()).isEqualTo("0102");
+                assertThat(c.getDescription()).isEqualTo("Live cattle");
+                assertThat(c.getTypeOfCommodity()).isEqualTo("LIVE");
+                assertThat(c.getTotalNoOfAnimals()).isEqualTo(10);
+            });
+    }
+
+    @Test
     void deepClone_shouldRoundTripContentFields() {
         Notification source = Notification.builder()
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-1").regionOfOriginCode("GB-ENG").build())
