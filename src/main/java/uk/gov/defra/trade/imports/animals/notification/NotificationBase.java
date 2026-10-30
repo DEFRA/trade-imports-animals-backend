@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import java.time.LocalDate;
+import java.util.List;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -13,7 +14,7 @@ public abstract class NotificationBase {
 
     private Origin origin;
 
-    private Commodity commodity;
+    private List<CommodityComplement> commodities;
 
     private String reasonForImport;
 

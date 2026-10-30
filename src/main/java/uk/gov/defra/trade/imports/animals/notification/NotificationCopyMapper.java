@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
  * so the copy starts as a fresh incomplete draft.
  *
  * <p>MapStruct was not used because the {@link CommodityComplement} transformation —
- * retaining only {@code typeOfCommodity} while explicitly nulling all per-animal data —
+ * retaining only identity fields while explicitly nulling all per-animal data —
  * requires a custom element-level mapping method. Encoding the retain/reset rules
  * in plain Java keeps them co-located, explicit, and directly auditable against the
  * acceptance criteria without MapStruct-generated indirection.
@@ -23,7 +23,7 @@ public class NotificationCopyMapper {
         Notification source = notificationAggregate.requireNotification();
         return NotificationDto.builder()
             .origin(mapOrigin(source.getOrigin()))
-            .commodity(mapCommodity(source.getCommodity()))
+            .commodities(mapCommoditiesForCopy(source.getCommodities()))
             .reasonForImport(source.getReasonForImport())
             .additionalDetails(mapAdditionalDetails(source.getAdditionalDetails()))
             .placeOfOrigin(mapConsignmentParty(source.getPlaceOfOrigin()))
@@ -70,23 +70,17 @@ public class NotificationCopyMapper {
             .build();
     }
 
-    private Commodity mapCommodity(Commodity source) {
-        if (source == null) {
-            return null;
-        }
-        return Commodity.builder()
-            .name(source.getName())
-            .commodityComplement(mapComplements(source.getCommodityComplement()))
-            .build();
-    }
-
-    private List<CommodityComplement> mapComplements(List<CommodityComplement> source) {
+    private List<CommodityComplement> mapCommoditiesForCopy(List<CommodityComplement> source) {
         if (source == null) {
             return List.of();
         }
-        // totalNoOfAnimals, totalNoOfPackages, species intentionally omitted — per-animal counts are reset on copy; only typeOfCommodity is retained
+        // totalNoOfAnimals, totalNoOfPackages, species intentionally omitted — per-animal counts are reset on copy
         return source.stream()
-            .map(cc -> CommodityComplement.builder().typeOfCommodity(cc.getTypeOfCommodity()).build())
+            .map(entry -> CommodityComplement.builder()
+                .name(entry.getName())
+                .commodityCode(entry.getCommodityCode())
+                .typeOfCommodity(entry.getTypeOfCommodity())
+                .build())
             .toList();
     }
 

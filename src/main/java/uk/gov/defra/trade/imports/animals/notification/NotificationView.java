@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import java.time.Instant;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 
 /**
@@ -30,8 +31,8 @@ public interface NotificationView {
     @Value("#{target.notification?.origin}")
     Origin getOrigin();
 
-    @Value("#{target.notification?.commodity}")
-    Commodity getCommodity();
+    @Value("#{target.notification?.commodities}")
+    List<CommodityComplement> getCommodities();
 
     @Value("#{target.notification?.consignor}")
     ConsignmentParty getConsignor();

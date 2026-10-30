@@ -24,7 +24,6 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Address;
 import uk.gov.defra.trade.imports.animals.notification.AnimalIdentifier;
-import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.MeansOfTransport;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
@@ -230,8 +229,8 @@ class GbnAgMapperTest {
             assertThat(items).hasSize(1);
             TradeLineItem line = items.getFirst().includedTradeLineItem().getFirst();
 
-            assertThat(line.description()).containsExactly("Cow");
-            assertThat(line.commonName()).isEqualTo("Cow");
+            assertThat(line.description()).containsExactly("Live bovine animals");
+            assertThat(line.commonName()).isEqualTo("Domestic cattle");
             assertThat(line.scientificName()).isEqualTo("Bos taurus");
             assertThat(line.typeCode()).isNull();
             assertThat(line.urlId()).isNull();
@@ -419,12 +418,10 @@ class GbnAgMapperTest {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-PKG001")
             .notification(Notification.builder()
-                .commodity(Commodity.builder()
-                    .commodityComplement(List.of(CommodityComplement.builder()
+                .commodities(List.of(CommodityComplement.builder()
                         .typeOfCommodity("01020000")
                         .totalNoOfPackages(null)
                         .build()))
-                    .build())
                 .build())
             .build();
 
@@ -440,12 +437,10 @@ class GbnAgMapperTest {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-SPC001")
             .notification(Notification.builder()
-                .commodity(Commodity.builder()
-                    .commodityComplement(List.of(CommodityComplement.builder()
+                .commodities(List.of(CommodityComplement.builder()
                         .typeOfCommodity("01020000")
                         .species(null)
                         .build()))
-                    .build())
                 .build())
             .build();
 
@@ -458,15 +453,13 @@ class GbnAgMapperTest {
     }
 
     @Test
-    void shouldMapApplicableClassificationToNull_whenTypeOfCommodityAbsent() {
+    void shouldMapApplicableClassificationToNull_whenCommodityCodeAbsent() {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-CN001")
             .notification(Notification.builder()
-                .commodity(Commodity.builder()
-                    .commodityComplement(List.of(CommodityComplement.builder()
+                .commodities(List.of(CommodityComplement.builder()
                         .typeOfCommodity(null)
                         .build()))
-                    .build())
                 .build())
             .build();
 
@@ -482,12 +475,10 @@ class GbnAgMapperTest {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-SPC004")
             .notification(Notification.builder()
-                .commodity(Commodity.builder()
-                    .commodityComplement(List.of(CommodityComplement.builder()
+                .commodities(List.of(CommodityComplement.builder()
                         .typeOfCommodity("01020000")
                         .species(List.of())
                         .build()))
-                    .build())
                 .build())
             .build();
 
@@ -499,17 +490,15 @@ class GbnAgMapperTest {
     }
 
     @Test
-    void shouldMapCommodityNameOntoTheComplementTotalsLine_whenSpeciesEmpty() {
+    void shouldMapDescriptionOntoTheComplementTotalsLine_whenSpeciesEmpty() {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-SPC005")
             .notification(Notification.builder()
-                .commodity(Commodity.builder()
-                    .name("Cow")
-                    .commodityComplement(List.of(CommodityComplement.builder()
-                        .typeOfCommodity("01020000")
+                .commodities(List.of(CommodityComplement.builder()
+                        .commodityCode("01020000")
+                        .description("Live bovine animals")
                         .species(List.of())
                         .build()))
-                    .build())
                 .build())
             .build();
 
@@ -517,9 +506,86 @@ class GbnAgMapperTest {
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
 
-        assertThat(line.description()).containsExactly("Cow");
-        assertThat(line.commonName()).isEqualTo("Cow");
+        assertThat(line.description()).containsExactly("Live bovine animals");
+        assertThat(line.commonName()).isNull();
         assertThat(line.scientificName()).isNull();
+    }
+
+    @Test
+    void shouldMapIncludedConsignmentItemToNull_whenCommoditiesEmpty() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-EMPTY")
+            .notification(Notification.builder()
+                .commodities(List.of())
+                .build())
+            .build();
+
+        assertThat(mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
+            .specifiedConsignment().includedConsignmentItem()).isNull();
+    }
+
+    @Test
+    void shouldPreferSpeciesTypeOfCommodityAsTradeLineTypeCode() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-TYPE")
+            .notification(Notification.builder()
+                .commodities(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("COMPLEMENT-TYPE")
+                        .species(List.of(Species.builder()
+                            .value("1148346")
+                            .text("Bos taurus")
+                            .typeOfCommodity("SPECIES-TYPE")
+                            .build()))
+                        .build()))
+                .build())
+            .build();
+
+        TradeLineItem line = firstLineOf(notificationAggregate);
+
+        assertThat(line.typeCode()).isEqualTo("SPECIES-TYPE");
+    }
+
+    @Test
+    void shouldFallBackToComplementTypeOfCommodity_whenSpeciesTypeBlank() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-TYPE2")
+            .notification(Notification.builder()
+                .commodities(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("COMPLEMENT-TYPE")
+                        .species(List.of(Species.builder()
+                            .value("1148346")
+                            .text("Bos taurus")
+                            .typeOfCommodity("  ")
+                            .build()))
+                        .build()))
+                .build())
+            .build();
+
+        assertThat(firstLineOf(notificationAggregate).typeCode()).isEqualTo("COMPLEMENT-TYPE");
+    }
+
+    @Test
+    void shouldOmitBlankCommonNameDescriptionAndClassification() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-BLANK")
+            .notification(Notification.builder()
+                .commodities(List.of(CommodityComplement.builder()
+                        .commodityCode("   ")
+                        .description("   ")
+                        .species(List.of(Species.builder()
+                            .value("1148346")
+                            .text("Bos taurus")
+                            .commonName("   ")
+                            .build()))
+                        .build()))
+                .build())
+            .build();
+
+        TradeLineItem line = firstLineOf(notificationAggregate);
+
+        assertThat(line.applicableClassification()).isNull();
+        assertThat(line.description()).isNull();
+        assertThat(line.commonName()).isNull();
     }
 
     @Test
@@ -527,11 +593,9 @@ class GbnAgMapperTest {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-CMD001")
             .notification(Notification.builder()
-                .commodity(Commodity.builder()
-                    .commodityComplement(List.of(CommodityComplement.builder()
+                .commodities(List.of(CommodityComplement.builder()
                         .typeOfCommodity("01020000")
                         .build()))
-                    .build())
                 .build())
             .build();
 
@@ -548,10 +612,8 @@ class GbnAgMapperTest {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-SCI001")
             .notification(Notification.builder()
-                .commodity(Commodity.builder()
-                    .name("Cow")
-                    .commodityComplement(List.of(CommodityComplement.builder()
-                        .typeOfCommodity("Domestic")
+                .commodities(List.of(CommodityComplement.builder()
+                        .commodityCode("0102")
                         .totalNoOfAnimals(15)
                         .totalNoOfPackages(3)
                         .species(List.of(
@@ -560,7 +622,6 @@ class GbnAgMapperTest {
                             Species.builder().value("749313").text("Bubalus bubalis")
                                 .noOfAnimals(3).noOfPackages(2).build()))
                         .build()))
-                    .build())
                 .build())
             .build();
 
@@ -580,9 +641,9 @@ class GbnAgMapperTest {
             });
         assertThat(lines).allSatisfy(line -> {
             assertThat(line.applicableClassification()).singleElement()
-                .satisfies(c -> assertThat(c.classCode().value()).isEqualTo("Domestic"));
-            assertThat(line.commonName()).isEqualTo("Cow");
-            assertThat(line.description()).containsExactly("Cow");
+                .satisfies(c -> assertThat(c.classCode().value()).isEqualTo("0102"));
+            assertThat(line.commonName()).isNull();
+            assertThat(line.description()).isNull();
         });
     }
 
@@ -888,12 +949,10 @@ class GbnAgMapperTest {
         return NotificationAggregate.builder()
             .referenceNumber(reference)
             .notification(Notification.builder()
-                .commodity(Commodity.builder()
-                    .commodityComplement(List.of(CommodityComplement.builder()
+                .commodities(List.of(CommodityComplement.builder()
                         .typeOfCommodity("01020000")
                         .species(List.of(species))
                         .build()))
-                    .build())
                 .build())
             .build();
     }
@@ -902,6 +961,75 @@ class GbnAgMapperTest {
         return mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
             .specifiedConsignment().includedConsignmentItem().getFirst()
             .includedTradeLineItem().getFirst();
+    }
+
+    @Test
+    void shouldMapEachCommodityEntryToTradeLinesWithMatchingNameAndCnCode() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-MULTI")
+            .notification(Notification.builder()
+                .commodities(List.of(
+                    CommodityComplement.builder()
+                        .name("Cow")
+                        .commodityCode("0102")
+                        .description("Live bovine animals")
+                        .species(List.of(Species.builder()
+                            .value("1148346")
+                            .text("Bos taurus")
+                            .commonName("Domestic cattle")
+                            .noOfAnimals(1)
+                            .noOfPackages(1)
+                            .build()))
+                        .build(),
+                    CommodityComplement.builder()
+                        .name("Cat")
+                        .commodityCode("01061900")
+                        .description("Other live animals")
+                        .species(List.of(Species.builder()
+                            .value("923501")
+                            .text("Felis catus")
+                            .commonName("Cat")
+                            .noOfAnimals(1)
+                            .noOfPackages(1)
+                            .build()))
+                        .build()))
+                .build())
+            .build();
+
+        List<TradeLineItem> lines = mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
+            .specifiedConsignment().includedConsignmentItem().getFirst().includedTradeLineItem();
+
+        assertThat(lines).hasSize(2);
+        assertThat(lines.get(0).commonName()).isEqualTo("Domestic cattle");
+        assertThat(lines.get(0).description()).containsExactly("Live bovine animals");
+        assertThat(lines.get(0).applicableClassification().getFirst().classCode().value()).isEqualTo("0102");
+        assertThat(lines.get(1).commonName()).isEqualTo("Cat");
+        assertThat(lines.get(1).description()).containsExactly("Other live animals");
+        assertThat(lines.get(1).applicableClassification().getFirst().classCode().value()).isEqualTo("01061900");
+    }
+
+    @Test
+    void shouldOmitClassification_whenOnlyTypeOfCommodityIsSet() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-LEGACY")
+            .notification(Notification.builder()
+                .commodities(List.of(CommodityComplement.builder()
+                        .typeOfCommodity("01020000")
+                        .totalNoOfAnimals(1)
+                        .totalNoOfPackages(1)
+                        .species(List.of(Species.builder()
+                            .value("1148346")
+                            .text("Bos taurus")
+                            .noOfAnimals(1)
+                            .noOfPackages(1)
+                            .build()))
+                        .build()))
+                .build())
+            .build();
+
+        TradeLineItem line = firstLineOf(notificationAggregate);
+        assertThat(line.applicableClassification()).isNull();
+        assertThat(line.typeCode()).isEqualTo("01020000");
     }
 
     private static NotificationAggregate fullyPopulatedNotification() {
@@ -928,27 +1056,27 @@ class GbnAgMapperTest {
                 .placeOfOrigin(party("Granja del Valle de Tenerife", simpleAddress("Camino La Hornera 12", "ES")))
                 .consignment(party("Animal and Plant Health Agency", simpleAddress("Woodham Lane", "GB")))
                 .cphNumber("CPH19876")
-                .commodity(Commodity.builder()
+                .commodities(List.of(CommodityComplement.builder()
                     .name("Cow")
-                    .commodityComplement(List.of(CommodityComplement.builder()
-                        .typeOfCommodity("01020000")
-                        .totalNoOfAnimals(20)
-                        .totalNoOfPackages(1)
-                        .species(List.of(Species.builder()
-                            .value("1148346")
-                            .text("Bos taurus")
-                            .noOfAnimals(20)
-                            .noOfPackages(1)
-                            .earTag("UK01234567890")
-                            .passport("UK0123456700999")
-                            .animalIdentifiers(List.of(
-                                AnimalIdentifier.builder()
-                                    .earTag("UK01234567890").passport("UK0123456700999").build(),
-                                AnimalIdentifier.builder()
-                                    .earTag("UK01234567891").passport("UK0123456700998").build()))
-                            .build()))
+                    .commodityCode("01020000")
+                    .description("Live bovine animals")
+                    .totalNoOfAnimals(20)
+                    .totalNoOfPackages(1)
+                    .species(List.of(Species.builder()
+                        .value("1148346")
+                        .text("Bos taurus")
+                        .commonName("Domestic cattle")
+                        .noOfAnimals(20)
+                        .noOfPackages(1)
+                        .earTag("UK01234567890")
+                        .passport("UK0123456700999")
+                        .animalIdentifiers(List.of(
+                            AnimalIdentifier.builder()
+                                .earTag("UK01234567890").passport("UK0123456700999").build(),
+                            AnimalIdentifier.builder()
+                                .earTag("UK01234567891").passport("UK0123456700998").build()))
                         .build()))
-                    .build())
+                    .build()))
                 .transport(Transport.builder()
                     .portOfEntry("GBDVR")
                     .arrivalDate(LocalDate.parse("2026-05-06"))

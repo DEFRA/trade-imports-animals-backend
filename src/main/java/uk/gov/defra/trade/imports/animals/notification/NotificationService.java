@@ -478,7 +478,7 @@ public class NotificationService {
         }
         Notification notification = notificationAggregate.getNotification();
         notification.setOrigin(dto.getOrigin());
-        notification.setCommodity(dto.getCommodity());
+        notification.setCommodities(dto.getCommodities());
         notification.setReasonForImport(dto.getReasonForImport());
         notification.setAdditionalDetails(dto.getAdditionalDetails());
         notification.setPlaceOfOrigin(dto.getPlaceOfOrigin());

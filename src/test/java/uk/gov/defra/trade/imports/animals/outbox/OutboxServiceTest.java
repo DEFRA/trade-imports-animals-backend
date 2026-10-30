@@ -28,7 +28,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
-import uk.gov.defra.trade.imports.animals.notification.Commodity;
+import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
@@ -142,7 +142,8 @@ class OutboxServiceTest {
                 .requiresRegionCode("true")
                 .internalReference("REF123")
                 .build();
-            Commodity commodity = Commodity.builder().name("Live bovine animals").build();
+            List<CommodityComplement> commodities = List.of(
+                CommodityComplement.builder().name("Live bovine animals").build());
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()
                 .portOfEntry("GBFXT")
@@ -154,7 +155,7 @@ class OutboxServiceTest {
                 NotificationStatus.SUBMITTED,
                 Notification.builder()
                     .origin(origin)
-                    .commodity(commodity)
+                    .commodities(commodities)
                     .reasonForImport("PERMANENT")
                     .additionalDetails(additionalDetails)
                     .cphNumber("12/345/6789")

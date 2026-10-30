@@ -139,14 +139,15 @@ class NotificationControllerTest {
                 .internalReference("CUSTOMER-REF-123")
                 .build();
             Species species = species();
-            CommodityComplement complement = new CommodityComplement("LIVE", 5, null, List.of(species));
-            Commodity commodity = Commodity.builder()
+            CommodityComplement complement = CommodityComplement.builder()
                 .name("Live bovine animals")
-                .commodityComplement(List.of(complement))
+                .typeOfCommodity("LIVE")
+                .totalNoOfAnimals(5)
+                .species(List.of(species))
                 .build();
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(origin)
-                .commodity(commodity)
+                .commodities(List.of(complement))
                 .reasonForImport("PERMANENT")
                 .consignor(consignors().getFirst())
                 .destination(destinations().getFirst())
@@ -159,7 +160,7 @@ class NotificationControllerTest {
             savedNotification.setId("507f1f77bcf86cd799439011");
             savedNotification.setReferenceNumber(REF_1);
             savedNotification.getNotification().setOrigin(origin);
-            savedNotification.getNotification().setCommodity(commodity);
+            savedNotification.getNotification().setCommodities(List.of(complement));
             savedNotification.getNotification().setReasonForImport("PERMANENT");
             savedNotification.getNotification().setConsignor(consignors().getFirst());
             savedNotification.getNotification().setDestination(destinations().getFirst());
@@ -179,14 +180,14 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.notification.origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$.notification.origin.internalReference").value("CUSTOMER-REF-123"))
-                .andExpect(jsonPath("$.notification.commodity.name").value("Live bovine animals"))
-                .andExpect(jsonPath("$.notification.commodity.commodityComplement[0].typeOfCommodity").value("LIVE"))
-                .andExpect(jsonPath("$.notification.commodity.commodityComplement[0].species[0].value").value("BOV"))
-                .andExpect(jsonPath("$.notification.commodity.commodityComplement[0].species[0].earTag").value(
+                .andExpect(jsonPath("$.notification.commodities[0].name").value("Live bovine animals"))
+                .andExpect(jsonPath("$.notification.commodities[0].typeOfCommodity").value("LIVE"))
+                .andExpect(jsonPath("$.notification.commodities[0].species[0].value").value("BOV"))
+                .andExpect(jsonPath("$.notification.commodities[0].species[0].earTag").value(
                     "UK01234567890"))
-                .andExpect(jsonPath("$.notification.commodity.commodityComplement[0].species[0].passport").value(
+                .andExpect(jsonPath("$.notification.commodities[0].species[0].passport").value(
                     "UK0123456700999"))
-                .andExpect(jsonPath("$.notification.commodity.commodityComplement[0].species[0].microchip").value(
+                .andExpect(jsonPath("$.notification.commodities[0].species[0].microchip").value(
                     "900123456789012"))
                 .andExpect(jsonPath("$.notification.reasonForImport").value("PERMANENT"))
                 .andExpect(jsonPath("$.notification.consignor.name").value(consignors().getFirst().getName()))
@@ -298,10 +299,12 @@ class NotificationControllerTest {
                 .passport("UK123456789")
                 .animalIdentifiers(List.of(firstUnit, secondUnit))
                 .build();
-            CommodityComplement complement = new CommodityComplement("LIVE", 2, 1, List.of(species));
-            Commodity commodity = Commodity.builder()
+            CommodityComplement complement = CommodityComplement.builder()
                 .name("Cow")
-                .commodityComplement(List.of(complement))
+                .typeOfCommodity("LIVE")
+                .totalNoOfAnimals(2)
+                .totalNoOfPackages(1)
+                .species(List.of(species))
                 .build();
             Transport transport = Transport.builder()
                 .portOfEntry("GB DVR")
@@ -309,7 +312,7 @@ class NotificationControllerTest {
                 .build();
             NotificationDto notificationDto = NotificationDto.builder()
                 .origin(origin)
-                .commodity(commodity)
+                .commodities(List.of(complement))
                 .purposeInInternalMarket("Breeding")
                 .destinationCountry("DE")
                 .portOfExit("GB DVR")
@@ -322,7 +325,7 @@ class NotificationControllerTest {
             savedNotification.setId("507f1f77bcf86cd799439099");
             savedNotification.setReferenceNumber(REF_3);
             savedNotification.getNotification().setOrigin(origin);
-            savedNotification.getNotification().setCommodity(commodity);
+            savedNotification.getNotification().setCommodities(List.of(complement));
             savedNotification.getNotification().setPurposeInInternalMarket("Breeding");
             savedNotification.getNotification().setDestinationCountry("DE");
             savedNotification.getNotification().setPortOfExit("GB DVR");
@@ -345,25 +348,25 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.notification.exitDate").value("2026-12-20"))
                 .andExpect(jsonPath("$.notification.transport.arrivalDate").value("2026-12-19"))
                 .andExpect(jsonPath(
-                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[0].earTag")
+                    "$.notification.commodities[0].species[0].animalIdentifiers[0].earTag")
                     .value("UK123456789012"))
                 .andExpect(jsonPath(
-                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[0].passport")
+                    "$.notification.commodities[0].species[0].animalIdentifiers[0].passport")
                     .value("UK123456789"))
                 .andExpect(jsonPath(
-                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[0].tattoo")
+                    "$.notification.commodities[0].species[0].animalIdentifiers[0].tattoo")
                     .value("AB1234"))
                 .andExpect(jsonPath(
-                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[1].horseName")
+                    "$.notification.commodities[0].species[0].animalIdentifiers[1].horseName")
                     .value("Silver"))
                 .andExpect(jsonPath(
-                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[1].microchip")
+                    "$.notification.commodities[0].species[0].animalIdentifiers[1].microchip")
                     .value("900123456789012"))
                 .andExpect(jsonPath(
-                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[1].permanentAddress.name")
+                    "$.notification.commodities[0].species[0].animalIdentifiers[1].permanentAddress.name")
                     .value("Owner"))
                 .andExpect(jsonPath(
-                    "$.notification.commodity.commodityComplement[0].species[0].animalIdentifiers[1].permanentAddress.address.addressLine1")
+                    "$.notification.commodities[0].species[0].animalIdentifiers[1].permanentAddress.address.addressLine1")
                     .value("8 Stable Close"));
         }
 
@@ -939,13 +942,13 @@ class NotificationControllerTest {
             // Given
             NotificationView notification1 = testView(REF_1, NotificationStatus.DRAFT,
                 Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-GB-001").build(),
-                Commodity.builder().name("Live cattle").build(),
+                List.of(CommodityComplement.builder().name("Live cattle").build()),
                 consignors().getFirst(),
                 Transport.builder().transporter(transporters().getFirst()).build());
 
             NotificationView notification2 = testView(REF_2, NotificationStatus.SUBMITTED,
                 Origin.builder().countryCode("FR").requiresRegionCode("false").internalReference("REF-FR-002").build(),
-                Commodity.builder().name("Live sheep").build(),
+                List.of(CommodityComplement.builder().name("Live sheep").build()),
                 consignors().getLast(),
                 Transport.builder().transporter(transporters().getLast()).build());
 
@@ -961,12 +964,12 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.content[0].referenceNumber").value(REF_1))
                 .andExpect(jsonPath("$.content[0].status").value("DRAFT"))
                 .andExpect(jsonPath("$.content[0].origin.countryCode").value("GB"))
-                .andExpect(jsonPath("$.content[0].commodity.name").value("Live cattle"))
+                .andExpect(jsonPath("$.content[0].commodities[0].name").value("Live cattle"))
                 .andExpect(jsonPath("$.content[0].created").value("2026-07-21T00:30:00.456Z"))
                 .andExpect(jsonPath("$.content[1].referenceNumber").value(REF_2))
                 .andExpect(jsonPath("$.content[1].status").value("SUBMITTED"))
                 .andExpect(jsonPath("$.content[1].origin.countryCode").value("FR"))
-                .andExpect(jsonPath("$.content[1].commodity.name").value("Live sheep"))
+                .andExpect(jsonPath("$.content[1].commodities[0].name").value("Live sheep"))
                 .andExpect(jsonPath("$.page").value(1))
                 .andExpect(jsonPath("$.size").value(25))
                 .andExpect(jsonPath("$.totalElements").value(2))
@@ -974,9 +977,9 @@ class NotificationControllerTest {
         }
 
         private NotificationView testView(String ref, NotificationStatus status, Origin origin,
-                Commodity commodity, ConsignmentParty consignor, Transport transport) {
+                List<CommodityComplement> commodities, ConsignmentParty consignor, Transport transport) {
             return new NotificationViewData(
-                ref, 0L, status, VIEW_CREATED, origin, commodity, consignor, null, transport);
+                ref, 0L, status, VIEW_CREATED, origin, commodities, consignor, null, transport);
         }
 
         @Test

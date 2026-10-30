@@ -283,10 +283,12 @@ class NotificationServiceTest {
                 .internalReference("REF456")
                 .regionOfOriginCode("FR-75")
                 .build();
-            Commodity commodity = Commodity.builder()
+            List<CommodityComplement> commodities = List.of(CommodityComplement.builder()
                 .name("Fish")
-                .commodityComplement(List.of(new CommodityComplement("LIVE", 5, null, List.of(species()))))
-                .build();
+                .typeOfCommodity("LIVE")
+                .totalNoOfAnimals(5)
+                .species(List.of(species()))
+                .build());
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()
                 .portOfEntry("ABERDEEN")
@@ -299,7 +301,7 @@ class NotificationServiceTest {
                 .referenceNumber(referenceNumber)
                 .concurrencyToken(0L)
                 .origin(origin)
-                .commodity(commodity)
+                .commodities(commodities)
                 .consignor(consignors().getFirst())
                 .destination(destinations().getFirst())
                 .additionalDetails(additionalDetails)
@@ -315,7 +317,7 @@ class NotificationServiceTest {
 
             Notification expectedNotification = Notification.builder()
                 .origin(origin)
-                .commodity(commodity)
+                .commodities(commodities)
                 .consignor(consignors().getFirst())
                 .destination(destinations().getFirst())
                 .additionalDetails(additionalDetails)
@@ -1859,11 +1861,12 @@ class NotificationServiceTest {
                 .internalReference("INTERNAL-REF")
                 .build();
             AdditionalDetails additionalDetails = new AdditionalDetails("Breeding", "yes");
-            CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
-                List.of(species()));
-            Commodity commodity = Commodity.builder()
+            CommodityComplement complement = CommodityComplement.builder()
                 .name("Live bovine animals")
-                .commodityComplement(List.of(complement))
+                .typeOfCommodity("LIVE")
+                .totalNoOfAnimals(10)
+                .totalNoOfPackages(5)
+                .species(List.of(species()))
                 .build();
 
             NotificationAggregate source = NotificationAggregate.builder()
@@ -1873,7 +1876,7 @@ class NotificationServiceTest {
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
                     .origin(origin)
-                    .commodity(commodity)
+                    .commodities(List.of(complement))
                     .reasonForImport("internalMarket")
                     .additionalDetails(additionalDetails)
                     .consignor(consignors().getFirst())
@@ -1907,7 +1910,7 @@ class NotificationServiceTest {
             assertThat(saved.getNotification().getOrigin().getCountryCode()).isEqualTo("DE");
             assertThat(saved.getNotification().getOrigin().getRequiresRegionCode()).isEqualTo("yes");
             assertThat(saved.getNotification().getReasonForImport()).isEqualTo("internalMarket");
-            assertThat(saved.getNotification().getCommodity().getName()).isEqualTo("Live bovine animals");
+            assertThat(saved.getNotification().getCommodities().getFirst().getName()).isEqualTo("Live bovine animals");
             assertThat(saved.getNotification().getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
             assertThat(saved.getNotification().getConsignor()).isEqualTo(consignors().getFirst());
             assertThat(saved.getNotification().getDestination()).isEqualTo(destinations().getFirst());
@@ -1927,10 +1930,7 @@ class NotificationServiceTest {
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
                     .origin(Origin.builder().countryCode("FR").requiresRegionCode("no").internalReference("DO-NOT-COPY").build())
-                    .commodity(Commodity.builder()
-                        .name("Cattle")
-                        .commodityComplement(List.of(complement))
-                        .build())
+                    .commodities(List.of(complement))
                     .additionalDetails(new AdditionalDetails("Slaughter", "no"))
                     .transport(Transport.builder()
                         .portOfEntry("GBFXT")
@@ -1958,8 +1958,7 @@ class NotificationServiceTest {
             assertThat(saved.getNotification().getAdditionalDetails().getUnweanedAnimals()).isNull();
             assertThat(saved.getNotification().getTransport()).isNull();
             assertThat(saved.getNotification().getConsignment()).isNull();
-            // Commodity complement strips per-animal data
-            CommodityComplement cc = saved.getNotification().getCommodity().getCommodityComplement().getFirst();
+            CommodityComplement cc = saved.getNotification().getCommodities().getFirst();
             assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
             assertThat(cc.getTotalNoOfAnimals()).isNull();
             assertThat(cc.getTotalNoOfPackages()).isNull();
@@ -2333,7 +2332,7 @@ class NotificationServiceTest {
                 .status(SUBMITTED)
                 .notification(Notification.builder()
                     .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("LIVE-REF").build())
-                    .commodity(Commodity.builder().name("Cattle").build())
+                    .commodities(List.of(CommodityComplement.builder().name("Cattle").build()))
                     .reasonForImport("PERMANENT")
                     .cphNumber("12/345/6789")
                     .build())
@@ -2352,18 +2351,18 @@ class NotificationServiceTest {
             assertThat(result.getPreAmendNotification()).isNotNull();
             assertThat(result.getPreAmendNotification().getOrigin().getInternalReference())
                 .isEqualTo("LIVE-REF");
-            assertThat(result.getPreAmendNotification().getCommodity().getName())
+            assertThat(result.getPreAmendNotification().getCommodities().getFirst().getName())
                 .isEqualTo("Cattle");
 
             // And
             result.getNotification().getOrigin().setInternalReference("EDITED");
-            result.getNotification().getCommodity().setName("MutatedCattle");
+            result.getNotification().getCommodities().getFirst().setName("MutatedCattle");
             result.getNotification().setReasonForImport("CHANGED");
             result.getNotification().setCphNumber("99/999/9999");
 
             assertThat(result.getPreAmendNotification().getOrigin().getInternalReference())
                 .isEqualTo("LIVE-REF");
-            assertThat(result.getPreAmendNotification().getCommodity().getName())
+            assertThat(result.getPreAmendNotification().getCommodities().getFirst().getName())
                 .isEqualTo("Cattle");
             assertThat(result.getPreAmendNotification().getReasonForImport())
                 .isEqualTo("PERMANENT");
@@ -2739,7 +2738,7 @@ class NotificationServiceTest {
         private NotificationStatus status;
         private Instant created;
         private Origin origin;
-        private Commodity commodity;
+        private List<CommodityComplement> commodities;
         private ConsignmentParty consignor;
         private ConsignmentParty consignee;
         private Transport transport;
@@ -2748,7 +2747,7 @@ class NotificationServiceTest {
         NotificationViewBuilder status(NotificationStatus v) { this.status = v; return this; }
         NotificationViewBuilder created(Instant v) { this.created = v; return this; }
         NotificationViewBuilder origin(Origin v) { this.origin = v; return this; }
-        NotificationViewBuilder commodity(Commodity v) { this.commodity = v; return this; }
+        NotificationViewBuilder commodities(List<CommodityComplement> v) { this.commodities = v; return this; }
         NotificationViewBuilder consignor(ConsignmentParty v) { this.consignor = v; return this; }
         NotificationViewBuilder consignee(ConsignmentParty v) { this.consignee = v; return this; }
         NotificationViewBuilder transport(Transport v) { this.transport = v; return this; }
@@ -2756,7 +2755,7 @@ class NotificationServiceTest {
         NotificationView build() {
             return new NotificationViewData(
                 referenceNumber, 0L, status, created,
-                origin, commodity, consignor, consignee, transport);
+                origin, commodities, consignor, consignee, transport);
         }
     }
 }
