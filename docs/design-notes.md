@@ -65,7 +65,9 @@ On CDP all egress except the database goes through the platform proxy named by `
 
 ## GBN-AG event mapping
 
-Each party's email and telephone map to one `definedContact`. With neither, `definedContact` is null rather than an empty list, so it is omitted like every other absent field. `personName` is never set: the address book holds an organisation or address name, already mapped to the party name, and no contact person.
+Each party's email and telephone map to one `definedContact`. With neither, `definedContact` is null rather than an empty list. `personName` is never set: the address book holds an organisation or address name, already mapped to the party name, and no contact person.
+
+Only `ExchangedDocument`, `ReferencedDocument`, `TradeCountry` and `TradeCountrySubDivision` leave absent fields out of the event JSON; every other record writes them as null, including `personName` on each `definedContact`. The gateway leaves nulls out of the PIMS payloads it builds, so PIMS never receives them.
 
 Document type codes follow `schemas/codelists/gbn-ag-document-types.json` in trade-imports-schemas.
 
