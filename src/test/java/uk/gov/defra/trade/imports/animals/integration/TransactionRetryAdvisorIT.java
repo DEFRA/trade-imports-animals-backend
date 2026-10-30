@@ -6,6 +6,7 @@ import static org.assertj.core.groups.Tuple.tuple;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.writeConflictAtCommit;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.writeConflictOnOutboxCreation;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,7 +22,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.transaction.TransactionSystemException;
 import org.springframework.transaction.annotation.Transactional;
-import uk.gov.defra.trade.imports.animals.notification.Commodity;
+import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
@@ -119,7 +120,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
         NotificationDto edit = NotificationDto.builder()
             .referenceNumber(referenceNumber)
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("EDITED").build())
-            .commodity(Commodity.builder().name("Live cattle").build())
+            .commodities(List.of(CommodityComplement.builder().name("Live cattle").build()))
             .concurrencyToken(draft.getConcurrencyToken())
             .build();
         transactionManager.failNextCommits(1);
@@ -144,7 +145,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
         origin.setCountryCode("GB");
         NotificationDto dto = NotificationDto.builder()
             .origin(origin)
-            .commodity(Commodity.builder().name("Live cattle").build())
+            .commodities(List.of(CommodityComplement.builder().name("Live cattle").build()))
             .build();
 
         return webClient("NoAuth")

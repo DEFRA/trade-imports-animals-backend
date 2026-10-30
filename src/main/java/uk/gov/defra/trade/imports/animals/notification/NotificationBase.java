@@ -14,8 +14,6 @@ public abstract class NotificationBase {
 
     private Origin origin;
 
-    private Commodity commodity;
-
     private List<CommodityComplement> commodities;
 
     private String reasonForImport;
