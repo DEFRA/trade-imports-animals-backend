@@ -61,9 +61,16 @@ class GbnAgMapperTest {
         }
 
         @Test
-        void shouldMapNotYetCapturedExchangedDocumentFieldsToNull() {
-            ExchangedDocument doc = result.exchangedDocument();
-            assertThat(doc.issuer()).isNull();
+        void shouldMapConsignmentContactToIssuerWithNameAddressEmailAndPhone() {
+            TradeParty issuer = result.exchangedDocument().issuer();
+            assertThat(issuer.name()).isEqualTo("Animal and Plant Health Agency");
+            assertThat(issuer.postalAddress().lineOne()).isEqualTo("Woodham Lane");
+            assertThat(issuer.postalAddress().countryId()).isEqualTo("GB");
+            assertThat(issuer.definedContact()).singleElement().satisfies(contact -> {
+                assertThat(contact.emailURIUniversalCommunication()).isEqualTo("imports@apha.example.gov.uk");
+                assertThat(contact.telephoneUniversalCommunication()).isEqualTo("03000 200301");
+                assertThat(contact.personName()).isNull();
+            });
         }
 
         @Test
@@ -76,16 +83,13 @@ class GbnAgMapperTest {
         }
 
         @Test
-        void shouldBuildDeclarationClausesIncludingInternalMarketPurpose() {
-            List<Clause> clauses = result.exchangedDocument().firstSignatoryAuthentication().includedClause();
-            assertThat(clauses).hasSize(3);
-            assertThat(clauses.get(0).identifier()).isEqualTo("PURPOSE");
-            assertThat(clauses.get(0).content()).isEqualTo("INTERNAL_MARKET");
-            assertThat(clauses.get(1).identifier()).isEqualTo("INTERNAL_MARKET_PURPOSE");
-            assertThat(clauses.get(1).content()).isNull();
-            assertThat(clauses.get(2).identifier()).isEqualTo("GOODS_CERTIFIED_AS");
-            assertThat(clauses.get(2).content()).isEqualTo("BREEDING_AND_PRODUCTION");
-            assertThat(clauses).allSatisfy(c -> assertThat(c.urlId()).isNull());
+        void shouldCodeEachDeclarationClauseFromItsListIncludingThePurposeInTheInternalMarket() {
+            assertThat(result.exchangedDocument().firstSignatoryAuthentication().includedClause()).containsExactly(
+                new Clause("PURPOSE", "INTERNAL_MARKET", "https://refdata.tbc.defra.gov.uk/gbn-ag-purposes"),
+                new Clause("INTERNAL_MARKET_PURPOSE", "BREEDING",
+                    "https://refdata.tbc.defra.gov.uk/gbn-ag-internal-market-purposes"),
+                new Clause("GOODS_CERTIFIED_AS", "FURTHER_KEEPING",
+                    "https://refdata.tbc.defra.gov.uk/gbn-ag-goods-certified-as"));
         }
 
         @Test
@@ -257,6 +261,17 @@ class GbnAgMapperTest {
             assertThat(instances.getFirst().name()).isNull();
             assertThat(instances.getFirst().permanentLocation()).isNull();
         }
+
+        @Test
+        void shouldNameTheIdentifierTypeListOnEveryAnimalIdentifier() {
+            TradeLineItem line = result.specifiedConsignment()
+                .includedConsignmentItem().getFirst().includedTradeLineItem().getFirst();
+            assertThat(line.individualTradeProductInstance())
+                .flatExtracting(TradeProductInstance::identifier)
+                .hasSize(4)
+                .extracting(TradeProductInstance.AnimalIdentifier::urlId)
+                .containsOnly("https://codelists.tbc.defra.gov.uk/animal_identifier_types");
+        }
     }
 
     @Nested
@@ -303,17 +318,119 @@ class GbnAgMapperTest {
         }
 
         @Test
-        void shouldEmitTwoRequiredClausesWithNullContent_whenReasonNotInternalMarket() {
-            List<Clause> clauses = result.exchangedDocument().firstSignatoryAuthentication().includedClause();
-            assertThat(clauses).extracting(Clause::identifier)
-                .containsExactly("PURPOSE", "GOODS_CERTIFIED_AS");
-            assertThat(clauses).allSatisfy(c -> assertThat(c.content()).isNull());
+        void shouldEmitTwoRequiredClausesWithNoContentOrListUrl_whenNothingIsAnswered() {
+            assertThat(result.exchangedDocument().firstSignatoryAuthentication().includedClause()).containsExactly(
+                new Clause("PURPOSE", null, null),
+                new Clause("GOODS_CERTIFIED_AS", null, null));
+        }
+
+        @Test
+        void shouldOmitIssuerKey_whenNoConsignmentContact() {
+            JsonNode exchangedDocument = new ObjectMapper().valueToTree(result.exchangedDocument());
+            assertThat(exchangedDocument.has("issuer")).isFalse();
         }
     }
 
     @Test
     void toGbnAgEventData_shouldReturnNull_whenNotificationNull() {
         assertThat(mapper.toGbnAgEventData(null, null, List.of())).isNull();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "internalMarket,INTERNAL_MARKET",
+        "transhipmentOrOnwardTravel,TRANSHIPMENT_OR_ONWARD_TRAVEL",
+        "transit,TRANSIT",
+        "reEntry,RE_ENTRY",
+        "temporaryAdmissionHorses,TEMPORARY_ADMISSION"
+    })
+    void shouldSendEachReasonForImportAsItsPurposeCode(String reasonForImport, String code) {
+        List<Clause> clauses = clausesOf(Notification.builder().reasonForImport(reasonForImport).build());
+
+        assertThat(clauses.getFirst())
+            .isEqualTo(new Clause("PURPOSE", code, "https://refdata.tbc.defra.gov.uk/gbn-ag-purposes"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "transfer-of-ownership-sale-gift,TRANSFER_OF_OWNERSHIP_SALE_GIFT",
+        "transfer-of-ownership-rescue,TRANSFER_OF_OWNERSHIP_RESCUE",
+        "breeding,BREEDING",
+        "research,RESEARCH",
+        "racing-competition-show-or-training,RACING_COMPETITION_SHOW_OR_TRAINING",
+        "approved-premises-or-body,APPROVED_PREMISES_OR_BODY",
+        "companion-animal-not-for-resale-or-rehoming,COMPANION_ANIMAL_NOT_FOR_RESALE_OR_REHOMING",
+        "production,PRODUCTION",
+        "slaughter,SLAUGHTER",
+        "fattening,FATTENING",
+        "restocking,RESTOCKING"
+    })
+    void shouldSendEachPurposeInTheInternalMarketAsItsCode(String purposeInInternalMarket, String code) {
+        List<Clause> clauses = clausesOf(Notification.builder()
+            .reasonForImport("internalMarket").purposeInInternalMarket(purposeInInternalMarket).build());
+
+        assertThat(clauses.get(1)).isEqualTo(new Clause(
+            "INTERNAL_MARKET_PURPOSE", code, "https://refdata.tbc.defra.gov.uk/gbn-ag-internal-market-purposes"));
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "further-keeping,FURTHER_KEEPING",
+        "slaughter,SLAUGHTER",
+        "confined-establishment,CONFINED_ESTABLISHMENT",
+        "germinal-products,GERMINAL_PRODUCTS",
+        "registered-equine-animal,REGISTERED_EQUIDAE",
+        "travelling-circus-animal-act,TRAVELLING_CIRCUS_ANIMAL_ACT",
+        "exhibition,EXHIBITION",
+        "event-or-activity-near-borders,EVENT_OR_ACTIVITY_NEAR_BORDERS",
+        "release-into-the-wild,RELEASE_INTO_THE_WILD",
+        "dispatch-centre,DISPATCH_CENTRE",
+        "relaying-area-purification-centre,RELAYING_AREA_PURIFICATION_CENTRE",
+        "ornamental-aquaculture-establishment,ORNAMENTAL_AQUACULTURE_ESTABLISHMENT",
+        "technical-use,TECHNICAL_USE",
+        "quarantine-or-similar-establishment,QUARANTINE_OR_SIMILAR_ESTABLISHMENT",
+        "live-aquatic-animals-for-human-consumption,LIVE_AQUATIC_ANIMALS_FOR_HUMAN_CONSUMPTION",
+        "other,OTHER"
+    })
+    void shouldSendEachCertifiedAsAnswerAsItsGoodsCertifiedAsCode(String certifiedFor, String code) {
+        List<Clause> clauses = clausesOf(Notification.builder()
+            .additionalDetails(new AdditionalDetails(certifiedFor, null)).build());
+
+        assertThat(clauses.getLast()).isEqualTo(new Clause(
+            "GOODS_CERTIFIED_AS", code, "https://refdata.tbc.defra.gov.uk/gbn-ag-goods-certified-as"));
+    }
+
+    @Test
+    void shouldSendAStoredValueUnchangedWithItsListUrl_whenItsListHasNoCodeForIt() {
+        List<Clause> clauses = clausesOf(Notification.builder()
+            .reasonForImport("internalMarket")
+            .purposeInInternalMarket("display")
+            .additionalDetails(new AdditionalDetails("circus-retirement", null))
+            .build());
+
+        assertThat(clauses).containsExactly(
+            new Clause("PURPOSE", "INTERNAL_MARKET", "https://refdata.tbc.defra.gov.uk/gbn-ag-purposes"),
+            new Clause("INTERNAL_MARKET_PURPOSE", "display",
+                "https://refdata.tbc.defra.gov.uk/gbn-ag-internal-market-purposes"),
+            new Clause("GOODS_CERTIFIED_AS", "circus-retirement",
+                "https://refdata.tbc.defra.gov.uk/gbn-ag-goods-certified-as"));
+    }
+
+    @Test
+    void shouldLeaveOutTheInternalMarketPurposeClause_whenTheReasonIsNotInternalMarket() {
+        List<Clause> clauses = clausesOf(Notification.builder()
+            .reasonForImport("transit").purposeInInternalMarket("breeding").build());
+
+        assertThat(clauses).extracting(Clause::identifier).containsExactly("PURPOSE", "GOODS_CERTIFIED_AS");
+    }
+
+    private List<Clause> clausesOf(Notification notification) {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-CLS001")
+            .notification(notification)
+            .build();
+        return mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
+            .exchangedDocument().firstSignatoryAuthentication().includedClause();
     }
 
     @ParameterizedTest
@@ -877,7 +994,7 @@ class GbnAgMapperTest {
             assertThat(instance.identifier()).singleElement().satisfies(microchip -> {
                 assertThat(microchip.typeCode()).isEqualTo("MICROCHIP");
                 assertThat(microchip.content()).isEqualTo("900123456789012");
-                assertThat(microchip.urlId()).isNull();
+                assertThat(microchip.urlId()).isEqualTo("https://codelists.tbc.defra.gov.uk/animal_identifier_types");
             }));
     }
 
@@ -908,8 +1025,9 @@ class GbnAgMapperTest {
             .updated(Instant.parse("2026-05-21T10:15:00Z"))
             .notification(Notification.builder()
                 .origin(Origin.builder().countryCode("ES").countrySubdivisionCode("ES-CN").requiresRegionCode("yes").internalReference("Imports456_GB").regionOfOriginCode("ES-12345").build())
-                .reasonForImport("INTERNAL_MARKET")
-                .additionalDetails(new AdditionalDetails("BREEDING_AND_PRODUCTION", "true"))
+                .reasonForImport("internalMarket")
+                .purposeInInternalMarket("breeding")
+                .additionalDetails(new AdditionalDetails("further-keeping", "true"))
                 .consignor(party("Astra Rosales",
                     Address.builder()
                         .addressLine1("43 East Hague Extension")
@@ -923,7 +1041,12 @@ class GbnAgMapperTest {
                 .destination(party("Linus George Ltd", simpleAddress("558 Oak Street", "CH")))
                 .importer(party("GB Animal Imports", simpleAddress("5 Port Way", "GB")))
                 .placeOfOrigin(party("Granja del Valle de Tenerife", simpleAddress("Camino La Hornera 12", "ES")))
-                .consignment(party("Animal and Plant Health Agency", simpleAddress("Woodham Lane", "GB")))
+                .consignment(ConsignmentParty.builder()
+                    .name("Animal and Plant Health Agency")
+                    .email("imports@apha.example.gov.uk")
+                    .phone("03000 200301")
+                    .address(simpleAddress("Woodham Lane", "GB"))
+                    .build())
                 .cphNumber("CPH19876")
                 .commodity(Commodity.builder()
                     .name("Cow")

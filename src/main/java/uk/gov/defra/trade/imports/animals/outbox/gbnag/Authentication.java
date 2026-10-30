@@ -11,17 +11,17 @@ public record Authentication(List<Clause> includedClause) {
         includedClause = List.copyOf(includedClause);
     }
 
-    static Authentication from(Notification notification) {
+    static Authentication from(Notification notification, String referenceNumber) {
         String reasonForImport = notification.getReasonForImport();
         AdditionalDetails additionalDetails = notification.getAdditionalDetails();
 
         List<Clause> clauses = new ArrayList<>();
-        clauses.add(Clause.purpose(reasonForImport));
-        if (Clause.INTERNAL_MARKET.equals(reasonForImport)) {
-            clauses.add(Clause.internalMarketPurpose());
+        clauses.add(Clause.purpose(reasonForImport, referenceNumber));
+        if (Clause.INTERNAL_MARKET_REASON.equals(reasonForImport)) {
+            clauses.add(Clause.internalMarketPurpose(notification.getPurposeInInternalMarket(), referenceNumber));
         }
         clauses.add(Clause.goodsCertifiedAs(
-            additionalDetails != null ? additionalDetails.getCertifiedFor() : null));
+            additionalDetails != null ? additionalDetails.getCertifiedFor() : null, referenceNumber));
         return new Authentication(clauses);
     }
 }
