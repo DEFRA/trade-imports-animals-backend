@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,7 +13,9 @@ import java.util.TimeZone;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.FieldSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
@@ -35,6 +38,21 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 
 class GbnAgMapperTest {
 
+    static final List<Arguments> DOCUMENT_TYPE_CODES = List.of(
+        arguments(DocumentType.ITAHC, "856"),
+        arguments(DocumentType.VETERINARY_HEALTH_CERTIFICATE, "853"),
+        arguments(DocumentType.SELF_DECLARATION, "GBN4"),
+        arguments(DocumentType.JOURNEY_LOG, "GBN3"),
+        arguments(DocumentType.IMPORT_PERMIT, "911"),
+        arguments(DocumentType.CITES_PERMIT_OR_CERTIFICATE, "GBN5"),
+        arguments(DocumentType.AIR_WAYBILL, "740"),
+        arguments(DocumentType.SEA_WAYBILL, "710"),
+        arguments(DocumentType.RAIL_WAYBILL, "720"),
+        arguments(DocumentType.BILL_OF_LADING, "705"),
+        arguments(DocumentType.COMMERCIAL_INVOICE, "380"),
+        arguments(DocumentType.PACKING_OR_SPECIES_LIST, "GBN6"),
+        arguments(DocumentType.OTHER, "916"));
+
     private final GbnAgEventDataMapper mapper = new GbnAgEventDataMapper();
 
     @Nested
@@ -42,7 +60,7 @@ class GbnAgMapperTest {
 
         private final GbnAgEventData result = mapper.toGbnAgEventData(fullyPopulatedNotification(), 1, List.of(
             accompanyingDocument(DocumentType.ITAHC, "ITAHC-2026-0001", "2026-05-01"),
-            accompanyingDocument(DocumentType.LETTER_OF_AUTHORITY, "LOA-778", "2026-04-20")));
+            accompanyingDocument(DocumentType.JOURNEY_LOG, "JL-778", "2026-04-20")));
 
         @Test
         void shouldSetConstantModelAndType() {
@@ -72,7 +90,7 @@ class GbnAgMapperTest {
                 new ReferencedDocument(
                     "856", "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types", null, "ITAHC-2026-0001", "2026-05-01"),
                 new ReferencedDocument(
-                    "GBN1", "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types", null, "LOA-778", "2026-04-20"));
+                    "GBN3", "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types", null, "JL-778", "2026-04-20"));
         }
 
         @Test
@@ -317,22 +335,7 @@ class GbnAgMapperTest {
     }
 
     @ParameterizedTest
-    @CsvSource({
-        "VETERINARY_HEALTH_CERTIFICATE, 853",
-        "HEALTH_CERTIFICATE, 636",
-        "AIR_WAYBILL, 740",
-        "SEA_WAYBILL, 710",
-        "RAIL_WAYBILL, 720",
-        "BILL_OF_LADING, 705",
-        "COMMERCIAL_INVOICE, 380",
-        "ITAHC, 856",
-        "IMPORT_PERMIT, 911",
-        "LETTER_OF_AUTHORITY, GBN1",
-        "CATCH_CERTIFICATE, GBN2",
-        "LABORATORY_SAMPLING_RESULTS_FOR_AFLATOXIN, 4",
-        "JOURNEY_LOG, GBN3",
-        "OTHER, 916"
-    })
+    @FieldSource("DOCUMENT_TYPE_CODES")
     void shouldCodeEachDocumentTypeFromTheDocumentTypeCodelist(DocumentType type, String typeCode) {
         ReferencedDocument document = mapper.toGbnAgEventData(
                 fullyPopulatedNotification(), 1, List.of(accompanyingDocument(type, "REF-1", "2026-05-01")))
@@ -343,8 +346,8 @@ class GbnAgMapperTest {
     }
 
     @Test
-    void shouldHaveACodelistRowForEveryDocumentType() {
-        assertThat(DocumentType.values()).hasSize(14);
+    void shouldCodeEveryDocumentTypeTheEnumHolds() {
+        assertThat(DocumentType.values()).hasSize(DOCUMENT_TYPE_CODES.size());
     }
 
     @Test

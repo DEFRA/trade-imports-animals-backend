@@ -9,32 +9,31 @@ import org.junit.jupiter.api.Test;
 
 class DocumentTypeTest {
 
-  private static final List<String> V4_DOCUMENT_TYPES = List.of(
+  private static final List<String> FRONTEND_DOCUMENT_TYPES = List.of(
       "ITAHC",
       "VETERINARY_HEALTH_CERTIFICATE",
-      "AIR_WAYBILL",
+      "SELF_DECLARATION",
+      "JOURNEY_LOG",
       "IMPORT_PERMIT",
-      "LETTER_OF_AUTHORITY",
-      "COMMERCIAL_INVOICE",
+      "CITES_PERMIT_OR_CERTIFICATE",
+      "AIR_WAYBILL",
       "SEA_WAYBILL",
       "RAIL_WAYBILL",
       "BILL_OF_LADING",
-      "CATCH_CERTIFICATE",
-      "LABORATORY_SAMPLING_RESULTS_FOR_AFLATOXIN",
-      "HEALTH_CERTIFICATE",
-      "JOURNEY_LOG",
+      "COMMERCIAL_INVOICE",
+      "PACKING_OR_SPECIES_LIST",
       "OTHER");
 
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   @Test
-  void shouldExposeTheCompleteOrderedV4SetAndParseEveryFrontendCode()
+  void shouldHoldTheFrontendCodesInTheFrontendOrderAndParseEveryOne()
       throws JsonProcessingException {
     assertThat(DocumentType.values())
         .extracting(Enum::name)
-        .containsExactlyElementsOf(V4_DOCUMENT_TYPES);
+        .containsExactlyElementsOf(FRONTEND_DOCUMENT_TYPES);
 
-    for (String documentType : V4_DOCUMENT_TYPES) {
+    for (String documentType : FRONTEND_DOCUMENT_TYPES) {
       assertThat(objectMapper.readValue("\"" + documentType + "\"", DocumentType.class))
           .isEqualTo(DocumentType.valueOf(documentType));
     }

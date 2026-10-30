@@ -1255,9 +1255,9 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody().getReferenceNumber();
         saveClaimedCleanDocument(referenceNumber, "refdoc-clean",
-            DocumentType.LETTER_OF_AUTHORITY, "LOA-778", LocalDate.parse("2026-09-01"));
+            DocumentType.JOURNEY_LOG, "JL-778", LocalDate.parse("2026-09-01"));
         saveUnclaimedCleanDocument(referenceNumber, "refdoc-unclaimed",
-            DocumentType.LETTER_OF_AUTHORITY, "LOA-ABANDONED", LocalDate.parse("2026-09-04"));
+            DocumentType.JOURNEY_LOG, "JL-ABANDONED", LocalDate.parse("2026-09-04"));
         saveClaimedPendingDocument(referenceNumber, "refdoc-pending",
             DocumentType.COMMERCIAL_INVOICE, "INV-9912", LocalDate.parse("2026-09-02"));
         saveClaimedRejectedDocument(referenceNumber, "refdoc-rejected",
@@ -1272,9 +1272,9 @@ class NotificationIT extends IntegrationBase {
             .filter(e -> e.getEventType().endsWith("NotificationSubmitted"))
             .findFirst().orElseThrow();
         assertThat(gbnAgReferenceDocuments(event)).containsExactly(Map.of(
-            "typeCode", "GBN1",
+            "typeCode", "GBN3",
             "urlId", "https://refdata.tbc.defra.gov.uk/gbn-ag-document-types",
-            "identifier", "LOA-778",
+            "identifier", "JL-778",
             "issueDateTime", "2026-09-01"));
     }
 
