@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
 import java.util.List;
+import java.util.Optional;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
@@ -36,14 +37,14 @@ public record SpecifiedConsignment(
             LogisticsLocation.cph(notification.getCphNumber()),
             LogisticsTransportMovement.from(transport),
             TradeCountry.fromCountryCodes(transport != null ? transport.getTransitedCountries() : null),
-            unweanedAnimalsAnswer(additionalDetails),
+            unweanedAnimalsAnswer(additionalDetails).orElse(null),
             ConsignmentItem.from(notification));
     }
 
-    private static Boolean unweanedAnimalsAnswer(AdditionalDetails additionalDetails) {
+    private static Optional<Boolean> unweanedAnimalsAnswer(AdditionalDetails additionalDetails) {
         if (additionalDetails == null || additionalDetails.getUnweanedAnimals() == null) {
-            return null;
+            return Optional.empty();
         }
-        return Boolean.valueOf(additionalDetails.getUnweanedAnimals());
+        return Optional.of(Boolean.valueOf(additionalDetails.getUnweanedAnimals()));
     }
 }
