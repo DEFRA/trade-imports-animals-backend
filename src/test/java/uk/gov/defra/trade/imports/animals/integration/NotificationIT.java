@@ -90,6 +90,8 @@ class NotificationIT extends IntegrationBase {
         Species species = NotificationTestData.species();
         CommodityComplement complement = CommodityComplement.builder()
             .name("Live bovine animals")
+            .commodityCode("0102")
+            .description("Live cattle")
             .typeOfCommodity("LIVE")
             .totalNoOfAnimals(10)
             .totalNoOfPackages(5)
