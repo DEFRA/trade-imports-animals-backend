@@ -2016,7 +2016,7 @@ class NotificationIT extends IntegrationBase {
                 Commodity::getTotalNoOfAnimals,
                 Commodity::getTotalNoOfPackages,
                 Commodity::getSpecies)
-            .containsExactly("LIVE", null, null, null);
+            .containsExactly("LIVE", null, null, List.of());
     }
 
     private void assertSourceUnchangedAfterCopy(String sourceRef) {
