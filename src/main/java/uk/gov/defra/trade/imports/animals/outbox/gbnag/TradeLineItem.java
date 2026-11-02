@@ -35,7 +35,7 @@ public record TradeLineItem(
             classificationOf(entry),
             descriptionOf(entry.getDescription()),
             species.getText(),
-            commonNameOf(species),
+            tradeLineCommonName(entry, species),
             typeCodeFor(species, entry),
             null,
             LineTradeDelivery.headCount(species.getNoOfAnimals()),
@@ -48,7 +48,7 @@ public record TradeLineItem(
             classificationOf(entry),
             descriptionOf(entry.getDescription()),
             null,
-            null,
+            textOrNull(entry.getName()),
             entry.getTypeOfCommodity(),
             null,
             LineTradeDelivery.headCount(entry.getTotalNoOfAnimals()),
@@ -70,6 +70,21 @@ public record TradeLineItem(
             return null;
         }
         return List.of(ApplicableClassification.cn(cn));
+    }
+
+    private static String tradeLineCommonName(CommodityComplement entry, Species species) {
+        String fromSpecies = commonNameOf(species);
+        if (fromSpecies != null) {
+            return fromSpecies;
+        }
+        return textOrNull(entry.getName());
+    }
+
+    private static String textOrNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value;
     }
 
     private static String commonNameOf(Species species) {
