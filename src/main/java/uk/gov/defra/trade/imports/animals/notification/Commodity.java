@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import java.util.ArrayList;
 import java.util.List;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -7,7 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 @Data
-@Builder
+@Builder(toBuilder = true)
 @NoArgsConstructor
 @AllArgsConstructor
 public class Commodity {
@@ -21,5 +22,6 @@ public class Commodity {
     private String typeOfCommodity;
     private Integer totalNoOfAnimals;
     private Integer totalNoOfPackages;
-    private List<Species> species;
+    @Builder.Default
+    private List<Species> species = new ArrayList<>();
 }

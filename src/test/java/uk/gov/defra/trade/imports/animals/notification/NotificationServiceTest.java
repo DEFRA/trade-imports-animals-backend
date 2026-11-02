@@ -1972,7 +1972,7 @@ class NotificationServiceTest {
             assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
             assertThat(cc.getTotalNoOfAnimals()).isNull();
             assertThat(cc.getTotalNoOfPackages()).isNull();
-            assertThat(cc.getSpecies()).isNull();
+            assertThat(cc.getSpecies()).isEmpty();
         }
 
         @Test

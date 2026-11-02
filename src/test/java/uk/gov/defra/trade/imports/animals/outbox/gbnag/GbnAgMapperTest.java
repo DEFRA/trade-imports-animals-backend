@@ -439,7 +439,6 @@ class GbnAgMapperTest {
             .notification(Notification.builder()
                 .commodities(List.of(Commodity.builder()
                         .typeOfCommodity("01020000")
-                        .species(null)
                         .build()))
                 .build())
             .build();

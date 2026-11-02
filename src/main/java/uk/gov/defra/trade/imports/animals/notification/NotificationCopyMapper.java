@@ -58,9 +58,6 @@ public class NotificationCopyMapper {
     }
 
     private List<Commodity> mapCommoditiesForCopy(List<Commodity> source) {
-        if (source == null) {
-            return List.of();
-        }
         return source.stream()
             .map(entry -> Commodity.builder()
                 .name(entry.getName())

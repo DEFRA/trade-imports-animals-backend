@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import java.util.ArrayList;
 import java.util.List;
 import org.mapstruct.Mapper;
 import org.mapstruct.Mapping;
@@ -15,8 +16,8 @@ public interface NotificationContentMapper {
 
     @Named("copyCommodities")
     default List<Commodity> copyCommodities(List<Commodity> source) {
-        if (source == null) {
-            return List.of();
+        if (source == null || source.isEmpty()) {
+            return new ArrayList<>();
         }
         return mapCommodityList(source);
     }

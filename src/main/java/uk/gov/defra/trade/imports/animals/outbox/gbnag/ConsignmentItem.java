@@ -9,7 +9,7 @@ public record ConsignmentItem(List<TradeLineItem> includedTradeLineItem) {
     @SuppressWarnings("java:S1168")
     static List<ConsignmentItem> from(Notification notification) {
         List<Commodity> entries = notification.getCommodities();
-        if (entries == null || entries.isEmpty()) {
+        if (entries.isEmpty()) {
             return null;
         }
         List<TradeLineItem> lines = entries.stream()

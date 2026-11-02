@@ -84,7 +84,7 @@ class NotificationCopyMapperTest {
                 assertThat(c.getTypeOfCommodity()).isEqualTo("LIVE");
                 assertThat(c.getTotalNoOfAnimals()).isNull();
                 assertThat(c.getTotalNoOfPackages()).isNull();
-                assertThat(c.getSpecies()).isNull();
+                assertThat(c.getSpecies()).isEmpty();
             });
             assertThat(result.getCommodities().get(1)).satisfies(c -> {
                 assertThat(c.getName()).isEqualTo("Sheep");
@@ -313,7 +313,7 @@ class NotificationCopyMapperTest {
             Commodity copied = result.getCommodities().getFirst();
             assertThat(copied.getTotalNoOfAnimals()).isNull();
             assertThat(copied.getTotalNoOfPackages()).isNull();
-            assertThat(copied.getSpecies()).isNull();
+            assertThat(copied.getSpecies()).isEmpty();
         }
 
         @Test
@@ -344,7 +344,7 @@ class NotificationCopyMapperTest {
             result.getCommodities().forEach(cc -> {
                 assertThat(cc.getTotalNoOfAnimals()).isNull();
                 assertThat(cc.getTotalNoOfPackages()).isNull();
-                assertThat(cc.getSpecies()).isNull();
+                assertThat(cc.getSpecies()).isEmpty();
             });
         }
 
@@ -417,7 +417,7 @@ class NotificationCopyMapperTest {
 
             NotificationDto result = mapper.toCopyDto(source);
 
-            assertThat(result.getCommodities().getFirst().getSpecies()).isNull();
+            assertThat(result.getCommodities().getFirst().getSpecies()).isEmpty();
         }
     }
 
@@ -444,13 +444,11 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldHandleNullCommodityList() {
-            NotificationAggregate source = aggregateOf(Notification.builder()
-                .commodities(null)
-                .build());
+            NotificationAggregate source = aggregateOf(Notification.builder().build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
-            assertThat(result.getCommodities()).isNullOrEmpty();
+            assertThat(result.getCommodities()).isEmpty();
         }
 
         @Test

@@ -165,6 +165,32 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void post_shouldPersistEmptyCommoditiesWhenDraftOmitsThem() {
+        NotificationDto notificationDto = NotificationDto.builder()
+            .origin(Origin.builder()
+                .countryCode("GB")
+                .requiresRegionCode("true")
+                .internalReference("REF-NOCOMM")
+                .build())
+            .build();
+
+        NotificationAggregate created = webClient("NoAuth")
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(notificationDto))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationAggregate.class)
+            .returnResult().getResponseBody();
+
+        assertThat(created.getNotification().getCommodities()).isNotNull().isEmpty();
+
+        NotificationAggregate persisted = notificationRepository.findByReferenceNumber(created.getReferenceNumber())
+            .orElseThrow();
+        assertThat(persisted.getNotification().getCommodities()).isNotNull().isEmpty();
+    }
+
+    @Test
     void findAll_shouldReturnAllNotifications() {
         // Given - create multiple notifications
         NotificationDto notificationDto1 = createNotificationDto("GB", "Live cattle");
