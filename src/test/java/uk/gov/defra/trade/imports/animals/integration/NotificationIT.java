@@ -586,6 +586,7 @@ class NotificationIT extends IntegrationBase {
         CommodityComplement initialComplement = CommodityComplement.builder()
             .name("Live ovine animals")
             .commodityCode("0104")
+            .description("Live sheep")
             .typeOfCommodity("LIVE")
             .totalNoOfAnimals(5)
             .totalNoOfPackages(2)
@@ -612,6 +613,7 @@ class NotificationIT extends IntegrationBase {
         CommodityComplement updatedComplement = CommodityComplement.builder()
             .name("Live bovine animals")
             .commodityCode("0102")
+            .description("Live cattle")
             .typeOfCommodity("LIVE")
             .totalNoOfAnimals(10)
             .totalNoOfPackages(5)
@@ -1910,10 +1912,12 @@ class NotificationIT extends IntegrationBase {
         assertThat(complement)
             .extracting(
                 CommodityComplement::getName,
+                CommodityComplement::getCommodityCode,
+                CommodityComplement::getDescription,
                 CommodityComplement::getTypeOfCommodity,
                 CommodityComplement::getTotalNoOfAnimals,
                 CommodityComplement::getTotalNoOfPackages)
-            .containsExactly("Live bovine animals", "LIVE", 10, 5);
+            .containsExactly("Live bovine animals", "0102", "Live cattle", "LIVE", 10, 5);
 
         Species species = complement.getSpecies().getFirst();
         assertThat(species)

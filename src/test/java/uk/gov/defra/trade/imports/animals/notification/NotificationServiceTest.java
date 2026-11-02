@@ -1924,6 +1924,7 @@ class NotificationServiceTest {
             CommodityComplement complement = CommodityComplement.builder()
                 .name("Cattle")
                 .commodityCode("0102")
+                .description("Live cattle")
                 .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(10)
                 .totalNoOfPackages(5)
@@ -1965,6 +1966,9 @@ class NotificationServiceTest {
             assertThat(saved.getNotification().getTransport()).isNull();
             assertThat(saved.getNotification().getConsignment()).isNull();
             CommodityComplement cc = saved.getNotification().getCommodities().getFirst();
+            assertThat(cc.getName()).isEqualTo("Cattle");
+            assertThat(cc.getCommodityCode()).isEqualTo("0102");
+            assertThat(cc.getDescription()).isEqualTo("Live cattle");
             assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
             assertThat(cc.getTotalNoOfAnimals()).isNull();
             assertThat(cc.getTotalNoOfPackages()).isNull();
