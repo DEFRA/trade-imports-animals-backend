@@ -23,7 +23,7 @@ class NotificationContentMapperTest {
 
     @Test
     void deepClone_shouldCopyEachCommodityField() {
-        CommodityComplement complement = CommodityComplement.builder()
+        Commodity complement = Commodity.builder()
             .name("Cow")
             .commodityCode("0102")
             .description("Live cattle")
@@ -53,7 +53,7 @@ class NotificationContentMapperTest {
             .text("Bovine")
             .typeOfCommodity("Domestic")
             .build();
-        CommodityComplement complement = CommodityComplement.builder()
+        Commodity complement = Commodity.builder()
             .name("Cattle")
             .typeOfCommodity("LIVE")
             .species(List.of(sourceSpecies))

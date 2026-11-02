@@ -1,7 +1,7 @@
 package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
 import java.util.List;
-import uk.gov.defra.trade.imports.animals.notification.CommodityComplement;
+import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.Species;
 
 public record TradeLineItem(
@@ -20,7 +20,7 @@ public record TradeLineItem(
      * One line per species on the complement, each carrying that species' own counts. A complement
      * with no species still gets one line, from the complement totals.
      */
-    static List<TradeLineItem> linesFrom(CommodityComplement entry) {
+    static List<TradeLineItem> linesFrom(Commodity entry) {
         List<Species> species = entry.getSpecies();
         if (species == null || species.isEmpty()) {
             return List.of(fromComplementTotals(entry));
@@ -30,7 +30,7 @@ public record TradeLineItem(
             .toList();
     }
 
-    private static TradeLineItem fromSpecies(CommodityComplement entry, Species species) {
+    private static TradeLineItem fromSpecies(Commodity entry, Species species) {
         return new TradeLineItem(
             classificationOf(entry),
             descriptionOf(entry.getDescription()),
@@ -43,7 +43,7 @@ public record TradeLineItem(
             TradeProductInstance.instancesFrom(species));
     }
 
-    private static TradeLineItem fromComplementTotals(CommodityComplement entry) {
+    private static TradeLineItem fromComplementTotals(Commodity entry) {
         return new TradeLineItem(
             classificationOf(entry),
             descriptionOf(entry.getDescription()),
@@ -56,7 +56,7 @@ public record TradeLineItem(
             null);
     }
 
-    private static String typeCodeFor(Species species, CommodityComplement entry) {
+    private static String typeCodeFor(Species species, Commodity entry) {
         if (species.getTypeOfCommodity() != null && !species.getTypeOfCommodity().isBlank()) {
             return species.getTypeOfCommodity();
         }
@@ -64,7 +64,7 @@ public record TradeLineItem(
     }
 
     @SuppressWarnings("java:S1168")
-    private static List<ApplicableClassification> classificationOf(CommodityComplement entry) {
+    private static List<ApplicableClassification> classificationOf(Commodity entry) {
         String cn = entry.getCommodityCode();
         if (cn == null || cn.isBlank()) {
             return null;
@@ -72,7 +72,7 @@ public record TradeLineItem(
         return List.of(ApplicableClassification.cn(cn));
     }
 
-    private static String tradeLineCommonName(CommodityComplement entry, Species species) {
+    private static String tradeLineCommonName(Commodity entry, Species species) {
         String fromSpecies = commonNameOf(species);
         if (fromSpecies != null) {
             return fromSpecies;

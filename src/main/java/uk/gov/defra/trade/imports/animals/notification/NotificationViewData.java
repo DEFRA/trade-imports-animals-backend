@@ -18,7 +18,7 @@ public class NotificationViewData implements NotificationView {
     private NotificationStatus status;
     private Instant created;
     private Origin origin;
-    private List<CommodityComplement> commodities;
+    private List<Commodity> commodities;
     private ConsignmentParty consignor;
     private ConsignmentParty consignee;
     private Transport transport;

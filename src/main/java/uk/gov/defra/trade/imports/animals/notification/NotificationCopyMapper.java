@@ -57,12 +57,12 @@ public class NotificationCopyMapper {
             .build();
     }
 
-    private List<CommodityComplement> mapCommoditiesForCopy(List<CommodityComplement> source) {
+    private List<Commodity> mapCommoditiesForCopy(List<Commodity> source) {
         if (source == null) {
             return List.of();
         }
         return source.stream()
-            .map(entry -> CommodityComplement.builder()
+            .map(entry -> Commodity.builder()
                 .name(entry.getName())
                 .commodityCode(entry.getCommodityCode())
                 .description(entry.getDescription())

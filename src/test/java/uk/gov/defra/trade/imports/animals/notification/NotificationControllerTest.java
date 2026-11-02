@@ -139,7 +139,7 @@ class NotificationControllerTest {
                 .internalReference("CUSTOMER-REF-123")
                 .build();
             Species species = species();
-            CommodityComplement complement = CommodityComplement.builder()
+            Commodity complement = Commodity.builder()
                 .name("Live bovine animals")
                 .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(5)
@@ -299,7 +299,7 @@ class NotificationControllerTest {
                 .passport("UK123456789")
                 .animalIdentifiers(List.of(firstUnit, secondUnit))
                 .build();
-            CommodityComplement complement = CommodityComplement.builder()
+            Commodity complement = Commodity.builder()
                 .name("Cow")
                 .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(2)
@@ -942,13 +942,13 @@ class NotificationControllerTest {
             // Given
             NotificationView notification1 = testView(REF_1, NotificationStatus.DRAFT,
                 Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-GB-001").build(),
-                List.of(CommodityComplement.builder().name("Live cattle").build()),
+                List.of(Commodity.builder().name("Live cattle").build()),
                 consignors().getFirst(),
                 Transport.builder().transporter(transporters().getFirst()).build());
 
             NotificationView notification2 = testView(REF_2, NotificationStatus.SUBMITTED,
                 Origin.builder().countryCode("FR").requiresRegionCode("false").internalReference("REF-FR-002").build(),
-                List.of(CommodityComplement.builder().name("Live sheep").build()),
+                List.of(Commodity.builder().name("Live sheep").build()),
                 consignors().getLast(),
                 Transport.builder().transporter(transporters().getLast()).build());
 
@@ -977,7 +977,7 @@ class NotificationControllerTest {
         }
 
         private NotificationView testView(String ref, NotificationStatus status, Origin origin,
-                List<CommodityComplement> commodities, ConsignmentParty consignor, Transport transport) {
+                List<Commodity> commodities, ConsignmentParty consignor, Transport transport) {
             return new NotificationViewData(
                 ref, 0L, status, VIEW_CREATED, origin, commodities, consignor, null, transport);
         }

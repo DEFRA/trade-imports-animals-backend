@@ -14,12 +14,12 @@ public interface NotificationContentMapper {
     Notification deepClone(Notification source);
 
     @Named("copyCommodities")
-    default List<CommodityComplement> copyCommodities(List<CommodityComplement> source) {
+    default List<Commodity> copyCommodities(List<Commodity> source) {
         if (source == null) {
             return List.of();
         }
-        return mapCommodityComplementList(source);
+        return mapCommodityList(source);
     }
 
-    List<CommodityComplement> mapCommodityComplementList(List<CommodityComplement> source);
+    List<Commodity> mapCommodityList(List<Commodity> source);
 }

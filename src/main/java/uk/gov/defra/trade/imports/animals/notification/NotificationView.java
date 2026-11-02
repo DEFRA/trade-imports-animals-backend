@@ -32,7 +32,7 @@ public interface NotificationView {
     Origin getOrigin();
 
     @Value("#{target.notification?.commodities}")
-    List<CommodityComplement> getCommodities();
+    List<Commodity> getCommodities();
 
     @Value("#{target.notification?.consignor}")
     ConsignmentParty getConsignor();
