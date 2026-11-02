@@ -583,7 +583,14 @@ class NotificationIT extends IntegrationBase {
             .passport("UK0987654300888")
             .microchip("900987654321098")
             .build();
-        CommodityComplement initialComplement = new CommodityComplement("LIVE", 5, 2, List.of(initialSpecies));
+        CommodityComplement initialComplement = CommodityComplement.builder()
+            .name("Live ovine animals")
+            .commodityCode("0104")
+            .typeOfCommodity("LIVE")
+            .totalNoOfAnimals(5)
+            .totalNoOfPackages(2)
+            .species(List.of(initialSpecies))
+            .build();
         NotificationDto initial = NotificationDto.builder()
             .origin(Origin.builder().countryCode("IE").requiresRegionCode("false").internalReference("REF-initial").build())
             .commodities(List.of(initialComplement))
@@ -604,6 +611,7 @@ class NotificationIT extends IntegrationBase {
         Species updatedSpecies = NotificationTestData.species();
         CommodityComplement updatedComplement = CommodityComplement.builder()
             .name("Live bovine animals")
+            .commodityCode("0102")
             .typeOfCommodity("LIVE")
             .totalNoOfAnimals(10)
             .totalNoOfPackages(5)

@@ -494,7 +494,6 @@ public class NotificationService {
         notification.setPortOfExit(dto.getPortOfExit());
         notification.setExitDate(dto.getExitDate());
         notificationAggregate.setFulfilments(dto.getFulfilments());
-        notificationAggregate.setUpdated(Instant.now());
     }
 
     private void createNotificationAuditRecord(

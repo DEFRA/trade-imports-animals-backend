@@ -1921,8 +1921,14 @@ class NotificationServiceTest {
         void copyNotification_shouldResetExcludedFields() {
             // Given
             String sourceRef = "GBN-AG-26-SRC003";
-            CommodityComplement complement = new CommodityComplement("LIVE", 10, 5,
-                List.of(species()));
+            CommodityComplement complement = CommodityComplement.builder()
+                .name("Cattle")
+                .commodityCode("0102")
+                .typeOfCommodity("LIVE")
+                .totalNoOfAnimals(10)
+                .totalNoOfPackages(5)
+                .species(List.of(species()))
+                .build();
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)

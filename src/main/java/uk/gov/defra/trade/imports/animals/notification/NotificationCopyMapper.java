@@ -5,16 +5,10 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 
 /**
- * Maps a source {@link NotificationAggregate} to a {@link NotificationDto} for the copy-as-new
- * feature: identification, commodity type, and address details are retained, while
- * logistical fields (transport, consignment contact) and per-animal counts are reset
- * so the copy starts as a fresh incomplete draft.
- *
- * <p>MapStruct was not used because the {@link CommodityComplement} transformation —
- * retaining only identity fields while explicitly nulling all per-animal data —
- * requires a custom element-level mapping method. Encoding the retain/reset rules
- * in plain Java keeps them co-located, explicit, and directly auditable against the
- * acceptance criteria without MapStruct-generated indirection.
+ * Maps a {@link NotificationAggregate} to a {@link NotificationDto} for copy-as-new.
+ * Keeps origin, commodity identity (name, commodity code, description, type), reason for import,
+ * certified-for purpose, party addresses, CPH, internal-market fields, port of exit, and fulfilments.
+ * Resets per-animal counts and species, transport, consignment contact, exit date, and internal reference.
  */
 @Component
 public class NotificationCopyMapper {
@@ -34,14 +28,8 @@ public class NotificationCopyMapper {
             .cphNumber(source.getCphNumber())
             .purposeInInternalMarket(source.getPurposeInInternalMarket())
             .destinationCountry(source.getDestinationCountry())
-            // portOfExit retained — pairs with portOfEntry, which is a logistical field reset
-            // via the whole transport block; kept here for consistency with the other
-            // reasonForImport-conditional fields above rather than resetting to match transport
             .portOfExit(source.getPortOfExit())
             .fulfilments(notificationAggregate.getFulfilments() == null ? null : new ArrayList<>(notificationAggregate.getFulfilments()))
-            // transport intentionally omitted — logistical fields (portOfEntry, arrivalDate, transporter) are reset on copy
-            // consignment intentionally omitted — contact address is reset on copy
-            // exitDate intentionally omitted — time-bound logistical value is reset on copy, like arrivalDate
             .build();
     }
 
@@ -66,7 +54,6 @@ public class NotificationCopyMapper {
             .countrySubdivisionCode(source.getCountrySubdivisionCode())
             .requiresRegionCode(source.getRequiresRegionCode())
             .regionOfOriginCode(source.getRegionOfOriginCode())
-            // internalReference intentionally omitted — per-consignment reference is reset on copy
             .build();
     }
 
@@ -74,11 +61,11 @@ public class NotificationCopyMapper {
         if (source == null) {
             return List.of();
         }
-        // totalNoOfAnimals, totalNoOfPackages, species intentionally omitted — per-animal counts are reset on copy
         return source.stream()
             .map(entry -> CommodityComplement.builder()
                 .name(entry.getName())
                 .commodityCode(entry.getCommodityCode())
+                .description(entry.getDescription())
                 .typeOfCommodity(entry.getTypeOfCommodity())
                 .build())
             .toList();
@@ -90,7 +77,6 @@ public class NotificationCopyMapper {
         }
         return AdditionalDetails.builder()
             .certifiedFor(source.getCertifiedFor())
-            // unweanedAnimals intentionally omitted — animal-specific detail is reset on copy
             .build();
     }
 }

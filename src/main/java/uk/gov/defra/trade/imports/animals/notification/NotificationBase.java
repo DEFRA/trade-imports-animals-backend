@@ -42,10 +42,6 @@ public abstract class NotificationBase {
 
     private String portOfExit;
 
-    /**
-     * A calendar day the user chose, carried as a {@code LocalDate}: {@code YYYY-MM-DD} on the
-     * wire and a string in Mongo. It has no time and no zone, so no reader can shift it by a day.
-     * Moments such as {@code created} are {@code Instant} instead.
-     */
+    /** The exit date the user chose, as YYYY-MM-DD on the wire. */
     private LocalDate exitDate;
 }
