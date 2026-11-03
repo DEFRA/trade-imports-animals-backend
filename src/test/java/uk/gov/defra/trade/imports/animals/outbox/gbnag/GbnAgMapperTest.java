@@ -41,16 +41,16 @@ class GbnAgMapperTest {
     static final List<Arguments> DOCUMENT_TYPE_CODES = List.of(
         arguments(DocumentType.ITAHC, "856"),
         arguments(DocumentType.VETERINARY_HEALTH_CERTIFICATE, "853"),
-        arguments(DocumentType.SELF_DECLARATION, "GBN4"),
+        arguments(DocumentType.SELF_DECLARATION, "GBN1"),
         arguments(DocumentType.JOURNEY_LOG, "GBN3"),
         arguments(DocumentType.IMPORT_PERMIT, "911"),
-        arguments(DocumentType.CITES_PERMIT_OR_CERTIFICATE, "GBN5"),
+        arguments(DocumentType.CITES_PERMIT_OR_CERTIFICATE, "GBN2"),
         arguments(DocumentType.AIR_WAYBILL, "740"),
         arguments(DocumentType.SEA_WAYBILL, "710"),
         arguments(DocumentType.RAIL_WAYBILL, "720"),
         arguments(DocumentType.BILL_OF_LADING, "705"),
         arguments(DocumentType.COMMERCIAL_INVOICE, "380"),
-        arguments(DocumentType.PACKING_OR_SPECIES_LIST, "GBN6"),
+        arguments(DocumentType.PACKING_OR_SPECIES_LIST, "GBN4"),
         arguments(DocumentType.OTHER, "916"));
 
     private final GbnAgEventDataMapper mapper = new GbnAgEventDataMapper();

@@ -68,9 +68,9 @@ public record ReferencedDocument(
             case ITAHC -> "856";                        // Inspection certificate, as TRACES codes the EU INTRA certificate
             case IMPORT_PERMIT -> "911";                // Import licence
             case JOURNEY_LOG -> "GBN3";
-            case SELF_DECLARATION -> "GBN4";
-            case CITES_PERMIT_OR_CERTIFICATE -> "GBN5";
-            case PACKING_OR_SPECIES_LIST -> "GBN6";
+            case SELF_DECLARATION -> "GBN1";
+            case CITES_PERMIT_OR_CERTIFICATE -> "GBN2";
+            case PACKING_OR_SPECIES_LIST -> "GBN4";
             case OTHER -> "916";                        // Related document
         };
     }
