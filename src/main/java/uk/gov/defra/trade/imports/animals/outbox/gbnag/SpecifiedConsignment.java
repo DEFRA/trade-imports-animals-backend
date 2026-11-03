@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.outbox.gbnag;
 
 import java.util.List;
+import java.util.Optional;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
@@ -24,11 +25,6 @@ public record SpecifiedConsignment(
     static SpecifiedConsignment from(Notification notification) {
         Transport transport = notification.getTransport();
         AdditionalDetails additionalDetails = notification.getAdditionalDetails();
-        // Tri-state: TRUE / FALSE when supplied, null when the field is absent upstream.
-        Boolean isOrHasUnweanedAnimals =
-            additionalDetails == null || additionalDetails.getUnweanedAnimals() == null
-                ? null
-                : Boolean.valueOf(additionalDetails.getUnweanedAnimals());
         return new SpecifiedConsignment(
             TradeParty.from(notification.getConsignor()),
             TradeParty.from(notification.getConsignee()),
@@ -41,7 +37,14 @@ public record SpecifiedConsignment(
             LogisticsLocation.cph(notification.getCphNumber()),
             LogisticsTransportMovement.from(transport),
             TradeCountry.fromCountryCodes(transport != null ? transport.getTransitedCountries() : null),
-            isOrHasUnweanedAnimals,
-            ConsignmentItem.from(notification.getCommodity()));
+            unweanedAnimalsAnswer(additionalDetails).orElse(null),
+            ConsignmentItem.from(notification));
+    }
+
+    private static Optional<Boolean> unweanedAnimalsAnswer(AdditionalDetails additionalDetails) {
+        if (additionalDetails == null || additionalDetails.getUnweanedAnimals() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(Boolean.valueOf(additionalDetails.getUnweanedAnimals()));
     }
 }

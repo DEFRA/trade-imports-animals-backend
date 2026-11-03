@@ -142,7 +142,8 @@ class OutboxServiceTest {
                 .requiresRegionCode("true")
                 .internalReference("REF123")
                 .build();
-            Commodity commodity = Commodity.builder().name("Live bovine animals").build();
+            List<Commodity> commodities = List.of(
+                Commodity.builder().name("Live bovine animals").build());
             AdditionalDetails additionalDetails = new AdditionalDetails("HUMAN_CONSUMPTION", "true");
             Transport transport = Transport.builder()
                 .portOfEntry("GBFXT")
@@ -154,7 +155,7 @@ class OutboxServiceTest {
                 NotificationStatus.SUBMITTED,
                 Notification.builder()
                     .origin(origin)
-                    .commodity(commodity)
+                    .commodities(commodities)
                     .reasonForImport("PERMANENT")
                     .additionalDetails(additionalDetails)
                     .cphNumber("12/345/6789")
