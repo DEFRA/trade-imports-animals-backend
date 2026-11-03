@@ -901,6 +901,19 @@ class GbnAgMapperTest {
     }
 
     @Test
+    void shouldCarryUnweanedAnimalsAsTrue_whenAnswerIsYes() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-UNW002")
+            .notification(Notification.builder()
+                .additionalDetails(new AdditionalDetails("SLAUGHTER", "yes"))
+                .build())
+            .build();
+
+        assertThat(mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
+            .specifiedConsignment().isOrHasUnweanedAnimals()).isTrue();
+    }
+
+    @Test
     void shouldCarryUnweanedAnimalsAsFalse_whenAnswerIsNo() {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-UNW001")
