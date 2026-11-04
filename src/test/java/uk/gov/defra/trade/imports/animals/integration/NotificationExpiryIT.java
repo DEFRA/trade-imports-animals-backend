@@ -1,13 +1,25 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
+import com.mongodb.client.MongoClient;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
+import org.bson.Document;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.index.Index;
+import org.springframework.test.context.TestPropertySource;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
@@ -16,21 +28,21 @@ import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
+import uk.gov.defra.trade.imports.animals.notification.NotificationExpiryIndex;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
-import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 
-/**
- * Integration test for the notification expiry sweep against a real Testcontainers MongoDB.
- * Exercises {@link NotificationService#deleteExpired(int)} directly (rather than waiting on the
- * scheduled {@code NotificationExpirySweeper}) so the assertions are deterministic. Verifies the
- * expiry cascade removes notifications and their accompanying documents, leaves audit records and
- * non-due notifications untouched, and respects the batch bound.
- */
+@TestPropertySource(
+    properties = {"notification.ttl.days=7", "notification.ttl.expiry.enabled=true"})
 class NotificationExpiryIT extends IntegrationBase {
 
+    private static final Document EXPIRE_AT_KEY = new Document("expireAt", 1);
+
     @Autowired
-    private NotificationService notificationService;
+    private MongoTemplate mongoTemplate;
+
+    @Autowired
+    private MongoClient mongoClient;
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -41,40 +53,64 @@ class NotificationExpiryIT extends IntegrationBase {
     @Autowired
     private AuditRepository auditRepository;
 
+    @Autowired
+    private NotificationExpiryIndex notificationExpiryIndex;
+
     @BeforeEach
     void setUp() {
         notificationRepository.deleteAll();
         accompanyingDocumentRepository.deleteAll();
         auditRepository.deleteAll();
+        notificationExpiryIndex.createIndexes();
     }
 
-    private void saveNotification(String referenceNumber, Instant expireAt) {
-        notificationRepository.save(NotificationAggregate.builder()
-            .referenceNumber(referenceNumber)
-            .status(NotificationStatus.DRAFT)
-            .created(Instant.now().minus(8, ChronoUnit.DAYS))
-            .expireAt(expireAt)
-            .build());
+    @AfterEach
+    void restoreSharedMongo() {
+        for (Class<?> entityClass : List.of(NotificationAggregate.class, AccompanyingDocument.class)) {
+            expireAtIndexes(entityClass).forEach(
+                index -> mongoTemplate.indexOps(entityClass).dropIndex(index.getString("name")));
+        }
+        setTtlMonitorSleepSecs(60);
     }
 
-    private void saveDocument(String uploadId, String notificationRef) {
-        accompanyingDocumentRepository.save(AccompanyingDocument.builder()
-            .uploadId(uploadId)
-            .correlationId(uploadId)
-            .notificationReferenceNumber(notificationRef)
-            .scanStatus(ScanStatus.COMPLETE)
-            .build());
+    @ParameterizedTest
+    @ValueSource(classes = {NotificationAggregate.class, AccompanyingDocument.class})
+    void ttlIndex_isOnExpireAtAndExpiresAtThatTime(Class<?> entityClass) {
+        // When
+        List<Document> indexes = expireAtIndexes(entityClass);
+
+        // Then
+        assertThat(indexes).singleElement().satisfies(
+            index -> assertThat(index.get("expireAfterSeconds", Number.class).longValue()).isZero());
+    }
+
+    @ParameterizedTest
+    @ValueSource(classes = {NotificationAggregate.class, AccompanyingDocument.class})
+    void createIndexes_replacesAPlainExpireAtIndexWithTheTtlIndex(Class<?> entityClass) {
+        // Given
+        expireAtIndexes(entityClass).forEach(
+            index -> mongoTemplate.indexOps(entityClass).dropIndex(index.getString("name")));
+        mongoTemplate.indexOps(entityClass).createIndex(new Index().on("expireAt", Sort.Direction.ASC));
+
+        // When
+        notificationExpiryIndex.createIndexes();
+
+        // Then
+        assertThat(expireAtIndexes(entityClass)).singleElement().satisfies(
+            index -> assertThat(index.get("expireAfterSeconds", Number.class).longValue()).isZero());
     }
 
     @Test
-    void deleteExpired_removesDueNotificationAndDocuments_leavingAuditAndNonDueUntouched() {
-        String expiredRef = "GBN-AG-26-EXP001";
-        String activeRef = "GBN-AG-26-ACT001";
-        saveNotification(expiredRef, Instant.now().minus(1, ChronoUnit.MINUTES));
-        saveNotification(activeRef, Instant.now().plus(7, ChronoUnit.DAYS));
-        saveDocument("expiry-it-doc-1", expiredRef);
-        saveDocument("expiry-it-doc-2", expiredRef);
-        saveDocument("expiry-it-doc-3", activeRef);
+    void expiredNotificationsAndDocuments_areRemovedByMongoWhileUndatedAndUnexpiredOnesAndAuditStay() {
+        // Given
+        Instant past = Instant.now().minus(1, ChronoUnit.HOURS);
+        Instant future = Instant.now().plus(7, ChronoUnit.DAYS);
+        String expiredRef = saveNotification("GBN-AG-26-EXP001", past);
+        String undatedRef = saveNotification("GBN-AG-26-UND001", null);
+        String activeRef = saveNotification("GBN-AG-26-ACT001", future);
+        saveDocument("expiry-it-doc-1", expiredRef, past);
+        saveDocument("expiry-it-doc-2", undatedRef, null);
+        saveDocument("expiry-it-doc-3", activeRef, future);
         auditRepository.save(Audit.builder()
             .action(Action.DELETE_NOTIFICATIONS)
             .result(Result.SUCCESS)
@@ -83,47 +119,57 @@ class NotificationExpiryIT extends IntegrationBase {
             .timestamp(Instant.now().minus(1, ChronoUnit.DAYS))
             .build());
 
-        int deleted = notificationService.deleteExpired(10);
+        // When
+        setTtlMonitorSleepSecs(1);
 
-        assertThat(deleted).isEqualTo(1);
-        // Due notification and its documents are gone.
-        assertThat(notificationRepository.findByReferenceNumber(expiredRef)).isEmpty();
-        assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(expiredRef))
-            .isEmpty();
-        // Non-due notification and its document survive.
+        // Then
+        await()
+            .atMost(Duration.ofSeconds(30))
+            .untilAsserted(() -> {
+                assertThat(notificationRepository.findByReferenceNumber(expiredRef)).isEmpty();
+                assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(expiredRef))
+                    .isEmpty();
+            });
+        assertThat(notificationRepository.findByReferenceNumber(undatedRef)).isPresent();
         assertThat(notificationRepository.findByReferenceNumber(activeRef)).isPresent();
+        assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(undatedRef))
+            .hasSize(1);
         assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(activeRef))
             .hasSize(1);
-        // AC: audit records referencing the expired notification are left untouched.
-        assertThat(auditRepository.findAll())
-            .singleElement()
-            .satisfies(audit -> assertThat(audit.getNotificationReferenceNumbers())
-                .containsExactly(expiredRef));
+        assertThat(auditRepository.findAll()).singleElement().satisfies(
+            audit -> assertThat(audit.getNotificationReferenceNumbers()).containsExactly(expiredRef));
     }
 
-    @Test
-    void deleteExpired_neverRemovesNotificationsWithNullExpireAt() {
-        // Pre-change notifications carry no expireAt and must never be swept (AC: existing
-        // notifications are not deleted on deploy).
-        String legacyRef = "GBN-AG-26-LEG001";
-        saveNotification(legacyRef, null);
-
-        int deleted = notificationService.deleteExpired(10);
-
-        assertThat(deleted).isZero();
-        assertThat(notificationRepository.findByReferenceNumber(legacyRef)).isPresent();
+    private String saveNotification(String referenceNumber, Instant expireAt) {
+        notificationRepository.save(NotificationAggregate.builder()
+            .referenceNumber(referenceNumber)
+            .status(NotificationStatus.DRAFT)
+            .created(Instant.now().minus(8, ChronoUnit.DAYS))
+            .expireAt(expireAt)
+            .build());
+        return referenceNumber;
     }
 
-    @Test
-    void deleteExpired_removesAtMostBatchSizePerRun() {
-        saveNotification("GBN-AG-26-BAT001", Instant.now().minus(1, ChronoUnit.MINUTES));
-        saveNotification("GBN-AG-26-BAT002", Instant.now().minus(1, ChronoUnit.MINUTES));
-        saveNotification("GBN-AG-26-BAT003", Instant.now().minus(1, ChronoUnit.MINUTES));
+    private void saveDocument(String uploadId, String notificationRef, Instant expireAt) {
+        accompanyingDocumentRepository.save(AccompanyingDocument.builder()
+            .uploadId(uploadId)
+            .correlationId(uploadId)
+            .notificationReferenceNumber(notificationRef)
+            .scanStatus(ScanStatus.COMPLETE)
+            .expireAt(expireAt)
+            .build());
+    }
 
-        assertThat(notificationService.deleteExpired(2)).isEqualTo(2);
-        assertThat(notificationRepository.findAll()).hasSize(1);
+    private List<Document> expireAtIndexes(Class<?> entityClass) {
+        return mongoTemplate.getCollection(mongoTemplate.getCollectionName(entityClass))
+            .listIndexes().into(new ArrayList<>()).stream()
+            .filter(index -> EXPIRE_AT_KEY.equals(index.get("key", Document.class)))
+            .toList();
+    }
 
-        assertThat(notificationService.deleteExpired(2)).isEqualTo(1);
-        assertThat(notificationRepository.findAll()).isEmpty();
+    private void setTtlMonitorSleepSecs(int seconds) {
+        mongoClient
+            .getDatabase("admin")
+            .runCommand(new Document("setParameter", 1).append("ttlMonitorSleepSecs", seconds));
     }
 }

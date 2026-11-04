@@ -8,6 +8,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,6 +31,7 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 
 @ExtendWith(MockitoExtension.class)
 class DocumentServiceTest {
@@ -40,12 +42,20 @@ class DocumentServiceTest {
   @Mock
   private UploadSessionRepository uploadSessionRepository;
 
+  @Mock
+  private NotificationRepository notificationRepository;
+
   private DocumentService documentService;
 
   @BeforeEach
   void setUp() {
-    documentService =
-        new DocumentService(accompanyingDocumentRepository, uploadSessionRepository);
+    documentService = new DocumentService(
+        accompanyingDocumentRepository, uploadSessionRepository, notificationRepository);
+  }
+
+  private void notificationExpiresAt(String notificationRef, Instant expireAt) {
+    when(notificationRepository.findExpiryByReferenceNumber(notificationRef))
+        .thenReturn(Optional.of(() -> expireAt));
   }
 
   private void saveReturnsWhatItWasGiven() {
@@ -172,6 +182,39 @@ class DocumentServiceTest {
       assertThat(claimed.getDocumentType()).isEqualTo(DocumentType.ITAHC);
       assertThat(claimed.getDocumentReference()).isEqualTo("UKGB2026001");
       assertThat(claimed.getDateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
+    }
+
+    @Test
+    void claimUpload_shouldGiveANewDocumentItsNotificationsExpireAt() {
+      Instant expireAt = Instant.parse("2026-11-11T09:30:00Z");
+      sessionIsOpen();
+      notificationExpiresAt(NOTIFICATION_REF, expireAt);
+      when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
+          .thenReturn(Optional.empty());
+      saveReturnsWhatItWasGiven();
+
+      AccompanyingDocument claimed = documentService.claimUpload(
+          UPLOAD_ID,
+          new ClaimUploadRequest(
+              DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15")));
+
+      assertThat(claimed.getExpireAt()).isEqualTo(expireAt);
+    }
+
+    @Test
+    void claimUpload_shouldLeaveANewDocumentWithoutExpireAt_whenItsNotificationHasNone() {
+      sessionIsOpen();
+      notificationExpiresAt(NOTIFICATION_REF, null);
+      when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
+          .thenReturn(Optional.empty());
+      saveReturnsWhatItWasGiven();
+
+      AccompanyingDocument claimed = documentService.claimUpload(
+          UPLOAD_ID,
+          new ClaimUploadRequest(
+              DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15")));
+
+      assertThat(claimed.getExpireAt()).isNull();
     }
 
     @Test
@@ -410,6 +453,26 @@ class DocumentServiceTest {
       assertThat(saved.getUploadId()).isEqualTo("upload-scan-first");
       assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
       assertThat(saved.isClaimed()).isFalse();
+    }
+
+    @Test
+    void handleScanResult_shouldGiveANewDocumentItsNotificationsExpireAt() {
+      String correlationId = "corr-scan-expiry";
+      Instant expireAt = Instant.parse("2026-11-11T09:30:00Z");
+      when(uploadSessionRepository.findByCorrelationId(correlationId)).thenReturn(
+          Optional.of(sessionOf("GBN-AG-26-SCN002", "upload-scan-expiry", correlationId)));
+      notificationExpiresAt("GBN-AG-26-SCN002", expireAt);
+      when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
+          .thenReturn(Optional.empty());
+      saveReturnsWhatItWasGiven();
+
+      documentService.handleScanResult("upload-scan-expiry", new CdpScanResultPayload(
+          "ready", Map.of("correlationId", correlationId), new CdpScanResultForm(), 0));
+
+      ArgumentCaptor<AccompanyingDocument> captor =
+          ArgumentCaptor.forClass(AccompanyingDocument.class);
+      verify(accompanyingDocumentRepository).save(captor.capture());
+      assertThat(captor.getValue().getExpireAt()).isEqualTo(expireAt);
     }
   }
 

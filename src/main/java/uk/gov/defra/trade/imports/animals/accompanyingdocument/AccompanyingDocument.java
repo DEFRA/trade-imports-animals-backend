@@ -78,4 +78,7 @@ public class AccompanyingDocument {
 
   @LastModifiedDate
   private Instant updated;
+
+  /** Its notification's {@code expireAt}, after which Mongo removes the document. */
+  private Instant expireAt;
 }

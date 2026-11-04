@@ -31,9 +31,13 @@ Why the code is shaped the way it is. Code states what it does; this file holds 
 Two independent safeguards keep expiry out of prod; both must fail before prod loses a notification:
 
 - Stamping: `expireAt` is set at creation only when `NOTIFICATION_TTL_DAYS` is configured and `ENVIRONMENT` is not `prod`.
-- Sweeping: `NotificationExpirySweeper` exists only when `NOTIFICATION_TTL_SWEEP_ENABLED=true`, with no `matchIfMissing`.
+- Removal: `NotificationExpiryIndex` creates the Mongo TTL indexes on `expireAt` only when `NOTIFICATION_TTL_EXPIRY_ENABLED=true`, with no `matchIfMissing`, and refuses in prod.
 
-`expireAt` counts from `created`, so later edits do not extend it. Notifications created without `expireAt` are never swept. The sweep polls hourly and deletes a bounded batch, because expiry is measured in days. It writes no audit record, because it is not a user action.
+`expireAt` counts from `created`, so later edits do not extend it. An accompanying document takes its notification's `expireAt` when the document is first written, so Mongo removes both in the same TTL pass; a document whose notification has no `expireAt` has none either. Mongo's TTL monitor removes a record within about a minute of its `expireAt` and never touches records without one. Removal writes no audit record and no outbox event, because it is not a user action.
+
+- The indexes are created at startup rather than with `@Indexed(expireAfter)`, because `auto-index-creation` would build an annotated index in every environment, prod included.
+- Mongo refuses a TTL index on a key that already carries a plain index, so `NotificationExpiryIndex` drops any plain `expireAt` index first.
+- Switching the flag back off does not drop the TTL indexes.
 
 ## Accompanying documents and cdp-uploader
 

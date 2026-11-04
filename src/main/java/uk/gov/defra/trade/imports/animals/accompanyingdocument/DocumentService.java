@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -13,6 +14,8 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.notification.NotificationExpiry;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 
 /**
  * Business logic for accompanying documents: recording an upload session, taking the document that
@@ -26,12 +29,15 @@ public class DocumentService {
 
   private final AccompanyingDocumentRepository accompanyingDocumentRepository;
   private final UploadSessionRepository uploadSessionRepository;
+  private final NotificationRepository notificationRepository;
 
   public DocumentService(
       AccompanyingDocumentRepository accompanyingDocumentRepository,
-      UploadSessionRepository uploadSessionRepository) {
+      UploadSessionRepository uploadSessionRepository,
+      NotificationRepository notificationRepository) {
     this.accompanyingDocumentRepository = accompanyingDocumentRepository;
     this.uploadSessionRepository = uploadSessionRepository;
+    this.notificationRepository = notificationRepository;
   }
 
   /**
@@ -233,7 +239,14 @@ public class DocumentService {
             .correlationId(session.getCorrelationId())
             .scanStatus(ScanStatus.PENDING)
             .files(new ArrayList<>())
+            .expireAt(notificationExpireAt(session.getNotificationReferenceNumber()))
             .build());
+  }
+
+  private Instant notificationExpireAt(String notificationRef) {
+    return notificationRepository.findExpiryByReferenceNumber(notificationRef)
+        .map(NotificationExpiry::getExpireAt)
+        .orElse(null);
   }
 
   private UploadSession saveOrThrowOnDuplicate(UploadSession session, String notificationRef) {
