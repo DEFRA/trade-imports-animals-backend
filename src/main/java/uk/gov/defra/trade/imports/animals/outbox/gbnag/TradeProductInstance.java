@@ -14,6 +14,8 @@ public record TradeProductInstance(
         identifier = identifier == null ? null : List.copyOf(identifier);
     }
 
+    static final String ANIMAL_IDENTIFIER_TYPES = "https://codelists.tbc.defra.gov.uk/animal_identifier_types";
+
     private static final String EAR_TAG = "EAR_TAG";
     private static final String PASSPORT = "PASSPORT";
     private static final String MICROCHIP = "MICROCHIP";
@@ -21,10 +23,6 @@ public record TradeProductInstance(
 
     public record AnimalIdentifier(String typeCode, String content, String urlId) {}
 
-    /**
-     * One instance per animal on the species line. Species saved before the per-animal list existed
-     * only carry the first animal's identifiers as scalars, so those still produce one instance.
-     */
     static List<TradeProductInstance> instancesFrom(Species species) {
         var animals = species.getAnimalIdentifiers();
         if (animals == null || animals.isEmpty()) {
@@ -52,10 +50,9 @@ public record TradeProductInstance(
         return identifiers.isEmpty() ? null : identifiers;
     }
 
-    // The journey saves an unanswered identifier as an empty string, not an absent one.
     private static void addIfPresent(List<AnimalIdentifier> identifiers, String typeCode, String content) {
         if (content != null && !content.isBlank()) {
-            identifiers.add(new AnimalIdentifier(typeCode, content, null));
+            identifiers.add(new AnimalIdentifier(typeCode, content, ANIMAL_IDENTIFIER_TYPES));
         }
     }
 }
