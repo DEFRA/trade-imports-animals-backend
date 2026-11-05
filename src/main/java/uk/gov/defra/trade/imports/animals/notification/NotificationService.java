@@ -478,7 +478,7 @@ public class NotificationService {
         }
         Notification notification = notificationAggregate.getNotification();
         notification.setOrigin(dto.getOrigin());
-        notification.setCommodity(dto.getCommodity());
+        notification.setCommodities(commoditiesFromDto(dto.getCommodities()));
         notification.setReasonForImport(dto.getReasonForImport());
         notification.setAdditionalDetails(dto.getAdditionalDetails());
         notification.setPlaceOfOrigin(dto.getPlaceOfOrigin());
@@ -494,7 +494,17 @@ public class NotificationService {
         notification.setPortOfExit(dto.getPortOfExit());
         notification.setExitDate(dto.getExitDate());
         notificationAggregate.setFulfilments(dto.getFulfilments());
-        notificationAggregate.setUpdated(Instant.now());
+    }
+
+    private List<Commodity> commoditiesFromDto(List<Commodity> fromDto) {
+        if (fromDto == null || fromDto.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return fromDto.stream()
+            .map(entry -> entry.getSpecies() != null
+                ? entry
+                : entry.toBuilder().species(new ArrayList<>()).build())
+            .collect(Collectors.toCollection(ArrayList::new));
     }
 
     private void createNotificationAuditRecord(

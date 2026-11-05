@@ -11,36 +11,36 @@ class NotificationContentMapperTest {
     private final NotificationContentMapper mapper = Mappers.getMapper(NotificationContentMapper.class);
 
     @Test
-    void deepClone_shouldNormaliseNullCommodityComplementToEmptyList() {
+    void deepClone_shouldNormaliseNullCommoditiesToEmptyList() {
         Notification source = Notification.builder()
-            .commodity(Commodity.builder().name("Cattle").commodityComplement(null).build())
+            .commodities(null)
             .build();
 
         Notification clone = mapper.deepClone(source);
 
-        assertThat(clone.getCommodity().getCommodityComplement()).isNotNull().isEmpty();
+        assertThat(clone.getCommodities()).isNotNull().isEmpty();
     }
 
     @Test
-    void deepClone_shouldPreservePopulatedCommodityComplement() {
-        CommodityComplement complement = CommodityComplement.builder()
+    void deepClone_shouldCopyEachCommodityField() {
+        Commodity complement = Commodity.builder()
+            .name("Cow")
+            .commodityCode("0102")
+            .description("Live cattle")
             .typeOfCommodity("LIVE")
             .totalNoOfAnimals(10)
             .build();
         Notification source = Notification.builder()
-            .commodity(Commodity.builder()
-                .name("Cattle")
-                .commodityComplement(List.of(complement))
-                .build())
+            .commodities(List.of(complement))
             .build();
 
         Notification clone = mapper.deepClone(source);
 
-        assertThat(clone.getCommodity().getName()).isEqualTo("Cattle");
-        assertThat(clone.getCommodity().getCommodityComplement())
-            .hasSize(1)
-            .first()
+        assertThat(clone.getCommodities()).singleElement()
             .satisfies(c -> {
+                assertThat(c.getName()).isEqualTo("Cow");
+                assertThat(c.getCommodityCode()).isEqualTo("0102");
+                assertThat(c.getDescription()).isEqualTo("Live cattle");
                 assertThat(c.getTypeOfCommodity()).isEqualTo("LIVE");
                 assertThat(c.getTotalNoOfAnimals()).isEqualTo(10);
             });
@@ -48,18 +48,30 @@ class NotificationContentMapperTest {
 
     @Test
     void deepClone_shouldProduceIndependentObjectGraph_soMutatingCloneDoesNotAffectSource() {
-        CommodityComplement complement = CommodityComplement.builder().typeOfCommodity("LIVE").build();
+        Species sourceSpecies = Species.builder()
+            .value("BOV")
+            .text("Bovine")
+            .typeOfCommodity("Domestic")
+            .build();
+        Commodity complement = Commodity.builder()
+            .name("Cattle")
+            .typeOfCommodity("LIVE")
+            .species(List.of(sourceSpecies))
+            .build();
         Notification source = Notification.builder()
-            .commodity(Commodity.builder().name("Cattle").commodityComplement(List.of(complement)).build())
+            .commodities(List.of(complement))
             .reasonForImport("PERMANENT")
             .build();
 
         Notification clone = mapper.deepClone(source);
         clone.setReasonForImport("MUTATED");
-        clone.getCommodity().setName("MutatedCattle");
+        clone.getCommodities().getFirst().setName("MutatedCattle");
+        clone.getCommodities().getFirst().getSpecies().getFirst().setTypeOfCommodity("Game");
 
         assertThat(source.getReasonForImport()).isEqualTo("PERMANENT");
-        assertThat(source.getCommodity().getName()).isEqualTo("Cattle");
+        assertThat(source.getCommodities().getFirst().getName()).isEqualTo("Cattle");
+        assertThat(source.getCommodities().getFirst().getSpecies().getFirst().getTypeOfCommodity())
+            .isEqualTo("Domestic");
     }
 
     @Test

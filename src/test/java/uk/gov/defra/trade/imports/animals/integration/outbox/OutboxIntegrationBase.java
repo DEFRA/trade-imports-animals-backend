@@ -228,7 +228,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
                 .referenceNumber(created.getReferenceNumber())
                 .concurrencyToken(created.getConcurrencyToken())
                 .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF123").build())
-                .commodity(Commodity.builder().name("Live cattle").build())
+                .commodities(List.of(Commodity.builder().name("Live cattle").build()))
                 .build()))
             .exchange()
             .expectStatus().isOk();
@@ -249,7 +249,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     protected static NotificationDto minimalNotificationDto() {
         return NotificationDto.builder()
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF123").build())
-            .commodity(Commodity.builder().name("Live cattle").build())
+            .commodities(List.of(Commodity.builder().name("Live cattle").build()))
             .build();
     }
 

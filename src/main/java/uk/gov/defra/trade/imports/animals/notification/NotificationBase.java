@@ -1,6 +1,9 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
@@ -13,7 +16,8 @@ public abstract class NotificationBase {
 
     private Origin origin;
 
-    private Commodity commodity;
+    @Builder.Default
+    private List<Commodity> commodities = new ArrayList<>();
 
     private String reasonForImport;
 
@@ -41,10 +45,6 @@ public abstract class NotificationBase {
 
     private String portOfExit;
 
-    /**
-     * A calendar day the user chose, carried as a {@code LocalDate}: {@code YYYY-MM-DD} on the
-     * wire and a string in Mongo. It has no time and no zone, so no reader can shift it by a day.
-     * Moments such as {@code created} are {@code Instant} instead.
-     */
+    /** The exit date the user chose, as YYYY-MM-DD on the wire. */
     private LocalDate exitDate;
 }

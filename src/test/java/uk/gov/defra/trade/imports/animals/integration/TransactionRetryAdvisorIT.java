@@ -6,6 +6,7 @@ import static org.assertj.core.groups.Tuple.tuple;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.writeConflictAtCommit;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.writeConflictOnOutboxCreation;
 
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
@@ -119,7 +120,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
         NotificationDto edit = NotificationDto.builder()
             .referenceNumber(referenceNumber)
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("EDITED").build())
-            .commodity(Commodity.builder().name("Live cattle").build())
+            .commodities(List.of(Commodity.builder().name("Live cattle").build()))
             .concurrencyToken(draft.getConcurrencyToken())
             .build();
         transactionManager.failNextCommits(1);
@@ -144,7 +145,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
         origin.setCountryCode("GB");
         NotificationDto dto = NotificationDto.builder()
             .origin(origin)
-            .commodity(Commodity.builder().name("Live cattle").build())
+            .commodities(List.of(Commodity.builder().name("Live cattle").build()))
             .build();
 
         return webClient("NoAuth")
