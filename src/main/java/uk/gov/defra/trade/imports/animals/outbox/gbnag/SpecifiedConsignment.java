@@ -45,6 +45,6 @@ public record SpecifiedConsignment(
         if (additionalDetails == null || additionalDetails.getUnweanedAnimals() == null) {
             return Optional.empty();
         }
-        return Optional.of(Boolean.valueOf(additionalDetails.getUnweanedAnimals()));
+        return Optional.of("yes".equalsIgnoreCase(additionalDetails.getUnweanedAnimals()));
     }
 }

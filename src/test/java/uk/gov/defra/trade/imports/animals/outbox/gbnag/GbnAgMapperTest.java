@@ -1018,6 +1018,32 @@ class GbnAgMapperTest {
     }
 
     @Test
+    void shouldCarryUnweanedAnimalsAsTrue_whenAnswerIsYes() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-UNW002")
+            .notification(Notification.builder()
+                .additionalDetails(new AdditionalDetails("SLAUGHTER", "yes"))
+                .build())
+            .build();
+
+        assertThat(mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
+            .specifiedConsignment().isOrHasUnweanedAnimals()).isTrue();
+    }
+
+    @Test
+    void shouldCarryUnweanedAnimalsAsFalse_whenAnswerIsNo() {
+        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            .referenceNumber("GBN-AG-26-UNW001")
+            .notification(Notification.builder()
+                .additionalDetails(new AdditionalDetails("SLAUGHTER", "no"))
+                .build())
+            .build();
+
+        assertThat(mapper.toGbnAgEventData(notificationAggregate, 1, List.of())
+            .specifiedConsignment().isOrHasUnweanedAnimals()).isFalse();
+    }
+
+    @Test
     void shouldOmitAbsentSubdivisionAndRegionOfOriginCode_whenSerialised() {
         TradeCountry wholeCountry = originCountryFor(Origin.builder().countryCode("FR").requiresRegionCode("no").build());
         TradeCountry subdivision = originCountryFor(Origin.builder().countryCode("ES").countrySubdivisionCode("ES-CN").build());
@@ -1178,7 +1204,7 @@ class GbnAgMapperTest {
                 .origin(Origin.builder().countryCode("ES").countrySubdivisionCode("ES-CN").requiresRegionCode("yes").internalReference("Imports456_GB").regionOfOriginCode("ES-12345").build())
                 .reasonForImport("internalMarket")
                 .purposeInInternalMarket("breeding")
-                .additionalDetails(new AdditionalDetails("further-keeping", "true"))
+                .additionalDetails(new AdditionalDetails("further-keeping", "yes"))
                 .consignor(party("Astra Rosales",
                     Address.builder()
                         .addressLine1("43 East Hague Extension")
