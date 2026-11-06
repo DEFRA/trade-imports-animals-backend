@@ -416,15 +416,6 @@ class DocumentServiceTest {
       assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.REJECTED);
     }
 
-    /**
-     * Headline regression guard for the multi-PENDING ambiguity that motivated correlationId.
-     *
-     * <p>Two PENDING documents share the same notification reference (legal — a user can start a
-     * second upload before the first leaves PENDING). A scan callback arrives for one. With the
-     * old {@code findFirst(notificationReferenceNumber, PENDING)} resolver this was non-deterministic and could
-     * silently update the wrong record. With correlationId routing, only the targeted document
-     * transitions; the sibling stays PENDING with empty {@code files}.
-     */
     @Test
     void handleScanResult_updatesOnlyMatchingDocument_whenMultiplePendingForSameRef() {
       String notificationReferenceNumber = "GBN-AG-26-MXST00";
