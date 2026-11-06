@@ -42,7 +42,6 @@ public class NotificationService {
 
     private static final String CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER = "Cannot find notification with reference number: ";
     private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
-    private static final int MAX_REF_RETRIES = 3;
     private static final int MAX_LOCK_RETRIES = 2;
 
     private final NotificationRepository notificationRepository;
@@ -430,7 +429,8 @@ public class NotificationService {
         notificationAggregate.setStatus(NotificationStatus.DRAFT);
         stampExpiry(notificationAggregate);
         setNotificationDetails(dto, notificationAggregate);
-        for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
+        int maxAttempts = 3;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             notificationAggregate.setReferenceNumber(referenceNumberGenerator.generate());
             try {
                 NotificationAggregate saved = saveWithStatusAndOutboxEvent(
@@ -443,11 +443,11 @@ public class NotificationService {
                 log.info("NotificationAggregate saved with reference number: {}", saved.getReferenceNumber());
                 return saved;
             } catch (DuplicateKeyException _) {
-                log.warn("Reference number collision on persistence attempt {}/{}; retrying", attempt, MAX_REF_RETRIES);
+                log.warn("Reference number collision on persistence attempt {}/{}", attempt, maxAttempts);
             }
         }
         throw new IllegalStateException(
-            "Failed to generate a unique reference number after " + MAX_REF_RETRIES + " attempts");
+            "Failed to generate a unique reference number after " + maxAttempts + " attempts");
     }
 
     private NotificationAggregate updateNotification(NotificationDto dto, String correlationId, Actor actor) {

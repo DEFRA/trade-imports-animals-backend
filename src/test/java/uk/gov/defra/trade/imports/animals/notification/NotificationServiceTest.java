@@ -253,7 +253,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void saveNotification_shouldThrowIllegalStateException_whenAllPersistenceRetriesExhausted() {
+        void saveNotification_shouldThrowIllegalStateException_whenAllPersistenceAttemptsCollide() {
             // Given — all three persistence attempts collide
             Origin origin = Origin.builder()
                 .countryCode("GB")
@@ -275,6 +275,30 @@ class NotificationServiceTest {
 
             verify(referenceNumberGenerator, times(3)).generate();
             verify(notificationRepository, times(3)).save(any(NotificationAggregate.class));
+        }
+
+        private List<ILoggingEvent> logEventsOfASaveWhoseThreeAttemptsCollide(DuplicateKeyException lastCollision) {
+            when(referenceNumberGenerator.generate())
+                .thenReturn("GBN-AG-26-ABC001", "GBN-AG-26-ABC002", "GBN-AG-26-ABC003");
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenThrow(new DuplicateKeyException("first collision"))
+                .thenThrow(new DuplicateKeyException("second collision"))
+                .thenThrow(lastCollision);
+            NotificationDto dto = NotificationDto.builder().build();
+
+            return logEventsDuring(() -> assertThatThrownBy(() -> notificationService.saveNotification(dto, "", null))
+                .isInstanceOf(IllegalStateException.class));
+        }
+
+        @Test
+        void saveNotification_shouldLogEachAttemptWithNoPromiseOfARetry_whenAllPersistenceAttemptsCollide() {
+            List<ILoggingEvent> events =
+                logEventsOfASaveWhoseThreeAttemptsCollide(new DuplicateKeyException("last collision"));
+
+            assertThat(messagesOf(events)).containsExactly(
+                "Reference number collision on persistence attempt 1/3",
+                "Reference number collision on persistence attempt 2/3",
+                "Reference number collision on persistence attempt 3/3");
         }
 
         @Test
