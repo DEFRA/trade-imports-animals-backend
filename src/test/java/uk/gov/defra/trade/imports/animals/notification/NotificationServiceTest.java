@@ -100,7 +100,7 @@ class NotificationServiceTest {
 
     @BeforeEach
     void setUp() {
-        notificationService = buildService(new NotificationTtlConfig(null, "local", sweep(false)));
+        notificationService = buildService(new NotificationTtlConfig(null, "local"));
     }
 
     private static ConsignmentParty literalParty() {
@@ -124,11 +124,6 @@ class NotificationServiceTest {
             Mappers.getMapper(NotificationContentMapper.class),
             referenceNumberGenerator, ttlConfig,
             Duration.ZERO, 54, 50);
-    }
-
-    private static NotificationTtlConfig.Sweep sweep(boolean enabled) {
-        return new NotificationTtlConfig.Sweep(
-            enabled, 3_600_000, 10, Duration.ofSeconds(1), Duration.ofSeconds(30));
     }
 
     @Nested
@@ -1004,76 +999,30 @@ class NotificationServiceTest {
 
         @Test
         void createNotification_stampsExpireAt_whenDaysConfiguredAndNotProd() {
-            NotificationAggregate result = create(new NotificationTtlConfig(7, "dev", sweep(false)));
+            NotificationAggregate result = create(new NotificationTtlConfig(7, "dev"));
 
             assertThat(result.getExpireAt()).isEqualTo(result.getCreated().plus(7, ChronoUnit.DAYS));
         }
 
         @Test
         void createNotification_neverStampsExpireAt_inProd_regardlessOfOtherConfig() {
-            NotificationAggregate result = create(new NotificationTtlConfig(7, "prod", sweep(true)));
+            NotificationAggregate result = create(new NotificationTtlConfig(7, "prod"));
 
             assertThat(result.getExpireAt()).isNull();
         }
 
         @Test
         void createNotification_neverStampsExpireAt_inProd_caseInsensitive() {
-            NotificationAggregate result = create(new NotificationTtlConfig(7, "PROD", sweep(true)));
+            NotificationAggregate result = create(new NotificationTtlConfig(7, "PROD"));
 
             assertThat(result.getExpireAt()).isNull();
         }
 
         @Test
         void createNotification_doesNotStampExpireAt_whenDaysUnconfigured() {
-            NotificationAggregate result = create(new NotificationTtlConfig(null, "dev", sweep(false)));
+            NotificationAggregate result = create(new NotificationTtlConfig(null, "dev"));
 
             assertThat(result.getExpireAt()).isNull();
-        }
-    }
-
-    @Nested
-    class DeleteExpired {
-
-        @Test
-        void deleteExpired_deletesDueNotifications_andCascadesToDocuments_withNoAudit() {
-            String ref1 = "GBN-AG-26-EXP001";
-            String ref2 = "GBN-AG-26-EXP002";
-            when(notificationRepository.findExpired(
-                any(Instant.class), any(Pageable.class)))
-                .thenReturn(List.of(() -> ref1, () -> ref2));
-
-            int deleted = notificationService.deleteExpired(10);
-
-            assertThat(deleted).isEqualTo(2);
-            InOrder inOrder = inOrder(notificationRepository, documentService);
-            inOrder.verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
-            inOrder.verify(documentService).deleteForNotificationRefs(List.of(ref1, ref2));
-            verify(auditRepository, never()).save(any(Audit.class));
-        }
-
-        @Test
-        void deleteExpired_returnsZeroAndSkipsDeletion_whenNothingDue() {
-            when(notificationRepository.findExpired(
-                any(Instant.class), any(Pageable.class)))
-                .thenReturn(Collections.emptyList());
-
-            assertThat(notificationService.deleteExpired(10)).isZero();
-
-            verify(notificationRepository, never()).deleteAllByReferenceNumberIn(anyList());
-            verify(documentService, never()).deleteForNotificationRefs(anyList());
-        }
-
-        @Test
-        void deleteExpired_queriesFirstPageBoundedByBatchSize() {
-            ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-            when(notificationRepository.findExpired(
-                any(Instant.class), pageableCaptor.capture()))
-                .thenReturn(Collections.emptyList());
-
-            notificationService.deleteExpired(5);
-
-            assertThat(pageableCaptor.getValue().getPageNumber()).isZero();
-            assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
         }
     }
 

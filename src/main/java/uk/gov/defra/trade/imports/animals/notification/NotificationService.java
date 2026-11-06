@@ -390,29 +390,6 @@ public class NotificationService {
         createNotificationAuditRecord(referenceNumbers, auditContext, Result.SUCCESS);
     }
 
-    /**
-     * Deletes up to {@code batchSize} notifications whose {@code expireAt} has passed, with their
-     * accompanying documents. Writes no audit record. Notifications with no {@code expireAt} are
-     * never selected.
-     *
-     * @param batchSize maximum number of notifications to remove in this run
-     * @return the number of notifications deleted
-     */
-    @Transactional
-    public int deleteExpired(int batchSize) {
-        List<NotificationReferenceOnly> due =
-            notificationRepository.findExpired(Instant.now(), PageRequest.of(0, batchSize));
-        if (due.isEmpty()) {
-            return 0;
-        }
-        List<String> referenceNumbers = due.stream()
-            .map(NotificationReferenceOnly::getReferenceNumber)
-            .toList();
-        log.info("Expiring {} notification(s)", referenceNumbers.size());
-        deleteNotificationsAndDocuments(referenceNumbers);
-        return referenceNumbers.size();
-    }
-
     private void deleteNotificationsAndDocuments(List<String> referenceNumbers) {
         notificationRepository.deleteAllByReferenceNumberIn(referenceNumbers);
         documentService.deleteForNotificationRefs(referenceNumbers);

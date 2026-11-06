@@ -135,17 +135,14 @@ notification:
   submit:
     lock-at-least-for: 50ms
   # Automatic expiry of app-created notifications in non-prod environments.
-  # Defaults here are the prod-safe values: days unset (no stamping) and sweep disabled.
-  # Non-prod environments opt in via NOTIFICATION_TTL_DAYS and NOTIFICATION_TTL_SWEEP_ENABLED.
+  # Defaults here are the prod-safe values: days unset (no stamping) and expiry disabled (no TTL
+  # indexes). Non-prod environments opt in via NOTIFICATION_TTL_DAYS and
+  # NOTIFICATION_TTL_EXPIRY_ENABLED.
   ttl:
     days: ${NOTIFICATION_TTL_DAYS:}
     environment: ${ENVIRONMENT:local}
-    sweep:
-      enabled: ${NOTIFICATION_TTL_SWEEP_ENABLED:false}
-      interval-ms: 3600000
-      batch-size: 10
-      lock-at-least-for: 1s
-      lock-at-most-for: 30s
+    expiry:
+      enabled: ${NOTIFICATION_TTL_EXPIRY_ENABLED:false}
 
 mongo:
   transaction:

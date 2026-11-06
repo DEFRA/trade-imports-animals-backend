@@ -93,13 +93,10 @@ notification:
     page-size: 2
   submit:
     lock-at-least-for: 0ms
-  # Expiry stays off in ITs; the expiry sweep is exercised by calling the service directly with
-  # back-dated expireAt, so no scheduled bean runs during unrelated integration tests.
   ttl:
     environment: ${ENVIRONMENT:local}
-    sweep:
+    expiry:
       enabled: false
-      batch-size: 10
 
 mongo:
   transaction:
