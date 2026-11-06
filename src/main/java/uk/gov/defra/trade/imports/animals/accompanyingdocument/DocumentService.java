@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -244,9 +245,13 @@ public class DocumentService {
   }
 
   private Instant notificationExpireAt(String notificationRef) {
-    return notificationRepository.findExpiryByReferenceNumber(notificationRef)
-        .map(NotificationExpiry::getExpireAt)
-        .orElse(null);
+    Optional<NotificationExpiry> expiry =
+        notificationRepository.findExpiryByReferenceNumber(notificationRef);
+    if (expiry.isEmpty()) {
+      log.warn("Notification {} not found, so its new document has no expireAt", notificationRef);
+      return null;
+    }
+    return expiry.get().getExpireAt();
   }
 
   private UploadSession saveOrThrowOnDuplicate(UploadSession session, String notificationRef) {

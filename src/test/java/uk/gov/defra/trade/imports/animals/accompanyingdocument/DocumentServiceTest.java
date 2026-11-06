@@ -8,6 +8,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -23,6 +27,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
@@ -70,6 +75,22 @@ class DocumentServiceTest {
         .uploadId(uploadId)
         .correlationId(correlationId)
         .build();
+  }
+
+  private static List<String> warningsLoggedDuring(Runnable action) {
+    Logger logger = (Logger) LoggerFactory.getLogger(DocumentService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      action.run();
+    } finally {
+      logger.detachAppender(appender);
+    }
+    return appender.list.stream()
+        .filter(event -> event.getLevel() == Level.WARN)
+        .map(ILoggingEvent::getFormattedMessage)
+        .toList();
   }
 
   @Nested
@@ -215,6 +236,42 @@ class DocumentServiceTest {
               DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15")));
 
       assertThat(claimed.getExpireAt()).isNull();
+    }
+
+    @Test
+    void claimUpload_shouldNotWarn_whenTheNotificationIsFoundWithNoExpireAt() {
+      sessionIsOpen();
+      notificationExpiresAt(NOTIFICATION_REF, null);
+      when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
+          .thenReturn(Optional.empty());
+      saveReturnsWhatItWasGiven();
+      ClaimUploadRequest request = new ClaimUploadRequest(
+          DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"));
+
+      List<String> warnings =
+          warningsLoggedDuring(() -> documentService.claimUpload(UPLOAD_ID, request));
+
+      assertThat(warnings).isEmpty();
+    }
+
+    @Test
+    void claimUpload_shouldWarnWithTheReferenceNumberAndSetNoExpireAt_whenTheNotificationIsNotFound() {
+      sessionIsOpen();
+      when(notificationRepository.findExpiryByReferenceNumber(NOTIFICATION_REF))
+          .thenReturn(Optional.empty());
+      when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
+          .thenReturn(Optional.empty());
+      saveReturnsWhatItWasGiven();
+      ClaimUploadRequest request = new ClaimUploadRequest(
+          DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15"));
+      List<AccompanyingDocument> claimed = new ArrayList<>();
+
+      List<String> warnings = warningsLoggedDuring(
+          () -> claimed.add(documentService.claimUpload(UPLOAD_ID, request)));
+
+      assertThat(warnings).singleElement().asString().contains(NOTIFICATION_REF);
+      assertThat(claimed).singleElement()
+          .satisfies(document -> assertThat(document.getExpireAt()).isNull());
     }
 
     @Test
