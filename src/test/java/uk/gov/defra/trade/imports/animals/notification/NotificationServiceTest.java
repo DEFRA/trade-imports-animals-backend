@@ -2738,26 +2738,16 @@ class NotificationServiceTest {
     private static final class NotificationViewBuilder {
         private String referenceNumber;
         private NotificationStatus status;
-        private Instant created;
         private Origin origin;
-        private List<Commodity> commodities;
-        private ConsignmentParty consignor;
-        private ConsignmentParty consignee;
-        private Transport transport;
 
         NotificationViewBuilder referenceNumber(String referenceNumber) { this.referenceNumber = referenceNumber; return this; }
         NotificationViewBuilder status(NotificationStatus status) { this.status = status; return this; }
-        NotificationViewBuilder created(Instant created) { this.created = created; return this; }
         NotificationViewBuilder origin(Origin origin) { this.origin = origin; return this; }
-        NotificationViewBuilder commodities(List<Commodity> commodities) { this.commodities = commodities; return this; }
-        NotificationViewBuilder consignor(ConsignmentParty consignor) { this.consignor = consignor; return this; }
-        NotificationViewBuilder consignee(ConsignmentParty consignee) { this.consignee = consignee; return this; }
-        NotificationViewBuilder transport(Transport transport) { this.transport = transport; return this; }
 
         NotificationView build() {
             return new NotificationViewData(
-                referenceNumber, 0L, status, created,
-                origin, commodities, consignor, consignee, transport);
+                referenceNumber, 0L, status, null,
+                origin, null, null, null, null);
         }
     }
 }
