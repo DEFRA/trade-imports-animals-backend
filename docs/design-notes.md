@@ -9,6 +9,7 @@ Why the code is shaped the way it is. Code states what it does; this file holds 
 - `YYYY-MM-DD` strings sort in date order, so sorts and range queries still work.
 - The string-to-`LocalDate` reader runs only where the target property is a `LocalDate`. Date-shaped strings in `String` fields, `fulfilments` and outbox `data` stay strings.
 - BSON dates hold milliseconds, so sub-millisecond digits on a stored `Instant` are dropped.
+- `write-dates-as-timestamps` is pinned to `false`, the Spring Boot default, so it cannot change by accident. Enabling it would serialise an `Instant` as a decimal epoch and a `LocalDate` as a `[year, month, day]` array instead of an ISO-8601 string, which breaks the API contract silently.
 - `PersistedTimestampZoneIT` asserts the raw BSON, not a repository round trip, because a round trip decodes in the zone that encoded it and hides any drift. It pins the JVM to `Europe/London`, because under UTC there is no drift to detect.
 - The GBN-AG event emits `issueDateTime` with every sub-second digit, and emits an arrival date as UTC midnight of that date, never the JVM zone's midnight.
 - The OpenAPI schema derives each date field's `format` from its Java type, so `format: date` tells a caller the value is a calendar date and `format: date-time` tells it the value is a moment. `OpenApiDateFormatTest` holds the two apart by resolving the schemas through the swagger model converters springdoc uses, which needs no running server.
@@ -35,7 +36,17 @@ Two independent safeguards keep expiry out of prod; both must fail before prod l
 - Stamping: `expireAt` is set at creation only when `NOTIFICATION_TTL_DAYS` is configured and `ENVIRONMENT` is not `prod`.
 - Removal: `NotificationExpiryIndex` creates the Mongo TTL indexes on `expireAt` only when `NOTIFICATION_TTL_EXPIRY_ENABLED=true`, with no `matchIfMissing`, and refuses in prod.
 
-`expireAt` counts from `created`, so later edits do not extend it. An accompanying document takes its notification's `expireAt` when the document is first written, so Mongo removes both in the same TTL pass; a document whose notification has no `expireAt` has none either. Mongo's TTL monitor removes a record within about a minute of its `expireAt` and never touches records without one. Removal writes no audit record and no outbox event, because it is not a user action.
+Both default to off in `application.yml`, the values prod relies on; an environment opts in by setting them.
+
+`expireAt` counts from `created`, so later edits do not extend it. An accompanying document takes its notification's `expireAt` when the document is first written. Once the TTL indexes exist, Mongo's TTL monitor runs every 60 seconds and removes records whose `expireAt` has passed, so a record usually goes soon after that moment. No exact time is guaranteed, and nor is a notification going in the same pass as its documents. With `NOTIFICATION_TTL_DAYS` set and the flag off, records carry an `expireAt` that nothing acts on. Removal writes no audit record and no outbox event, because it is not a user action.
+
+Mongo never removes a record with no `expireAt`:
+
+- A notification created while stamping was off, or before stamping existed, has none, and neither does a document of that notification.
+- A document written before documents took an `expireAt` has none, even if its notification has one.
+- A document first written after its notification has gone has none.
+
+Nothing in this service clears these. An orphaned document, one with no `expireAt` whose `notificationReferenceNumber` matches no notification, stays until someone deletes it by hand.
 
 - The indexes are created at startup rather than with `@Indexed(expireAfter)`, because `auto-index-creation` would build an annotated index in every environment, prod included.
 - Mongo refuses a TTL index on a key that already carries a plain index, so `NotificationExpiryIndex` drops any plain `expireAt` index first.
@@ -47,7 +58,7 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 
 - A session and a document are separate records in separate collections. The frontend opens a session every time it paints the upload page — a trader who loads it, reloads it or comes back to it opens several — so writing a document then would leave a notification holding a document per page view, with nothing to tell them apart from the real ones. A document is written by whichever of the claim and the scan callback arrives first, both of which mean a file genuinely exists.
 - Registering a session carries both the `uploadId` and the `correlationId`, because the callback body echoes back only the `correlationId` it was given at initiate time, and the callback URL is fixed inside the `/initiate` request — before cdp-uploader has assigned an `uploadId`. The caller that opened the session is the only party holding both, so it has to hand them over.
-- Sessions expire 24 hours after they are created, which is how the ones nobody uploaded through are cleared out. Documents do not expire.
+- Sessions expire 24 hours after they are created, which is how the ones nobody uploaded through are cleared out. Documents expire only as "Automatic expiry outside prod" sets out.
 - The browser's return to the upload page looks a session up by notification and handle together, so the handle it carries cannot reach a session another notification opened. The scan callback has only the handle, which is why the unauthenticated-callback note below matters.
 - A document the scan callback created is unclaimed and has no details until the frontend claims it. `claimed` separates a document the user attached from an upload they walked away from, and only claimed documents reach a notification's events. Without it, a clean scan on an abandoned upload would ship on the next GBN-AG event as a document nobody attached. `claimed` was added without a backfill because the service was not live at the time, so the records a migration would have touched did not exist — that is a fact about the moment, not a rule about the pattern: a field added to an outbox filter after launch needs its own backfill.
 - Claiming is repeatable: it replaces the details, so a repeated claim cannot produce a second document.

@@ -26,10 +26,6 @@ spring:
     timeout-per-shutdown-phase: 30s
   jackson:
     serialization:
-      # Timestamps on this API are Instants and date-only fields are LocalDates. Enabling this
-      # would serialise an Instant as a decimal epoch and a LocalDate as a [year, month, day]
-      # array instead of ISO-8601 strings — a silent contract break. Pinned to the Spring Boot
-      # default so it cannot change by accident.
       write-dates-as-timestamps: false
 
 # CDP platform configuration
@@ -134,10 +130,6 @@ notification:
     page-size: 25
   submit:
     lock-at-least-for: 50ms
-  # Automatic expiry of app-created notifications in non-prod environments.
-  # Defaults here are the prod-safe values: days unset (no stamping) and expiry disabled (no TTL
-  # indexes). Non-prod environments opt in via NOTIFICATION_TTL_DAYS and
-  # NOTIFICATION_TTL_EXPIRY_ENABLED.
   ttl:
     days: ${NOTIFICATION_TTL_DAYS:}
     environment: ${ENVIRONMENT:local}
