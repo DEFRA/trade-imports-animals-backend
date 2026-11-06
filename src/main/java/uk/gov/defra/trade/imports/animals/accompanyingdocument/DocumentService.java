@@ -49,19 +49,20 @@ public class DocumentService {
    * <p>Several open sessions per notification are deliberately allowed — a trader may start a
    * second document while the first is still being checked.
    *
-   * @param notificationRef the parent notification reference number
-   * @param request         the upload session's identifiers
+   * @param notificationReferenceNumber the parent notification reference number
+   * @param request the upload session's identifiers
    * @return the recorded session
    * @throws ConflictException if either identifier is already recorded
    */
-  public UploadSession registerUpload(String notificationRef, RegisterUploadRequest request) {
+  public UploadSession registerUpload(
+      String notificationReferenceNumber, RegisterUploadRequest request) {
     UploadSession session = UploadSession.builder()
-        .notificationReferenceNumber(notificationRef)
+        .notificationReferenceNumber(notificationReferenceNumber)
         .uploadId(request.uploadId())
         .correlationId(request.correlationId())
         .build();
 
-    return saveOrThrowOnDuplicate(session, notificationRef);
+    return saveOrThrowOnDuplicate(session, notificationReferenceNumber);
   }
 
   /**
@@ -71,16 +72,17 @@ public class DocumentService {
    * <p>Scoped to the notification deliberately: the handle alone must not be enough to reach a
    * session opened by someone else's notification.
    *
-   * @param notificationRef the parent notification reference number
-   * @param correlationId   the handle the session was opened under
+   * @param notificationReferenceNumber the parent notification reference number
+   * @param correlationId the handle the session was opened under
    * @return the session
    * @throws NotFoundException if that notification has no session under the handle
    */
-  public UploadSession findSession(String notificationRef, String correlationId) {
+  public UploadSession findSession(String notificationReferenceNumber, String correlationId) {
     return uploadSessionRepository
-        .findByNotificationReferenceNumberAndCorrelationId(notificationRef, correlationId)
+        .findByNotificationReferenceNumberAndCorrelationId(
+            notificationReferenceNumber, correlationId)
         .orElseThrow(() -> new NotFoundException(
-            "No upload session found for notification " + notificationRef
+            "No upload session found for notification " + notificationReferenceNumber
                 + " with correlationId: " + correlationId));
   }
 
@@ -167,24 +169,30 @@ public class DocumentService {
   /**
    * Returns all accompanying documents for the given notification reference.
    *
-   * @param ref the notification reference number
+   * @param notificationReferenceNumber the notification reference number
    * @return list of documents, possibly empty
    */
-  public List<AccompanyingDocument> findByNotificationRef(String ref) {
-    return accompanyingDocumentRepository.findAllByNotificationReferenceNumber(ref);
+  public List<AccompanyingDocument> findByNotificationReferenceNumber(
+      String notificationReferenceNumber) {
+    return accompanyingDocumentRepository
+        .findAllByNotificationReferenceNumber(notificationReferenceNumber);
   }
 
   /**
    * Deletes all accompanying documents belonging to the given notification reference numbers.
    * Called as part of cascade deletion when notifications are removed.
    *
-   * @param referenceNumbers the parent notification reference numbers whose documents should be deleted
+   * @param notificationReferenceNumbers the parent notification reference numbers whose documents
+   *     should be deleted
    */
-  public void deleteForNotificationRefs(List<String> referenceNumbers) {
-    Objects.requireNonNull(referenceNumbers, "referenceNumbers must not be null");
-    log.info("Cascade deleting accompanying documents for {} notification(s)", referenceNumbers.size());
-    accompanyingDocumentRepository.deleteAllByNotificationReferenceNumberIn(referenceNumbers);
-    uploadSessionRepository.deleteAllByNotificationReferenceNumberIn(referenceNumbers);
+  public void deleteForNotificationReferenceNumbers(List<String> notificationReferenceNumbers) {
+    Objects.requireNonNull(
+        notificationReferenceNumbers, "notificationReferenceNumbers must not be null");
+    log.info("Cascade deleting accompanying documents for {} notification(s)",
+        notificationReferenceNumbers.size());
+    accompanyingDocumentRepository
+        .deleteAllByNotificationReferenceNumberIn(notificationReferenceNumbers);
+    uploadSessionRepository.deleteAllByNotificationReferenceNumberIn(notificationReferenceNumbers);
   }
 
   /**
@@ -244,31 +252,32 @@ public class DocumentService {
             .build());
   }
 
-  private Instant notificationExpireAt(String notificationRef) {
+  private Instant notificationExpireAt(String notificationReferenceNumber) {
     Optional<NotificationExpiry> expiry =
-        notificationRepository.findExpiryByReferenceNumber(notificationRef);
+        notificationRepository.findExpiryByReferenceNumber(notificationReferenceNumber);
     if (expiry.isEmpty()) {
-      log.warn("Notification {} not found, so its new document has no expireAt", notificationRef);
+      log.warn("Notification {} not found, so its new document has no expireAt",
+          notificationReferenceNumber);
       return null;
     }
     return expiry.get().getExpireAt();
   }
 
-  private UploadSession saveOrThrowOnDuplicate(UploadSession session, String notificationRef) {
+  private UploadSession saveOrThrowOnDuplicate(UploadSession session, String notificationReferenceNumber) {
     try {
       UploadSession saved = uploadSessionRepository.save(session);
       log.info(
           "Registered uploadId {} correlationId {} for notification {}",
           session.getUploadId(),
           session.getCorrelationId(),
-          notificationRef);
+          notificationReferenceNumber);
       return saved;
     } catch (DuplicateKeyException _) {
       log.warn(
           "Duplicate uploadId {} or correlationId {} for notification {}",
           session.getUploadId(),
           session.getCorrelationId(),
-          notificationRef);
+          notificationReferenceNumber);
       throw new ConflictException(
           "An upload session already exists for uploadId " + session.getUploadId()
               + " or correlationId " + session.getCorrelationId());

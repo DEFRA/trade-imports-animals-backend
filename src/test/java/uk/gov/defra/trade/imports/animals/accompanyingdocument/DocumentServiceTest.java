@@ -58,8 +58,8 @@ class DocumentServiceTest {
         accompanyingDocumentRepository, uploadSessionRepository, notificationRepository);
   }
 
-  private void notificationExpiresAt(String notificationRef, Instant expireAt) {
-    when(notificationRepository.findExpiryByReferenceNumber(notificationRef))
+  private void notificationExpiresAt(String notificationReferenceNumber, Instant expireAt) {
+    when(notificationRepository.findExpiryByReferenceNumber(notificationReferenceNumber))
         .thenReturn(Optional.of(() -> expireAt));
   }
 
@@ -69,9 +69,9 @@ class DocumentServiceTest {
   }
 
   private static UploadSession sessionOf(
-      String notificationRef, String uploadId, String correlationId) {
+      String notificationReferenceNumber, String uploadId, String correlationId) {
     return UploadSession.builder()
-        .notificationReferenceNumber(notificationRef)
+        .notificationReferenceNumber(notificationReferenceNumber)
         .uploadId(uploadId)
         .correlationId(correlationId)
         .build();
@@ -98,16 +98,16 @@ class DocumentServiceTest {
 
     @Test
     void registerUpload_shouldSaveASessionCarryingBothIdentifiers() {
-      String notificationRef = "GBN-AG-26-ABC123";
+      String notificationReferenceNumber = "GBN-AG-26-ABC123";
       String uploadId = UUID.randomUUID().toString();
       String correlationId = UUID.randomUUID().toString();
       when(uploadSessionRepository.save(any(UploadSession.class)))
           .thenAnswer(invocation -> invocation.getArgument(0));
 
       UploadSession registered = documentService.registerUpload(
-          notificationRef, new RegisterUploadRequest(uploadId, correlationId));
+          notificationReferenceNumber, new RegisterUploadRequest(uploadId, correlationId));
 
-      assertThat(registered.getNotificationReferenceNumber()).isEqualTo(notificationRef);
+      assertThat(registered.getNotificationReferenceNumber()).isEqualTo(notificationReferenceNumber);
       assertThat(registered.getUploadId()).isEqualTo(uploadId);
       assertThat(registered.getCorrelationId()).isEqualTo(correlationId);
     }
@@ -167,16 +167,16 @@ class DocumentServiceTest {
 
     private static final String UPLOAD_ID = "upload-id-claim";
     private static final String CORRELATION_ID = "correlation-id-claim";
-    private static final String NOTIFICATION_REF = "GBN-AG-26-CLM001";
+    private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-26-CLM001";
 
     private void sessionIsOpen() {
       when(uploadSessionRepository.findByUploadId(UPLOAD_ID))
-          .thenReturn(Optional.of(sessionOf(NOTIFICATION_REF, UPLOAD_ID, CORRELATION_ID)));
+          .thenReturn(Optional.of(sessionOf(NOTIFICATION_REFERENCE_NUMBER, UPLOAD_ID, CORRELATION_ID)));
     }
 
     private AccompanyingDocument scanned() {
       return AccompanyingDocument.builder()
-          .notificationReferenceNumber(NOTIFICATION_REF)
+          .notificationReferenceNumber(NOTIFICATION_REFERENCE_NUMBER)
           .uploadId(UPLOAD_ID)
           .correlationId(CORRELATION_ID)
           .scanStatus(ScanStatus.COMPLETE)
@@ -196,7 +196,7 @@ class DocumentServiceTest {
           new ClaimUploadRequest(
               DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15")));
 
-      assertThat(claimed.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+      assertThat(claimed.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REFERENCE_NUMBER);
       assertThat(claimed.getUploadId()).isEqualTo(UPLOAD_ID);
       assertThat(claimed.getCorrelationId()).isEqualTo(CORRELATION_ID);
       assertThat(claimed.isClaimed()).isTrue();
@@ -209,7 +209,7 @@ class DocumentServiceTest {
     void claimUpload_shouldGiveANewDocumentItsNotificationsExpireAt() {
       Instant expireAt = Instant.parse("2026-11-11T09:30:00Z");
       sessionIsOpen();
-      notificationExpiresAt(NOTIFICATION_REF, expireAt);
+      notificationExpiresAt(NOTIFICATION_REFERENCE_NUMBER, expireAt);
       when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
           .thenReturn(Optional.empty());
       saveReturnsWhatItWasGiven();
@@ -225,7 +225,7 @@ class DocumentServiceTest {
     @Test
     void claimUpload_shouldLeaveANewDocumentWithoutExpireAt_whenItsNotificationHasNone() {
       sessionIsOpen();
-      notificationExpiresAt(NOTIFICATION_REF, null);
+      notificationExpiresAt(NOTIFICATION_REFERENCE_NUMBER, null);
       when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
           .thenReturn(Optional.empty());
       saveReturnsWhatItWasGiven();
@@ -241,7 +241,7 @@ class DocumentServiceTest {
     @Test
     void claimUpload_shouldNotWarn_whenTheNotificationIsFoundWithNoExpireAt() {
       sessionIsOpen();
-      notificationExpiresAt(NOTIFICATION_REF, null);
+      notificationExpiresAt(NOTIFICATION_REFERENCE_NUMBER, null);
       when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
           .thenReturn(Optional.empty());
       saveReturnsWhatItWasGiven();
@@ -257,7 +257,7 @@ class DocumentServiceTest {
     @Test
     void claimUpload_shouldWarnWithTheReferenceNumberAndSetNoExpireAt_whenTheNotificationIsNotFound() {
       sessionIsOpen();
-      when(notificationRepository.findExpiryByReferenceNumber(NOTIFICATION_REF))
+      when(notificationRepository.findExpiryByReferenceNumber(NOTIFICATION_REFERENCE_NUMBER))
           .thenReturn(Optional.empty());
       when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
           .thenReturn(Optional.empty());
@@ -269,7 +269,7 @@ class DocumentServiceTest {
       List<String> warnings = warningsLoggedDuring(
           () -> claimed.add(documentService.claimUpload(UPLOAD_ID, request)));
 
-      assertThat(warnings).singleElement().asString().contains(NOTIFICATION_REF);
+      assertThat(warnings).singleElement().asString().contains(NOTIFICATION_REFERENCE_NUMBER);
       assertThat(claimed).singleElement()
           .satisfies(document -> assertThat(document.getExpireAt()).isNull());
     }
@@ -400,40 +400,40 @@ class DocumentServiceTest {
      *
      * <p>Two PENDING documents share the same notification reference (legal — a user can start a
      * second upload before the first leaves PENDING). A scan callback arrives for one. With the
-     * old {@code findFirst(notificationRef, PENDING)} resolver this was non-deterministic and could
+     * old {@code findFirst(notificationReferenceNumber, PENDING)} resolver this was non-deterministic and could
      * silently update the wrong record. With correlationId routing, only the targeted document
      * transitions; the sibling stays PENDING with empty {@code files}.
      */
     @Test
     void handleScanResult_updatesOnlyMatchingDocument_whenMultiplePendingForSameRef() {
-      String notificationRef = "GBN-AG-26-MXST00";
+      String notificationReferenceNumber = "GBN-AG-26-MXST00";
       String targetCorrelationId = "corr-target";
       String siblingCorrelationId = "corr-sibling";
 
       AccompanyingDocument target = AccompanyingDocument.builder()
           .uploadId("upload-target")
           .correlationId(targetCorrelationId)
-          .notificationReferenceNumber(notificationRef)
+          .notificationReferenceNumber(notificationReferenceNumber)
           .scanStatus(ScanStatus.PENDING)
           .files(new ArrayList<>())
           .build();
       AccompanyingDocument sibling = AccompanyingDocument.builder()
           .uploadId("upload-sibling")
           .correlationId(siblingCorrelationId)
-          .notificationReferenceNumber(notificationRef)
+          .notificationReferenceNumber(notificationReferenceNumber)
           .scanStatus(ScanStatus.PENDING)
           .files(new ArrayList<>())
           .build();
 
       when(uploadSessionRepository.findByCorrelationId(targetCorrelationId)).thenReturn(
-          Optional.of(sessionOf(notificationRef, "upload-target", targetCorrelationId)));
+          Optional.of(sessionOf(notificationReferenceNumber, "upload-target", targetCorrelationId)));
       when(accompanyingDocumentRepository.findByCorrelationId(targetCorrelationId))
           .thenReturn(Optional.of(target));
 
       CdpScanResultForm form = new CdpScanResultForm();
       CdpScanResultPayload payload = new CdpScanResultPayload(
           "ready",
-          Map.of("notificationReferenceNumber", notificationRef,
+          Map.of("notificationReferenceNumber", notificationReferenceNumber,
                  "correlationId", targetCorrelationId),
           form,
           0);
@@ -534,23 +534,23 @@ class DocumentServiceTest {
   }
 
   @Nested
-  class DeleteForNotificationRefs {
+  class DeleteForNotificationReferenceNumbers {
 
     @Test
-    void deleteForNotificationRefs_shouldDeleteAllDocumentsForGivenRefs() {
-      List<String> referenceNumbers = List.of("GBN-AG-26-000111", "GBN-AG-26-000222");
+    void deleteForNotificationReferenceNumbers_shouldDeleteAllDocumentsForGivenRefs() {
+      List<String> notificationReferenceNumbers = List.of("GBN-AG-26-000111", "GBN-AG-26-000222");
 
-      documentService.deleteForNotificationRefs(referenceNumbers);
+      documentService.deleteForNotificationReferenceNumbers(notificationReferenceNumbers);
 
-      verify(accompanyingDocumentRepository).deleteAllByNotificationReferenceNumberIn(referenceNumbers);
-      verify(uploadSessionRepository).deleteAllByNotificationReferenceNumberIn(referenceNumbers);
+      verify(accompanyingDocumentRepository).deleteAllByNotificationReferenceNumberIn(notificationReferenceNumbers);
+      verify(uploadSessionRepository).deleteAllByNotificationReferenceNumberIn(notificationReferenceNumbers);
     }
 
     @Test
-    void deleteForNotificationRefs_shouldThrowNullPointerException_whenReferenceNumbersIsNull() {
-      assertThatThrownBy(() -> documentService.deleteForNotificationRefs(null))
+    void deleteForNotificationReferenceNumbers_shouldThrowNullPointerException_whenNotificationReferenceNumbersIsNull() {
+      assertThatThrownBy(() -> documentService.deleteForNotificationReferenceNumbers(null))
           .isInstanceOf(NullPointerException.class)
-          .hasMessageContaining("referenceNumbers must not be null");
+          .hasMessageContaining("notificationReferenceNumbers must not be null");
     }
   }
 

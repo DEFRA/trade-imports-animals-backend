@@ -162,11 +162,12 @@ class NotificationExpiryIT extends IntegrationBase {
         return referenceNumber;
     }
 
-    private void saveDocument(String uploadId, String notificationRef, Instant expireAt) {
+    private void saveDocument(
+        String uploadId, String notificationReferenceNumber, Instant expireAt) {
         accompanyingDocumentRepository.save(AccompanyingDocument.builder()
             .uploadId(uploadId)
             .correlationId(uploadId)
-            .notificationReferenceNumber(notificationRef)
+            .notificationReferenceNumber(notificationReferenceNumber)
             .scanStatus(ScanStatus.COMPLETE)
             .expireAt(expireAt)
             .build());

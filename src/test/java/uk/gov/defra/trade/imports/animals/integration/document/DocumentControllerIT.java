@@ -82,7 +82,7 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class DocumentControllerIT extends IntegrationBase {
 
-    private static final String NOTIFICATION_REF = "GBN-AG-25-TC0001";
+    private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-25-TC0001";
     private static final String AWS_REGION = "eu-west-2";
 
     private static final Duration SCAN_TIMEOUT = Duration.ofSeconds(20);
@@ -186,7 +186,7 @@ class DocumentControllerIT extends IntegrationBase {
 
             EntityExchangeResult<UploadSessionDto> result = webClient("NoAuth")
                 .post()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(registerBody(session))
                 .exchange()
@@ -198,14 +198,14 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(responseBody).isNotNull();
             assertThat(responseBody.uploadId()).isEqualTo(session.uploadId());
             assertThat(responseBody.correlationId()).isEqualTo(session.correlationId());
-            assertThat(responseBody.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+            assertThat(responseBody.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REFERENCE_NUMBER);
 
             assertThat(result.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
                 .endsWith("/document-uploads/" + session.uploadId());
 
             assertThat(uploadSessionRepository.findByUploadId(session.uploadId())).isPresent();
             assertThat(accompanyingDocumentRepository
-                .findAllByNotificationReferenceNumber(NOTIFICATION_REF)).isEmpty();
+                .findAllByNotificationReferenceNumber(NOTIFICATION_REFERENCE_NUMBER)).isEmpty();
         }
 
         @Test
@@ -214,7 +214,7 @@ class DocumentControllerIT extends IntegrationBase {
 
             webClient("NoAuth")
                 .post()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(registerBody(session))
                 .exchange()
@@ -231,7 +231,7 @@ class DocumentControllerIT extends IntegrationBase {
 
             webClient("NoAuth")
                 .get()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-upload-sessions/"
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-upload-sessions/"
                     + session.correlationId())
                 .exchange()
                 .expectStatus().isOk()
@@ -273,7 +273,7 @@ class DocumentControllerIT extends IntegrationBase {
             AccompanyingDocument doc =
                 accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
             assertThat(doc.isClaimed()).isTrue();
-            assertThat(doc.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+            assertThat(doc.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REFERENCE_NUMBER);
             assertThat(doc.getDocumentType()).isEqualTo(DocumentType.ITAHC);
             assertThat(doc.getDocumentReference()).isEqualTo("UKGB2026001234");
             assertThat(doc.getDateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
@@ -352,7 +352,7 @@ class DocumentControllerIT extends IntegrationBase {
             awaitScanCallback(infectedSession.uploadId());
 
             assertThat(accompanyingDocumentRepository
-                .findAllByNotificationReferenceNumber(NOTIFICATION_REF)).hasSize(2);
+                .findAllByNotificationReferenceNumber(NOTIFICATION_REFERENCE_NUMBER)).hasSize(2);
 
             assertThat(accompanyingDocumentRepository
                 .findByCorrelationId(cleanSession.correlationId()))
@@ -384,7 +384,7 @@ class DocumentControllerIT extends IntegrationBase {
 
             EntityExchangeResult<DocumentListResponse> result = webClient("NoAuth")
                 .get()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(DocumentListResponse.class)
@@ -395,7 +395,7 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(listResponse.items()).hasSize(1);
             AccompanyingDocumentDto item = listResponse.items().get(0);
             assertThat(item.uploadId()).isEqualTo(uploadId);
-            assertThat(item.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+            assertThat(item.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REFERENCE_NUMBER);
             assertThat(item.scanStatus()).isEqualTo(ScanStatus.PENDING);
             assertThat(item.id()).isNotNull();
             assertThat(item.documentType()).isEqualTo(DocumentType.ITAHC);
@@ -405,7 +405,7 @@ class DocumentControllerIT extends IntegrationBase {
             // The typed read above would accept any shape Jackson can decode; this pins the wire.
             webClient("NoAuth")
                 .get()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
@@ -432,7 +432,7 @@ class DocumentControllerIT extends IntegrationBase {
             AccompanyingDocumentDto dto = result.getResponseBody();
             assertThat(dto).isNotNull();
             assertThat(dto.uploadId()).isEqualTo(uploadId);
-            assertThat(dto.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+            assertThat(dto.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REFERENCE_NUMBER);
             assertThat(dto.scanStatus()).isEqualTo(ScanStatus.PENDING);
             assertThat(dto.id()).isNotNull();
             assertThat(dto.created()).isNotNull();
@@ -618,8 +618,8 @@ class DocumentControllerIT extends IntegrationBase {
                   "s3Path": "%s",
                   "metadata": {"correlationId": "%s"}
                 }
-                """.formatted(NOTIFICATION_REF, callbackUrl,
-                    CdpUploaderTestSupport.DOCUMENTS_BUCKET, NOTIFICATION_REF, correlationId))
+                """.formatted(NOTIFICATION_REFERENCE_NUMBER, callbackUrl,
+                    CdpUploaderTestSupport.DOCUMENTS_BUCKET, NOTIFICATION_REFERENCE_NUMBER, correlationId))
             .exchange()
             .expectStatus().is2xxSuccessful()
             .expectBody().returnResult().getResponseBody();
@@ -634,7 +634,7 @@ class DocumentControllerIT extends IntegrationBase {
         OpenedSession session = openUploadSession();
         webClient("NoAuth")
             .post()
-            .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+            .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(registerBody(session))
             .exchange()

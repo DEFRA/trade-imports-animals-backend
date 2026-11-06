@@ -42,7 +42,7 @@ import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 public class DocumentController {
 
   /** A notification reference as the service mints them, e.g. {@code GBN-AG-26-000001}. */
-  private static final String NOTIFICATION_REF_PATTERN = "^[A-Za-z0-9.-]{1,50}$";
+  private static final String NOTIFICATION_REFERENCE_NUMBER_PATTERN = "^[A-Za-z0-9.-]{1,50}$";
 
   /** An upload or correlation handle: cdp-uploader's ids and the UUIDs the frontend mints. */
   private static final String UPLOAD_HANDLE_PATTERN = "^[A-Za-z0-9._-]{1,100}$";
@@ -63,7 +63,7 @@ public class DocumentController {
   /**
    * Register an upload session the caller has opened with cdp-uploader.
    *
-   * @param ref     the notification reference number
+   * @param notificationReferenceNumber the notification reference number
    * @param request the upload session's identifiers
    * @return 201 Created with the recorded session and a Location header
    */
@@ -78,12 +78,14 @@ public class DocumentController {
       content = @Content)
   @Timed("document.register")
   public ResponseEntity<UploadSessionDto> register(
-      @PathVariable @Pattern(regexp = NOTIFICATION_REF_PATTERN) String ref,
+      @PathVariable("ref") @Pattern(regexp = NOTIFICATION_REFERENCE_NUMBER_PATTERN)
+      String notificationReferenceNumber,
       @Valid @RequestBody RegisterUploadRequest request) {
 
-    log.info("POST /notifications/{}/document-uploads uploadId={}", ref, request.uploadId());
+    log.info("POST /notifications/{}/document-uploads uploadId={}", notificationReferenceNumber,
+        request.uploadId());
 
-    UploadSession session = documentService.registerUpload(ref, request);
+    UploadSession session = documentService.registerUpload(notificationReferenceNumber, request);
     URI location = buildLocationUri(session.getUploadId());
 
     return ResponseEntity.created(location).body(UploadSessionDto.from(session));
@@ -92,7 +94,7 @@ public class DocumentController {
   /**
    * Look up the upload session a notification opened under a correlation handle.
    *
-   * @param ref           the notification reference number
+   * @param notificationReferenceNumber the notification reference number
    * @param correlationId the handle the session was opened under
    * @return 200 OK with the session
    */
@@ -105,14 +107,16 @@ public class DocumentController {
   @ApiResponse(responseCode = "404", description = "Session not found", content = @Content)
   @Timed("document.session")
   public ResponseEntity<UploadSessionDto> session(
-      @PathVariable @Pattern(regexp = NOTIFICATION_REF_PATTERN) String ref,
+      @PathVariable("ref") @Pattern(regexp = NOTIFICATION_REFERENCE_NUMBER_PATTERN)
+      String notificationReferenceNumber,
       @PathVariable("correlation-id")
       @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String correlationId) {
 
-    log.info("GET /notifications/{}/document-upload-sessions/{}", ref, correlationId);
+    log.info("GET /notifications/{}/document-upload-sessions/{}", notificationReferenceNumber,
+        correlationId);
 
-    return ResponseEntity.ok(
-        UploadSessionDto.from(documentService.findSession(ref, correlationId)));
+    return ResponseEntity.ok(UploadSessionDto.from(
+        documentService.findSession(notificationReferenceNumber, correlationId)));
   }
 
   /**
@@ -146,7 +150,7 @@ public class DocumentController {
   /**
    * List all accompanying document upload sessions for a notification.
    *
-   * @param ref the notification reference number
+   * @param notificationReferenceNumber the notification reference number
    * @return 200 OK with a list of accompanying document DTOs
    */
   @GetMapping("/notifications/{ref}/document-uploads")
@@ -157,9 +161,11 @@ public class DocumentController {
       content = @Content(schema = @Schema(implementation = DocumentListResponse.class)))
   @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
   @Timed("document.list")
-  public ResponseEntity<DocumentListResponse> list(@PathVariable String ref) {
-    log.info("GET /notifications/{}/document-uploads", ref);
-    List<AccompanyingDocumentDto> items = documentService.findByNotificationRef(ref).stream()
+  public ResponseEntity<DocumentListResponse> list(
+      @PathVariable("ref") String notificationReferenceNumber) {
+    log.info("GET /notifications/{}/document-uploads", notificationReferenceNumber);
+    List<AccompanyingDocumentDto> items = documentService
+        .findByNotificationReferenceNumber(notificationReferenceNumber).stream()
         .map(AccompanyingDocumentDto::from)
         .toList();
     return ResponseEntity.ok(new DocumentListResponse(items));

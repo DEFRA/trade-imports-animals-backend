@@ -29,7 +29,7 @@ import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
  */
 class DocumentScanCallbackIT extends IntegrationBase {
 
-    private static final String NOTIFICATION_REF = "GBN-AG-25-CB0001";
+    private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-25-CB0001";
     private static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
     private static final String S3_KEY_FROM_FIXTURE =
         "44f1a20e-0a27-4d61-9aa7-7afa7fb82d85/c1ec2432-54ed-4153-bd6f-d69a35f598f4";
@@ -84,7 +84,7 @@ class DocumentScanCallbackIT extends IntegrationBase {
               },
               "form": {}
             }
-            """.formatted(NOTIFICATION_REF);
+            """.formatted(NOTIFICATION_REFERENCE_NUMBER);
 
         webClient("NoAuth")
             .post()
@@ -127,7 +127,8 @@ class DocumentScanCallbackIT extends IntegrationBase {
                 }
               }
             }
-            """.formatted(NOTIFICATION_REF, correlationId, FILE_ID_FROM_FIXTURE, S3_KEY_FROM_FIXTURE);
+            """.formatted(
+                NOTIFICATION_REFERENCE_NUMBER, correlationId, FILE_ID_FROM_FIXTURE, S3_KEY_FROM_FIXTURE);
 
         webClient("NoAuth")
             .post()
@@ -260,12 +261,12 @@ class DocumentScanCallbackIT extends IntegrationBase {
         String correlationId = UUID.randomUUID().toString();
         String uploadId = UUID.randomUUID().toString();
         uploadSessionRepository.save(UploadSession.builder()
-            .notificationReferenceNumber(NOTIFICATION_REF)
+            .notificationReferenceNumber(NOTIFICATION_REFERENCE_NUMBER)
             .uploadId(uploadId)
             .correlationId(correlationId)
             .build());
         AccompanyingDocument doc = AccompanyingDocument.builder()
-            .notificationReferenceNumber(NOTIFICATION_REF)
+            .notificationReferenceNumber(NOTIFICATION_REFERENCE_NUMBER)
             .uploadId(uploadId)
             .correlationId(correlationId)
             .scanStatus(ScanStatus.PENDING)

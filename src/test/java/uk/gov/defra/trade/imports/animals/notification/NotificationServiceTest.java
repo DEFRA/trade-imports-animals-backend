@@ -878,7 +878,7 @@ class NotificationServiceTest {
             verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
 
             // And cascade document deletion is triggered for the same refs
-            verify(documentService).deleteForNotificationRefs(List.of(ref1, ref2));
+            verify(documentService).deleteForNotificationReferenceNumbers(List.of(ref1, ref2));
 
             // And an audit record is saved with SUCCESS
             ArgumentCaptor<Audit> auditCaptor = ArgumentCaptor.forClass(Audit.class);
@@ -975,7 +975,7 @@ class NotificationServiceTest {
             InOrder inOrder = inOrder(notificationRepository, documentService);
             inOrder.verify(notificationRepository)
                 .deleteAllByReferenceNumberIn(List.of(referenceNumber));
-            inOrder.verify(documentService).deleteForNotificationRefs(List.of(referenceNumber));
+            inOrder.verify(documentService).deleteForNotificationReferenceNumbers(List.of(referenceNumber));
         }
     }
 

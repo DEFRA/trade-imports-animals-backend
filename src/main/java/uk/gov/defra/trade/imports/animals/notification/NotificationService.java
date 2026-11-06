@@ -392,7 +392,7 @@ public class NotificationService {
 
     private void deleteNotificationsAndDocuments(List<String> referenceNumbers) {
         notificationRepository.deleteAllByReferenceNumberIn(referenceNumbers);
-        documentService.deleteForNotificationRefs(referenceNumbers);
+        documentService.deleteForNotificationReferenceNumbers(referenceNumbers);
     }
 
     private void stampExpiry(NotificationAggregate notificationAggregate) {

@@ -70,14 +70,15 @@ class DocumentControllerTest {
   @Nested
   class Register {
 
-    private static final String REF = "GBN-AG-26-000001";
+    private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-26-000001";
 
     @Test
     void shouldReturn201WithLocationHeaderAndTheRegisteredSession() throws Exception {
-      when(documentService.registerUpload(eq(REF), any(RegisterUploadRequest.class)))
-          .thenReturn(registeredSession(REF));
+      when(documentService.registerUpload(
+          eq(NOTIFICATION_REFERENCE_NUMBER), any(RegisterUploadRequest.class)))
+          .thenReturn(registeredSession(NOTIFICATION_REFERENCE_NUMBER));
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .content(objectMapper.writeValueAsString(registerUploadRequest())))
           .andExpect(status().isCreated())
@@ -86,7 +87,8 @@ class DocumentControllerTest {
               "http://localhost:8085/document-uploads/" + UPLOAD_ID))
           .andExpect(jsonPath("$.uploadId").value(UPLOAD_ID))
           .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID))
-          .andExpect(jsonPath("$.notificationReferenceNumber").value(REF));
+          .andExpect(
+              jsonPath("$.notificationReferenceNumber").value(NOTIFICATION_REFERENCE_NUMBER));
     }
 
     @Test
@@ -95,7 +97,7 @@ class DocumentControllerTest {
           {"uploadId":"","correlationId":"correlation-abc-123"}
           """;
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -110,7 +112,7 @@ class DocumentControllerTest {
           {"uploadId":"upload-abc-123"}
           """;
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -124,7 +126,7 @@ class DocumentControllerTest {
       String body = String.format(
           "{\"uploadId\":\"%s\",\"correlationId\":\"correlation-abc-123\"}", "A".repeat(101));
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -138,7 +140,7 @@ class DocumentControllerTest {
       String body = String.format(
           "{\"uploadId\":\"upload-abc-123\",\"correlationId\":\"%s\"}", "A".repeat(101));
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -355,11 +357,11 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn200WithDocumentList() throws Exception {
-      String ref = "GBN-AG-26-000001";
+      String notificationReferenceNumber = "GBN-AG-26-000001";
 
       AccompanyingDocument doc = AccompanyingDocument.builder()
           .id("doc-id-1")
-          .notificationReferenceNumber(ref)
+          .notificationReferenceNumber(notificationReferenceNumber)
           .uploadId("upload-abc-123")
           .documentType(DocumentType.ITAHC)
           .documentReference("UKGB2026001")
@@ -368,9 +370,10 @@ class DocumentControllerTest {
           .files(List.of())
           .build();
 
-      when(documentService.findByNotificationRef(ref)).thenReturn(List.of(doc));
+      when(documentService.findByNotificationReferenceNumber(notificationReferenceNumber))
+          .thenReturn(List.of(doc));
 
-      mockMvc.perform(get("/notifications/{ref}/document-uploads", ref)
+      mockMvc.perform(get("/notifications/{ref}/document-uploads", notificationReferenceNumber)
               .contentType(MediaType.APPLICATION_JSON))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.items").isArray())
@@ -382,10 +385,11 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn200WithEmptyList() throws Exception {
-      String ref = "GBN-AG-26-000001";
-      when(documentService.findByNotificationRef(ref)).thenReturn(List.of());
+      String notificationReferenceNumber = "GBN-AG-26-000001";
+      when(documentService.findByNotificationReferenceNumber(notificationReferenceNumber))
+          .thenReturn(List.of());
 
-      mockMvc.perform(get("/notifications/{ref}/document-uploads", ref)
+      mockMvc.perform(get("/notifications/{ref}/document-uploads", notificationReferenceNumber)
               .contentType(MediaType.APPLICATION_JSON))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.items").isArray())
