@@ -2,6 +2,11 @@ package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.AdditionalAnswers.delegatesTo;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 
 import com.mongodb.client.MongoClient;
 import java.time.Duration;
@@ -19,6 +24,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.index.Index;
+import org.springframework.data.mongodb.core.index.IndexInfo;
+import org.springframework.data.mongodb.core.index.IndexOperations;
 import org.springframework.test.context.TestPropertySource;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
@@ -27,6 +34,7 @@ import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
+import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationExpiryIndex;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
@@ -101,6 +109,20 @@ class NotificationExpiryIT extends IntegrationBase {
     }
 
     @Test
+    void createIndexes_shouldPutTheTtlIndexInPlace_whenAnotherInstanceDroppedThePlainIndexFirst() {
+        expireAtIndexes(NotificationAggregate.class).forEach(index -> mongoTemplate
+            .indexOps(NotificationAggregate.class).dropIndex(index.getString("name")));
+        mongoTemplate.indexOps(NotificationAggregate.class)
+            .createIndex(new Index().on("expireAt", Sort.Direction.ASC).named("expireAt"));
+
+        new NotificationExpiryIndex(templateOvertakenAfterListingIndexes(), new NotificationTtlConfig(null, "dev"))
+            .createIndexes();
+
+        assertThat(expireAtIndexes(NotificationAggregate.class)).singleElement().satisfies(
+            index -> assertThat(index.get("expireAfterSeconds", Number.class).longValue()).isZero());
+    }
+
+    @Test
     void expiredNotificationsAndDocuments_areRemovedByMongoWhileUndatedAndUnexpiredOnesAndAuditStay() {
         // Given
         Instant past = Instant.now().minus(1, ChronoUnit.HOURS);
@@ -138,6 +160,20 @@ class NotificationExpiryIT extends IntegrationBase {
             .hasSize(1);
         assertThat(auditRepository.findAll()).singleElement().satisfies(
             audit -> assertThat(audit.getNotificationReferenceNumbers()).containsExactly(expiredRef));
+    }
+
+    private MongoTemplate templateOvertakenAfterListingIndexes() {
+        IndexOperations notificationIndexes = mongoTemplate.indexOps(NotificationAggregate.class);
+        IndexOperations overtakenIndexes =
+            mock(IndexOperations.class, delegatesTo(notificationIndexes));
+        doAnswer(listing -> {
+            List<IndexInfo> listed = notificationIndexes.getIndexInfo();
+            notificationIndexes.dropIndex("expireAt");
+            return listed;
+        }).when(overtakenIndexes).getIndexInfo();
+        MongoTemplate overtakenTemplate = spy(mongoTemplate);
+        doReturn(overtakenIndexes).when(overtakenTemplate).indexOps(NotificationAggregate.class);
+        return overtakenTemplate;
     }
 
     private String saveNotification(String referenceNumber, Instant expireAt) {

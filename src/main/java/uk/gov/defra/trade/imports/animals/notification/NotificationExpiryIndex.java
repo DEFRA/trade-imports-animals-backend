@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import com.mongodb.MongoCommandException;
 import java.time.Duration;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -7,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.index.Index;
@@ -58,10 +60,24 @@ public class NotificationExpiryIndex {
         indexOps.getIndexInfo().stream()
             .filter(NotificationExpiryIndex::isPlainExpireAtIndex)
             .map(IndexInfo::getName)
-            .forEach(name -> {
-                indexOps.dropIndex(name);
-                log.info("Dropped plain index {} on expireAt", name);
-            });
+            .forEach(name -> dropPlainIndex(indexOps, name));
+    }
+
+    private static void dropPlainIndex(IndexOperations indexOps, String name) {
+        try {
+            indexOps.dropIndex(name);
+            log.info("Dropped plain index {} on expireAt", name);
+        } catch (DataAccessException e) {
+            if (!isIndexNotFound(e)) {
+                throw e;
+            }
+            log.info("Plain index {} on expireAt was already dropped", name, e);
+        }
+    }
+
+    private static boolean isIndexNotFound(DataAccessException e) {
+        return e.getCause() instanceof MongoCommandException command
+            && "IndexNotFound".equals(command.getErrorCodeName());
     }
 
     private static boolean isPlainExpireAtIndex(IndexInfo index) {

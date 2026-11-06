@@ -49,7 +49,7 @@ Mongo never removes a record with no `expireAt`:
 Nothing in this service clears these. An orphaned document, one with no `expireAt` whose `notificationReferenceNumber` matches no notification, stays until someone deletes it by hand.
 
 - The indexes are created at startup rather than with `@Indexed(expireAfter)`, because `auto-index-creation` would build an annotated index in every environment, prod included.
-- Mongo refuses a TTL index on a key that already carries a plain index, so `NotificationExpiryIndex` drops any plain `expireAt` index first.
+- Mongo refuses a TTL index on a key that already carries a plain index, so `NotificationExpiryIndex` drops any plain `expireAt` index first. Instances starting together can both list that index, so one already dropped by another instance counts as done rather than as a startup failure.
 - Switching the flag back off does not drop the TTL indexes.
 
 ## Accompanying documents and cdp-uploader
