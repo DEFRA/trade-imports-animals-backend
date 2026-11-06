@@ -417,21 +417,13 @@ class DocumentServiceTest {
     }
 
     @Test
-    void handleScanResult_updatesOnlyMatchingDocument_whenMultiplePendingForSameRef() {
+    void handleScanResult_shouldSaveTheDocumentMatchingTheCorrelationId() {
       String notificationReferenceNumber = "GBN-AG-26-MXST00";
       String targetCorrelationId = "corr-target";
-      String siblingCorrelationId = "corr-sibling";
 
       AccompanyingDocument target = AccompanyingDocument.builder()
           .uploadId("upload-target")
           .correlationId(targetCorrelationId)
-          .notificationReferenceNumber(notificationReferenceNumber)
-          .scanStatus(ScanStatus.PENDING)
-          .files(new ArrayList<>())
-          .build();
-      AccompanyingDocument sibling = AccompanyingDocument.builder()
-          .uploadId("upload-sibling")
-          .correlationId(siblingCorrelationId)
           .notificationReferenceNumber(notificationReferenceNumber)
           .scanStatus(ScanStatus.PENDING)
           .files(new ArrayList<>())
@@ -458,10 +450,6 @@ class DocumentServiceTest {
       assertThat(saved.getCorrelationId()).isEqualTo(targetCorrelationId);
       assertThat(saved.getUploadId()).isEqualTo("upload-target");
       assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
-
-      verify(accompanyingDocumentRepository, never()).findByCorrelationId(siblingCorrelationId);
-      assertThat(sibling.getScanStatus()).isEqualTo(ScanStatus.PENDING);
-      assertThat(sibling.getFiles()).isEmpty();
     }
 
     @Test

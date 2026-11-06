@@ -372,6 +372,25 @@ class DocumentControllerIT extends IntegrationBase {
                     assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
                 });
         }
+
+        @Test
+        void shouldLeaveTheOtherSessionsStoredDocumentPendingWithNoFiles_whenOneSessionIsScanned()
+            throws IOException {
+            OpenedSession scannedSession = registeredSession();
+            OpenedSession otherSession = registeredSession();
+            claimUpload(otherSession.uploadId());
+            byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
+
+            uploadFile(scannedSession.uploadId(), pdfBytes, "clean.pdf", "application/pdf");
+
+            assertThat(awaitScanCallback(scannedSession.uploadId()).getScanStatus())
+                .isEqualTo(ScanStatus.COMPLETE);
+            AccompanyingDocument other = accompanyingDocumentRepository
+                .findByCorrelationId(otherSession.correlationId())
+                .orElseThrow();
+            assertThat(other.getScanStatus()).isEqualTo(ScanStatus.PENDING);
+            assertThat(other.getFiles()).isEmpty();
+        }
     }
 
     @Nested
