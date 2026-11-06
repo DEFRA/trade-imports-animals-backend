@@ -196,6 +196,29 @@ public class GlobalExceptionHandler {
             .body(problemDetail);
     }
 
+    @ExceptionHandler(uk.gov.defra.trade.imports.animals.exceptions.ForbiddenException.class)
+    public ResponseEntity<ProblemDetail> handleForbiddenException(
+        uk.gov.defra.trade.imports.animals.exceptions.ForbiddenException ex) {
+        String traceId = MDC.get(MDC_TRACE_ID);
+        log.warn("Forbidden (trace: {})", traceId, ex);
+
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
+            HttpStatus.FORBIDDEN,
+            ex.getMessage()
+        );
+
+        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/forbidden"));
+        problemDetail.setTitle("Forbidden");
+
+        if (traceId != null) {
+            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
+        }
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
+            .body(problemDetail);
+    }
+
     /**
      * Handle not found errors (404 Not Found).
      */

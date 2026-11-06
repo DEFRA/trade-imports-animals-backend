@@ -19,6 +19,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
+import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
 @WebMvcTest(DocumentController.class)
@@ -51,6 +52,7 @@ class DocumentControllerTrailingSlashTest {
 
     mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
             .contentType(MediaType.APPLICATION_JSON)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, "5900002")
             .content(objectMapper.writeValueAsString(registerUploadRequest())))
         .andExpect(status().isCreated())
         .andExpect(header().string(

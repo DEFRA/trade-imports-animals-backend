@@ -48,6 +48,7 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
+import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 class NotificationIT extends IntegrationBase {
@@ -60,6 +61,7 @@ class NotificationIT extends IntegrationBase {
     private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
     /** The acting user's organisation, sent on submit and copy. */
     private static final String ORG_ID = "5900002";
+    private static final String OTHER_ORG_ID = "9999999";
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -128,6 +130,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(created).isNotNull();
         assertThat(created.getId()).isNotNull();
         assertThat(created.getReferenceNumber()).matches(REF_FORMAT_REGEX);
+        assertThat(created.getOrganisationId()).isEqualTo(ORG_ID);
         assertNotificationMappedFields(created);
         assertThat(created.getNotification().getOrigin().getRegionOfOriginCode()).isEqualTo("GB-ENG");
 
@@ -2647,5 +2650,79 @@ class NotificationIT extends IntegrationBase {
             return null;
         }
         return notification.getTransport().getArrivalDate();
+    }
+
+    @Test
+    void traderRequests_shouldRejectMissingOrganisationHeader() {
+        webClient("NoAuth")
+            .mutate()
+            .defaultHeaders(headers -> headers.remove(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER))
+            .build()
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail")
+            .value(Matchers.containsString(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER));
+    }
+
+    @Test
+    void organisationScope_shouldHideNotificationFromOtherOrganisation() {
+        NotificationDto dto = createNotificationDto("GB", "Live cattle");
+        String referenceNumber = webClient("NoAuth", ORG_ID)
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(dto))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationAggregate.class)
+            .returnResult()
+            .getResponseBody()
+            .getReferenceNumber();
+
+        submitAs(referenceNumber, ORG_ID);
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .get()
+            .uri(NOTIFICATION_ENDPOINT + "?referenceNumber={ref}", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationPageResponse.class)
+            .value(page -> assertThat(page.content()).isEmpty());
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .post()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .exchange()
+            .expectStatus().isNotFound();
+    }
+
+    @Test
+    void organisationScope_shouldReturn403ForFulfilmentsWhenOrganisationDiffers() {
+        NotificationDto dto = NotificationDto.builder()
+            .origin(Origin.builder().countryCode("GB").build())
+            .commodities(List.of(Commodity.builder().name("Live cattle").build()))
+            .fulfilments(sampleFulfilments())
+            .build();
+        String referenceNumber = webClient("NoAuth", ORG_ID)
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(dto))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationAggregate.class)
+            .returnResult()
+            .getResponseBody()
+            .getReferenceNumber();
+
+        submitAs(referenceNumber, ORG_ID);
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .get()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", referenceNumber)
+            .exchange()
+            .expectStatus().isForbidden();
     }
 }
