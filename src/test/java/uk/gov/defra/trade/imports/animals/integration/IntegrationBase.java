@@ -30,6 +30,7 @@ import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.lifecycle.Startables;
@@ -132,11 +133,16 @@ public abstract class IntegrationBase {
     }
 
     protected WebTestClient webClient(String clientType) {
+        return webClient(clientType, "5900002");
+    }
+
+    protected WebTestClient webClient(String clientType, String organisationId) {
         return WebTestClient.bindToServer()
             .baseUrl("http://localhost:%d".formatted(port))
             .defaultHeader("Authorization", "Bearer " + getToken(clientType))
             .defaultHeader("Content-Type", "application/json")
             .defaultHeader("INS-ConversationId", UUID.randomUUID().toString())
+            .defaultHeader(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, organisationId)
             .responseTimeout(FIRST_REQUEST_WARM_UP_ALLOWANCE)
             .build();
     }

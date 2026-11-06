@@ -14,14 +14,28 @@ public interface NotificationRepository extends MongoRepository<NotificationAggr
 
     Optional<NotificationAggregate> findByReferenceNumber(String referenceNumber);
 
+    boolean existsByReferenceNumber(String referenceNumber);
+
+    Optional<NotificationAggregate> findByReferenceNumberAndOrganisationId(
+        String referenceNumber, String organisationId);
+
     List<NotificationReferenceOnly> findAllByReferenceNumberIn(List<String> referenceNumbers);
 
     Optional<NotificationFulfilmentsView> findFulfilmentsViewByReferenceNumber(String referenceNumber);
 
+    Optional<NotificationFulfilmentsView> findFulfilmentsViewByReferenceNumberAndOrganisationId(
+        String referenceNumber, String organisationId);
+
     Optional<NotificationView> findViewByReferenceNumberAndStatusIn(
         String referenceNumber, List<NotificationStatus> statuses);
 
+    Optional<NotificationView> findViewByReferenceNumberAndStatusInAndOrganisationId(
+        String referenceNumber, List<NotificationStatus> statuses, String organisationId);
+
     Page<NotificationView> findAllViewByStatusIn(List<NotificationStatus> statuses, Pageable pageable);
+
+    Page<NotificationView> findAllViewByStatusInAndOrganisationId(
+        List<NotificationStatus> statuses, String organisationId, Pageable pageable);
 
     /**
      * Notifications due for automatic expiry: a non-null {@code expireAt} at or before {@code now}.
@@ -36,5 +50,7 @@ public interface NotificationRepository extends MongoRepository<NotificationAggr
     Page<NotificationReferenceOnly> findAllProjectedBy(Pageable pageable);
 
     void deleteAllByReferenceNumberIn(List<String> referenceNumbers);
+
+    long deleteByOrganisationIdIsNull();
 
 }
