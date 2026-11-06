@@ -820,7 +820,7 @@ class NotificationServiceTest {
             // Given
             Page<NotificationReferenceOnly> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
-            when(notificationRepository.findAllProjectedBy(any(Pageable.class)))
+            when(notificationRepository.findAllReferencesBy(any(Pageable.class)))
                 .thenReturn(emptyPage);
 
             // When
@@ -833,7 +833,7 @@ class NotificationServiceTest {
             assertThat(result.numberOfElements()).isZero();
             assertThat(result.totalElements()).isZero();
             assertThat(result.totalPages()).isZero();
-            verify(notificationRepository, times(1)).findAllProjectedBy(any(Pageable.class));
+            verify(notificationRepository, times(1)).findAllReferencesBy(any(Pageable.class));
         }
 
         @Test
@@ -843,7 +843,7 @@ class NotificationServiceTest {
             NotificationReferenceOnly ref2 = () -> "GBN-AG-26-XYZ456";
             Page<NotificationReferenceOnly> page = new PageImpl<>(
                 List.of(ref1, ref2), PageRequest.of(0, 54), 2);
-            when(notificationRepository.findAllProjectedBy(any(Pageable.class))).thenReturn(page);
+            when(notificationRepository.findAllReferencesBy(any(Pageable.class))).thenReturn(page);
 
             // When
             ReferenceNumberPageResponse result = notificationService.findAllReferenceNumbers(0);
@@ -852,7 +852,7 @@ class NotificationServiceTest {
             assertThat(result.content()).containsExactly("GBN-AG-26-ABC123", "GBN-AG-26-XYZ456");
             assertThat(result.totalElements()).isEqualTo(2);
             assertThat(result.totalPages()).isEqualTo(1);
-            verify(notificationRepository, times(1)).findAllProjectedBy(any(Pageable.class));
+            verify(notificationRepository, times(1)).findAllReferencesBy(any(Pageable.class));
         }
 
         @Test
@@ -860,7 +860,7 @@ class NotificationServiceTest {
             // Given
             Page<NotificationReferenceOnly> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(2, 54), 200);
-            when(notificationRepository.findAllProjectedBy(any(Pageable.class)))
+            when(notificationRepository.findAllReferencesBy(any(Pageable.class)))
                 .thenReturn(emptyPage);
 
             // When
@@ -868,7 +868,7 @@ class NotificationServiceTest {
 
             // Then
             ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
-            verify(notificationRepository).findAllProjectedBy(pageableCaptor.capture());
+            verify(notificationRepository).findAllReferencesBy(pageableCaptor.capture());
             Pageable pageable = pageableCaptor.getValue();
             assertThat(pageable.getPageNumber()).isEqualTo(2);
             assertThat(pageable.getPageSize()).isEqualTo(50);
@@ -889,7 +889,7 @@ class NotificationServiceTest {
             NotificationReferenceOnly n1 = () -> ref1;
             NotificationReferenceOnly n2 = () -> ref2;
 
-            when(notificationRepository.findAllByReferenceNumberIn(List.of(ref1, ref2)))
+            when(notificationRepository.findAllReferencesByReferenceNumberIn(List.of(ref1, ref2)))
                 .thenReturn(List.of(n1, n2));
             when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
@@ -922,7 +922,7 @@ class NotificationServiceTest {
             NotificationReferenceOnly n1 = () -> existingRef;
 
             when(
-                notificationRepository.findAllByReferenceNumberIn(List.of(existingRef, missingRef)))
+                notificationRepository.findAllReferencesByReferenceNumberIn(List.of(existingRef, missingRef)))
                 .thenReturn(List.of(n1));
             when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
@@ -950,7 +950,7 @@ class NotificationServiceTest {
             String missing1 = "GBN-AG-26-000AAA";
             String missing2 = "GBN-AG-26-000BBB";
 
-            when(notificationRepository.findAllByReferenceNumberIn(List.of(missing1, missing2)))
+            when(notificationRepository.findAllReferencesByReferenceNumberIn(List.of(missing1, missing2)))
                 .thenReturn(Collections.emptyList());
             when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
@@ -975,7 +975,7 @@ class NotificationServiceTest {
                 new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
             // Then
-            verify(notificationRepository, never()).findAllByReferenceNumberIn(anyList());
+            verify(notificationRepository, never()).findAllReferencesByReferenceNumberIn(anyList());
             verify(notificationRepository, never()).deleteAllByReferenceNumberIn(anyList());
             verify(auditRepository, never()).save(any(Audit.class));
         }
@@ -986,7 +986,7 @@ class NotificationServiceTest {
             String referenceNumber = "GBN-AG-26-000111";
             NotificationReferenceOnly notificationRef = () -> referenceNumber;
 
-            when(notificationRepository.findAllByReferenceNumberIn(List.of(referenceNumber)))
+            when(notificationRepository.findAllReferencesByReferenceNumberIn(List.of(referenceNumber)))
                 .thenReturn(List.of(notificationRef));
             when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 

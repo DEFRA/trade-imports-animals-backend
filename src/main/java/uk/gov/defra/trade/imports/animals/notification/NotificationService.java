@@ -381,7 +381,7 @@ public class NotificationService {
 
     public ReferenceNumberPageResponse findAllReferenceNumbers(int page) {
         log.debug("Fetching notification reference numbers page {} (size {})", page, listPageSize);
-        Page<NotificationReferenceOnly> result = notificationRepository.findAllProjectedBy(
+        Page<NotificationReferenceOnly> result = notificationRepository.findAllReferencesBy(
             PageRequest.of(page, adminPageSize, Sort.by(Direction.DESC, "created")));
         log.debug("Found {} reference numbers on page {} of {}",
             result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
@@ -393,7 +393,7 @@ public class NotificationService {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return;
         }
-        List<NotificationReferenceOnly> found = notificationRepository.findAllByReferenceNumberIn(
+        List<NotificationReferenceOnly> found = notificationRepository.findAllReferencesByReferenceNumberIn(
             referenceNumbers);
         Set<String> foundRefs = found.stream()
             .map(NotificationReferenceOnly::getReferenceNumber)

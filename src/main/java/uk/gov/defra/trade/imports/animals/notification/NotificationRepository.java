@@ -12,7 +12,7 @@ public interface NotificationRepository extends MongoRepository<NotificationAggr
 
     Optional<NotificationAggregate> findByReferenceNumber(String referenceNumber);
 
-    List<NotificationReferenceOnly> findAllByReferenceNumberIn(List<String> referenceNumbers);
+    List<NotificationReferenceOnly> findAllReferencesByReferenceNumberIn(List<String> referenceNumbers);
 
     Optional<NotificationFulfilmentsView> findFulfilmentsViewByReferenceNumber(String referenceNumber);
 
@@ -23,7 +23,7 @@ public interface NotificationRepository extends MongoRepository<NotificationAggr
 
     Optional<NotificationExpiry> findExpiryByReferenceNumber(String referenceNumber);
 
-    Page<NotificationReferenceOnly> findAllProjectedBy(Pageable pageable);
+    Page<NotificationReferenceOnly> findAllReferencesBy(Pageable pageable);
 
     void deleteAllByReferenceNumberIn(List<String> referenceNumbers);
 
