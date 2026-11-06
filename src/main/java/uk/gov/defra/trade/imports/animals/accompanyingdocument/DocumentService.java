@@ -42,12 +42,8 @@ public class DocumentService {
   }
 
   /**
-   * Records an upload session the caller has opened with cdp-uploader, so that whatever arrives
-   * through it can be matched to its notification. No document is written here: a session is opened
-   * every time the upload page is painted, and most are never uploaded through.
-   *
-   * <p>Several open sessions per notification are deliberately allowed — a trader may start a
-   * second document while the first is still being checked.
+   * Records an upload session for a notification, which may already hold others. No document is
+   * written.
    *
    * @param notificationReferenceNumber the parent notification reference number
    * @param request the upload session's identifiers
@@ -66,11 +62,7 @@ public class DocumentService {
   }
 
   /**
-   * Returns the upload session a notification opened under the given correlation handle, which is
-   * how the uploading journey recovers the session it opened when the browser comes back to it.
-   *
-   * <p>Scoped to the notification deliberately: the handle alone must not be enough to reach a
-   * session opened by someone else's notification.
+   * Returns the upload session a notification opened under the given correlation handle.
    *
    * @param notificationReferenceNumber the parent notification reference number
    * @param correlationId the handle the session was opened under
@@ -87,13 +79,8 @@ public class DocumentService {
   }
 
   /**
-   * Takes a trader's validated answers on as the notification's document, which is the point at
-   * which a document is known to exist. Only claimed documents are published on a notification's
-   * events, so a file the trader walked away from never reaches one.
-   *
-   * <p>The scan callback may land first, so the document is written where one is already waiting
-   * and created where it is not. Claiming twice replaces the details rather than adding a second
-   * document.
+   * Writes the given details onto the session's document and marks it claimed, creating the
+   * document when none exists yet. Claiming again replaces the details.
    *
    * @param uploadId the upload session identifier
    * @param request  the document details the trader gave
@@ -120,9 +107,8 @@ public class DocumentService {
   }
 
   /**
-   * Records a cdp-uploader scan result against the document the session opened under
-   * {@code metadata.correlationId}, creating the document when neither the claim nor an earlier
-   * callback has written it yet.
+   * Records a scan result against the document of the session opened under
+   * {@code metadata.correlationId}, creating the document when none exists yet.
    *
    * @param payload the callback payload
    * @throws BadRequestException if the payload metadata does not include a correlationId
@@ -151,8 +137,8 @@ public class DocumentService {
   }
 
   /**
-   * Deletes the accompanying document with the given upload ID, and the session it was uploaded
-   * through, so a scan result arriving afterwards cannot bring the document back.
+   * Deletes the accompanying document with the given upload ID and the session it was uploaded
+   * through.
    *
    * @param uploadId the upload session identifier
    * @throws NotFoundException if not found
@@ -180,7 +166,6 @@ public class DocumentService {
   /**
    * Deletes all accompanying documents and upload sessions belonging to the given notification
    * reference numbers.
-   * Called as part of cascade deletion when notifications are removed.
    *
    * @param notificationReferenceNumbers the parent notification reference numbers whose documents
    *     and sessions should be deleted
@@ -209,12 +194,7 @@ public class DocumentService {
   }
 
   /**
-   * Returns the uploaded file for the given upload session.
-   *
-   * <p>The upload workflow enforces a one-file-per-session invariant, so {@code findFirst()} is
-   * safe here. This method does not enforce that invariant structurally — it relies on the workflow
-   * contract. Throws {@link NotFoundException} if the session has no file or if the file was
-   * rejected (s3Key is null).
+   * Returns the first uploaded file for the given upload session.
    *
    * @param uploadId the upload session identifier
    * @return the uploaded file record
