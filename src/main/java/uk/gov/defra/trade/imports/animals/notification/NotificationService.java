@@ -411,7 +411,7 @@ public class NotificationService {
             throw new NotFoundException(
                 "Cannot find notifications with reference numbers: " + String.join(", ", missing));
         }
-        log.info("Deleting {} notifications", found.size());
+        log.info("Deleting {} notifications: {}", found.size(), referenceNumbers);
         deleteNotificationsAndDocuments(referenceNumbers);
         createNotificationAuditRecord(referenceNumbers, auditContext, Result.SUCCESS);
     }
