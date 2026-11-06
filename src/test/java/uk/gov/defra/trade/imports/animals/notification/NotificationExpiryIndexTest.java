@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -55,17 +56,18 @@ class NotificationExpiryIndexTest {
     }
 
     @Test
-    void createIndexes_inProdTouchesNoIndexEvenWhenExpiryIsEnabled() {
-        // Given
-        MongoTemplate mongoTemplate = mock(MongoTemplate.class);
-        NotificationExpiryIndex expiryIndex =
-            new NotificationExpiryIndex(mongoTemplate, new NotificationTtlConfig(7, "prod"));
+    void ensureTtlIndexes_shouldTouchNoIndex_whenExpiryIsEnabledInProd() {
+        contextRunner
+            .withPropertyValues(
+                "notification.ttl.expiry.enabled=true", "notification.ttl.environment=prod")
+            .run(context -> {
+                MongoTemplate mongoTemplate = context.getBean(MongoTemplate.class);
+                clearInvocations(mongoTemplate);
 
-        // When
-        expiryIndex.ensureTtlIndexes();
+                context.getBean(NotificationExpiryIndex.class).ensureTtlIndexes();
 
-        // Then
-        verifyNoInteractions(mongoTemplate);
+                verifyNoInteractions(mongoTemplate);
+            });
     }
 
     @Test
