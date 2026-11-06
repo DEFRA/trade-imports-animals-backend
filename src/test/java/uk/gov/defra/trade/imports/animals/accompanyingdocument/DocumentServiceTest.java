@@ -8,11 +8,10 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -29,7 +28,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
@@ -98,16 +96,7 @@ class DocumentServiceTest {
   }
 
   private static List<String> warningsLoggedDuring(Runnable action) {
-    Logger logger = (Logger) LoggerFactory.getLogger(DocumentService.class);
-    ListAppender<ILoggingEvent> appender = new ListAppender<>();
-    appender.start();
-    logger.addAppender(appender);
-    try {
-      action.run();
-    } finally {
-      logger.detachAppender(appender);
-    }
-    return appender.list.stream()
+    return logEventsDuring(DocumentService.class, action).stream()
         .filter(event -> event.getLevel() == Level.WARN)
         .map(ILoggingEvent::getFormattedMessage)
         .toList();

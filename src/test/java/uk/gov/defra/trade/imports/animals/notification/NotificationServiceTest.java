@@ -19,15 +19,14 @@ import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DELETED;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DRAFT;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.SUBMITTED;
+import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -55,7 +54,6 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.slf4j.LoggerFactory;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
@@ -133,19 +131,6 @@ class NotificationServiceTest {
             Mappers.getMapper(NotificationContentMapper.class),
             referenceNumberGenerator, ttlConfig,
             Duration.ZERO, 54, 50);
-    }
-
-    private static List<ILoggingEvent> logEventsDuring(Runnable action) {
-        Logger logger = (Logger) LoggerFactory.getLogger(NotificationService.class);
-        ListAppender<ILoggingEvent> appender = new ListAppender<>();
-        appender.start();
-        logger.addAppender(appender);
-        try {
-            action.run();
-        } finally {
-            logger.detachAppender(appender);
-        }
-        return appender.list;
     }
 
     private static List<String> messagesOf(List<ILoggingEvent> events) {
@@ -282,7 +267,7 @@ class NotificationServiceTest {
 
         @Test
         void saveNotification_shouldLogEachAttemptWithNoPromiseOfARetry_whenAllPersistenceAttemptsCollide() {
-            List<ILoggingEvent> events = logEventsDuring(
+            List<ILoggingEvent> events = logEventsDuring(NotificationService.class,
                 () -> saveWhoseThreeAttemptsCollide(new DuplicateKeyException("last collision")));
 
             assertThat(messagesOf(events)).containsExactly(
@@ -293,7 +278,7 @@ class NotificationServiceTest {
 
         @Test
         void saveNotification_shouldLogTheThrowableOfEachCollision_whenAllPersistenceAttemptsCollide() {
-            List<ILoggingEvent> events = logEventsDuring(
+            List<ILoggingEvent> events = logEventsDuring(NotificationService.class,
                 () -> saveWhoseThreeAttemptsCollide(new DuplicateKeyException("last collision")));
 
             assertThat(events)
@@ -1085,7 +1070,7 @@ class NotificationServiceTest {
     class ExpiryStampingLog {
 
         private List<String> messagesLoggedBy(NotificationTtlConfig ttlConfig) {
-            return messagesOf(logEventsDuring(buildService(ttlConfig)::logExpiryStamping));
+            return messagesOf(logEventsDuring(NotificationService.class, buildService(ttlConfig)::logExpiryStamping));
         }
 
         @Test
