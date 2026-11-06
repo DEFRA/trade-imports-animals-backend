@@ -40,8 +40,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationExpiryIndex;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 
-@TestPropertySource(
-    properties = {"notification.ttl.days=7", "notification.ttl.expiry.enabled=true"})
+@TestPropertySource(properties = "notification.ttl.expiry.enabled=true")
 class NotificationExpiryIT extends IntegrationBase {
 
     private static final Document EXPIRE_AT_KEY = new Document("expireAt", 1);
@@ -84,10 +83,8 @@ class NotificationExpiryIT extends IntegrationBase {
     @ParameterizedTest
     @ValueSource(classes = {NotificationAggregate.class, AccompanyingDocument.class})
     void ttlIndex_isOnExpireAtAndExpiresAtThatTime(Class<?> entityClass) {
-        // When
         List<Document> indexes = expireAtIndexes(entityClass);
 
-        // Then
         assertThat(indexes).singleElement().satisfies(
             index -> assertThat(index.get("expireAfterSeconds", Number.class).longValue()).isZero());
     }
@@ -115,27 +112,18 @@ class NotificationExpiryIT extends IntegrationBase {
 
     @Test
     void expiredNotificationsAndDocuments_areRemovedByMongoWhileUndatedAndUnexpiredOnesAndAuditStay() {
-        // Given
         Instant past = Instant.now().minus(1, ChronoUnit.HOURS);
         Instant future = Instant.now().plus(7, ChronoUnit.DAYS);
         String expiredRef = saveNotification("GBN-AG-26-EXP001", past);
         String undatedRef = saveNotification("GBN-AG-26-UND001", null);
-        String activeRef = saveNotification("GBN-AG-26-ACT001", future);
+        String unexpiredRef = saveNotification("GBN-AG-26-UNE001", future);
         saveDocument("expiry-it-doc-1", expiredRef, past);
         saveDocument("expiry-it-doc-2", undatedRef, null);
-        saveDocument("expiry-it-doc-3", activeRef, future);
-        auditRepository.save(Audit.builder()
-            .action(Action.DELETE_NOTIFICATIONS)
-            .result(Result.SUCCESS)
-            .notificationReferenceNumbers(List.of(expiredRef))
-            .numberOfNotifications(1)
-            .timestamp(Instant.now().minus(1, ChronoUnit.DAYS))
-            .build());
+        saveDocument("expiry-it-doc-3", unexpiredRef, future);
+        saveDeletionAudit(expiredRef);
 
-        // When
         setTtlMonitorSleepSecs(1);
 
-        // Then
         await()
             .atMost(Duration.ofSeconds(30))
             .untilAsserted(() -> {
@@ -144,10 +132,10 @@ class NotificationExpiryIT extends IntegrationBase {
                     .isEmpty();
             });
         assertThat(notificationRepository.findByReferenceNumber(undatedRef)).isPresent();
-        assertThat(notificationRepository.findByReferenceNumber(activeRef)).isPresent();
+        assertThat(notificationRepository.findByReferenceNumber(unexpiredRef)).isPresent();
         assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(undatedRef))
             .hasSize(1);
-        assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(activeRef))
+        assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(unexpiredRef))
             .hasSize(1);
         assertThat(auditRepository.findAll()).singleElement().satisfies(
             audit -> assertThat(audit.getNotificationReferenceNumbers()).containsExactly(expiredRef));
@@ -191,6 +179,16 @@ class NotificationExpiryIT extends IntegrationBase {
             .notificationReferenceNumber(notificationRef)
             .scanStatus(ScanStatus.COMPLETE)
             .expireAt(expireAt)
+            .build());
+    }
+
+    private void saveDeletionAudit(String notificationReferenceNumber) {
+        auditRepository.save(Audit.builder()
+            .action(Action.DELETE_NOTIFICATIONS)
+            .result(Result.SUCCESS)
+            .notificationReferenceNumbers(List.of(notificationReferenceNumber))
+            .numberOfNotifications(1)
+            .timestamp(Instant.now().minus(1, ChronoUnit.DAYS))
             .build());
     }
 
