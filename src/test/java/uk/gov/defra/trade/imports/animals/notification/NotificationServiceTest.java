@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -277,7 +278,7 @@ class NotificationServiceTest {
             verify(notificationRepository, times(3)).save(any(NotificationAggregate.class));
         }
 
-        private List<ILoggingEvent> logEventsOfASaveWhoseThreeAttemptsCollide(DuplicateKeyException lastCollision) {
+        private Throwable saveWhoseThreeAttemptsCollide(DuplicateKeyException lastCollision) {
             when(referenceNumberGenerator.generate())
                 .thenReturn("GBN-AG-26-ABC001", "GBN-AG-26-ABC002", "GBN-AG-26-ABC003");
             when(notificationRepository.save(any(NotificationAggregate.class)))
@@ -286,19 +287,37 @@ class NotificationServiceTest {
                 .thenThrow(lastCollision);
             NotificationDto dto = NotificationDto.builder().build();
 
-            return logEventsDuring(() -> assertThatThrownBy(() -> notificationService.saveNotification(dto, "", null))
-                .isInstanceOf(IllegalStateException.class));
+            return catchThrowable(() -> notificationService.saveNotification(dto, "", null));
         }
 
         @Test
         void saveNotification_shouldLogEachAttemptWithNoPromiseOfARetry_whenAllPersistenceAttemptsCollide() {
-            List<ILoggingEvent> events =
-                logEventsOfASaveWhoseThreeAttemptsCollide(new DuplicateKeyException("last collision"));
+            List<ILoggingEvent> events = logEventsDuring(
+                () -> saveWhoseThreeAttemptsCollide(new DuplicateKeyException("last collision")));
 
             assertThat(messagesOf(events)).containsExactly(
-                "Reference number collision on persistence attempt 1/3",
-                "Reference number collision on persistence attempt 2/3",
-                "Reference number collision on persistence attempt 3/3");
+                "Reference number GBN-AG-26-ABC001 collided on persistence attempt 1/3",
+                "Reference number GBN-AG-26-ABC002 collided on persistence attempt 2/3",
+                "Reference number GBN-AG-26-ABC003 collided on persistence attempt 3/3");
+        }
+
+        @Test
+        void saveNotification_shouldLogTheThrowableOfEachCollision_whenAllPersistenceAttemptsCollide() {
+            List<ILoggingEvent> events = logEventsDuring(
+                () -> saveWhoseThreeAttemptsCollide(new DuplicateKeyException("last collision")));
+
+            assertThat(events)
+                .extracting(event -> event.getThrowableProxy().getMessage())
+                .containsExactly("first collision", "second collision", "last collision");
+        }
+
+        @Test
+        void saveNotification_shouldKeepTheLastCollisionAsTheCause_whenAllPersistenceAttemptsCollide() {
+            DuplicateKeyException lastCollision = new DuplicateKeyException("last collision");
+
+            Throwable thrown = saveWhoseThreeAttemptsCollide(lastCollision);
+
+            assertThat(thrown).isInstanceOf(IllegalStateException.class).hasCauseReference(lastCollision);
         }
 
         @Test
