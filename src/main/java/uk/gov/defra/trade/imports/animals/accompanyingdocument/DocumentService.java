@@ -214,11 +214,6 @@ public class DocumentService {
     return file;
   }
 
-  /**
-   * The document recorded for a session, creating an unsaved one when neither the claim nor the
-   * scan callback has written it yet. Both resolve the same document by the session's correlation
-   * handle, so the second to arrive adds to what the first wrote.
-   */
   private AccompanyingDocument existingOrNewDocumentFor(UploadSession session) {
     return accompanyingDocumentRepository
         .findByCorrelationId(session.getCorrelationId())
@@ -283,10 +278,6 @@ public class DocumentService {
     return files;
   }
 
-  /**
-   * Fail-closed: treat a missing or non-zero rejected count as REJECTED to avoid silently
-   * accepting a file when cdp-uploader omits the field.
-   */
   private static ScanStatus resolveScanStatus(CdpScanResultPayload payload) {
     Integer rejectedCount = payload.numberOfRejectedFiles();
     return rejectedCount != null && rejectedCount == 0
