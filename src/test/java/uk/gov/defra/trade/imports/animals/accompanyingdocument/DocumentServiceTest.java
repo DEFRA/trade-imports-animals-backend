@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -14,6 +15,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -59,7 +61,7 @@ class DocumentServiceTest {
   }
 
   private void notificationExpiresAt(String notificationReferenceNumber, Instant expireAt) {
-    when(notificationRepository.findExpiryByReferenceNumber(notificationReferenceNumber))
+    lenient().when(notificationRepository.findExpiryByReferenceNumber(notificationReferenceNumber))
         .thenReturn(Optional.of(() -> expireAt));
   }
 
@@ -289,6 +291,25 @@ class DocumentServiceTest {
       assertThat(claimed.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
       assertThat(claimed.isClaimed()).isTrue();
       verify(accompanyingDocumentRepository, times(1)).save(any(AccompanyingDocument.class));
+    }
+
+    @Test
+    void claimUpload_shouldKeepTheStoredExpireAt_whenTheDocumentAlreadyExists() {
+      Instant storedExpireAt = Instant.parse("2026-11-11T09:30:00Z");
+      AccompanyingDocument stored = scanned();
+      stored.setExpireAt(storedExpireAt);
+      sessionIsOpen();
+      notificationExpiresAt(NOTIFICATION_REFERENCE_NUMBER, storedExpireAt.plus(1, ChronoUnit.DAYS));
+      when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
+          .thenReturn(Optional.of(stored));
+      saveReturnsWhatItWasGiven();
+
+      AccompanyingDocument claimed = documentService.claimUpload(
+          UPLOAD_ID,
+          new ClaimUploadRequest(
+              DocumentType.ITAHC, "UKGB2026001", LocalDate.parse("2026-01-15")));
+
+      assertThat(claimed.getExpireAt()).isEqualTo(storedExpireAt);
     }
 
     @Test
@@ -530,6 +551,34 @@ class DocumentServiceTest {
           ArgumentCaptor.forClass(AccompanyingDocument.class);
       verify(accompanyingDocumentRepository).save(captor.capture());
       assertThat(captor.getValue().getExpireAt()).isEqualTo(expireAt);
+    }
+
+    @Test
+    void handleScanResult_shouldKeepTheStoredExpireAt_whenTheDocumentAlreadyExists() {
+      String correlationId = "corr-scan-stored-expiry";
+      Instant storedExpireAt = Instant.parse("2026-11-11T09:30:00Z");
+      AccompanyingDocument stored = AccompanyingDocument.builder()
+          .notificationReferenceNumber("GBN-AG-26-SCN003")
+          .uploadId("upload-scan-stored-expiry")
+          .correlationId(correlationId)
+          .scanStatus(ScanStatus.PENDING)
+          .claimed(true)
+          .files(new ArrayList<>())
+          .expireAt(storedExpireAt)
+          .build();
+      when(uploadSessionRepository.findByCorrelationId(correlationId)).thenReturn(
+          Optional.of(sessionOf("GBN-AG-26-SCN003", "upload-scan-stored-expiry", correlationId)));
+      notificationExpiresAt("GBN-AG-26-SCN003", storedExpireAt.plus(1, ChronoUnit.DAYS));
+      when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
+          .thenReturn(Optional.of(stored));
+
+      documentService.handleScanResult(new CdpScanResultPayload(
+          "ready", Map.of("correlationId", correlationId), new CdpScanResultForm(), 0));
+
+      ArgumentCaptor<AccompanyingDocument> captor =
+          ArgumentCaptor.forClass(AccompanyingDocument.class);
+      verify(accompanyingDocumentRepository).save(captor.capture());
+      assertThat(captor.getValue().getExpireAt()).isEqualTo(storedExpireAt);
     }
   }
 
