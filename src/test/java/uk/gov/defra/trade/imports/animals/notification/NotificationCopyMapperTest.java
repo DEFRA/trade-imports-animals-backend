@@ -430,7 +430,7 @@ class NotificationCopyMapperTest {
 
             org.assertj.core.api.Assertions.assertThatNullPointerException()
                 .isThrownBy(() -> mapper.toCopyDto(source))
-                .withMessageContaining("requires a notification sub-object");
+                .withMessageContaining("has no notification sub-object");
         }
 
         @Test

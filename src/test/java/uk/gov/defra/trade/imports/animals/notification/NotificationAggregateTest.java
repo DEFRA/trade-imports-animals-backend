@@ -23,6 +23,6 @@ class NotificationAggregateTest {
 
         assertThatNullPointerException()
             .isThrownBy(aggregate::requireNotification)
-            .withMessageContaining("requires a notification sub-object");
+            .withMessageContaining("has no notification sub-object");
     }
 }
