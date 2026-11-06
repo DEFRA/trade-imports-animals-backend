@@ -6,18 +6,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
 /**
- * Automatic expiry of app-created notifications outside prod, bound to {@code notification.ttl}.
+ * The days used to stamp a notification's expiry and the running environment's name, bound to
+ * {@code notification.ttl}.
  *
- * @param days        how many days after {@code created} a notification expires; {@code null}
- *                    disables expiry stamping. Must be positive when set
- * @param environment the running CDP environment name (from {@code ENVIRONMENT}); production is
- *                    {@code prod}, matched case-insensitively
+ * @param days        days after a notification's creation that its expiry is stamped for;
+ *                    {@code null} when none is set. Must be positive when set
+ * @param environment the running CDP environment name (from {@code ENVIRONMENT})
  */
 @Validated
 @ConfigurationProperties(prefix = "notification.ttl")
 public record NotificationTtlConfig(@Nullable @Positive Integer days, String environment) {
 
-  /** True when the running environment is production, where expiry must never occur. */
+  /** True when the running environment is production: {@code prod}, in any case. */
   public boolean isProd() {
     return "prod".equalsIgnoreCase(environment);
   }
