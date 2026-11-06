@@ -67,6 +67,11 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 - cdp-uploader owns the callback body's shape and echoes back every field the browser submitted, including ones this service has no use for, so the body is read leniently: the `form` section keeps only the values carrying a `fileId`, and a file entry tolerates fields this service does not know. An object-shaped `form` value without a `fileId` is not a file entry; it is dropped with a warning naming the field, because a document saved with no files can still finish as `COMPLETE` and support needs something to search on.
 - A download streams the file through this service's response. If S3 fails mid-stream after the headers are sent, the client gets a 200 with a truncated body; a failure before the first byte is still a 500.
 
+## Integration test profile
+
+- The EMF metrics publisher is off, because tests have no CloudWatch agent and a blank `AWS_EMF_NAMESPACE` raises `InvalidNamespaceException` on every scheduler tick.
+- `notification.submit.lock-at-least-for` is `0ms`, so a rapid re-submission in a test can acquire the lock.
+
 ## Outbound proxy
 
 On CDP all egress except the database goes through the platform proxy named by `HTTP_PROXY`. `ProxyConfig` sets the JVM proxy properties and the default `ProxySelector`, so every HTTP client uses it; the proxy routes internal `*.cdp-int.defra.cloud` URLs itself. A malformed `HTTP_PROXY` is logged with any credentials replaced by `***`.
