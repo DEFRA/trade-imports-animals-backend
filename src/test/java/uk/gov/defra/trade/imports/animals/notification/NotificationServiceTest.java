@@ -673,7 +673,8 @@ class NotificationServiceTest {
             NotificationPageResponse result = notificationService.findAll(1, null);
 
             // Then
-            assertThat(result).isNotNull();
+            assertThat(result.content()).isEmpty();
+            assertThat(result.totalElements()).isZero();
             verify(notificationRepository, times(1))
                 .findAllViewByStatusIn(eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class));
         }
@@ -711,7 +712,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void findAll_shouldMapStatusToNotificationDto() {
+        void findAll_shouldReturnTheViewWithItsReferenceNumberAndStatus() {
             // Given
             NotificationView view = notificationView()
                 .referenceNumber("GBN-AG-26-ABC123")
@@ -899,7 +900,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void findAllReferenceNumbers_shouldPassPageRequestWithConfiguredPageSizeAndAscendingIdSort() {
+        void findAllReferenceNumbers_shouldPassPageRequestWithAdminPageSizeAndNewestCreatedFirst() {
             // Given
             Page<NotificationReferenceOnly> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(2, 54), 200);
@@ -1071,7 +1072,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void createNotification_neverStampsExpireAt_inProd_regardlessOfOtherConfig() {
+        void createNotification_neverStampsExpireAt_inProd_whenDaysConfigured() {
             NotificationAggregate result = create(new NotificationTtlConfig(7, "prod"));
 
             assertThat(result.getExpireAt()).isNull();
@@ -2495,37 +2496,49 @@ class NotificationServiceTest {
         }
 
         @Test
-        void submittedAt_shouldReflectLatestSubmission_acrossFullAmendCycle() {
-            // Given
+        void submittedAt_shouldBeStamped_onFirstSubmission() {
             String ref = "GBN-AG-26-SBMT02";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("db-id-cycle")
-                .referenceNumber(ref)
-                .status(DRAFT)
-                .notification(Notification.builder().build())
-                .fulfilments(List.of(new Document("obligationId", "cycle")))
-                .build();
+            givenStoredNotificationAwaitingSave(ref, DRAFT, null);
 
-            when(notificationRepository.findByReferenceNumber(ref))
-                .thenReturn(Optional.of(notificationAggregate));
+            NotificationAggregate result = notificationService.submitNotification(ref, SUBMIT_TOKEN, "trace", null);
+
+            assertThat(result.getSubmittedAt()).isNotNull();
+        }
+
+        @Test
+        void submittedAt_shouldStayAtTheEarlierSubmission_whenAmendmentIsRequested() {
+            String ref = "GBN-AG-26-SBMT03";
+            Instant earlierSubmission = Instant.parse("2026-01-01T09:00:00Z");
+            givenStoredNotificationAwaitingSave(ref, SUBMITTED, earlierSubmission);
+
+            NotificationAggregate result = notificationService.amendNotification(ref, "trace", null);
+
+            assertThat(result.getSubmittedAt()).isEqualTo(earlierSubmission);
+        }
+
+        @Test
+        void submittedAt_shouldMoveOnFromTheEarlierSubmission_whenResubmittedFromAmend() {
+            String ref = "GBN-AG-26-SBMT04";
+            Instant earlierSubmission = Instant.parse("2026-01-01T09:00:00Z");
+            givenStoredNotificationAwaitingSave(ref, AMEND, earlierSubmission);
+
+            NotificationAggregate result = notificationService.submitNotification(ref, SUBMIT_TOKEN, "trace", null);
+
+            assertThat(result.getSubmittedAt()).isAfter(earlierSubmission);
+        }
+
+        private void givenStoredNotificationAwaitingSave(
+            String ref, NotificationStatus status, Instant submittedAt) {
+            NotificationAggregate stored = NotificationAggregate.builder()
+                .referenceNumber(ref)
+                .status(status)
+                .notification(Notification.builder().build())
+                .fulfilments(List.of(new Document("obligationId", "stored")))
+                .submittedAt(submittedAt)
+                .build();
+            when(notificationRepository.findByReferenceNumber(ref)).thenReturn(Optional.of(stored));
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
-
-            // When
-            NotificationAggregate afterFirstSubmit = notificationService.submitNotification(ref, SUBMIT_TOKEN, "t1", null);
-            Instant firstSubmittedAt = afterFirstSubmit.getSubmittedAt();
-            assertThat(firstSubmittedAt).isNotNull();
-
-            // And
-            NotificationAggregate afterAmend = notificationService.amendNotification(ref, "t2", null);
-            assertThat(afterAmend.getSubmittedAt()).isEqualTo(firstSubmittedAt);
-
-            // And
-            NotificationAggregate afterResubmit = notificationService.submitNotification(ref, SUBMIT_TOKEN, "t3", null);
-
-            // Then
-            assertThat(afterResubmit.getSubmittedAt()).isNotNull();
-            assertThat(afterResubmit.getSubmittedAt()).isAfterOrEqualTo(firstSubmittedAt);
         }
 
         @Test
