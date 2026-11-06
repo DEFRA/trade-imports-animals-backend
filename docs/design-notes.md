@@ -5,7 +5,7 @@ Why the code is shaped the way it is. Code states what it does; this file holds 
 ## Dates and timestamps in MongoDB
 
 - Moments (`created`, `updated`, `submittedAt`, `expireAt`, the audit `timestamp`) are `Instant`. An `Instant` decodes without a zone, so a change of JVM zone between the writer and the reader cannot shift it.
-- Calendar dates (`arrivalDate`, `exitDate`) are `LocalDate`, stored by `LocalDateStringConverters` as `YYYY-MM-DD` strings. MongoDB has no date-only type, and Spring Data's built-in converter stores a `LocalDate` as a moment in the JVM zone, so under `Europe/London` in summer `2026-07-21` was stored as `2026-07-20T23:00:00Z`.
+- Calendar dates (`arrivalDate`, `exitDate`, a document's `dateOfIssue`) are `LocalDate`, stored by `LocalDateStringConverters` as `YYYY-MM-DD` strings. MongoDB has no date-only type, and Spring Data's built-in converter stores a `LocalDate` as a moment in the JVM zone, so under `Europe/London` in summer `2026-07-21` was stored as `2026-07-20T23:00:00Z`.
 - `YYYY-MM-DD` strings sort in date order, so sorts and range queries still work.
 - The string-to-`LocalDate` reader runs only where the target property is a `LocalDate`. Date-shaped strings in `String` fields, `fulfilments` and outbox `data` stay strings.
 - BSON dates hold milliseconds, so sub-millisecond digits on a stored `Instant` are dropped.

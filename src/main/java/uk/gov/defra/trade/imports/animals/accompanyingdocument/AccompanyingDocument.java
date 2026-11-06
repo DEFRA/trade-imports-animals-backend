@@ -19,13 +19,8 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 /**
- * MongoDB document representing an accompanying document submitted alongside an import
- * notification. One record exists per upload that produced either the trader's details or a scan
- * result, written by whichever of the two arrives first.
- *
- * <p>{@code dateOfIssue} is a calendar date, so it is a {@link LocalDate}: {@code YYYY-MM-DD} on
- * the wire and a string in MongoDB, written and read by {@code LocalDateStringConverters}. The
- * moments {@code created} and {@code updated} are {@link Instant}, which MongoDB stores natively.
+ * An accompanying document submitted alongside an import notification. One record exists per
+ * upload that produced either the trader's details or a scan result.
  */
 @CompoundIndex(def = "{'notificationReferenceNumber': 1, 'scanStatus': 1, 'claimed': 1, 'created': 1}")
 @Document(collection = "accompanying_documents")
@@ -40,15 +35,12 @@ public class AccompanyingDocument {
   @Id
   private String id;
 
-  /** Optimistic locking version managed by Spring Data MongoDB. */
   @Version
   private Long version;
 
-  /** Foreign key to the parent notification. Not unique — one notification may have many docs. */
   @Indexed
   private String notificationReferenceNumber;
 
-  /** Unique identifier assigned by cdp-uploader at initiation time. */
   @Indexed(unique = true)
   private String uploadId;
 
@@ -60,7 +52,7 @@ public class AccompanyingDocument {
 
   private String documentReference;
 
-  /** Date of issue on the physical document, stored as a string such as {@code 2024-06-15}. */
+  /** Date of issue on the physical document. */
   private LocalDate dateOfIssue;
 
   private ScanStatus scanStatus;
@@ -69,7 +61,6 @@ public class AccompanyingDocument {
   @Builder.Default
   private boolean claimed = false;
 
-  /** Individual file entries populated by cdp-uploader callbacks. Initialised to empty list. */
   @Builder.Default
   private List<UploadedFile> files = new ArrayList<>();
 
