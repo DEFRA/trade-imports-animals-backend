@@ -231,7 +231,7 @@ public class DocumentController {
 
     log.info("POST /document-uploads/{}/scan-results uploadStatus={}", uploadId,
         payload.uploadStatus());
-    documentService.handleScanResult(uploadId, payload);
+    documentService.handleScanResult(payload);
     return ResponseEntity.noContent().build();
   }
 

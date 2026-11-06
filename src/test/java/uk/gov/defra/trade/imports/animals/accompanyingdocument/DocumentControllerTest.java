@@ -449,7 +449,7 @@ class DocumentControllerTest {
       CdpScanResultForm form = new CdpScanResultForm(Map.of());
       CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
 
-      doNothing().when(documentService).handleScanResult(eq(uploadId), any(CdpScanResultPayload.class));
+      doNothing().when(documentService).handleScanResult(any(CdpScanResultPayload.class));
 
       mockMvc.perform(post("/document-uploads/{id}/scan-results", uploadId)
               .contentType(MediaType.APPLICATION_JSON)
@@ -467,7 +467,7 @@ class DocumentControllerTest {
 
       doThrow(new NotFoundException(
           "No accompanying document found with correlationId: " + unknownCorrelationId))
-          .when(documentService).handleScanResult(eq(pathSegment), any(CdpScanResultPayload.class));
+          .when(documentService).handleScanResult(any(CdpScanResultPayload.class));
 
       mockMvc.perform(post("/document-uploads/{id}/scan-results", pathSegment)
               .contentType(MediaType.APPLICATION_JSON)
@@ -485,7 +485,7 @@ class DocumentControllerTest {
 
       doThrow(new BadRequestException(
           "Scan callback missing required correlationId in metadata"))
-          .when(documentService).handleScanResult(eq(pathSegment), any(CdpScanResultPayload.class));
+          .when(documentService).handleScanResult(any(CdpScanResultPayload.class));
 
       mockMvc.perform(post("/document-uploads/{id}/scan-results", pathSegment)
               .contentType(MediaType.APPLICATION_JSON)

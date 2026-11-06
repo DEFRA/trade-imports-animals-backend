@@ -124,13 +124,12 @@ public class DocumentService {
    * {@code metadata.correlationId}, creating the document when neither the claim nor an earlier
    * callback has written it yet.
    *
-   * @param uploadId the upload session identifier from the callback path, used only in logs
-   * @param payload  the callback payload
+   * @param payload the callback payload
    * @throws BadRequestException if the payload metadata does not include a correlationId
    * @throws NotFoundException   if no session was opened under that correlationId
    */
   @Transactional
-  public void handleScanResult(String uploadId, CdpScanResultPayload payload) {
+  public void handleScanResult(CdpScanResultPayload payload) {
     String correlationId = extractCorrelationId(payload);
     UploadSession session = uploadSessionRepository.findByCorrelationId(correlationId)
         .orElseThrow(() -> new NotFoundException(
@@ -179,11 +178,12 @@ public class DocumentService {
   }
 
   /**
-   * Deletes all accompanying documents belonging to the given notification reference numbers.
+   * Deletes all accompanying documents and upload sessions belonging to the given notification
+   * reference numbers.
    * Called as part of cascade deletion when notifications are removed.
    *
    * @param notificationReferenceNumbers the parent notification reference numbers whose documents
-   *     should be deleted
+   *     and sessions should be deleted
    */
   public void deleteForNotificationReferenceNumbers(List<String> notificationReferenceNumbers) {
     Objects.requireNonNull(

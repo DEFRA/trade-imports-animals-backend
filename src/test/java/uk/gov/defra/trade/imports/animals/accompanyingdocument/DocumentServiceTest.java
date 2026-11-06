@@ -331,7 +331,7 @@ class DocumentServiceTest {
       CdpScanResultForm form = new CdpScanResultForm();
       CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
 
-      assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
+      assertThatThrownBy(() -> documentService.handleScanResult(payload))
           .isInstanceOf(BadRequestException.class)
           .hasMessageContaining("correlationId");
 
@@ -344,7 +344,7 @@ class DocumentServiceTest {
       CdpScanResultPayload payload = new CdpScanResultPayload(
           "ready", Map.of("correlationId", "   "), form, 0);
 
-      assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
+      assertThatThrownBy(() -> documentService.handleScanResult(payload))
           .isInstanceOf(BadRequestException.class)
           .hasMessageContaining("correlationId");
 
@@ -361,7 +361,7 @@ class DocumentServiceTest {
       CdpScanResultPayload payload = new CdpScanResultPayload(
           "ready", Map.of("correlationId", correlationId), form, 0);
 
-      assertThatThrownBy(() -> documentService.handleScanResult("pending", payload))
+      assertThatThrownBy(() -> documentService.handleScanResult(payload))
           .isInstanceOf(NotFoundException.class)
           .hasMessageContaining(correlationId);
 
@@ -389,7 +389,7 @@ class DocumentServiceTest {
 
       ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
 
-      documentService.handleScanResult("pending", payload);
+      documentService.handleScanResult(payload);
 
       verify(accompanyingDocumentRepository).save(captor.capture());
       assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.REJECTED);
@@ -438,7 +438,7 @@ class DocumentServiceTest {
           form,
           0);
 
-      documentService.handleScanResult("pending", payload);
+      documentService.handleScanResult(payload);
 
       ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
       verify(accompanyingDocumentRepository).save(captor.capture());
@@ -475,7 +475,7 @@ class DocumentServiceTest {
       CdpScanResultPayload payload = new CdpScanResultPayload(
           "ready", Map.of("correlationId", correlationId), new CdpScanResultForm(), 0);
 
-      documentService.handleScanResult("upload-claim-first", payload);
+      documentService.handleScanResult(payload);
 
       ArgumentCaptor<AccompanyingDocument> captor =
           ArgumentCaptor.forClass(AccompanyingDocument.class);
@@ -500,7 +500,7 @@ class DocumentServiceTest {
       CdpScanResultPayload payload = new CdpScanResultPayload(
           "ready", Map.of("correlationId", correlationId), new CdpScanResultForm(), 0);
 
-      documentService.handleScanResult("upload-scan-first", payload);
+      documentService.handleScanResult(payload);
 
       ArgumentCaptor<AccompanyingDocument> captor =
           ArgumentCaptor.forClass(AccompanyingDocument.class);
@@ -523,7 +523,7 @@ class DocumentServiceTest {
           .thenReturn(Optional.empty());
       saveReturnsWhatItWasGiven();
 
-      documentService.handleScanResult("upload-scan-expiry", new CdpScanResultPayload(
+      documentService.handleScanResult(new CdpScanResultPayload(
           "ready", Map.of("correlationId", correlationId), new CdpScanResultForm(), 0));
 
       ArgumentCaptor<AccompanyingDocument> captor =
