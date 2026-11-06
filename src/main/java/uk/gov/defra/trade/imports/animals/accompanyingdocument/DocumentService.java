@@ -62,7 +62,7 @@ public class DocumentService {
         .correlationId(request.correlationId())
         .build();
 
-    return saveOrThrowOnDuplicate(session, notificationReferenceNumber);
+    return saveSession(session);
   }
 
   /**
@@ -263,21 +263,21 @@ public class DocumentService {
     return expiry.get().getExpireAt();
   }
 
-  private UploadSession saveOrThrowOnDuplicate(UploadSession session, String notificationReferenceNumber) {
+  private UploadSession saveSession(UploadSession session) {
     try {
       UploadSession saved = uploadSessionRepository.save(session);
       log.info(
           "Registered uploadId {} correlationId {} for notification {}",
           session.getUploadId(),
           session.getCorrelationId(),
-          notificationReferenceNumber);
+          session.getNotificationReferenceNumber());
       return saved;
     } catch (DuplicateKeyException _) {
       log.warn(
           "Duplicate uploadId {} or correlationId {} for notification {}",
           session.getUploadId(),
           session.getCorrelationId(),
-          notificationReferenceNumber);
+          session.getNotificationReferenceNumber());
       throw new ConflictException(
           "An upload session already exists for uploadId " + session.getUploadId()
               + " or correlationId " + session.getCorrelationId());
