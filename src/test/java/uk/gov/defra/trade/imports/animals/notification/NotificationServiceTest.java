@@ -107,6 +107,8 @@ class NotificationServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(lockProvider.lock(any()))
+            .thenReturn(Optional.of(mock(SimpleLock.class)));
         notificationService = buildService(new NotificationTtlConfig(null, "local"));
     }
 
@@ -152,12 +154,6 @@ class NotificationServiceTest {
 
     @Nested
     class SaveNotification {
-
-        @BeforeEach
-        void setUp() {
-            lenient().when(lockProvider.lock(any()))
-                .thenReturn(Optional.of(mock(SimpleLock.class)));
-        }
 
         @Test
         void saveNotification_shouldCreateDraftWithGeneratedReferenceNumber() {
@@ -1045,8 +1041,6 @@ class NotificationServiceTest {
 
         @BeforeEach
         void stubCreate() {
-            lenient().when(lockProvider.lock(any()))
-                .thenReturn(Optional.of(mock(SimpleLock.class)));
             when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-TTL001");
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -1124,13 +1118,6 @@ class NotificationServiceTest {
 
     @Nested
     class SubmitNotification {
-
-        @BeforeEach
-        void setUp() {
-            // Default: lock is acquired and the task executes
-            lenient().when(lockProvider.lock(any()))
-                .thenReturn(Optional.of(mock(SimpleLock.class)));
-        }
 
         @Test
         void submitNotification_shouldSetStatusToSubmittedAndSave() {
@@ -1440,13 +1427,6 @@ class NotificationServiceTest {
     @Nested
     class AmendNotification {
 
-        @BeforeEach
-        void setUp() {
-            // Default: lock is acquired and the task executes
-            lenient().when(lockProvider.lock(any()))
-                .thenReturn(Optional.of(mock(SimpleLock.class)));
-        }
-
         @Test
         void amendNotification_shouldSetStatusToAmendAndSave_whenSubmitted() {
             // Given
@@ -1683,12 +1663,6 @@ class NotificationServiceTest {
     @Nested
     class CancelAmendNotification {
 
-        @BeforeEach
-        void setUp() {
-            lenient().when(lockProvider.lock(any()))
-                .thenReturn(Optional.of(mock(SimpleLock.class)));
-        }
-
         @Test
         void cancelAmendNotification_shouldRestoreBaselineAndSetSubmitted() {
             // Given
@@ -1821,12 +1795,6 @@ class NotificationServiceTest {
 
     @Nested
     class CopyNotification {
-
-        @BeforeEach
-        void setUp() {
-            lenient().when(lockProvider.lock(any()))
-                .thenReturn(Optional.of(mock(SimpleLock.class)));
-        }
 
         @Test
         void copyNotification_shouldCreateNewDraftWithNewReferenceNumber() {
@@ -2171,12 +2139,6 @@ class NotificationServiceTest {
 
     @Nested
     class Fulfilments {
-
-        @BeforeEach
-        void setUp() {
-            lenient().when(lockProvider.lock(any()))
-                .thenReturn(Optional.of(mock(SimpleLock.class)));
-        }
 
         @Test
         void replace_shouldReplaceContentIncludingFulfilments_whenDraft() {
@@ -2611,12 +2573,6 @@ class NotificationServiceTest {
 
     @Nested
     class SoftDeleteNotification {
-
-        @BeforeEach
-        void setUp() {
-            lenient().when(lockProvider.lock(any()))
-                .thenReturn(Optional.of(mock(SimpleLock.class)));
-        }
 
         @Test
         void softDeleteNotification_shouldSetStatusToDeletedAndSave_whenDraft() {
