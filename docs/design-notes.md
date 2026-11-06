@@ -23,7 +23,9 @@ Why the code is shaped the way it is. Code states what it does; this file holds 
 
 - `submitNotification` saves at the caller's `concurrencyToken`, so `@Version` refuses the save atomically when the notification changed after the caller read it.
 - `amendNotification` stores deep copies of the notification and its fulfilments as the pre-amend snapshot, so `cancelAmendNotification` restores exactly what was submitted. A shared reference at any depth would let a later edit change the snapshot.
-- Only a submission sets a new `submittedAt`. Cancelling an amendment returns to SUBMITTED and keeps the original `submittedAt`.
+- The two snapshots are independent, and the notification snapshot keeps inline party details as they stood when the amendment started. Submitting or cancelling the amendment clears both.
+- `submittedAt` is the latest submission: set when a DRAFT is submitted and refreshed when an AMEND is resubmitted. Starting an amendment leaves it unchanged, and cancelling one returns to SUBMITTED and keeps it.
+- `fulfilments` is an opaque payload, stored as it arrives and never interpreted here.
 - Soft delete of an already DELETED notification returns it unchanged, so a repeated call after a lost response is harmless.
 
 ## Automatic expiry outside prod
