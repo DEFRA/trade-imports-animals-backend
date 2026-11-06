@@ -129,7 +129,7 @@ public class NotificationService {
         }
         notificationAggregate.setConcurrencyToken(dto.getConcurrencyToken());
         setNotificationDetails(dto, notificationAggregate);
-        return writeWithOutbox(notificationAggregate, referenceNumber, correlationId,
+        return saveWithStatusAndOutboxEvent(notificationAggregate, referenceNumber, correlationId,
             notificationAggregate.getStatus(), OutboxEventType.NOTIFICATION_EDITED, actor);
     }
 
@@ -216,7 +216,7 @@ public class NotificationService {
             ? OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED
             : OutboxEventType.NOTIFICATION_SUBMITTED;
 
-        return writeWithOutbox(
+        return saveWithStatusAndOutboxEvent(
             notificationAggregate,
             referenceNumber,
             correlationId,
@@ -245,7 +245,7 @@ public class NotificationService {
         }
         notificationAggregate.setPreAmendFulfilments(deepCopyFulfilments(currentFulfilments));
 
-        return writeWithOutbox(
+        return saveWithStatusAndOutboxEvent(
             notificationAggregate,
             referenceNumber,
             correlationId,
@@ -276,7 +276,7 @@ public class NotificationService {
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
         notificationAggregate.setPreAmendFulfilments(null);
         notificationAggregate.setPreAmendNotification(null);
-        return writeWithOutbox(
+        return saveWithStatusAndOutboxEvent(
             notificationAggregate,
             referenceNumber,
             correlationId,
@@ -285,7 +285,7 @@ public class NotificationService {
             actor);
     }
 
-    private NotificationAggregate writeWithOutbox(
+    private NotificationAggregate saveWithStatusAndOutboxEvent(
         NotificationAggregate notification,
         String referenceNumber,
         String correlationId,
@@ -294,20 +294,23 @@ public class NotificationService {
         Actor actor) {
         return executeWithOutboxLock(
             OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
-                if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)
-                    && notification.getStatus() == NotificationStatus.AMEND) {
-                    notification.setPreAmendFulfilments(null);
-                    notification.setPreAmendNotification(null);
+                if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)) {
+                    applySubmission(notification);
                 }
                 notification.setStatus(targetStatus);
                 notification.setUpdated(Instant.now());
-                if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)) {
-                    notification.setSubmittedAt(Instant.now());
-                }
                 NotificationAggregate saved = notificationRepository.save(notification);
                 outboxService.appendEvent(saved, eventType, correlationId, actor);
                 return saved;
             });
+    }
+
+    private void applySubmission(NotificationAggregate notification) {
+        if (notification.getStatus() == NotificationStatus.AMEND) {
+            notification.setPreAmendFulfilments(null);
+            notification.setPreAmendNotification(null);
+        }
+        notification.setSubmittedAt(Instant.now());
     }
 
     private <T> T executeWithOutboxLock(
@@ -367,7 +370,7 @@ public class NotificationService {
         OutboxEventType eventType = notificationAggregate.getStatus() == NotificationStatus.DRAFT
             ? OutboxEventType.NOTIFICATION_DELETED
             : OutboxEventType.NOTIFICATION_SUBMISSION_DELETED;
-        return writeWithOutbox(
+        return saveWithStatusAndOutboxEvent(
             notificationAggregate,
             referenceNumber,
             correlationId,
@@ -430,7 +433,7 @@ public class NotificationService {
         for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
             notificationAggregate.setReferenceNumber(referenceNumberGenerator.generate());
             try {
-                NotificationAggregate saved = writeWithOutbox(
+                NotificationAggregate saved = saveWithStatusAndOutboxEvent(
                     notificationAggregate,
                     notificationAggregate.getReferenceNumber(),
                     correlationId,
@@ -463,7 +466,7 @@ public class NotificationService {
         existing.setConcurrencyToken(dto.getConcurrencyToken());
         log.info("Updating notification {}", referenceNumber);
         setNotificationDetails(dto, existing);
-        return writeWithOutbox(existing, referenceNumber, correlationId, existing.getStatus(),
+        return saveWithStatusAndOutboxEvent(existing, referenceNumber, correlationId, existing.getStatus(),
             OutboxEventType.NOTIFICATION_EDITED, actor);
     }
 
