@@ -1,9 +1,8 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static uk.gov.defra.trade.imports.animals.integration.ExpireAtIndexes.expireAtIndexes;
 
-import java.util.ArrayList;
-import org.bson.Document;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,11 +24,6 @@ class NotificationExpiryDisabledIT extends IntegrationBase {
     @ParameterizedTest
     @ValueSource(classes = {NotificationAggregate.class, AccompanyingDocument.class})
     void startup_shouldLeaveNoIndexOnExpireAt_whenExpiryIsDisabled(Class<?> entityClass) {
-        var indexedKeys = mongoTemplate.getCollection(mongoTemplate.getCollectionName(entityClass))
-            .listIndexes().into(new ArrayList<>()).stream()
-            .map(index -> index.get("key", Document.class))
-            .toList();
-
-        assertThat(indexedKeys).isNotEmpty().noneMatch(key -> key.containsKey("expireAt"));
+        assertThat(expireAtIndexes(mongoTemplate, entityClass)).isEmpty();
     }
 }

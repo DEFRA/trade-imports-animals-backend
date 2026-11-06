@@ -7,19 +7,18 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static uk.gov.defra.trade.imports.animals.integration.ExpireAtIndexes.assertSingleTtlIndexNamed;
+import static uk.gov.defra.trade.imports.animals.integration.ExpireAtIndexes.expireAtIndexes;
 
 import com.mongodb.client.MongoClient;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
 import java.util.List;
 import org.bson.Document;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
@@ -40,10 +39,12 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationExpiryIndex;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 
-@TestPropertySource(properties = "notification.ttl.expiry.enabled=true")
+@TestPropertySource(
+    properties = {
+        "notification.ttl.expiry.enabled=true",
+        "spring.data.mongodb.database=notification-expiry-it"
+    })
 class NotificationExpiryIT extends IntegrationBase {
-
-    private static final Document EXPIRE_AT_KEY = new Document("expireAt", 1);
 
     @Autowired
     private MongoTemplate mongoTemplate;
@@ -72,21 +73,8 @@ class NotificationExpiryIT extends IntegrationBase {
     }
 
     @AfterEach
-    void restoreSharedMongo() {
-        for (Class<?> entityClass : List.of(NotificationAggregate.class, AccompanyingDocument.class)) {
-            expireAtIndexes(entityClass).forEach(
-                index -> mongoTemplate.indexOps(entityClass).dropIndex(index.getString("name")));
-        }
+    void restoreTtlMonitorSleep() {
         setTtlMonitorSleepSecs(60);
-    }
-
-    @ParameterizedTest
-    @ValueSource(classes = {NotificationAggregate.class, AccompanyingDocument.class})
-    void ttlIndex_isOnExpireAtAndExpiresAtThatTime(Class<?> entityClass) {
-        List<Document> indexes = expireAtIndexes(entityClass);
-
-        assertThat(indexes).singleElement().satisfies(
-            index -> assertThat(index.get("expireAfterSeconds", Number.class).longValue()).isZero());
     }
 
     @Test
@@ -95,19 +83,20 @@ class NotificationExpiryIT extends IntegrationBase {
 
         notificationExpiryIndex.ensureTtlIndexes();
 
-        assertThat(expireAtIndexes(NotificationAggregate.class)).singleElement().satisfies(
-            index -> assertThat(index.get("expireAfterSeconds", Number.class).longValue()).isZero());
+        assertSingleTtlIndexNamed(
+            mongoTemplate, NotificationAggregate.class, "notification_expire_at_ttl");
     }
 
     @Test
     void ensureTtlIndexes_shouldPutTheTtlIndexInPlace_whenAnotherInstanceDroppedThePlainIndexFirst() {
         createPlainExpireAtIndexOnNotifications();
 
-        new NotificationExpiryIndex(templateOvertakenAfterListingIndexes(), new NotificationTtlConfig(null, "dev"))
+        new NotificationExpiryIndex(
+            templateOvertakenAfterListingIndexes(), new NotificationTtlConfig(null, "dev"))
             .ensureTtlIndexes();
 
-        assertThat(expireAtIndexes(NotificationAggregate.class)).singleElement().satisfies(
-            index -> assertThat(index.get("expireAfterSeconds", Number.class).longValue()).isZero());
+        assertSingleTtlIndexNamed(
+            mongoTemplate, NotificationAggregate.class, "notification_expire_at_ttl");
     }
 
     @Test
@@ -143,9 +132,10 @@ class NotificationExpiryIT extends IntegrationBase {
 
     private void createPlainExpireAtIndexOnNotifications() {
         IndexOperations notificationIndexes = mongoTemplate.indexOps(NotificationAggregate.class);
-        expireAtIndexes(NotificationAggregate.class)
+        expireAtIndexes(mongoTemplate, NotificationAggregate.class)
             .forEach(index -> notificationIndexes.dropIndex(index.getString("name")));
-        notificationIndexes.createIndex(new Index().on("expireAt", Sort.Direction.ASC).named("expireAt"));
+        notificationIndexes.createIndex(
+            new Index().on("expireAt", Sort.Direction.ASC).named("expireAt"));
     }
 
     private MongoTemplate templateOvertakenAfterListingIndexes() {
@@ -190,13 +180,6 @@ class NotificationExpiryIT extends IntegrationBase {
             .numberOfNotifications(1)
             .timestamp(Instant.now().minus(1, ChronoUnit.DAYS))
             .build());
-    }
-
-    private List<Document> expireAtIndexes(Class<?> entityClass) {
-        return mongoTemplate.getCollection(mongoTemplate.getCollectionName(entityClass))
-            .listIndexes().into(new ArrayList<>()).stream()
-            .filter(index -> EXPIRE_AT_KEY.equals(index.get("key", Document.class)))
-            .toList();
     }
 
     private void setTtlMonitorSleepSecs(int seconds) {
