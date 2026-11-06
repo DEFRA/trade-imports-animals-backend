@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.configuration;
 
+import jakarta.annotation.Nullable;
 import jakarta.validation.constraints.Positive;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
@@ -14,7 +15,7 @@ import org.springframework.validation.annotation.Validated;
  */
 @Validated
 @ConfigurationProperties(prefix = "notification.ttl")
-public record NotificationTtlConfig(@Positive Integer days, String environment) {
+public record NotificationTtlConfig(@Nullable @Positive Integer days, String environment) {
 
   /** True when the running environment is production, where expiry must never occur. */
   public boolean isProd() {
