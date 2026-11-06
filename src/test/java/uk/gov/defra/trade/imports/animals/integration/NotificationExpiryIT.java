@@ -69,7 +69,7 @@ class NotificationExpiryIT extends IntegrationBase {
         notificationRepository.deleteAll();
         accompanyingDocumentRepository.deleteAll();
         auditRepository.deleteAll();
-        notificationExpiryIndex.createIndexes();
+        notificationExpiryIndex.ensureTtlIndexes();
     }
 
     @AfterEach
@@ -92,31 +92,22 @@ class NotificationExpiryIT extends IntegrationBase {
             index -> assertThat(index.get("expireAfterSeconds", Number.class).longValue()).isZero());
     }
 
-    @ParameterizedTest
-    @ValueSource(classes = {NotificationAggregate.class, AccompanyingDocument.class})
-    void createIndexes_replacesAPlainExpireAtIndexWithTheTtlIndex(Class<?> entityClass) {
-        // Given
-        expireAtIndexes(entityClass).forEach(
-            index -> mongoTemplate.indexOps(entityClass).dropIndex(index.getString("name")));
-        mongoTemplate.indexOps(entityClass).createIndex(new Index().on("expireAt", Sort.Direction.ASC));
+    @Test
+    void ensureTtlIndexes_shouldReplaceAPlainExpireAtIndexWithTheTtlIndex() {
+        createPlainExpireAtIndexOnNotifications();
 
-        // When
-        notificationExpiryIndex.createIndexes();
+        notificationExpiryIndex.ensureTtlIndexes();
 
-        // Then
-        assertThat(expireAtIndexes(entityClass)).singleElement().satisfies(
+        assertThat(expireAtIndexes(NotificationAggregate.class)).singleElement().satisfies(
             index -> assertThat(index.get("expireAfterSeconds", Number.class).longValue()).isZero());
     }
 
     @Test
-    void createIndexes_shouldPutTheTtlIndexInPlace_whenAnotherInstanceDroppedThePlainIndexFirst() {
-        expireAtIndexes(NotificationAggregate.class).forEach(index -> mongoTemplate
-            .indexOps(NotificationAggregate.class).dropIndex(index.getString("name")));
-        mongoTemplate.indexOps(NotificationAggregate.class)
-            .createIndex(new Index().on("expireAt", Sort.Direction.ASC).named("expireAt"));
+    void ensureTtlIndexes_shouldPutTheTtlIndexInPlace_whenAnotherInstanceDroppedThePlainIndexFirst() {
+        createPlainExpireAtIndexOnNotifications();
 
         new NotificationExpiryIndex(templateOvertakenAfterListingIndexes(), new NotificationTtlConfig(null, "dev"))
-            .createIndexes();
+            .ensureTtlIndexes();
 
         assertThat(expireAtIndexes(NotificationAggregate.class)).singleElement().satisfies(
             index -> assertThat(index.get("expireAfterSeconds", Number.class).longValue()).isZero());
@@ -160,6 +151,13 @@ class NotificationExpiryIT extends IntegrationBase {
             .hasSize(1);
         assertThat(auditRepository.findAll()).singleElement().satisfies(
             audit -> assertThat(audit.getNotificationReferenceNumbers()).containsExactly(expiredRef));
+    }
+
+    private void createPlainExpireAtIndexOnNotifications() {
+        IndexOperations notificationIndexes = mongoTemplate.indexOps(NotificationAggregate.class);
+        expireAtIndexes(NotificationAggregate.class)
+            .forEach(index -> notificationIndexes.dropIndex(index.getString("name")));
+        notificationIndexes.createIndex(new Index().on("expireAt", Sort.Direction.ASC).named("expireAt"));
     }
 
     private MongoTemplate templateOvertakenAfterListingIndexes() {

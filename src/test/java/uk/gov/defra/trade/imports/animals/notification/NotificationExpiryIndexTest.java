@@ -62,14 +62,14 @@ class NotificationExpiryIndexTest {
             new NotificationExpiryIndex(mongoTemplate, new NotificationTtlConfig(7, "prod"));
 
         // When
-        expiryIndex.createIndexes();
+        expiryIndex.ensureTtlIndexes();
 
         // Then
         verifyNoInteractions(mongoTemplate);
     }
 
     @Test
-    void createIndexes_shouldFail_whenDroppingThePlainIndexFailsForAnotherReason() {
+    void ensureTtlIndexes_shouldFail_whenDroppingThePlainIndexFailsForAnotherReason() {
         MongoCommandException writeConflict = TransientMongoFailure.writeConflictOnOutboxCreation();
         IndexOperations indexOps = mock(IndexOperations.class);
         when(indexOps.getIndexInfo()).thenReturn(List.of(new IndexInfo(
@@ -81,6 +81,6 @@ class NotificationExpiryIndexTest {
         NotificationExpiryIndex expiryIndex =
             new NotificationExpiryIndex(mongoTemplate, new NotificationTtlConfig(null, "dev"));
 
-        assertThatThrownBy(expiryIndex::createIndexes).hasCause(writeConflict);
+        assertThatThrownBy(expiryIndex::ensureTtlIndexes).hasCause(writeConflict);
     }
 }

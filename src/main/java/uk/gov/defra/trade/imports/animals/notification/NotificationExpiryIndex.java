@@ -20,10 +20,9 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocum
 import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 
 /**
- * Once the application is ready, creates the Mongo TTL indexes that remove notifications and
- * accompanying documents when their {@code expireAt} has passed, dropping any plain index on
- * {@code expireAt} first. Exists only when {@code notification.ttl.expiry.enabled=true}, and
- * creates nothing in prod.
+ * Once the application is ready, ensures the Mongo TTL indexes on {@code expireAt} exist, replacing
+ * any plain index on {@code expireAt} on the notification collection. Exists only when
+ * {@code notification.ttl.expiry.enabled=true}, and touches no index in prod.
  */
 @Component
 @Slf4j
@@ -31,47 +30,53 @@ import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 @ConditionalOnProperty(prefix = "notification.ttl.expiry", name = "enabled", havingValue = "true")
 public class NotificationExpiryIndex {
 
-    static final String NOTIFICATION_INDEX_NAME = "notification_expire_at_ttl";
-    static final String DOCUMENT_INDEX_NAME = "accompanying_document_expire_at_ttl";
     private static final String EXPIRE_AT = "expireAt";
 
     private final MongoTemplate mongoTemplate;
     private final NotificationTtlConfig ttlConfig;
 
     @EventListener(ApplicationReadyEvent.class)
-    public void createIndexes() {
+    public void ensureTtlIndexes() {
         if (ttlConfig.isProd()) {
             log.warn("Notification expiry is enabled in prod; refusing to create the TTL indexes");
             return;
         }
-        createTtlIndex(AccompanyingDocument.class, DOCUMENT_INDEX_NAME);
-        createTtlIndex(NotificationAggregate.class, NOTIFICATION_INDEX_NAME);
+        createTtlIndex(AccompanyingDocument.class, "accompanying_document_expire_at_ttl");
+        replacePlainExpireAtIndexWithTtlIndex(
+            NotificationAggregate.class, "notification_expire_at_ttl");
+    }
+
+    private void replacePlainExpireAtIndexWithTtlIndex(Class<?> entityClass, String indexName) {
+        dropPlainExpireAtIndexes(entityClass);
+        createTtlIndex(entityClass, indexName);
     }
 
     private void createTtlIndex(Class<?> entityClass, String indexName) {
-        IndexOperations indexOps = mongoTemplate.indexOps(entityClass);
-        dropPlainExpireAtIndexes(indexOps);
-        indexOps.createIndex(
+        mongoTemplate.indexOps(entityClass).createIndex(
             new Index().on(EXPIRE_AT, Sort.Direction.ASC).expire(Duration.ZERO).named(indexName));
         log.info("Expiry TTL index {} is in place", indexName);
     }
 
-    private static void dropPlainExpireAtIndexes(IndexOperations indexOps) {
+    private void dropPlainExpireAtIndexes(Class<?> entityClass) {
+        IndexOperations indexOps = mongoTemplate.indexOps(entityClass);
+        String collectionName = mongoTemplate.getCollectionName(entityClass);
         indexOps.getIndexInfo().stream()
             .filter(NotificationExpiryIndex::isPlainExpireAtIndex)
             .map(IndexInfo::getName)
-            .forEach(name -> dropPlainIndex(indexOps, name));
+            .forEach(indexName -> dropPlainIndex(indexOps, collectionName, indexName));
     }
 
-    private static void dropPlainIndex(IndexOperations indexOps, String name) {
+    private static void dropPlainIndex(
+        IndexOperations indexOps, String collectionName, String indexName) {
         try {
-            indexOps.dropIndex(name);
-            log.info("Dropped plain index {} on expireAt", name);
+            indexOps.dropIndex(indexName);
+            log.info("Dropped plain index {} on expireAt from {}", indexName, collectionName);
         } catch (DataAccessException e) {
             if (!isIndexNotFound(e)) {
                 throw e;
             }
-            log.info("Plain index {} on expireAt was already dropped", name, e);
+            log.info(
+                "Plain index {} on expireAt was already dropped from {}", indexName, collectionName, e);
         }
     }
 
