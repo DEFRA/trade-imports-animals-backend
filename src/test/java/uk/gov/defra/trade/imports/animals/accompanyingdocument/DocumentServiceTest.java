@@ -316,7 +316,9 @@ class DocumentServiceTest {
     void claimUpload_shouldReplaceTheDetails_whenTheDocumentIsAlreadyClaimed() {
       AccompanyingDocument alreadyClaimed = scanned();
       alreadyClaimed.setClaimed(true);
+      alreadyClaimed.setDocumentType(DocumentType.JOURNEY_LOG);
       alreadyClaimed.setDocumentReference("UKGBFIRST");
+      alreadyClaimed.setDateOfIssue(LocalDate.parse("2026-01-15"));
       sessionIsOpen();
       when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
           .thenReturn(Optional.of(alreadyClaimed));
@@ -328,7 +330,9 @@ class DocumentServiceTest {
               DocumentType.ITAHC, "UKGBSECOND", LocalDate.parse("2026-02-20")));
 
       assertThat(claimed.isClaimed()).isTrue();
+      assertThat(claimed.getDocumentType()).isEqualTo(DocumentType.ITAHC);
       assertThat(claimed.getDocumentReference()).isEqualTo("UKGBSECOND");
+      assertThat(claimed.getDateOfIssue()).isEqualTo(LocalDate.parse("2026-02-20"));
       verify(accompanyingDocumentRepository).save(alreadyClaimed);
     }
 
@@ -565,17 +569,19 @@ class DocumentServiceTest {
   class DeleteForNotificationReferenceNumbers {
 
     @Test
-    void deleteForNotificationReferenceNumbers_shouldDeleteAllDocumentsForGivenRefs() {
+    void deleteForNotificationReferenceNumbers_shouldDeleteTheDocumentsAndSessions() {
       List<String> notificationReferenceNumbers = List.of("GBN-AG-26-000111", "GBN-AG-26-000222");
 
       documentService.deleteForNotificationReferenceNumbers(notificationReferenceNumbers);
 
-      verify(accompanyingDocumentRepository).deleteAllByNotificationReferenceNumberIn(notificationReferenceNumbers);
-      verify(uploadSessionRepository).deleteAllByNotificationReferenceNumberIn(notificationReferenceNumbers);
+      verify(accompanyingDocumentRepository)
+          .deleteAllByNotificationReferenceNumberIn(notificationReferenceNumbers);
+      verify(uploadSessionRepository)
+          .deleteAllByNotificationReferenceNumberIn(notificationReferenceNumbers);
     }
 
     @Test
-    void deleteForNotificationReferenceNumbers_shouldThrowNullPointerException_whenNotificationReferenceNumbersIsNull() {
+    void deleteForNotificationReferenceNumbers_shouldThrowNullPointerException_whenGivenNull() {
       assertThatThrownBy(() -> documentService.deleteForNotificationReferenceNumbers(null))
           .isInstanceOf(NullPointerException.class)
           .hasMessageContaining("notificationReferenceNumbers must not be null");
