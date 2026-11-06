@@ -104,7 +104,7 @@ public class NotificationService {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
             return createNotification(notificationDto, correlationId, actor);
         } else {
-            return updateNotification(notificationDto, correlationId, actor);
+            return replaceContent(notificationDto.getReferenceNumber(), notificationDto, correlationId, actor);
         }
     }
 
@@ -114,6 +114,11 @@ public class NotificationService {
      */
     @Transactional
     public NotificationAggregate replace(String referenceNumber, NotificationDto dto,
+        String correlationId, Actor actor) {
+        return replaceContent(referenceNumber, dto, correlationId, actor);
+    }
+
+    private NotificationAggregate replaceContent(String referenceNumber, NotificationDto dto,
         String correlationId, Actor actor) {
         NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
@@ -127,6 +132,7 @@ public class NotificationService {
             throw new BadRequestException("concurrencyToken is required to replace a notification");
         }
         notificationAggregate.setConcurrencyToken(dto.getConcurrencyToken());
+        log.info("Updating notification {}", referenceNumber);
         setNotificationDetails(dto, notificationAggregate);
         return saveWithStatusAndOutboxEvent(notificationAggregate, referenceNumber, correlationId,
             notificationAggregate.getStatus(), OutboxEventType.NOTIFICATION_EDITED, actor);
@@ -448,26 +454,6 @@ public class NotificationService {
         }
         throw new IllegalStateException(
             "Failed to generate a unique reference number after " + maxAttempts + " attempts");
-    }
-
-    private NotificationAggregate updateNotification(NotificationDto dto, String correlationId, Actor actor) {
-        String referenceNumber = dto.getReferenceNumber();
-        NotificationAggregate existing = notificationRepository.findByReferenceNumber(referenceNumber)
-            .orElseThrow(() -> new NotFoundException(
-                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
-        if (existing.getStatus() != NotificationStatus.DRAFT
-            && existing.getStatus() != NotificationStatus.AMEND) {
-            throw new BadRequestException(
-                "Cannot save notification with status: " + existing.getStatus());
-        }
-        if (dto.getConcurrencyToken() == null) {
-            throw new BadRequestException("concurrencyToken is required to update a notification");
-        }
-        existing.setConcurrencyToken(dto.getConcurrencyToken());
-        log.info("Updating notification {}", referenceNumber);
-        setNotificationDetails(dto, existing);
-        return saveWithStatusAndOutboxEvent(existing, referenceNumber, correlationId, existing.getStatus(),
-            OutboxEventType.NOTIFICATION_EDITED, actor);
     }
 
     private void setNotificationDetails(NotificationDto dto, NotificationAggregate notificationAggregate) {
