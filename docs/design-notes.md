@@ -33,7 +33,7 @@ Why the code is shaped the way it is. Code states what it does; this file holds 
 
 Two independent safeguards keep expiry out of prod; both must fail before prod loses a notification:
 
-- Stamping: `expireAt` is set at creation only when `NOTIFICATION_TTL_DAYS` is configured and `ENVIRONMENT` is not `prod`.
+- Stamping: `expireAt` is set at creation only when `NOTIFICATION_TTL_DAYS` is configured and `ENVIRONMENT` is not `prod`. The service logs once at startup whether stamping is on and, if it is off, which of the two conditions turned it off.
 - Removal: `NotificationExpiryIndex` creates the Mongo TTL indexes on `expireAt` only when `NOTIFICATION_TTL_EXPIRY_ENABLED=true`, with no `matchIfMissing`, and refuses in prod.
 
 Both default to off in `application.yml`, the values prod relies on; an environment opts in by setting them.

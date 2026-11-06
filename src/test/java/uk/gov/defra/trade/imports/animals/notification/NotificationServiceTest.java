@@ -24,6 +24,9 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.dest
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -51,6 +54,9 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Sort.Direction;
@@ -124,6 +130,23 @@ class NotificationServiceTest {
             Mappers.getMapper(NotificationContentMapper.class),
             referenceNumberGenerator, ttlConfig,
             Duration.ZERO, 54, 50);
+    }
+
+    private static List<ILoggingEvent> logEventsDuring(Runnable action) {
+        Logger logger = (Logger) LoggerFactory.getLogger(NotificationService.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            action.run();
+        } finally {
+            logger.detachAppender(appender);
+        }
+        return appender.list;
+    }
+
+    private static List<String> messagesOf(List<ILoggingEvent> events) {
+        return events.stream().map(ILoggingEvent::getFormattedMessage).toList();
     }
 
     @Nested
@@ -1023,6 +1046,41 @@ class NotificationServiceTest {
             NotificationAggregate result = create(new NotificationTtlConfig(null, "dev"));
 
             assertThat(result.getExpireAt()).isNull();
+        }
+    }
+
+    @Nested
+    class ExpiryStampingLog {
+
+        private List<String> messagesLoggedBy(NotificationTtlConfig ttlConfig) {
+            return messagesOf(logEventsDuring(buildService(ttlConfig)::logExpiryStamping));
+        }
+
+        @Test
+        void logExpiryStamping_shouldGiveDaysAndEnvironment_whenStampingIsOn() {
+            assertThat(messagesLoggedBy(new NotificationTtlConfig(7, "dev")))
+                .containsExactly("Notification expiry stamping is on: 7 days in environment dev");
+        }
+
+        @Test
+        void logExpiryStamping_shouldNameProdAsTheReason_whenDaysAreSetInProd() {
+            assertThat(messagesLoggedBy(new NotificationTtlConfig(7, "prod")))
+                .containsExactly("Notification expiry stamping is off: environment prod is prod");
+        }
+
+        @Test
+        void logExpiryStamping_shouldNameMissingDaysAsTheReason_whenNoDaysAreSetOutsideProd() {
+            assertThat(messagesLoggedBy(new NotificationTtlConfig(null, "dev")))
+                .containsExactly("Notification expiry stamping is off: no days set in environment dev");
+        }
+
+        @Test
+        void logExpiryStamping_shouldListenForTheApplicationBeingReady() throws NoSuchMethodException {
+            EventListener listener = NotificationService.class
+                .getMethod("logExpiryStamping")
+                .getAnnotation(EventListener.class);
+
+            assertThat(listener.value()).containsExactly(ApplicationReadyEvent.class);
         }
     }
 
