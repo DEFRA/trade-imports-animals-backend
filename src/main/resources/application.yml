@@ -78,8 +78,6 @@ logging:
     io.netty.handler.logging.LoggingHandler: WARN
 
 # Actuator endpoints
-# Production: Only health endpoint exposed (secure by default)
-# Development: Use dev profile (application-local.yml) for debugging endpoints
 management:
   endpoints:
     web:
@@ -122,7 +120,6 @@ springdoc:
   swagger-ui:
     enabled: false
 
-# Notification submission outbox lock configuration
 notification:
   admin:
     page-size: 50
