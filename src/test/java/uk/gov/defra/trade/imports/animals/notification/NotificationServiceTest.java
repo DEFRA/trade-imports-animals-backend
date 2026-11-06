@@ -160,7 +160,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void saveNotification_shouldCreateNotificationWithGeneratedReferenceNumber() {
+        void saveNotification_shouldCreateDraftWithGeneratedReferenceNumber() {
             // Given - new notification without referenceNumber
             Origin origin = Origin.builder()
                 .countryCode("GB")
@@ -171,24 +171,18 @@ class NotificationServiceTest {
                 .origin(origin)
                 .build();
 
-            String generatedId = "507f1f77bcf86cd799439011";
             String expectedRef = "GBN-AG-26-ABC123";
 
-            NotificationAggregate saved = new NotificationAggregate();
-            saved.setNotification(new Notification());
-            saved.setId(generatedId);
-            saved.getNotification().setOrigin(origin);
-            saved.setReferenceNumber(expectedRef);
-
             when(referenceNumberGenerator.generate()).thenReturn(expectedRef);
-            when(notificationRepository.save(any(NotificationAggregate.class))).thenReturn(saved);
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
 
             // When
             NotificationAggregate result = notificationService.saveNotification(notificationDto, "", null);
 
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(expectedRef);
-            assertThat(result.getId()).isEqualTo(generatedId);
+            assertThat(result.getStatus()).isEqualTo(DRAFT);
             assertThat(result.getNotification().getOrigin()).isEqualTo(origin);
             verify(referenceNumberGenerator).generate();
             verify(notificationRepository, times(1)).save(any(NotificationAggregate.class));
@@ -1845,20 +1839,14 @@ class NotificationServiceTest {
                     .origin(Origin.builder().countryCode("IE").requiresRegionCode("no").internalReference("INT-REF-DO-NOT-COPY").build())
                     .build())
                 .status(NotificationStatus.DRAFT)
-                .notification(Notification.builder().build())
                 .concurrencyToken(0L)
-                .build();
-
-            NotificationAggregate created = NotificationAggregate.builder()
-                .referenceNumber(newRef)
-                .status(NotificationStatus.DRAFT)
-                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(sourceRef))
                 .thenReturn(Optional.of(source));
             when(referenceNumberGenerator.generate()).thenReturn(newRef);
-            when(notificationRepository.save(any(NotificationAggregate.class))).thenReturn(created);
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
 
             // When
             NotificationAggregate result = notificationService.copyNotification(sourceRef, 0L, "trace", null);
@@ -1879,20 +1867,14 @@ class NotificationServiceTest {
                     .origin(Origin.builder().countryCode("IE").requiresRegionCode("no").internalReference("INT-REF-DO-NOT-COPY").build())
                     .build())
                 .status(NotificationStatus.SUBMITTED)
-                .notification(Notification.builder().build())
                 .concurrencyToken(0L)
-                .build();
-
-            NotificationAggregate created = NotificationAggregate.builder()
-                .referenceNumber(newRef)
-                .status(NotificationStatus.DRAFT)
-                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(sourceRef))
                 .thenReturn(Optional.of(source));
             when(referenceNumberGenerator.generate()).thenReturn(newRef);
-            when(notificationRepository.save(any(NotificationAggregate.class))).thenReturn(created);
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
 
             // When
             NotificationAggregate result = notificationService.copyNotification(sourceRef, 0L, "trace", null);
@@ -1923,7 +1905,6 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
-                .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
                     .origin(origin)
@@ -1984,7 +1965,6 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .status(NotificationStatus.DRAFT)
-                .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
                     .origin(Origin.builder().countryCode("FR").requiresRegionCode("no").internalReference("DO-NOT-COPY").build())
@@ -2036,20 +2016,14 @@ class NotificationServiceTest {
                     .origin(Origin.builder().countryCode("IE").requiresRegionCode("no").internalReference("INT-REF-DO-NOT-COPY").build())
                     .build())
                 .status(AMEND)
-                .notification(Notification.builder().build())
                 .concurrencyToken(0L)
-                .build();
-
-            NotificationAggregate created = NotificationAggregate.builder()
-                .referenceNumber(newRef)
-                .status(DRAFT)
-                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumber(sourceRef))
                 .thenReturn(Optional.of(source));
             when(referenceNumberGenerator.generate()).thenReturn(newRef);
-            when(notificationRepository.save(any(NotificationAggregate.class))).thenReturn(created);
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
 
             NotificationAggregate result = notificationService.copyNotification(sourceRef, 0L, "trace", null);
 
@@ -2609,7 +2583,6 @@ class NotificationServiceTest {
             NotificationAggregate source = NotificationAggregate.builder()
                 .referenceNumber(sourceRef)
                 .status(SUBMITTED)
-                .notification(Notification.builder().build())
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
                     .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("SOURCE-REF").build())
