@@ -7,6 +7,7 @@ import com.jayway.jsonpath.JsonPath;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
@@ -51,6 +52,9 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 
 /**
  * Integration tests for the accompanying document upload flow.
@@ -168,12 +172,16 @@ class DocumentControllerIT extends IntegrationBase {
     private UploadSessionRepository uploadSessionRepository;
 
     @Autowired
+    private NotificationRepository notificationRepository;
+
+    @Autowired
     private MongoTemplate mongoTemplate;
 
     @BeforeEach
     void setUpDocuments() {
         uploadSessionRepository.deleteAll();
         accompanyingDocumentRepository.deleteAll();
+        notificationRepository.deleteAll();
         assertThat(port).isEqualTo(BACKEND_PORT);
     }
 
@@ -277,6 +285,23 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(doc.getDocumentType()).isEqualTo(DocumentType.ITAHC);
             assertThat(doc.getDocumentReference()).isEqualTo("UKGB2026001234");
             assertThat(doc.getDateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
+        }
+
+        @Test
+        void shouldStoreTheDocumentWithItsNotificationsExpireAt() {
+            Instant expireAt = Instant.parse("2030-01-01T00:00:00Z");
+            notificationRepository.save(NotificationAggregate.builder()
+                .referenceNumber(NOTIFICATION_REFERENCE_NUMBER)
+                .status(NotificationStatus.DRAFT)
+                .expireAt(expireAt)
+                .build());
+            String uploadId = registeredUploadId();
+
+            claimUpload(uploadId);
+
+            AccompanyingDocument stored =
+                accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
+            assertThat(stored.getExpireAt()).isEqualTo(expireAt);
         }
 
         @Test
