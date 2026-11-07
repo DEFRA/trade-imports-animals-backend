@@ -1304,8 +1304,7 @@ class NotificationControllerTest {
 
             // When & Then
             mockMvc.perform(get("/notifications/{ref}/outbox-events", referenceNumber)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HEADER_ORGANISATION_ID, ORG_ID))
+                    .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$.length()").value(2))
@@ -1321,8 +1320,7 @@ class NotificationControllerTest {
 
             // When & Then
             mockMvc.perform(get("/notifications/{ref}/outbox-events", referenceNumber)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .header(HEADER_ORGANISATION_ID, ORG_ID))
+                    .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
                 .andExpect(jsonPath("$").isEmpty());

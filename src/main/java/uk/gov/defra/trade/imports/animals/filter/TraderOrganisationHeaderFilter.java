@@ -17,7 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Trader-facing notification routes require {@code Trade-Imports-Organisation-Id}.
- * Admin routes (bulk delete, replay, reference-number listing) are excluded.
+ * Admin routes (bulk delete, replay, reference-number and outbox-event listing) are excluded.
  */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 2)
@@ -44,6 +44,9 @@ public class TraderOrganisationHeaderFilter extends OncePerRequestFilter {
             return true;
         }
         if ("GET".equalsIgnoreCase(method) && "/notifications/reference-numbers".equals(path)) {
+            return true;
+        }
+        if ("GET".equalsIgnoreCase(method) && path.matches("/notifications/[^/]+/outbox-events")) {
             return true;
         }
         if ("POST".equalsIgnoreCase(method) && path.matches("/notifications/[^/]+/replay")) {
