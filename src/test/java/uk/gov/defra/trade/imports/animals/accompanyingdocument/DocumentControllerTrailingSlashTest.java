@@ -1,7 +1,9 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -10,6 +12,7 @@ import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSess
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registeredSession;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -20,6 +23,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
+import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
 @WebMvcTest(DocumentController.class)
@@ -41,7 +45,15 @@ class DocumentControllerTrailingSlashTest {
   private DocumentService documentService;
 
   @MockitoBean
+  private NotificationService notificationService;
+
+  @MockitoBean
   private S3DocumentService s3DocumentService;
+
+  @BeforeEach
+  void allowTraderNotificationAccess() {
+    doNothing().when(notificationService).requireTraderAccess(anyString(), anyString());
+  }
 
   @Test
   void shouldNormaliseTrailingSlashInLocationHeader() throws Exception {
