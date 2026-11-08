@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 
 /**
  * Integration test for ECS (Elastic Common Schema) structured logging.
@@ -25,10 +26,13 @@ import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 @AutoConfigureMockMvc
 class EcsLoggingIT extends IntegrationBase {
 
-    private static final String ORG_ID = "5900002";
+    private static final String LOGGING_TEST_REF = "LOGGING-TEST";
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
 
     private final ByteArrayOutputStream outputStreamCaptor = new ByteArrayOutputStream();
     private final PrintStream originalOut = System.out;
@@ -36,6 +40,7 @@ class EcsLoggingIT extends IntegrationBase {
 
     @BeforeEach
     void setUp() {
+        ensureTraderNotification(notificationRepository, LOGGING_TEST_REF);
         System.setOut(new PrintStream(outputStreamCaptor));
     }
 
@@ -48,8 +53,8 @@ class EcsLoggingIT extends IntegrationBase {
     void requestLogging_shouldProduceEcsJsonFormat() throws Exception {
         // Make a request with CDP trace ID header — use an app endpoint so the controller's
         // own INFO log carries the MDC fields we assert on.
-        mockMvc.perform(get("/notifications/LOGGING-TEST/document-uploads")
-                        .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, ORG_ID)
+        mockMvc.perform(get("/notifications/" + LOGGING_TEST_REF + "/document-uploads")
+                        .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, DEFAULT_TRADER_ORG_ID)
                         .header("x-cdp-request-id", "test-trace-123"))
                 .andExpect(status().isOk());
 
@@ -113,8 +118,8 @@ class EcsLoggingIT extends IntegrationBase {
         outputStreamCaptor.reset();
 
         // Make request WITHOUT x-cdp-request-id header
-        mockMvc.perform(get("/notifications/LOGGING-TEST/document-uploads")
-                        .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, ORG_ID))
+        mockMvc.perform(get("/notifications/" + LOGGING_TEST_REF + "/document-uploads")
+                        .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, DEFAULT_TRADER_ORG_ID))
                 .andExpect(status().isOk());
 
         String logOutput = outputStreamCaptor.toString(StandardCharsets.UTF_8);

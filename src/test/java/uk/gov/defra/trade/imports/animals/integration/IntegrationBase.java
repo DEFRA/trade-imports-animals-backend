@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,6 +32,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
+import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.lifecycle.Startables;
@@ -56,6 +61,8 @@ import org.testcontainers.utility.DockerImageName;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
 public abstract class IntegrationBase {
+
+    protected static final String DEFAULT_TRADER_ORG_ID = "5900002";
 
     static final List<String> SERVICES_TO_MOCK = List.of();
 
@@ -133,7 +140,7 @@ public abstract class IntegrationBase {
     }
 
     protected WebTestClient webClient(String clientType) {
-        return webClient(clientType, "5900002");
+        return webClient(clientType, DEFAULT_TRADER_ORG_ID);
     }
 
     protected WebTestClient webClient(String clientType, String organisationId) {
@@ -145,6 +152,28 @@ public abstract class IntegrationBase {
             .defaultHeader(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, organisationId)
             .responseTimeout(FIRST_REQUEST_WARM_UP_ALLOWANCE)
             .build();
+    }
+
+    /**
+     * Seeds a notification owned by the trader organisation so document routes can enforce
+     * {@code requireTraderAccess} without going through notification create APIs.
+     */
+    protected void ensureTraderNotification(
+            NotificationRepository repository, String referenceNumber) {
+        ensureTraderNotification(repository, referenceNumber, DEFAULT_TRADER_ORG_ID);
+    }
+
+    protected void ensureTraderNotification(
+            NotificationRepository repository, String referenceNumber, String organisationId) {
+        repository.findByReferenceNumber(referenceNumber).ifPresent(repository::delete);
+        NotificationAggregate aggregate = NotificationAggregate.builder()
+                .referenceNumber(referenceNumber)
+                .organisationId(organisationId)
+                .status(NotificationStatus.DRAFT)
+                .created(Instant.now())
+                .notification(new Notification())
+                .build();
+        repository.save(aggregate);
     }
 
     String getToken(String clientType) {

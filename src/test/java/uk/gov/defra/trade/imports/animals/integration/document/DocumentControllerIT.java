@@ -51,6 +51,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 
 /**
  * Integration tests for the accompanying document upload flow.
@@ -170,10 +171,14 @@ class DocumentControllerIT extends IntegrationBase {
     @Autowired
     private MongoTemplate mongoTemplate;
 
+    @Autowired
+    private NotificationRepository notificationRepository;
+
     @BeforeEach
     void setUpDocuments() {
         uploadSessionRepository.deleteAll();
         accompanyingDocumentRepository.deleteAll();
+        ensureTraderNotification(notificationRepository, NOTIFICATION_REF);
         assertThat(port).isEqualTo(BACKEND_PORT);
     }
 
