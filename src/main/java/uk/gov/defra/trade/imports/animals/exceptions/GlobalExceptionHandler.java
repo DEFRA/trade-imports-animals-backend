@@ -196,9 +196,8 @@ public class GlobalExceptionHandler {
             .body(problemDetail);
     }
 
-    @ExceptionHandler(uk.gov.defra.trade.imports.animals.exceptions.ForbiddenException.class)
-    public ResponseEntity<ProblemDetail> handleForbiddenException(
-        uk.gov.defra.trade.imports.animals.exceptions.ForbiddenException ex) {
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ProblemDetail> handleForbiddenException(ForbiddenException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.warn("Forbidden (trace: {})", traceId, ex);
 

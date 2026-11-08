@@ -2,7 +2,9 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -25,6 +27,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.hamcrest.Matchers;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -46,6 +49,7 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
+import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 
 @WebMvcTest(DocumentController.class)
 @EnableConfigurationProperties(AppConfig.class)
@@ -66,7 +70,15 @@ class DocumentControllerTest {
   private DocumentService documentService;
 
   @MockitoBean
+  private NotificationService notificationService;
+
+  @MockitoBean
   private S3DocumentService s3DocumentService;
+
+  @BeforeEach
+  void allowTraderNotificationAccess() {
+    doNothing().when(notificationService).requireTraderAccess(anyString(), anyString());
+  }
 
   @Nested
   class Register {

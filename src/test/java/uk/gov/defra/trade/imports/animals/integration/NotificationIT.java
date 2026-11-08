@@ -1993,6 +1993,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(copy.getReferenceNumber()).isNotEqualTo(sourceRef);
         assertThat(copy.getReferenceNumber()).matches(REF_FORMAT_REGEX);
         assertThat(copy.getStatus()).isEqualTo(NotificationStatus.DRAFT);
+        assertThat(copy.getOrganisationId()).isEqualTo(ORG_ID);
     }
 
     private void assertCopyRetainsIdentificationFields(NotificationAggregate copy) {
@@ -2695,6 +2696,37 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth", OTHER_ORG_ID)
             .post()
             .uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .exchange()
+            .expectStatus().isNotFound();
+
+        Long concurrencyToken = currentConcurrencyToken(referenceNumber);
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .put()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
+            .bodyValue(SaveNotificationDto.of(
+                NotificationDto.builder().concurrencyToken(concurrencyToken).build()))
+            .exchange()
+            .expectStatus().isNotFound();
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .post()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, concurrencyToken)
+            .exchange()
+            .expectStatus().isNotFound();
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", concurrencyToken)
+                .build(referenceNumber))
+            .exchange()
+            .expectStatus().isNotFound();
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .post()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
             .exchange()
             .expectStatus().isNotFound();
     }

@@ -24,12 +24,15 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import org.springframework.validation.annotation.Validated;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
+import uk.gov.defra.trade.imports.animals.notification.NotificationController;
+import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
 /**
@@ -48,14 +51,17 @@ public class DocumentController {
   private static final String UPLOAD_HANDLE_PATTERN = "^[A-Za-z0-9._-]{1,100}$";
 
   private final DocumentService documentService;
+  private final NotificationService notificationService;
   private final S3DocumentService s3DocumentService;
   private final String backendBaseUrl;
 
   public DocumentController(
       DocumentService documentService,
+      NotificationService notificationService,
       S3DocumentService s3DocumentService,
       AppConfig appConfig) {
     this.documentService = documentService;
+    this.notificationService = notificationService;
     this.s3DocumentService = s3DocumentService;
     this.backendBaseUrl = appConfig.baseUrl();
   }
@@ -79,10 +85,12 @@ public class DocumentController {
   @Timed("document.register")
   public ResponseEntity<UploadSessionDto> register(
       @PathVariable @Pattern(regexp = NOTIFICATION_REF_PATTERN) String ref,
+      @RequestHeader(NotificationController.HEADER_ORGANISATION_ID) String organisationId,
       @Valid @RequestBody RegisterUploadRequest request) {
 
     log.info("POST /notifications/{}/document-uploads uploadId={}", ref, request.uploadId());
 
+    notificationService.requireTraderAccess(ref, organisationId);
     UploadSession session = documentService.registerUpload(ref, request);
     URI location = buildLocationUri(session.getUploadId());
 
@@ -107,10 +115,12 @@ public class DocumentController {
   public ResponseEntity<UploadSessionDto> session(
       @PathVariable @Pattern(regexp = NOTIFICATION_REF_PATTERN) String ref,
       @PathVariable("correlation-id")
-      @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String correlationId) {
+      @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String correlationId,
+      @RequestHeader(NotificationController.HEADER_ORGANISATION_ID) String organisationId) {
 
     log.info("GET /notifications/{}/document-upload-sessions/{}", ref, correlationId);
 
+    notificationService.requireTraderAccess(ref, organisationId);
     return ResponseEntity.ok(
         UploadSessionDto.from(documentService.findSession(ref, correlationId)));
   }
@@ -157,8 +167,11 @@ public class DocumentController {
       content = @Content(schema = @Schema(implementation = DocumentListResponse.class)))
   @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
   @Timed("document.list")
-  public ResponseEntity<DocumentListResponse> list(@PathVariable String ref) {
+  public ResponseEntity<DocumentListResponse> list(
+      @PathVariable String ref,
+      @RequestHeader(NotificationController.HEADER_ORGANISATION_ID) String organisationId) {
     log.info("GET /notifications/{}/document-uploads", ref);
+    notificationService.requireTraderAccess(ref, organisationId);
     List<AccompanyingDocumentDto> items = documentService.findByNotificationRef(ref).stream()
         .map(AccompanyingDocumentDto::from)
         .toList();

@@ -60,6 +60,7 @@ import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
+import uk.gov.defra.trade.imports.animals.exceptions.ForbiddenException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.outbox.Actor;
@@ -162,7 +163,9 @@ class NotificationServiceTest {
             saved.setReferenceNumber(expectedRef);
 
             when(referenceNumberGenerator.generate()).thenReturn(expectedRef);
-            when(notificationRepository.save(any(NotificationAggregate.class))).thenReturn(saved);
+            ArgumentCaptor<NotificationAggregate> savedAggregate =
+                ArgumentCaptor.forClass(NotificationAggregate.class);
+            when(notificationRepository.save(savedAggregate.capture())).thenReturn(saved);
 
             // When
             NotificationAggregate result = notificationService.saveNotification(notificationDto, "", null, ORG_ID);
@@ -171,6 +174,7 @@ class NotificationServiceTest {
             assertThat(result.getReferenceNumber()).isEqualTo(expectedRef);
             assertThat(result.getId()).isEqualTo(generatedId);
             assertThat(result.getNotification().getOrigin()).isEqualTo(origin);
+            assertThat(savedAggregate.getValue().getOrganisationId()).isEqualTo(ORG_ID);
             verify(referenceNumberGenerator).generate();
             verify(notificationRepository, times(1)).save(any(NotificationAggregate.class));
             verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_CREATED), any(), any());
@@ -781,10 +785,23 @@ class NotificationServiceTest {
             String ref = "GBN-AG-26-ABSENT";
             when(notificationRepository.findFulfilmentsViewByReferenceNumberAndOrganisationId(ref, ORG_ID))
                 .thenReturn(Optional.empty());
+            when(notificationRepository.existsByReferenceNumber(ref)).thenReturn(false);
 
             // When / Then
             assertThatThrownBy(() -> notificationService.findFulfilmentsView(ref, ORG_ID))
                 .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining(ref);
+        }
+
+        @Test
+        void findFulfilmentsView_shouldThrowForbidden_whenReferenceBelongsToAnotherOrganisation() {
+            String ref = "GBN-AG-26-OTHER-ORG";
+            when(notificationRepository.findFulfilmentsViewByReferenceNumberAndOrganisationId(ref, ORG_ID))
+                .thenReturn(Optional.empty());
+            when(notificationRepository.existsByReferenceNumber(ref)).thenReturn(true);
+
+            assertThatThrownBy(() -> notificationService.findFulfilmentsView(ref, ORG_ID))
+                .isInstanceOf(ForbiddenException.class)
                 .hasMessageContaining(ref);
         }
     }

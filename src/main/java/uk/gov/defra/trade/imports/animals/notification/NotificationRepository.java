@@ -21,18 +21,11 @@ public interface NotificationRepository extends MongoRepository<NotificationAggr
 
     List<NotificationReferenceOnly> findAllByReferenceNumberIn(List<String> referenceNumbers);
 
-    Optional<NotificationFulfilmentsView> findFulfilmentsViewByReferenceNumber(String referenceNumber);
-
     Optional<NotificationFulfilmentsView> findFulfilmentsViewByReferenceNumberAndOrganisationId(
         String referenceNumber, String organisationId);
 
-    Optional<NotificationView> findViewByReferenceNumberAndStatusIn(
-        String referenceNumber, List<NotificationStatus> statuses);
-
     Optional<NotificationView> findViewByReferenceNumberAndStatusInAndOrganisationId(
         String referenceNumber, List<NotificationStatus> statuses, String organisationId);
-
-    Page<NotificationView> findAllViewByStatusIn(List<NotificationStatus> statuses, Pageable pageable);
 
     Page<NotificationView> findAllViewByStatusInAndOrganisationId(
         List<NotificationStatus> statuses, String organisationId, Pageable pageable);
