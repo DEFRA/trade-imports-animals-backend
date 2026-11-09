@@ -65,10 +65,14 @@ class NotificationExpiryIT extends IntegrationBase {
     private NotificationExpiryIndex notificationExpiryIndex;
 
     @BeforeEach
-    void setUp() {
+    void deleteAllNotificationsDocumentsAndAudits() {
         notificationRepository.deleteAll();
         accompanyingDocumentRepository.deleteAll();
         auditRepository.deleteAll();
+    }
+
+    @BeforeEach
+    void putTtlIndexesInPlace() {
         notificationExpiryIndex.ensureTtlIndexes();
     }
 
@@ -103,31 +107,34 @@ class NotificationExpiryIT extends IntegrationBase {
     void expiredNotificationsAndDocuments_areRemovedByMongoWhileUndatedAndUnexpiredOnesAndAuditStay() {
         Instant past = Instant.now().minus(1, ChronoUnit.HOURS);
         Instant future = Instant.now().plus(7, ChronoUnit.DAYS);
-        String expiredRef = saveNotification("GBN-AG-26-EXP001", past);
-        String undatedRef = saveNotification("GBN-AG-26-UND001", null);
-        String unexpiredRef = saveNotification("GBN-AG-26-UNE001", future);
-        saveDocument("expiry-it-doc-1", expiredRef, past);
-        saveDocument("expiry-it-doc-2", undatedRef, null);
-        saveDocument("expiry-it-doc-3", unexpiredRef, future);
-        saveDeletionAudit(expiredRef);
+        String expiredReference = "GBN-AG-26-EXP001";
+        String undatedReference = "GBN-AG-26-UND001";
+        String unexpiredReference = "GBN-AG-26-UNE001";
+        saveNotification(expiredReference, past);
+        saveNotification(undatedReference, null);
+        saveNotification(unexpiredReference, future);
+        saveDocument("expiry-it-doc-1", expiredReference, past);
+        saveDocument("expiry-it-doc-2", undatedReference, null);
+        saveDocument("expiry-it-doc-3", unexpiredReference, future);
+        saveDeletionAudit(expiredReference);
 
         setTtlMonitorSleepSecs(1);
 
         await()
             .atMost(Duration.ofSeconds(30))
             .untilAsserted(() -> {
-                assertThat(notificationRepository.findByReferenceNumber(expiredRef)).isEmpty();
-                assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(expiredRef))
+                assertThat(notificationRepository.findByReferenceNumber(expiredReference)).isEmpty();
+                assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(expiredReference))
                     .isEmpty();
             });
-        assertThat(notificationRepository.findByReferenceNumber(undatedRef)).isPresent();
-        assertThat(notificationRepository.findByReferenceNumber(unexpiredRef)).isPresent();
-        assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(undatedRef))
+        assertThat(notificationRepository.findByReferenceNumber(undatedReference)).isPresent();
+        assertThat(notificationRepository.findByReferenceNumber(unexpiredReference)).isPresent();
+        assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(undatedReference))
             .hasSize(1);
-        assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(unexpiredRef))
+        assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(unexpiredReference))
             .hasSize(1);
         assertThat(auditRepository.findAll()).singleElement().satisfies(
-            audit -> assertThat(audit.getNotificationReferenceNumbers()).containsExactly(expiredRef));
+            audit -> assertThat(audit.getNotificationReferenceNumbers()).containsExactly(expiredReference));
     }
 
     private void createPlainExpireAtIndexOnNotifications() {
@@ -152,14 +159,13 @@ class NotificationExpiryIT extends IntegrationBase {
         return overtakenTemplate;
     }
 
-    private String saveNotification(String referenceNumber, Instant expireAt) {
+    private void saveNotification(String referenceNumber, Instant expireAt) {
         notificationRepository.save(NotificationAggregate.builder()
             .referenceNumber(referenceNumber)
             .status(NotificationStatus.DRAFT)
             .created(Instant.now().minus(8, ChronoUnit.DAYS))
             .expireAt(expireAt)
             .build());
-        return referenceNumber;
     }
 
     private void saveDocument(
