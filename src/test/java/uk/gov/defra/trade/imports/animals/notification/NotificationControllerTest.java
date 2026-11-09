@@ -1247,7 +1247,7 @@ class NotificationControllerTest {
             when(outboxService.findByReferenceNumber(referenceNumber)).thenReturn(events);
 
             // When & Then
-            mockMvc.perform(get("/notifications/{ref}/outbox-events", referenceNumber)
+            mockMvc.perform(get("/notifications/{referenceNumber}/outbox-events", referenceNumber)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
@@ -1263,7 +1263,7 @@ class NotificationControllerTest {
             when(outboxService.findByReferenceNumber(referenceNumber)).thenReturn(List.of());
 
             // When & Then
-            mockMvc.perform(get("/notifications/{ref}/outbox-events", referenceNumber)
+            mockMvc.perform(get("/notifications/{referenceNumber}/outbox-events", referenceNumber)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())

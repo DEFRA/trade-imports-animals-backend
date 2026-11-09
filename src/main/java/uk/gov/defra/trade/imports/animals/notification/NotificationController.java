@@ -170,7 +170,7 @@ public class NotificationController {
     @Operation(summary = "List notifications",
         description = "Returns a paginated list of import notifications. "
             + "Optional sort: arrivalDate,desc (default), arrivalDate,asc, createdAt,desc, createdAt,asc. "
-            + "Optional referenceNumber: exact match against a complete notification reference.")
+            + "Optional referenceNumber: exact match against a complete notification reference number.")
     @ApiResponse(responseCode = "200", description = "Paginated notifications returned",
         content = @Content(schema = @Schema(implementation = NotificationPageResponse.class)))
     @Timed("controller.findDashboardPage.time")

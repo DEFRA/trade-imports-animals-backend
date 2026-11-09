@@ -51,7 +51,7 @@ class ReplayIT extends OutboxIntegrationBase {
 
         // When — replay all events for this notification (CREATED)
         ReplayResponse response = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/replay", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/replay", referenceNumber)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
             .header(HEADER_TRACE_ID, "trace-replay-001")
             .header("User-Id", "user-replay-001")
@@ -87,7 +87,7 @@ class ReplayIT extends OutboxIntegrationBase {
 
         // When
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/replay", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/replay", referenceNumber)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
             .header(HEADER_TRACE_ID, "trace-replay-002")
             .header("User-Id", "user-replay-002")
@@ -109,7 +109,7 @@ class ReplayIT extends OutboxIntegrationBase {
         notificationRepository.save(notificationAggregate);
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .header(HEADER_TRACE_ID, "trace-v2")
             .exchange().expectStatus().isOk();
 
@@ -117,7 +117,7 @@ class ReplayIT extends OutboxIntegrationBase {
 
         // When
         ReplayResponse response = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/replay", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/replay", referenceNumber)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
             .header(HEADER_TRACE_ID, "trace-replay-multi")
             .header("User-Id", "user-replay-multi")
@@ -146,7 +146,7 @@ class ReplayIT extends OutboxIntegrationBase {
         String referenceNumber = createAndSubmitNotification("trace-audit");
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/replay", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/replay", referenceNumber)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
             .header(HEADER_TRACE_ID, "trace-audit")
             .header("User-Id", "user-audit-001")
@@ -181,7 +181,7 @@ class ReplayIT extends OutboxIntegrationBase {
         assertThat(outboxEventRepository.count()).isZero();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/replay", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/replay", referenceNumber)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
             .header(HEADER_TRACE_ID, "trace-404")
             .header("User-Id", "user-404")
@@ -196,7 +196,7 @@ class ReplayIT extends OutboxIntegrationBase {
         String referenceNumber = createAndSubmitNotification("trace-401");
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/replay", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/replay", referenceNumber)
             .header(HEADER_TRACE_ID, "trace-401")
             .header("User-Id", "user-401")
             .exchange()

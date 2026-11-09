@@ -482,7 +482,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void saveNotification_shouldThrowNotFound_whenRefUnknown() {
+        void saveNotification_shouldThrowNotFound_whenReferenceNumberUnknown() {
             String referenceNumber = "GBN-AG-26-ABSENT";
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.empty());
@@ -921,7 +921,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void deleteByReferenceNumbers_shouldListAllMissingRefs_inExceptionMessage() {
+        void deleteByReferenceNumbers_shouldListAllMissingReferenceNumbers_inExceptionMessage() {
             String missing1 = "GBN-AG-26-000AAA";
             String missing2 = "GBN-AG-26-000BBB";
 

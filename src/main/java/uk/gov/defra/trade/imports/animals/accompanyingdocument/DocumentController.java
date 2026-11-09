@@ -60,11 +60,11 @@ public class DocumentController {
   /**
    * Register an upload session for a notification.
    *
-   * @param notificationReferenceNumber the notification reference number
+   * @param referenceNumber the notification reference number
    * @param request the upload session's identifiers
    * @return 201 Created with the recorded session and a Location header
    */
-  @PostMapping("/notifications/{ref}/document-uploads")
+  @PostMapping("/notifications/{referenceNumber}/document-uploads")
   @Operation(
       summary = "Register document upload",
       description = "Records an upload session so what arrives through it can be matched")
@@ -75,14 +75,14 @@ public class DocumentController {
       content = @Content)
   @Timed("document.register")
   public ResponseEntity<UploadSessionDto> register(
-      @PathVariable("ref") @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-      String notificationReferenceNumber,
+      @PathVariable @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+      String referenceNumber,
       @Valid @RequestBody RegisterUploadRequest request) {
 
-    log.info("POST /notifications/{}/document-uploads uploadId={}", notificationReferenceNumber,
+    log.info("POST /notifications/{}/document-uploads uploadId={}", referenceNumber,
         request.uploadId());
 
-    UploadSession session = documentService.registerUpload(notificationReferenceNumber, request);
+    UploadSession session = documentService.registerUpload(referenceNumber, request);
     URI location = buildLocationUri(session.getUploadId());
 
     return ResponseEntity.created(location).body(UploadSessionDto.from(session));
@@ -91,11 +91,11 @@ public class DocumentController {
   /**
    * Look up the upload session a notification opened under a correlation handle.
    *
-   * @param notificationReferenceNumber the notification reference number
+   * @param referenceNumber the notification reference number
    * @param correlationId the handle the session was opened under
    * @return 200 OK with the session
    */
-  @GetMapping("/notifications/{ref}/document-upload-sessions/{correlation-id}")
+  @GetMapping("/notifications/{referenceNumber}/document-upload-sessions/{correlationId}")
   @Operation(
       summary = "Get document upload session",
       description = "Returns the upload session a notification opened under a correlation handle")
@@ -104,16 +104,16 @@ public class DocumentController {
   @ApiResponse(responseCode = "404", description = "Session not found", content = @Content)
   @Timed("document.session")
   public ResponseEntity<UploadSessionDto> session(
-      @PathVariable("ref") @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
-      String notificationReferenceNumber,
-      @PathVariable("correlation-id")
+      @PathVariable @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
+      String referenceNumber,
+      @PathVariable
       @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String correlationId) {
 
-    log.info("GET /notifications/{}/document-upload-sessions/{}", notificationReferenceNumber,
+    log.info("GET /notifications/{}/document-upload-sessions/{}", referenceNumber,
         correlationId);
 
     return ResponseEntity.ok(UploadSessionDto.from(
-        documentService.findSession(notificationReferenceNumber, correlationId)));
+        documentService.findSession(referenceNumber, correlationId)));
   }
 
   /**
@@ -123,7 +123,7 @@ public class DocumentController {
    * @param request  the document details
    * @return 200 OK with the claimed document
    */
-  @PostMapping("/document-uploads/{upload-id}/claim")
+  @PostMapping("/document-uploads/{uploadId}/claim")
   @Operation(
       summary = "Claim document upload",
       description = "Attaches the user's document details to a registered upload and claims it")
@@ -133,7 +133,7 @@ public class DocumentController {
   @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
   @Timed("document.claim")
   public ResponseEntity<AccompanyingDocumentDto> claim(
-      @PathVariable("upload-id")
+      @PathVariable
       @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String uploadId,
       @Valid @RequestBody ClaimUploadRequest request) {
 
@@ -147,22 +147,22 @@ public class DocumentController {
   /**
    * List all accompanying document upload sessions for a notification.
    *
-   * @param notificationReferenceNumber the notification reference number
+   * @param referenceNumber the notification reference number
    * @return 200 OK with a list of accompanying document DTOs
    */
-  @GetMapping("/notifications/{ref}/document-uploads")
+  @GetMapping("/notifications/{referenceNumber}/document-uploads")
   @Operation(
       summary = "List document uploads",
-      description = "Returns all accompanying documents for a notification reference")
+      description = "Returns all accompanying documents for a notification reference number")
   @ApiResponse(responseCode = "200", description = "Document list returned",
       content = @Content(schema = @Schema(implementation = DocumentListResponse.class)))
   @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
   @Timed("document.list")
   public ResponseEntity<DocumentListResponse> list(
-      @PathVariable("ref") String notificationReferenceNumber) {
-    log.info("GET /notifications/{}/document-uploads", notificationReferenceNumber);
+      @PathVariable String referenceNumber) {
+    log.info("GET /notifications/{}/document-uploads", referenceNumber);
     List<AccompanyingDocumentDto> items = documentService
-        .findByNotificationReferenceNumber(notificationReferenceNumber).stream()
+        .findByNotificationReferenceNumber(referenceNumber).stream()
         .map(AccompanyingDocumentDto::from)
         .toList();
     return ResponseEntity.ok(new DocumentListResponse(items));
@@ -174,7 +174,7 @@ public class DocumentController {
    * @param uploadId the upload session identifier
    * @return 200 OK with the accompanying document DTO
    */
-  @GetMapping("/document-uploads/{upload-id}")
+  @GetMapping("/document-uploads/{uploadId}")
   @Operation(
       summary = "Get document upload",
       description = "Returns an accompanying document by upload ID")
@@ -183,7 +183,7 @@ public class DocumentController {
   @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
   @Timed("document.get")
   public ResponseEntity<AccompanyingDocumentDto> get(
-      @PathVariable("upload-id") String uploadId) {
+      @PathVariable String uploadId) {
 
     log.info("GET /document-uploads/{}", uploadId);
     AccompanyingDocument document = documentService.findByUploadId(uploadId);
@@ -196,14 +196,14 @@ public class DocumentController {
    * @param uploadId the upload session identifier
    * @return 204 No Content
    */
-  @DeleteMapping("/document-uploads/{upload-id}")
+  @DeleteMapping("/document-uploads/{uploadId}")
   @Operation(
       summary = "Delete document upload",
       description = "Removes an accompanying document upload session from the notification")
   @ApiResponse(responseCode = "204", description = "Document deleted", content = @Content)
   @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
   @Timed("document.delete")
-  public ResponseEntity<Void> delete(@PathVariable("upload-id") String uploadId) {
+  public ResponseEntity<Void> delete(@PathVariable String uploadId) {
     log.info("DELETE /document-uploads/{}", uploadId);
     documentService.deleteByUploadId(uploadId);
     return ResponseEntity.noContent().build();
@@ -216,14 +216,14 @@ public class DocumentController {
    * @param payload     the scan result payload
    * @return 204 No Content
    */
-  @PostMapping("/document-uploads/{path-segment}/scan-results")
+  @PostMapping("/document-uploads/{pathSegment}/scan-results")
   @Operation(
       summary = "Handle scan result",
       description = "Receives the cdp-uploader antivirus scan result callback")
   @ApiResponse(responseCode = "204", description = "Scan result processed", content = @Content)
   @Timed("document.scanResult")
   public ResponseEntity<Void> scanResult(
-      @PathVariable("path-segment") String pathSegment,
+      @PathVariable String pathSegment,
       @RequestBody CdpScanResultPayload payload) {
 
     log.info("POST /document-uploads/{}/scan-results correlationId={} uploadStatus={}", pathSegment,
@@ -238,7 +238,7 @@ public class DocumentController {
    * @param uploadId the upload session identifier
    * @return 200 OK with the file content streamed from S3
    */
-  @GetMapping("/document-uploads/{upload-id}/file")
+  @GetMapping("/document-uploads/{uploadId}/file")
   @Operation(
       summary = "Download uploaded file",
       description = "Streams the scanned file for an upload session from S3")
@@ -247,7 +247,7 @@ public class DocumentController {
   @ApiResponse(responseCode = "404", description = "File not found", content = @Content)
   @Timed("document.downloadFile")
   public ResponseEntity<StreamingResponseBody> downloadFile(
-      @PathVariable("upload-id") String uploadId) {
+      @PathVariable String uploadId) {
 
     log.info("GET /document-uploads/{}/file", uploadId);
     UploadedFile file = documentService.findFile(uploadId);

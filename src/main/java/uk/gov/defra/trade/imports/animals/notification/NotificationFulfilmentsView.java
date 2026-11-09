@@ -6,7 +6,7 @@ import org.bson.Document;
 
 /**
  * Spring Data interface projection over the {@code notification} collection backing
- * {@code GET /notifications/{ref}/fulfilments}. Server-only fields
+ * {@code GET /notifications/{referenceNumber}/fulfilments}. Server-only fields
  * ({@code preAmendNotification}, {@code preAmendFulfilments}, {@code expireAt}) are
  * intentionally omitted so they aren't loaded on read.
  */

@@ -180,16 +180,16 @@ public class NotificationService {
             NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
         var pageable = PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort));
 
-        String trimmedReference = StringUtils.trimToNull(referenceNumber);
-        if (trimmedReference != null) {
-            log.debug("Fetching notification by reference {} for dashboard", trimmedReference);
+        String trimmedReferenceNumber = StringUtils.trimToNull(referenceNumber);
+        if (trimmedReferenceNumber != null) {
+            log.debug("Fetching notification by reference {} for dashboard", trimmedReferenceNumber);
             Page<NotificationView> matched = notificationRepository
-                .findViewByReferenceNumberAndStatusIn(trimmedReference, dashboardStatuses)
+                .findViewByReferenceNumberAndStatusIn(trimmedReferenceNumber, dashboardStatuses)
                 .<Page<NotificationView>>map(notification ->
                     new PageImpl<>(List.of(notification), pageable, 1))
                 .orElseGet(() -> Page.empty(pageable));
             log.debug("Found {} notifications for reference {}", matched.getNumberOfElements(),
-                trimmedReference);
+                trimmedReferenceNumber);
             return NotificationPageResponse.from(matched);
         }
 
@@ -407,11 +407,11 @@ public class NotificationService {
         }
         List<NotificationReferenceOnly> found = notificationRepository.findAllReferencesByReferenceNumberIn(
             referenceNumbers);
-        Set<String> foundRefs = found.stream()
+        Set<String> foundReferenceNumbers = found.stream()
             .map(NotificationReferenceOnly::getReferenceNumber)
             .collect(Collectors.toSet());
         List<String> missing = referenceNumbers.stream()
-            .filter(ref -> !foundRefs.contains(ref))
+            .filter(referenceNumber -> !foundReferenceNumbers.contains(referenceNumber))
             .toList();
         if (!missing.isEmpty()) {
             createNotificationAuditRecord(referenceNumbers, auditContext, Result.FAILURE);

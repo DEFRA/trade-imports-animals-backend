@@ -126,7 +126,7 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
         transactionManager.failNextCommits(1);
 
         webClient("NoAuth")
-            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
+            .put().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", referenceNumber)
             .bodyValue(SaveNotificationDto.of(edit))
             .exchange()
             .expectStatus().isOk();

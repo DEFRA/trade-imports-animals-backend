@@ -44,12 +44,12 @@ class DocumentControllerTrailingSlashTest {
 
   @Test
   void shouldNormaliseTrailingSlashInLocationHeader() throws Exception {
-    String ref = "GBN-AG-26-000001";
+    String referenceNumber = "GBN-AG-26-000001";
 
-    when(documentService.registerUpload(eq(ref), any(RegisterUploadRequest.class)))
-        .thenReturn(registeredSession(ref));
+    when(documentService.registerUpload(eq(referenceNumber), any(RegisterUploadRequest.class)))
+        .thenReturn(registeredSession(referenceNumber));
 
-    mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
+    mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", referenceNumber)
             .contentType(MediaType.APPLICATION_JSON)
             .content(objectMapper.writeValueAsString(registerUploadRequest())))
         .andExpect(status().isCreated())

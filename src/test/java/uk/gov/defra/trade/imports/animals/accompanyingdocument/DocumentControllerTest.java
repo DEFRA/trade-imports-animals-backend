@@ -81,7 +81,7 @@ class DocumentControllerTest {
           eq(NOTIFICATION_REFERENCE_NUMBER), any(RegisterUploadRequest.class)))
           .thenReturn(registeredSession(NOTIFICATION_REFERENCE_NUMBER));
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .content(objectMapper.writeValueAsString(registerUploadRequest())))
           .andExpect(status().isCreated())
@@ -98,7 +98,7 @@ class DocumentControllerTest {
     @ValueSource(strings = {"GBN-AG-26-OTHER0", "GBN-HRP-26-000001", "LOGGING-TEST"})
     void shouldReturn400_whenTheReferenceIsNotANotificationReferenceNumber(String reference)
         throws Exception {
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", reference)
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", reference)
               .contentType(MediaType.APPLICATION_JSON)
               .content(objectMapper.writeValueAsString(registerUploadRequest())))
           .andExpect(status().isBadRequest());
@@ -112,7 +112,7 @@ class DocumentControllerTest {
           {"uploadId":"","correlationId":"correlation-abc-123"}
           """;
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -127,7 +127,7 @@ class DocumentControllerTest {
           {"uploadId":"upload-abc-123"}
           """;
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -141,7 +141,7 @@ class DocumentControllerTest {
       String body = String.format(
           "{\"uploadId\":\"%s\",\"correlationId\":\"correlation-abc-123\"}", "A".repeat(101));
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -155,7 +155,7 @@ class DocumentControllerTest {
       String body = String.format(
           "{\"uploadId\":\"upload-abc-123\",\"correlationId\":\"%s\"}", "A".repeat(101));
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -388,7 +388,7 @@ class DocumentControllerTest {
       when(documentService.findByNotificationReferenceNumber(notificationReferenceNumber))
           .thenReturn(List.of(doc));
 
-      mockMvc.perform(get("/notifications/{ref}/document-uploads", notificationReferenceNumber)
+      mockMvc.perform(get("/notifications/{referenceNumber}/document-uploads", notificationReferenceNumber)
               .contentType(MediaType.APPLICATION_JSON))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.items").isArray())
@@ -404,7 +404,7 @@ class DocumentControllerTest {
       when(documentService.findByNotificationReferenceNumber(notificationReferenceNumber))
           .thenReturn(List.of());
 
-      mockMvc.perform(get("/notifications/{ref}/document-uploads", notificationReferenceNumber)
+      mockMvc.perform(get("/notifications/{referenceNumber}/document-uploads", notificationReferenceNumber)
               .contentType(MediaType.APPLICATION_JSON))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.items").isArray())
@@ -432,7 +432,7 @@ class DocumentControllerTest {
 
       when(documentService.findByUploadId(uploadId)).thenReturn(doc);
 
-      mockMvc.perform(get("/document-uploads/{id}", uploadId)
+      mockMvc.perform(get("/document-uploads/{uploadId}", uploadId)
               .contentType(MediaType.APPLICATION_JSON))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.uploadId").value(uploadId))
@@ -447,7 +447,7 @@ class DocumentControllerTest {
       when(documentService.findByUploadId(unknownId))
           .thenThrow(new NotFoundException("No accompanying document found with uploadId: " + unknownId));
 
-      mockMvc.perform(get("/document-uploads/{id}", unknownId)
+      mockMvc.perform(get("/document-uploads/{uploadId}", unknownId)
               .contentType(MediaType.APPLICATION_JSON))
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.detail").value(
@@ -463,7 +463,7 @@ class DocumentControllerTest {
     }
 
     private ResultActions postScanResult(CdpScanResultPayload payload) throws Exception {
-      return mockMvc.perform(post("/document-uploads/{path-segment}/scan-results", "pending")
+      return mockMvc.perform(post("/document-uploads/{pathSegment}/scan-results", "pending")
           .contentType(MediaType.APPLICATION_JSON)
           .content(objectMapper.writeValueAsString(payload)));
     }
@@ -596,7 +596,7 @@ class DocumentControllerTest {
       String uploadId = "upload-abc-123";
       doNothing().when(documentService).deleteByUploadId(uploadId);
 
-      mockMvc.perform(delete("/document-uploads/{id}", uploadId))
+      mockMvc.perform(delete("/document-uploads/{uploadId}", uploadId))
           .andExpect(status().isNoContent());
     }
 
@@ -606,7 +606,7 @@ class DocumentControllerTest {
       doThrow(new NotFoundException("No accompanying document found with uploadId: " + unknownId))
           .when(documentService).deleteByUploadId(unknownId);
 
-      mockMvc.perform(delete("/document-uploads/{id}", unknownId))
+      mockMvc.perform(delete("/document-uploads/{uploadId}", unknownId))
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.detail").value(
               "No accompanying document found with uploadId: " + unknownId));

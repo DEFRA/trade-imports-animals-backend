@@ -152,7 +152,7 @@ public class DocumentService {
   }
 
   /**
-   * Returns all accompanying documents for the given notification reference.
+   * Returns all accompanying documents for the given notification reference number.
    *
    * @param notificationReferenceNumber the notification reference number
    * @return list of documents, possibly empty
