@@ -38,7 +38,7 @@ Two independent safeguards keep expiry out of prod; both must fail before prod l
 
 Both default to off in `application.yml`, the values prod relies on; an environment opts in by setting them.
 
-`expireAt` counts from `created`, so later edits do not extend it. An accompanying document takes its notification's `expireAt` when the document is first written. Once the TTL indexes exist, Mongo's TTL monitor runs every 60 seconds and removes records whose `expireAt` has passed, so a record usually goes soon after that moment. No exact time is guaranteed, and nor is a notification going in the same pass as its documents. With `NOTIFICATION_TTL_DAYS` set and the flag off, records carry an `expireAt` that nothing acts on. Removal writes no audit record and no outbox event, because it is not a user action.
+`expireAt` counts from `created`, so later edits do not extend it. An accompanying document takes its notification's `expireAt` when the document is first written. Once the TTL indexes exist, Mongo's TTL monitor runs every 60 seconds and removes records whose `expireAt` has passed, so a record usually goes soon after that moment. No exact time is guaranteed, and nor is a notification going in the same pass as its documents. With `NOTIFICATION_TTL_DAYS` set and the flag off, nothing creates the TTL indexes, so records carry an `expireAt` that nothing acts on, unless an earlier run with the flag on left the indexes in place: then Mongo still removes them. Removal writes no audit record and no outbox event, because it is not a user action.
 
 Mongo never removes a record with no `expireAt`:
 
