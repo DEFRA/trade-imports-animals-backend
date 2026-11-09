@@ -285,7 +285,6 @@ class NotificationServiceTest {
                 .build();
             List<Commodity> commodities = List.of(Commodity.builder()
                 .name("Fish")
-                .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(5)
                 .species(List.of(species()))
                 .build());
@@ -1863,7 +1862,6 @@ class NotificationServiceTest {
             AdditionalDetails additionalDetails = new AdditionalDetails("Breeding", "yes");
             Commodity complement = Commodity.builder()
                 .name("Live bovine animals")
-                .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(10)
                 .totalNoOfPackages(5)
                 .species(List.of(species()))
@@ -1925,7 +1923,6 @@ class NotificationServiceTest {
                 .name("Cattle")
                 .commodityCode("0102")
                 .description("Live cattle")
-                .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(10)
                 .totalNoOfPackages(5)
                 .species(List.of(species()))
@@ -1969,7 +1966,6 @@ class NotificationServiceTest {
             assertThat(cc.getName()).isEqualTo("Cattle");
             assertThat(cc.getCommodityCode()).isEqualTo("0102");
             assertThat(cc.getDescription()).isEqualTo("Live cattle");
-            assertThat(cc.getTypeOfCommodity()).isEqualTo("LIVE");
             assertThat(cc.getTotalNoOfAnimals()).isNull();
             assertThat(cc.getTotalNoOfPackages()).isNull();
             assertThat(cc.getSpecies()).isEmpty();

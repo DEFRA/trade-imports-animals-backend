@@ -15,7 +15,6 @@ public class Species {
     private String value;
     private String text;
     private String commonName;
-    private String typeOfCommodity;
     private Integer noOfAnimals;
     private Integer noOfPackages;
     private String earTag;

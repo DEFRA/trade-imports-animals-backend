@@ -92,7 +92,6 @@ class NotificationIT extends IntegrationBase {
             .name("Live bovine animals")
             .commodityCode("0102")
             .description("Live cattle")
-            .typeOfCommodity("LIVE")
             .totalNoOfAnimals(10)
             .totalNoOfPackages(5)
             .species(List.of(species))
@@ -615,7 +614,6 @@ class NotificationIT extends IntegrationBase {
             .name("Live ovine animals")
             .commodityCode("0104")
             .description("Live sheep")
-            .typeOfCommodity("LIVE")
             .totalNoOfAnimals(5)
             .totalNoOfPackages(2)
             .species(List.of(initialSpecies))
@@ -642,7 +640,6 @@ class NotificationIT extends IntegrationBase {
             .name("Live bovine animals")
             .commodityCode("0102")
             .description("Live cattle")
-            .typeOfCommodity("LIVE")
             .totalNoOfAnimals(10)
             .totalNoOfPackages(5)
             .species(List.of(updatedSpecies))
@@ -1942,10 +1939,9 @@ class NotificationIT extends IntegrationBase {
                 Commodity::getName,
                 Commodity::getCommodityCode,
                 Commodity::getDescription,
-                Commodity::getTypeOfCommodity,
                 Commodity::getTotalNoOfAnimals,
                 Commodity::getTotalNoOfPackages)
-            .containsExactly("Live bovine animals", "0102", "Live cattle", "LIVE", 10, 5);
+            .containsExactly("Live bovine animals", "0102", "Live cattle", 10, 5);
 
         Species species = complement.getSpecies().getFirst();
         assertThat(species)
@@ -2012,11 +2008,10 @@ class NotificationIT extends IntegrationBase {
         assertThat(notification.getConsignment()).isNull();
         assertThat(notification.getCommodities().getFirst())
             .extracting(
-                Commodity::getTypeOfCommodity,
                 Commodity::getTotalNoOfAnimals,
                 Commodity::getTotalNoOfPackages,
                 Commodity::getSpecies)
-            .containsExactly("LIVE", null, null, List.of());
+            .containsExactly(null, null, List.of());
     }
 
     private void assertSourceUnchangedAfterCopy(String sourceRef) {
@@ -2617,7 +2612,6 @@ class NotificationIT extends IntegrationBase {
     private NotificationDto sourceNotificationWithAllOperators() {
         Commodity complement = Commodity.builder()
             .name("Live bovine animals")
-            .typeOfCommodity("LIVE")
             .totalNoOfAnimals(10)
             .totalNoOfPackages(5)
             .species(List.of(NotificationTestData.species()))
