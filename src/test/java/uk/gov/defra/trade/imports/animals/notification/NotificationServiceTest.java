@@ -851,32 +851,38 @@ class NotificationServiceTest {
     @Nested
     class DeleteByReferenceNumbers {
 
-        @Test
-        void deleteByReferenceNumbers_shouldDeleteAll_whenAllFound() {
-            String ref1 = "GBN-AG-26-000111";
-            String ref2 = "GBN-AG-26-000222";
-            NotificationReferenceOnly n1 = () -> ref1;
-            NotificationReferenceOnly n2 = () -> ref2;
+        private static final List<String> FOUND_REFERENCES = List.of("GBN-AG-26-000111", "GBN-AG-26-000222");
 
-            when(notificationRepository.findAllReferencesByReferenceNumberIn(List.of(ref1, ref2)))
-                .thenReturn(List.of(n1, n2));
-            when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
+        private void deleteFoundReferences() {
+            NotificationReferenceOnly notificationRef1 = () -> FOUND_REFERENCES.get(0);
+            NotificationReferenceOnly notificationRef2 = () -> FOUND_REFERENCES.get(1);
+            when(notificationRepository.findAllReferencesByReferenceNumberIn(FOUND_REFERENCES))
+                .thenReturn(List.of(notificationRef1, notificationRef2));
 
-            notificationService.deleteByReferenceNumbers(List.of(ref1, ref2),
+            notificationService.deleteByReferenceNumbers(FOUND_REFERENCES,
                 new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
+        }
 
-            verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
+        @Test
+        void deleteByReferenceNumbers_shouldDeleteTheNotificationsAndTheirDocuments_whenAllFound() {
+            deleteFoundReferences();
 
-            verify(documentService).deleteForNotificationReferenceNumbers(List.of(ref1, ref2));
+            verify(notificationRepository).deleteAllByReferenceNumberIn(FOUND_REFERENCES);
+            verify(documentService).deleteForNotificationReferenceNumbers(FOUND_REFERENCES);
+        }
+
+        @Test
+        void deleteByReferenceNumbers_shouldAuditASuccessWithTheReferencesAndCaller_whenAllFound() {
+            deleteFoundReferences();
 
             ArgumentCaptor<Audit> auditCaptor = ArgumentCaptor.forClass(Audit.class);
             verify(auditRepository).save(auditCaptor.capture());
             Audit saved = auditCaptor.getValue();
             assertThat(saved.getResult()).isEqualTo(Result.SUCCESS);
-            assertThat(saved.getNotificationReferenceNumbers()).containsExactly(ref1, ref2);
+            assertThat(saved.getNotificationReferenceNumbers()).containsExactlyElementsOf(FOUND_REFERENCES);
             assertThat(saved.getNumberOfNotifications()).isEqualTo(2);
-            assertThat(saved.getTraceId()).isEqualTo("test-trace-id");
-            assertThat(saved.getUserId()).isEqualTo("test-user-id");
+            assertThat(saved.getTraceId()).isEqualTo(TEST_TRACE_ID);
+            assertThat(saved.getUserId()).isEqualTo(TEST_USER_ID);
         }
 
         @Test
