@@ -2224,7 +2224,7 @@ class NotificationServiceTest {
         void cancelAmend_shouldRestoreFulfilmentsAndPreserveOriginalSubmittedAt() {
             String ref = "GBN-AG-26-CAN001";
             Instant originalSubmittedAt = Instant.parse("2026-04-15T10:00:00Z");
-            List<Document> priorFulfilments = List.of(new Document("obligationId", "prior"));
+            List<Document> preAmendFulfilments = List.of(new Document("obligationId", "prior"));
             Notification preAmendSnapshot =Notification.builder()
                 .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("ORIGINAL").build())
                 .build();
@@ -2236,7 +2236,7 @@ class NotificationServiceTest {
                     .origin(Origin.builder().countryCode("FR").requiresRegionCode("yes").internalReference("EDITED").build())
                     .build())
                 .preAmendNotification(preAmendSnapshot)
-                .preAmendFulfilments(new ArrayList<>(priorFulfilments))
+                .preAmendFulfilments(new ArrayList<>(preAmendFulfilments))
                 .fulfilments(List.of(new Document("obligationId", "in-flight-edit")))
                 .submittedAt(originalSubmittedAt)
                 .build();
@@ -2251,7 +2251,7 @@ class NotificationServiceTest {
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
             assertThat(result.getPreAmendNotification()).isNull();
             assertThat(result.getPreAmendFulfilments()).isNull();
-            assertThat(result.getFulfilments()).isEqualTo(priorFulfilments);
+            assertThat(result.getFulfilments()).isEqualTo(preAmendFulfilments);
             assertThat(result.getSubmittedAt()).isEqualTo(originalSubmittedAt);
             assertThat(result.getNotification().getOrigin().getInternalReference()).isEqualTo("ORIGINAL");
         }
