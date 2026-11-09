@@ -456,7 +456,7 @@ class DocumentControllerIT extends IntegrationBase {
         }
 
         @Test
-        void shouldReturn404_whenTheSessionWasOnlyOpened() {
+        void shouldReturn404_whenTheRegisteredSessionHasNoDocument() {
             String uploadId = registeredUploadId();
 
             webClient("NoAuth")
