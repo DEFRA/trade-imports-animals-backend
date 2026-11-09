@@ -44,6 +44,4 @@ public interface NotificationRepository extends MongoRepository<NotificationAggr
 
     void deleteAllByReferenceNumberIn(List<String> referenceNumbers);
 
-    long deleteByOrganisationIdIsNull();
-
 }

@@ -158,7 +158,8 @@ public class NotificationService {
                 referenceNumber,
                 organisationId);
             throw new ForbiddenException(
-                "Cannot read fulfilments for notification with reference number: " + referenceNumber);
+                "Cannot read fulfilments for notification with reference number: "
+                    + referenceNumber + " organisationId: " + organisationId);
         }
         throw new NotFoundException(CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber);
     }
@@ -443,9 +444,18 @@ public class NotificationService {
     }
 
     private NotificationAggregate requireTraderNotification(String referenceNumber, String organisationId) {
-        return notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, organisationId)
-            .orElseThrow(() -> new NotFoundException(
-                CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
+        Optional<NotificationAggregate> scoped =
+            notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, organisationId);
+        if (scoped.isPresent()) {
+            return scoped.get();
+        }
+        if (notificationRepository.existsByReferenceNumber(referenceNumber)) {
+            log.warn(
+                "Trader notification access denied for referenceNumber={} organisationId={}",
+                referenceNumber,
+                organisationId);
+        }
+        throw new NotFoundException(CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber);
     }
 
     private NotificationAggregate createNotification(
