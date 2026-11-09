@@ -253,7 +253,7 @@ class DocumentControllerIT extends IntegrationBase {
 
             webClient("NoAuth")
                 .get()
-                .uri("/notifications/GBN-AG-26-OTHER0/document-upload-sessions/"
+                .uri("/notifications/GBN-AG-26-ANTHR1/document-upload-sessions/"
                     + session.correlationId())
                 .exchange()
                 .expectStatus().isNotFound();

@@ -30,6 +30,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import org.springframework.validation.annotation.Validated;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
+import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
 /**
@@ -40,8 +41,6 @@ import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 @Tag(name = "Document Uploads", description = "Operations for accompanying document upload sessions")
 @Slf4j
 public class DocumentController {
-
-  private static final String NOTIFICATION_REFERENCE_NUMBER_PATTERN = "^[A-Za-z0-9.-]{1,50}$";
 
   private static final String UPLOAD_HANDLE_PATTERN = "^[A-Za-z0-9._-]{1,100}$";
 
@@ -76,7 +75,7 @@ public class DocumentController {
       content = @Content)
   @Timed("document.register")
   public ResponseEntity<UploadSessionDto> register(
-      @PathVariable("ref") @Pattern(regexp = NOTIFICATION_REFERENCE_NUMBER_PATTERN)
+      @PathVariable("ref") @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
       String notificationReferenceNumber,
       @Valid @RequestBody RegisterUploadRequest request) {
 
@@ -105,7 +104,7 @@ public class DocumentController {
   @ApiResponse(responseCode = "404", description = "Session not found", content = @Content)
   @Timed("document.session")
   public ResponseEntity<UploadSessionDto> session(
-      @PathVariable("ref") @Pattern(regexp = NOTIFICATION_REFERENCE_NUMBER_PATTERN)
+      @PathVariable("ref") @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
       String notificationReferenceNumber,
       @PathVariable("correlation-id")
       @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String correlationId) {

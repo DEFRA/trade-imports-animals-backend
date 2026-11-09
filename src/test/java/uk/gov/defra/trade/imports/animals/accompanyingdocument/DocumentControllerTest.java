@@ -93,6 +93,18 @@ class DocumentControllerTest {
               jsonPath("$.notificationReferenceNumber").value(NOTIFICATION_REFERENCE_NUMBER));
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {"GBN-AG-26-OTHER0", "GBN-HRP-26-000001", "LOGGING-TEST"})
+    void shouldReturn400_whenTheReferenceIsNotANotificationReferenceNumber(String reference)
+        throws Exception {
+      mockMvc.perform(post("/notifications/{ref}/document-uploads", reference)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(objectMapper.writeValueAsString(registerUploadRequest())))
+          .andExpect(status().isBadRequest());
+
+      verify(documentService, never()).registerUpload(any(), any());
+    }
+
     @Test
     void shouldReturn400_whenUploadIdIsBlank() throws Exception {
       String body = """

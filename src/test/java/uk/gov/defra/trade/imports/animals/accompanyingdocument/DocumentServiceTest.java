@@ -162,10 +162,10 @@ class DocumentServiceTest {
     @Test
     void findSession_shouldThrowNotFound_whenThatNotificationHasNoSessionUnderTheHandle() {
       when(uploadSessionRepository.findByNotificationReferenceNumberAndCorrelationId(
-          "GBN-AG-26-OTHER0", "correlation-id-ses")).thenReturn(Optional.empty());
+          "GBN-AG-26-ANTHR1", "correlation-id-ses")).thenReturn(Optional.empty());
 
       assertThatThrownBy(
-          () -> documentService.findSession("GBN-AG-26-OTHER0", "correlation-id-ses"))
+          () -> documentService.findSession("GBN-AG-26-ANTHR1", "correlation-id-ses"))
           .isInstanceOf(NotFoundException.class)
           .hasMessageContaining("correlation-id-ses");
     }
@@ -176,7 +176,7 @@ class DocumentServiceTest {
 
     private static final String UPLOAD_ID = "upload-id-claim";
     private static final String CORRELATION_ID = "correlation-id-claim";
-    private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-26-CLM001";
+    private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-26-CMD001";
 
     private void sessionIsOpen() {
       when(uploadSessionRepository.findByUploadId(UPLOAD_ID))
