@@ -233,9 +233,7 @@ public class DocumentController {
   }
 
   /**
-   * Download the file associated with a document upload session.
-   *
-   * <p>Each upload session contains exactly one file. The file is streamed directly from S3.
+   * Download the first uploaded file of a document upload session.
    *
    * @param uploadId the upload session identifier
    * @return 200 OK with the file content streamed from S3
