@@ -21,8 +21,6 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 /**
  * Business logic for accompanying documents: recording an upload session, taking the document that
  * comes through it on, recording the scan result, and reading or removing what was stored.
- *
- * <p>Why a session and a document are separate records is in {@code docs/design-notes.md}.
  */
 @Service
 @Slf4j
