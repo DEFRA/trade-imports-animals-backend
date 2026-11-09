@@ -52,7 +52,7 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldRetainCommodityIdentityFields() {
-            List<Commodity> complements = List.of(
+            List<Commodity> commodities = List.of(
                 Commodity.builder()
                     .name("Live bovine animals")
                     .commodityCode("0102")
@@ -71,26 +71,26 @@ class NotificationCopyMapperTest {
                     .species(List.of(species()))
                     .build());
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .commodities(complements)
+                .commodities(commodities)
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
             assertThat(result.getCommodities()).hasSize(2);
-            assertThat(result.getCommodities().get(0)).satisfies(c -> {
-                assertThat(c.getName()).isEqualTo("Live bovine animals");
-                assertThat(c.getCommodityCode()).isEqualTo("0102");
-                assertThat(c.getDescription()).isEqualTo("Live cattle");
-                assertThat(c.getTypeOfCommodity()).isEqualTo("LIVE");
-                assertThat(c.getTotalNoOfAnimals()).isNull();
-                assertThat(c.getTotalNoOfPackages()).isNull();
-                assertThat(c.getSpecies()).isEmpty();
+            assertThat(result.getCommodities().get(0)).satisfies(copied -> {
+                assertThat(copied.getName()).isEqualTo("Live bovine animals");
+                assertThat(copied.getCommodityCode()).isEqualTo("0102");
+                assertThat(copied.getDescription()).isEqualTo("Live cattle");
+                assertThat(copied.getTypeOfCommodity()).isEqualTo("LIVE");
+                assertThat(copied.getTotalNoOfAnimals()).isNull();
+                assertThat(copied.getTotalNoOfPackages()).isNull();
+                assertThat(copied.getSpecies()).isEmpty();
             });
-            assertThat(result.getCommodities().get(1)).satisfies(c -> {
-                assertThat(c.getName()).isEqualTo("Sheep");
-                assertThat(c.getCommodityCode()).isEqualTo("0104");
-                assertThat(c.getDescription()).isEqualTo("Live sheep");
-                assertThat(c.getTypeOfCommodity()).isEqualTo("LIVE");
+            assertThat(result.getCommodities().get(1)).satisfies(copied -> {
+                assertThat(copied.getName()).isEqualTo("Sheep");
+                assertThat(copied.getCommodityCode()).isEqualTo("0104");
+                assertThat(copied.getDescription()).isEqualTo("Live sheep");
+                assertThat(copied.getTypeOfCommodity()).isEqualTo("LIVE");
             });
         }
 
@@ -296,7 +296,7 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldOmitPerAnimalDataFromCommodity() {
-            Commodity complement = Commodity.builder()
+            Commodity commodity = Commodity.builder()
                 .name("Ovine")
                 .commodityCode("0104")
                 .typeOfCommodity("LIVE")
@@ -305,7 +305,7 @@ class NotificationCopyMapperTest {
                 .species(List.of(species()))
                 .build();
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .commodities(List.of(complement))
+                .commodities(List.of(commodity))
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
@@ -317,8 +317,8 @@ class NotificationCopyMapperTest {
         }
 
         @Test
-        void toCopyDto_shouldOmitPerAnimalDataFromAllComplements() {
-            List<Commodity> complements = List.of(
+        void toCopyDto_shouldOmitPerAnimalDataFromAllCommodities() {
+            List<Commodity> commodities = List.of(
                 Commodity.builder()
                     .name("First")
                     .commodityCode("0102")
@@ -336,15 +336,15 @@ class NotificationCopyMapperTest {
                     .species(List.of(species()))
                     .build());
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .commodities(complements)
+                .commodities(commodities)
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
-            result.getCommodities().forEach(cc -> {
-                assertThat(cc.getTotalNoOfAnimals()).isNull();
-                assertThat(cc.getTotalNoOfPackages()).isNull();
-                assertThat(cc.getSpecies()).isEmpty();
+            result.getCommodities().forEach(copied -> {
+                assertThat(copied.getTotalNoOfAnimals()).isNull();
+                assertThat(copied.getTotalNoOfPackages()).isNull();
+                assertThat(copied.getSpecies()).isEmpty();
             });
         }
 
@@ -403,7 +403,7 @@ class NotificationCopyMapperTest {
                 .text("Bovine")
                 .animalIdentifiers(List.of(unit))
                 .build();
-            Commodity complement = Commodity.builder()
+            Commodity commodity = Commodity.builder()
                 .name("Cattle")
                 .commodityCode("0102")
                 .typeOfCommodity("LIVE")
@@ -412,7 +412,7 @@ class NotificationCopyMapperTest {
                 .species(List.of(speciesWithIdentifiers))
                 .build();
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .commodities(List.of(complement))
+                .commodities(List.of(commodity))
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
