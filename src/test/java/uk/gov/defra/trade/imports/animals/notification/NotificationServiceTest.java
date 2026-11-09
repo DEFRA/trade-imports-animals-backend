@@ -2278,6 +2278,75 @@ class NotificationServiceTest {
         }
 
         @Test
+        void submit_shouldClearPreAmendSnapshots_andKeepAmendedFulfilments_whenSubmittingFromAmend() {
+            String ref = "GBN-AG-26-SBM001";
+            Notification preAmendSnapshot = Notification.builder()
+                .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("PRIOR").build())
+                .build();
+            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+                .id("db-id-s")
+                .referenceNumber(ref)
+                .status(AMEND)
+                .notification(Notification.builder()
+                    .origin(Origin.builder().countryCode("FR").requiresRegionCode("yes").internalReference("AMENDED").build())
+                    .build())
+                .preAmendNotification(preAmendSnapshot)
+                .preAmendFulfilments(new ArrayList<>(
+                    List.of(new Document("obligationId", "prior"))))
+                .fulfilments(List.of(new Document("obligationId", "current")))
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(ref))
+                .thenReturn(Optional.of(notificationAggregate));
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            NotificationAggregate result = notificationService.submitNotification(ref, SUBMIT_TOKEN, "trace", null);
+
+            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
+            assertThat(result.getSubmittedAt()).isNotNull();
+            assertThat(result.getPreAmendNotification()).isNull();
+            assertThat(result.getPreAmendFulfilments()).isNull();
+            assertThat(result.getFulfilments()).extracting("obligationId").containsExactly("current");
+        }
+
+        @Test
+        void copy_shouldCarryFulfilmentsAcross() {
+            String sourceRef = "GBN-AG-26-CPY001";
+            String newRef = "GBN-AG-26-CPY002";
+            List<Document> sourceFulfilments = new ArrayList<>(
+                List.of(new Document("obligationId", "source")));
+            NotificationAggregate source = NotificationAggregate.builder()
+                .referenceNumber(sourceRef)
+                .status(SUBMITTED)
+                .concurrencyToken(0L)
+                .notification(Notification.builder()
+                    .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("SOURCE-REF").build())
+                    .build())
+                .fulfilments(sourceFulfilments)
+                .build();
+
+            when(notificationRepository.findByReferenceNumber(sourceRef))
+                .thenReturn(Optional.of(source));
+            when(referenceNumberGenerator.generate()).thenReturn(newRef);
+            ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
+            when(notificationRepository.save(captor.capture()))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            notificationService.copyNotification(sourceRef, 0L, "trace", null);
+
+            NotificationAggregate saved = captor.getValue();
+            assertThat(saved.getReferenceNumber()).isEqualTo(newRef);
+            assertThat(saved.getFulfilments()).isEqualTo(sourceFulfilments);
+            sourceFulfilments.add(new Document("obligationId", "post-copy"));
+            assertThat(saved.getFulfilments()).hasSize(1);
+        }
+    }
+
+    @Nested
+    class SubmittedAt {
+
+        @Test
         void submittedAt_shouldBeStamped_onFirstSubmission() {
             String ref = "GBN-AG-26-SBMT02";
             givenStoredNotificationAwaitingSave(ref, DRAFT, null);
@@ -2322,39 +2391,10 @@ class NotificationServiceTest {
             when(notificationRepository.save(any(NotificationAggregate.class)))
                 .thenAnswer(inv -> inv.getArgument(0));
         }
+    }
 
-        @Test
-        void submit_shouldClearPreAmendSnapshots_andKeepAmendedFulfilments_whenSubmittingFromAmend() {
-            String ref = "GBN-AG-26-SBM001";
-            Notification preAmendSnapshot = Notification.builder()
-                .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("PRIOR").build())
-                .build();
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("db-id-s")
-                .referenceNumber(ref)
-                .status(AMEND)
-                .notification(Notification.builder()
-                    .origin(Origin.builder().countryCode("FR").requiresRegionCode("yes").internalReference("AMENDED").build())
-                    .build())
-                .preAmendNotification(preAmendSnapshot)
-                .preAmendFulfilments(new ArrayList<>(
-                    List.of(new Document("obligationId", "prior"))))
-                .fulfilments(List.of(new Document("obligationId", "current")))
-                .build();
-
-            when(notificationRepository.findByReferenceNumber(ref))
-                .thenReturn(Optional.of(notificationAggregate));
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
-
-            NotificationAggregate result = notificationService.submitNotification(ref, SUBMIT_TOKEN, "trace", null);
-
-            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
-            assertThat(result.getSubmittedAt()).isNotNull();
-            assertThat(result.getPreAmendNotification()).isNull();
-            assertThat(result.getPreAmendFulfilments()).isNull();
-            assertThat(result.getFulfilments()).extracting("obligationId").containsExactly("current");
-        }
+    @Nested
+    class SoftDeleteNotification {
 
         @Test
         void softDelete_shouldBeIdempotent_onAlreadyDeleted() {
@@ -2374,42 +2414,6 @@ class NotificationServiceTest {
             assertThat(result.getStatus()).isEqualTo(DELETED);
             verify(notificationRepository, never()).save(any());
         }
-
-        @Test
-        void copy_shouldCarryFulfilmentsAcross() {
-            String sourceRef = "GBN-AG-26-CPY001";
-            String newRef = "GBN-AG-26-CPY002";
-            List<Document> sourceFulfilments = new ArrayList<>(
-                List.of(new Document("obligationId", "source")));
-            NotificationAggregate source = NotificationAggregate.builder()
-                .referenceNumber(sourceRef)
-                .status(SUBMITTED)
-                .concurrencyToken(0L)
-                .notification(Notification.builder()
-                    .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("SOURCE-REF").build())
-                    .build())
-                .fulfilments(sourceFulfilments)
-                .build();
-
-            when(notificationRepository.findByReferenceNumber(sourceRef))
-                .thenReturn(Optional.of(source));
-            when(referenceNumberGenerator.generate()).thenReturn(newRef);
-            ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
-            when(notificationRepository.save(captor.capture()))
-                .thenAnswer(inv -> inv.getArgument(0));
-
-            notificationService.copyNotification(sourceRef, 0L, "trace", null);
-
-            NotificationAggregate saved = captor.getValue();
-            assertThat(saved.getReferenceNumber()).isEqualTo(newRef);
-            assertThat(saved.getFulfilments()).isEqualTo(sourceFulfilments);
-            sourceFulfilments.add(new Document("obligationId", "post-copy"));
-            assertThat(saved.getFulfilments()).hasSize(1);
-        }
-    }
-
-    @Nested
-    class SoftDeleteNotification {
 
         @Test
         void softDeleteNotification_shouldSetStatusToDeletedAndSave_whenDraft() {
