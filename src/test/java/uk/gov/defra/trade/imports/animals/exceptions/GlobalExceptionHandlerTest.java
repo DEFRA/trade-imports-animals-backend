@@ -100,7 +100,7 @@ class GlobalExceptionHandlerTest {
         @SuppressWarnings("unchecked")
         ConstraintViolation<Object> violation = mock(ConstraintViolation.class);
         Path propertyPath = mock(Path.class);
-        when(propertyPath.toString()).thenReturn("findAll.referenceNumber");
+        when(propertyPath.toString()).thenReturn("findDashboardPage.referenceNumber");
         when(violation.getPropertyPath()).thenReturn(propertyPath);
         when(violation.getMessage()).thenReturn(
             "must match \"^GBN-AG-\\d{2}-[0-9A-HJ-KM-NP-TV-Z]{6}$\"");

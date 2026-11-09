@@ -600,17 +600,17 @@ class NotificationServiceTest {
     }
 
     @Nested
-    class FindAll {
+    class FindDashboardPage {
 
         @Test
-        void findAll_shouldReturnEmptyPage() {
+        void findDashboardPage_shouldReturnEmptyPage() {
             Page<NotificationView> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
             when(notificationRepository.findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
-            NotificationPageResponse result = notificationService.findAll(1, null);
+            NotificationPageResponse result = notificationService.findDashboardPage(1, null, null);
 
             assertThat(result.content()).isEmpty();
             assertThat(result.totalElements()).isZero();
@@ -619,7 +619,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void findAll_shouldExcludeDeletedNotifications() {
+        void findDashboardPage_shouldExcludeDeletedNotifications() {
             NotificationView draft = notificationView()
                 .referenceNumber("GBN-AG-26-000DFT")
                 .status(DRAFT)
@@ -636,7 +636,7 @@ class NotificationServiceTest {
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
-            NotificationPageResponse result = notificationService.findAll(1, null);
+            NotificationPageResponse result = notificationService.findDashboardPage(1, null, null);
 
             assertThat(result.content()).hasSize(2);
             assertThat(result.content()).extracting(NotificationView::getStatus)
@@ -648,7 +648,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void findAll_shouldReturnTheViewWithItsReferenceNumberAndStatus() {
+        void findDashboardPage_shouldReturnTheViewWithItsReferenceNumberAndStatus() {
             NotificationView view = notificationView()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-1").build())
@@ -660,7 +660,7 @@ class NotificationServiceTest {
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
-            NotificationPageResponse result = notificationService.findAll(1, null);
+            NotificationPageResponse result = notificationService.findDashboardPage(1, null, null);
 
             assertThat(result.content()).hasSize(1);
             assertThat(result.content().getFirst().getReferenceNumber()).isEqualTo(
@@ -670,7 +670,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void findAll_shouldIncludeAmendNotifications() {
+        void findDashboardPage_shouldIncludeAmendNotifications() {
             NotificationView amend = notificationView()
                 .referenceNumber("GBN-AG-26-000AMD")
                 .status(AMEND)
@@ -683,7 +683,7 @@ class NotificationServiceTest {
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(page);
 
-            NotificationPageResponse result = notificationService.findAll(1, null);
+            NotificationPageResponse result = notificationService.findDashboardPage(1, null, null);
 
             assertThat(result.content()).hasSize(1);
             assertThat(result.content()).extracting(NotificationView::getStatus)
@@ -691,14 +691,14 @@ class NotificationServiceTest {
         }
 
         @Test
-        void findAll_shouldUseCreatedAtSort_whenRequested() {
+        void findDashboardPage_shouldUseCreatedAtSort_whenRequested() {
             Page<NotificationView> emptyPage = new PageImpl<>(
                 Collections.emptyList(), PageRequest.of(0, 54), 0);
             when(notificationRepository.findAllViewByStatusIn(
                 eq(List.of(DRAFT, SUBMITTED, AMEND)), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
-            notificationService.findAll(1, "createdAt,asc");
+            notificationService.findDashboardPage(1, "createdAt,asc", null);
 
             ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
             verify(notificationRepository).findAllViewByStatusIn(
@@ -708,7 +708,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void findAll_shouldReturnMatchingNotification_whenReferenceNumberProvided() {
+        void findDashboardPage_shouldReturnMatchingNotification_whenReferenceNumberProvided() {
             NotificationView draft = notificationView()
                 .referenceNumber("GBN-AG-26-ABC123")
                 .status(DRAFT)
@@ -719,7 +719,7 @@ class NotificationServiceTest {
                 .thenReturn(Optional.of(draft));
 
             NotificationPageResponse result =
-                notificationService.findAll(1, null, "GBN-AG-26-ABC123");
+                notificationService.findDashboardPage(1, null, "GBN-AG-26-ABC123");
 
             assertThat(result.content()).hasSize(1);
             assertThat(result.content().getFirst().getReferenceNumber())
@@ -730,13 +730,13 @@ class NotificationServiceTest {
         }
 
         @Test
-        void findAll_shouldReturnEmptyPage_whenReferenceNumberNotFound() {
+        void findDashboardPage_shouldReturnEmptyPage_whenReferenceNumberNotFound() {
             when(notificationRepository.findViewByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ZZZZZZ", List.of(DRAFT, SUBMITTED, AMEND)))
                 .thenReturn(Optional.empty());
 
             NotificationPageResponse result =
-                notificationService.findAll(1, null, "GBN-AG-26-ZZZZZZ");
+                notificationService.findDashboardPage(1, null, "GBN-AG-26-ZZZZZZ");
 
             assertThat(result.content()).isEmpty();
             assertThat(result.totalElements()).isZero();
@@ -745,12 +745,12 @@ class NotificationServiceTest {
         }
 
         @Test
-        void findAll_shouldTrimReferenceNumber_beforeLookup() {
+        void findDashboardPage_shouldTrimReferenceNumber_beforeLookup() {
             when(notificationRepository.findViewByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND)))
                 .thenReturn(Optional.empty());
 
-            notificationService.findAll(1, null, "  GBN-AG-26-ABC123  ");
+            notificationService.findDashboardPage(1, null, "  GBN-AG-26-ABC123  ");
 
             verify(notificationRepository).findViewByReferenceNumberAndStatusIn(
                 "GBN-AG-26-ABC123", List.of(DRAFT, SUBMITTED, AMEND));

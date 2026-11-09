@@ -164,17 +164,13 @@ public class NotificationService {
         return createNotification(notificationCopyMapper.toCopyDto(source), correlationId, actor);
     }
 
-    public NotificationPageResponse findAll(int page, String sort) {
-        return findAll(page, sort, null);
-    }
-
     public NotificationFulfilmentsView findFulfilmentsView(String referenceNumber) {
         return notificationRepository.findFulfilmentsViewByReferenceNumber(referenceNumber)
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
     }
 
-    public NotificationPageResponse findAll(int page, String sort, String referenceNumber) {
+    public NotificationPageResponse findDashboardPage(int page, String sort, String referenceNumber) {
         List<NotificationStatus> dashboardStatuses = List.of(
             NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
         var pageable = PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort));
