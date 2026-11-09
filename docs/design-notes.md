@@ -77,6 +77,14 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 - The EMF metrics publisher is off, because tests have no CloudWatch agent and a blank `AWS_EMF_NAMESPACE` raises `InvalidNamespaceException` on every scheduler tick.
 - `notification.submit.lock-at-least-for` is `0ms`, so a rapid re-submission in a test can acquire the lock.
 
+## Document upload integration tests
+
+- `DocumentControllerIT` runs the upload, scan and callback round trip against a real cdp-uploader container, with Redis, and Floci emulating S3 and SQS. The test posts a file to cdp-uploader, which stores it in the quarantine bucket; an S3 notification on SQS triggers cdp-uploader's mock virus scanner, which publishes a result; cdp-uploader then promotes a clean file to the documents bucket or marks it rejected, and posts the scan-result callback to this service.
+- The scanner is cdp-uploader's mock: it matches the upload's file name against `MOCK_VIRUS_REGEX` (default `.*virus.*`), so `virus.pdf` comes back infected and any other name clean. The scan itself is not real; the round trip and the callback are.
+- `DocumentScanCallbackIT` posts callback bodies straight to this service, for shapes cdp-uploader never sends, such as a missing `correlationId` or mixed file results. It tests this service's routing, parsing and error mapping, so it has no need of cdp-uploader.
+- The list test also reads the response as raw JSON, because the typed read accepts any shape Jackson can decode and would not pin the wire format.
+- The date-of-issue test reads the raw Mongo document, because a repository round trip passes whether the field is stored as a string or as a BSON date.
+
 ## Local AWS credentials
 
 `AwsConfig` uses static credentials whenever `APP_AWS_ENDPOINT_OVERRIDE` and both `app.aws.access-key-id` and `app.aws.secret-access-key` are set, and nothing checks which environment it runs in. They are for local development against a stand-in such as LocalStack; never set real credentials in them.

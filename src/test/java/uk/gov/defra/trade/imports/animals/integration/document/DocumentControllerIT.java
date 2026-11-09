@@ -56,32 +56,6 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 
-/**
- * Integration tests for the accompanying document upload flow.
- *
- * <p>Drives the full upload→scan→callback round-trip against a real cdp-uploader Testcontainer:
- * the test posts a multipart file to cdp-uploader; cdp-uploader stores it in the Floci-emulated
- * quarantine bucket; an S3 → SQS notification triggers cdp-uploader's mock virus scanner; the
- * scanner publishes a result to {@code cdp-clamav-results}; cdp-uploader's listener picks it up,
- * promotes the file to the consumer bucket (CLEAN) or marks it rejected (INFECTED), and POSTs the
- * scan-result callback back to this backend.
- *
- * <p>Mock scanner behaviour: the scanner reads the upload's stored {@code encodedfilename} S3
- * metadata and tests it against {@code MOCK_VIRUS_REGEX} (default {@code .*virus.*}). So an
- * upload named {@code virus.pdf} comes back as INFECTED, anything else as CLEAN.
- *
- * <p>Defensive / edge-case scan callbacks (missing correlationId, mixed file results, etc.) live
- * in {@link DocumentScanCallbackIT} — they exercise our handler in shapes the real cdp-uploader
- * wouldn't produce, so the direct-POST fixture pattern is the right tool there.
- *
- * <p>Infrastructure:
- * <ul>
- *   <li>MongoDB — real Testcontainer from {@link IntegrationBase}
- *   <li>cdp-uploader — real {@code defradigital/cdp-uploader} Testcontainer
- *   <li>Redis — real Testcontainer (required by cdp-uploader)
- *   <li>Floci — emulates S3 + SQS, with a quarantine→mock-clamav bucket notification wired up
- * </ul>
- */
 @Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class DocumentControllerIT extends IntegrationBase {
@@ -446,7 +420,6 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(item.documentReference()).isEqualTo("UKGB2026001234");
             assertThat(item.dateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
 
-            // The typed read above would accept any shape Jackson can decode; this pins the wire.
             webClient("NoAuth")
                 .get()
                 .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
@@ -606,8 +579,6 @@ class DocumentControllerIT extends IntegrationBase {
                 accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
             assertThat(doc.getDateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
 
-            // The raw document, not a repository round trip: a round trip would pass whether
-            // the field is stored as a string or as a BSON date.
             org.bson.Document stored = mongoTemplate.getCollection("accompanying_documents")
                 .find(new org.bson.Document("uploadId", uploadId))
                 .first();
