@@ -73,6 +73,11 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 - cdp-uploader owns the callback body's shape and echoes back every field the browser submitted, including ones this service has no use for, so the body is read leniently: the `form` section keeps only the values carrying a `fileId`, and a file entry tolerates fields this service does not know. An object-shaped `form` value without a `fileId` is not a file entry; it is dropped with a warning naming the field, because a document saved with no files can still finish as `COMPLETE` and support needs something to search on.
 - A download streams the file through this service's response. If S3 fails mid-stream after the headers are sent, the client gets a 200 with a truncated body; a failure before the first byte is still a 500.
 
+## Build
+
+- `spring-boot-devtools` gives hot reload in the workspace's docker-compose dev stack (the `dev-run` stage). It is `optional`, so it never reaches a project that depends on this one, and Spring Boot's `repackage` leaves it out of the production jar.
+- Surefire and Failsafe both run tests with `@{argLine} -XX:+EnableDynamicAgentLoading`. The `@{argLine}` late-binds JaCoCo's `-javaagent`, which `prepare-agent` sets after the plugin configuration is read. `-XX:+EnableDynamicAgentLoading` stops the JDK warning when Mockito and ByteBuddy attach themselves as dynamic agents.
+
 ## Integration test profile
 
 - The EMF metrics publisher is off, because tests have no CloudWatch agent and a blank `AWS_EMF_NAMESPACE` raises `InvalidNamespaceException` on every scheduler tick.
