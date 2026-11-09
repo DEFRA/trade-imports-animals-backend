@@ -198,7 +198,8 @@ public class DocumentService {
    *
    * @param uploadId the upload session identifier
    * @return the uploaded file record
-   * @throws NotFoundException if the document has no file or the file was rejected
+   * @throws NotFoundException if no document exists for the uploadId, it has no file, or its file
+   *     was rejected
    */
   public UploadedFile findFile(String uploadId) {
     AccompanyingDocument document = findByUploadId(uploadId);
