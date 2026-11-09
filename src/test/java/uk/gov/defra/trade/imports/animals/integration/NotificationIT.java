@@ -1058,6 +1058,48 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void putAndSubmit_shouldSucceedAndShedTypeOfCommodity_whenStoredCommodityStillHoldsIt() {
+        // Given — a draft written before the commodity type was removed still carries typeOfCommodity
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("CH", "Live cattle")))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+        mongoTemplate.getCollection("notification").updateOne(
+            Filters.eq("referenceNumber", referenceNumber),
+            Updates.set("notification.commodities.0.typeOfCommodity", "Domestic"));
+
+        // When — the stored draft is read and saved again by a client that still sends the field
+        NotificationAggregate stored = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow();
+        assertThat(stored.getNotification().getCommodities()).singleElement()
+            .satisfies(commodity -> assertThat(commodity.getName()).isEqualTo("Live cattle"));
+        Map<String, Object> staleClientBody = Map.of("notification", Map.of(
+            "referenceNumber", referenceNumber,
+            "concurrencyToken", stored.getConcurrencyToken(),
+            "origin", Map.of("countryCode", "CH", "requiresRegionCode", "no"),
+            "commodities", List.of(Map.of("name", "Live cattle", "typeOfCommodity", "Domestic"))));
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
+            .bodyValue(staleClientBody)
+            .exchange().expectStatus().isOk();
+        submitAs(referenceNumber, ORG_ID);
+
+        // Then — the notification is submitted and the outbound event never carries the field
+        assertThat(notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow().getStatus())
+            .isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(submittedOutboxEvent().getData().toString()).doesNotContain("typeOfCommodity");
+
+        // And — the re-save sheds the field from the stored document
+        Document rawNotification = mongoTemplate.getCollection("notification")
+            .find(Filters.eq("referenceNumber", referenceNumber)).first()
+            .get("notification", Document.class);
+        assertThat(rawNotification.getList("commodities", Document.class)).singleElement()
+            .satisfies(commodity -> assertThat(commodity).doesNotContainKey("typeOfCommodity"));
+    }
+
+    @Test
     void amend_shouldReturn404_whenReferenceNumberDoesNotExist() {
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", NONEXISTENT_REF)
