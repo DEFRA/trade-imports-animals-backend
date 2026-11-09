@@ -41,10 +41,8 @@ import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 @Slf4j
 public class DocumentController {
 
-  /** A notification reference as the service mints them, e.g. {@code GBN-AG-26-000001}. */
   private static final String NOTIFICATION_REFERENCE_NUMBER_PATTERN = "^[A-Za-z0-9.-]{1,50}$";
 
-  /** An upload or correlation handle: cdp-uploader's ids and the UUIDs the frontend mints. */
   private static final String UPLOAD_HANDLE_PATTERN = "^[A-Za-z0-9._-]{1,100}$";
 
   private final DocumentService documentService;
@@ -61,7 +59,7 @@ public class DocumentController {
   }
 
   /**
-   * Register an upload session the caller has opened with cdp-uploader.
+   * Register an upload session for a notification.
    *
    * @param notificationReferenceNumber the notification reference number
    * @param request the upload session's identifiers
