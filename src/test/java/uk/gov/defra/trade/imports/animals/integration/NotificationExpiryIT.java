@@ -99,7 +99,7 @@ class NotificationExpiryIT extends IntegrationBase {
     }
 
     @Test
-    void expiredNotificationsAndDocuments_areRemovedByMongoWhileUndatedAndUnexpiredOnesAndAuditStay() {
+    void ttlMonitor_shouldRemoveOnlyExpiredNotificationsAndDocuments_andKeepAudit() {
         Instant past = Instant.now().minus(1, ChronoUnit.HOURS);
         Instant future = Instant.now().plus(7, ChronoUnit.DAYS);
         String expiredReference = "GBN-AG-26-EXP001";
