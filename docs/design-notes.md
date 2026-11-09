@@ -77,6 +77,10 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 - The EMF metrics publisher is off, because tests have no CloudWatch agent and a blank `AWS_EMF_NAMESPACE` raises `InvalidNamespaceException` on every scheduler tick.
 - `notification.submit.lock-at-least-for` is `0ms`, so a rapid re-submission in a test can acquire the lock.
 
+## Local AWS credentials
+
+`AwsConfig` uses static credentials whenever `APP_AWS_ENDPOINT_OVERRIDE` and both `app.aws.access-key-id` and `app.aws.secret-access-key` are set, and nothing checks which environment it runs in. They are for local development against a stand-in such as LocalStack; never set real credentials in them.
+
 ## Outbound proxy
 
 On CDP all egress except the database goes through the platform proxy named by `HTTP_PROXY`. `ProxyConfig` sets the JVM proxy properties and the default `ProxySelector`, so every HTTP client uses it; the proxy routes internal `*.cdp-int.defra.cloud` URLs itself. A malformed `HTTP_PROXY` is logged with any credentials replaced by `***`.
