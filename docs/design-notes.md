@@ -47,7 +47,7 @@ Mongo never removes a record with no `expireAt`:
 - A document written before documents took an `expireAt` has none, even if its notification has one.
 - A document first written after its notification has gone has none.
 
-Nothing in this service clears these. An orphaned document, one with no `expireAt` whose `notificationReferenceNumber` matches no notification, stays until someone deletes it by hand.
+Nothing in this service clears these automatically. An orphaned document, one with no `expireAt` whose `notificationReferenceNumber` matches no notification, stays until someone deletes it, through `DELETE /document-uploads/{uploadId}` or in the database.
 
 - The indexes are created at startup rather than with `@Indexed(expireAfter)`, because `auto-index-creation` would build an annotated index in every environment, prod included.
 - Mongo refuses a TTL index on a key that already carries a plain index, so `NotificationExpiryIndex` drops any plain `expireAt` index from the notification collection first; only that collection ever had one. Instances starting together can both list that index, so one already dropped by another instance counts as done rather than as a startup failure.
