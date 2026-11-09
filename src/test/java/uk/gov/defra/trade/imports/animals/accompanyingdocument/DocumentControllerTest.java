@@ -40,6 +40,7 @@ import org.springframework.test.context.TestPropertySource;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
@@ -457,17 +458,23 @@ class DocumentControllerTest {
   @Nested
   class ScanResult {
 
+    private static CdpScanResultPayload payloadWithMetadata(Map<String, String> metadata) {
+      return new CdpScanResultPayload("ready", metadata, new CdpScanResultForm(Map.of()), 0);
+    }
+
+    private ResultActions postScanResult(CdpScanResultPayload payload) throws Exception {
+      return mockMvc.perform(post("/document-uploads/{path-segment}/scan-results", "pending")
+          .contentType(MediaType.APPLICATION_JSON)
+          .content(objectMapper.writeValueAsString(payload)));
+    }
+
     @Test
-    void shouldLogTheCorrelationIdTheCallbackCarries() throws Exception {
-      CdpScanResultPayload payload = new CdpScanResultPayload(
-          "ready", Map.of("correlationId", CORRELATION_ID), new CdpScanResultForm(Map.of()), 0);
-      String body = objectMapper.writeValueAsString(payload);
+    void shouldLogTheCorrelationIdTheCallbackCarries() {
+      CdpScanResultPayload payload = payloadWithMetadata(Map.of("correlationId", CORRELATION_ID));
 
       List<ILoggingEvent> events = logEventsDuring(DocumentController.class, () -> {
         try {
-          mockMvc.perform(post("/document-uploads/{path-segment}/scan-results", "pending")
-              .contentType(MediaType.APPLICATION_JSON)
-              .content(body));
+          postScanResult(payload);
         } catch (Exception e) {
           throw new IllegalStateException(e);
         }
@@ -479,52 +486,33 @@ class DocumentControllerTest {
     }
 
     @Test
-    void shouldReturn204() throws Exception {
-      String uploadId = "upload-abc-123";
-      CdpScanResultForm form = new CdpScanResultForm(Map.of());
-      CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
-
+    void shouldReturn204_whenTheServiceAcceptsTheScanResult() throws Exception {
       doNothing().when(documentService).handleScanResult(any(CdpScanResultPayload.class));
 
-      mockMvc.perform(post("/document-uploads/{id}/scan-results", uploadId)
-              .contentType(MediaType.APPLICATION_JSON)
-              .content(objectMapper.writeValueAsString(payload)))
+      postScanResult(payloadWithMetadata(Map.of("correlationId", CORRELATION_ID)))
           .andExpect(status().isNoContent());
     }
 
     @Test
-    void shouldReturn404_whenCorrelationIdUnknown() throws Exception {
-      String pathSegment = "pending";
+    void shouldReturn404_whenTheServiceFindsNoUploadSession() throws Exception {
       String unknownCorrelationId = "unknown-correlation-id";
-      CdpScanResultForm form = new CdpScanResultForm(Map.of());
-      CdpScanResultPayload payload = new CdpScanResultPayload(
-          "ready", Map.of("correlationId", unknownCorrelationId), form, 0);
-
       doThrow(new NotFoundException(
-          "No accompanying document found with correlationId: " + unknownCorrelationId))
+          "No upload session found with correlationId: " + unknownCorrelationId))
           .when(documentService).handleScanResult(any(CdpScanResultPayload.class));
 
-      mockMvc.perform(post("/document-uploads/{id}/scan-results", pathSegment)
-              .contentType(MediaType.APPLICATION_JSON)
-              .content(objectMapper.writeValueAsString(payload)))
+      postScanResult(payloadWithMetadata(Map.of("correlationId", unknownCorrelationId)))
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.detail").value(
-              "No accompanying document found with correlationId: " + unknownCorrelationId));
+              "No upload session found with correlationId: " + unknownCorrelationId));
     }
 
     @Test
-    void shouldReturn400_whenCorrelationIdMissing() throws Exception {
-      String pathSegment = "pending";
-      CdpScanResultForm form = new CdpScanResultForm(Map.of());
-      CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
-
+    void shouldReturn400_whenTheServiceRefusesTheScanResult() throws Exception {
       doThrow(new BadRequestException(
           "Scan callback missing required correlationId in metadata"))
           .when(documentService).handleScanResult(any(CdpScanResultPayload.class));
 
-      mockMvc.perform(post("/document-uploads/{id}/scan-results", pathSegment)
-              .contentType(MediaType.APPLICATION_JSON)
-              .content(objectMapper.writeValueAsString(payload)))
+      postScanResult(payloadWithMetadata(Map.of()))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.detail").value(
               "Scan callback missing required correlationId in metadata"));
