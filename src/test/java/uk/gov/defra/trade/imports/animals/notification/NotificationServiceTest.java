@@ -2177,7 +2177,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void amend_shouldCapturePreAmendSnapshot_withoutMutatingLiveEdits() {
+        void amend_shouldKeepPreAmendSnapshotUnchanged_whenLiveNotificationIsEdited() {
             String ref = "GBN-AG-26-AMD002";
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("db-id-b")
