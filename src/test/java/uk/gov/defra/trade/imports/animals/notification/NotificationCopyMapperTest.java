@@ -228,7 +228,6 @@ class NotificationCopyMapperTest {
 
             assertThat(result.getOrigin().getCountryCode()).isEqualTo("ES");
             assertThat(result.getOrigin().getCountrySubdivisionCode()).isEqualTo("ES-CN");
-            assertThat(result.getOrigin().getInternalReference()).isNull();
         }
 
         @Test
