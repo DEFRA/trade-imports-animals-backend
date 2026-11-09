@@ -103,6 +103,8 @@ On CDP all egress except the database goes through the platform proxy named by `
 
 ## Outbox writes
 
+The transactional outbox and its SNS relay (the `outbox` block in `application.yml`) carry out ADR-EUDP-001.
+
 - `appendEvent` reads the claimed, scan-complete documents itself rather than taking them from its caller, so the documents an event lists are the ones committed with it. The callers in `NotificationService.writeWithOutbox` are `@Transactional` and hold the outbox lock across the append, so a claim or a scan result landing alongside a submit either joins that event or waits for the next one.
 - `TransientTransactionRetryInterceptorTest` drives the interceptor through a real `ProxyFactory` proxy rather than a stubbed invocation, so each retry goes through the same `MethodInvocation` plumbing it meets in the application context.
 - `SUBMISSION_EVENT_WIRE_VALUES` is derived from `OutboxEventType.SUBMISSION_EVENTS` rather than listed again, so the set the version count queries on cannot drift from the set the enum declares.
