@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.configuration;
 
 import jakarta.annotation.Nullable;
 import jakarta.validation.constraints.Positive;
+import java.util.Optional;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -20,5 +21,17 @@ public record NotificationTtlConfig(@Nullable @Positive Integer days, String env
   /** True when the running environment is production: {@code prod}, in any case. */
   public boolean isProd() {
     return "prod".equalsIgnoreCase(environment);
+  }
+
+  /**
+   * The days after creation a new notification's expiry is stamped for.
+   *
+   * @return the configured days, or empty in prod or when no days are set
+   */
+  public Optional<Integer> daysToStamp() {
+    if (isProd()) {
+      return Optional.empty();
+    }
+    return Optional.ofNullable(days);
   }
 }

@@ -5,6 +5,7 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
@@ -94,12 +95,13 @@ public class NotificationService {
     @EventListener(ApplicationReadyEvent.class)
     public void logExpiryStamping() {
         String environment = ttlConfig.environment();
-        if (ttlConfig.isProd()) {
+        Optional<Integer> daysToStamp = ttlConfig.daysToStamp();
+        if (daysToStamp.isPresent()) {
+            log.info("Notification expiry stamping is on: {} days in environment {}", daysToStamp.get(), environment);
+        } else if (ttlConfig.isProd()) {
             log.info("Notification expiry stamping is off: environment {} is prod", environment);
-        } else if (ttlConfig.days() == null) {
-            log.info("Notification expiry stamping is off: no days set in environment {}", environment);
         } else {
-            log.info("Notification expiry stamping is on: {} days in environment {}", ttlConfig.days(), environment);
+            log.info("Notification expiry stamping is off: no days set in environment {}", environment);
         }
     }
 
@@ -427,11 +429,8 @@ public class NotificationService {
     }
 
     private void stampExpiry(NotificationAggregate notificationAggregate) {
-        Integer days = ttlConfig.days();
-        if (days == null || ttlConfig.isProd()) {
-            return;
-        }
-        notificationAggregate.setExpireAt(notificationAggregate.getCreated().plus(days, ChronoUnit.DAYS));
+        ttlConfig.daysToStamp().ifPresent(days ->
+            notificationAggregate.setExpireAt(notificationAggregate.getCreated().plus(days, ChronoUnit.DAYS)));
     }
 
     private NotificationAggregate createNotification(NotificationDto dto, String correlationId, Actor actor) {

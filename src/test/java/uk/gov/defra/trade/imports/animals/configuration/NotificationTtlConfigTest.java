@@ -6,6 +6,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validation;
 import jakarta.validation.ValidatorFactory;
 import java.util.Set;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -37,6 +38,22 @@ class NotificationTtlConfigTest {
     @ValueSource(strings = {"local", "dev", "test", "perf-test", "ext-test", "production"})
     void isProd_false_forEveryNonProdEnvironment(String environment) {
         assertThat(withEnvironment(environment).isProd()).isFalse();
+    }
+
+    @Test
+    void daysToStamp_shouldReturnTheDays_whenDaysAreSetOutsideProd() {
+        assertThat(new NotificationTtlConfig(7, "dev").daysToStamp()).contains(7);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"prod", "PROD"})
+    void daysToStamp_shouldReturnEmpty_whenEnvironmentIsProd(String environment) {
+        assertThat(new NotificationTtlConfig(7, environment).daysToStamp()).isEmpty();
+    }
+
+    @Test
+    void daysToStamp_shouldReturnEmpty_whenNoDaysAreSet() {
+        assertThat(new NotificationTtlConfig(null, "dev").daysToStamp()).isEmpty();
     }
 
     @ParameterizedTest
