@@ -443,7 +443,7 @@ class NotificationCopyMapperTest {
         }
 
         @Test
-        void toCopyDto_shouldHandleNullCommodityList() {
+        void toCopyDto_shouldCopyEmptyCommodityList() {
             NotificationAggregate source = aggregateOf(Notification.builder().build());
 
             NotificationDto result = mapper.toCopyDto(source);
