@@ -96,7 +96,7 @@ class NotificationExpiryIT extends IntegrationBase {
         createPlainExpireAtIndexOnNotifications();
 
         new NotificationExpiryIndex(
-            templateOvertakenAfterListingIndexes(), new NotificationTtlConfig(null, "dev"))
+            templateThatDropsThePlainIndexAfterListingIndexes(),new NotificationTtlConfig(null, "dev"))
             .ensureTtlIndexes();
 
         assertSingleTtlIndexNamed(
@@ -145,18 +145,18 @@ class NotificationExpiryIT extends IntegrationBase {
             new Index().on("expireAt", Sort.Direction.ASC).named("expireAt"));
     }
 
-    private MongoTemplate templateOvertakenAfterListingIndexes() {
+    private MongoTemplate templateThatDropsThePlainIndexAfterListingIndexes() {
         IndexOperations notificationIndexes = mongoTemplate.indexOps(NotificationAggregate.class);
-        IndexOperations overtakenIndexes =
+        IndexOperations droppingIndexes =
             mock(IndexOperations.class, delegatesTo(notificationIndexes));
-        doAnswer(listing -> {
+        doAnswer(invocation -> {
             List<IndexInfo> listed = notificationIndexes.getIndexInfo();
             notificationIndexes.dropIndex("expireAt");
             return listed;
-        }).when(overtakenIndexes).getIndexInfo();
-        MongoTemplate overtakenTemplate = spy(mongoTemplate);
-        doReturn(overtakenIndexes).when(overtakenTemplate).indexOps(NotificationAggregate.class);
-        return overtakenTemplate;
+        }).when(droppingIndexes).getIndexInfo();
+        MongoTemplate droppingTemplate = spy(mongoTemplate);
+        doReturn(droppingIndexes).when(droppingTemplate).indexOps(NotificationAggregate.class);
+        return droppingTemplate;
     }
 
     private void saveNotification(String referenceNumber, Instant expireAt) {
