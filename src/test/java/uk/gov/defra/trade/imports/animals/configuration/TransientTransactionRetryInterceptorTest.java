@@ -2,60 +2,37 @@ package uk.gov.defra.trade.imports.animals.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
+import static uk.gov.defra.trade.imports.animals.utils.LogCapture.messagesAt;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.transientNetworkFailureAtCommit;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.unknownCommitResultAtCommit;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.writeConflictAtCommit;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
-import org.slf4j.LoggerFactory;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 
-/**
- * Drives the interceptor through a real {@link ProxyFactory} proxy rather than a stubbed
- * invocation, so each retry exercises the same {@code MethodInvocation} plumbing it meets in the
- * application context.
- */
 class TransientTransactionRetryInterceptorTest {
 
     private static final int MAX_ATTEMPTS = 3;
     private static final String RESULT = "saved";
 
-    private final ListAppender<ILoggingEvent> logAppender = new ListAppender<>();
-
-    @BeforeEach
-    void captureLogs() {
-        logAppender.start();
-        interceptorLogger().addAppender(logAppender);
-    }
-
     @AfterEach
     void clearThreadState() {
-        interceptorLogger().detachAppender(logAppender);
-        logAppender.stop();
         TransactionSynchronizationManager.setActualTransactionActive(false);
     }
 
-    private static Logger interceptorLogger() {
-        return (Logger) LoggerFactory.getLogger(TransientTransactionRetryInterceptor.class);
-    }
-
-    private List<String> logged(Level level) {
-        return logAppender.list.stream()
-            .filter(event -> event.getLevel() == level)
-            .map(ILoggingEvent::getFormattedMessage)
-            .toList();
+    private static List<ILoggingEvent> interceptorLogEventsDuring(Runnable action) {
+        return logEventsDuring(TransientTransactionRetryInterceptor.class, action);
     }
 
     @Test
@@ -87,13 +64,14 @@ class TransientTransactionRetryInterceptorTest {
     void invoke_shouldLogAnErrorNamingTheAttemptCount_whenTheRetriesAreExhausted() {
         CountingWork work = new CountingWork(Integer.MAX_VALUE, writeConflictAtCommit());
 
-        assertThatThrownBy(proxied(work)::run).isInstanceOf(RuntimeException.class);
+        List<ILoggingEvent> events = interceptorLogEventsDuring(
+            () -> assertThatThrownBy(proxied(work)::run).isInstanceOf(RuntimeException.class));
 
-        assertThat(logged(Level.ERROR))
+        assertThat(messagesAt(Level.ERROR, events))
             .singleElement()
             .satisfies(message -> assertThat(message)
                 .contains("still failing after " + MAX_ATTEMPTS + " attempts"));
-        assertThat(logged(Level.WARN)).hasSize(MAX_ATTEMPTS - 1);
+        assertThat(messagesAt(Level.WARN, events)).hasSize(MAX_ATTEMPTS - 1);
     }
 
     @Test
@@ -101,10 +79,12 @@ class TransientTransactionRetryInterceptorTest {
         RuntimeException failure = unknownCommitResultAtCommit();
         CountingWork work = new CountingWork(Integer.MAX_VALUE, failure);
 
-        assertThatThrownBy(proxied(work)::run).isSameAs(failure);
+        List<ILoggingEvent> events = interceptorLogEventsDuring(
+            () -> assertThatThrownBy(proxied(work)::run).isSameAs(failure));
+
         assertThat(work.invocations).isEqualTo(1);
-        assertThat(logged(Level.WARN)).isEmpty();
-        assertThat(logged(Level.ERROR)).isEmpty();
+        assertThat(messagesAt(Level.WARN, events)).isEmpty();
+        assertThat(messagesAt(Level.ERROR, events)).isEmpty();
     }
 
     @ParameterizedTest
@@ -137,8 +117,12 @@ class TransientTransactionRetryInterceptorTest {
     void invoke_shouldSummariseTheExceptionItself_whenTheFailureCarriesNoServerResponse() {
         CountingWork work = new CountingWork(1, transientNetworkFailureAtCommit());
 
-        assertThat(proxied(work).run()).isEqualTo(RESULT);
-        assertThat(logged(Level.WARN))
+        List<String> results = new ArrayList<>();
+
+        List<ILoggingEvent> events = interceptorLogEventsDuring(() -> results.add(proxied(work).run()));
+
+        assertThat(results).containsExactly(RESULT);
+        assertThat(messagesAt(Level.WARN, events))
             .singleElement()
             .satisfies(message -> assertThat(message)
                 .contains("MongoException: Connection reset by peer")

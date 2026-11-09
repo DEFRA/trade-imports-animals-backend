@@ -20,6 +20,7 @@ import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DRAFT;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.SUBMITTED;
 import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
+import static uk.gov.defra.trade.imports.animals.utils.LogCapture.messagesOf;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
@@ -139,10 +140,6 @@ class NotificationServiceTest {
             Mappers.getMapper(NotificationContentMapper.class),
             referenceNumberGenerator, ttlConfig, clock,
             Duration.ZERO, 54, 50);
-    }
-
-    private static List<String> messagesOf(List<ILoggingEvent> events) {
-        return events.stream().map(ILoggingEvent::getFormattedMessage).toList();
     }
 
     @Nested

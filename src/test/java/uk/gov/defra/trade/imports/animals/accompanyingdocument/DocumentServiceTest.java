@@ -9,9 +9,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
+import static uk.gov.defra.trade.imports.animals.utils.LogCapture.messagesAt;
+import static uk.gov.defra.trade.imports.animals.utils.LogCapture.messagesOf;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
@@ -124,10 +125,7 @@ class DocumentServiceTest {
   }
 
   private static List<String> warningsLoggedDuring(Runnable action) {
-    return logEventsDuring(DocumentService.class, action).stream()
-        .filter(event -> event.getLevel() == Level.WARN)
-        .map(ILoggingEvent::getFormattedMessage)
-        .toList();
+    return messagesAt(Level.WARN, logEventsDuring(DocumentService.class, action));
   }
 
   @Nested
@@ -530,11 +528,8 @@ class DocumentServiceTest {
     void deleteForNotificationReferenceNumbers_shouldLogThatDocumentsAndSessionsAreDeleted() {
       List<String> notificationReferenceNumbers = List.of("GBN-AG-26-000111", "GBN-AG-26-000222");
 
-      List<String> messages = logEventsDuring(DocumentService.class,
-          () -> documentService.deleteForNotificationReferenceNumbers(notificationReferenceNumbers))
-          .stream()
-          .map(ILoggingEvent::getFormattedMessage)
-          .toList();
+      List<String> messages = messagesOf(logEventsDuring(DocumentService.class,
+          () -> documentService.deleteForNotificationReferenceNumbers(notificationReferenceNumbers)));
 
       assertThat(messages).containsExactly(
           "Deleting accompanying documents and upload sessions for 2 notification(s)");

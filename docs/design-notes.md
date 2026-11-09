@@ -98,6 +98,7 @@ On CDP all egress except the database goes through the platform proxy named by `
 ## Outbox writes
 
 - `appendEvent` reads the claimed, scan-complete documents itself rather than taking them from its caller, so the documents an event lists are the ones committed with it. The callers in `NotificationService.writeWithOutbox` are `@Transactional` and hold the outbox lock across the append, so a claim or a scan result landing alongside a submit either joins that event or waits for the next one.
+- `TransientTransactionRetryInterceptorTest` drives the interceptor through a real `ProxyFactory` proxy rather than a stubbed invocation, so each retry goes through the same `MethodInvocation` plumbing it meets in the application context.
 - `SUBMISSION_EVENT_WIRE_VALUES` is derived from `OutboxEventType.SUBMISSION_EVENTS` rather than listed again, so the set the version count queries on cannot drift from the set the enum declares.
 - `CommitRetryingMongoTransactionManager` re-commits a transaction whose commit result is unknown, within the window it is configured with. Its unit test sizes that window in whole seconds rather than tens of milliseconds, so one scheduling stall on a loaded machine cannot exhaust the window before the first retry.
 - `versionId` is absent on created, edited and deleted events because the schema mints `V1` on first submission. A notification edited before it has ever been submitted would otherwise emit `versionId: 0`, a value the schema's semantics never produce.

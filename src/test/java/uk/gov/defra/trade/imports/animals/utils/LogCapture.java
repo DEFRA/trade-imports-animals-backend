@@ -36,4 +36,12 @@ public final class LogCapture {
             logger.setLevel(configuredLevel);
         }
     }
+
+    public static List<String> messagesOf(List<ILoggingEvent> events) {
+        return events.stream().map(ILoggingEvent::getFormattedMessage).toList();
+    }
+
+    public static List<String> messagesAt(Level level, List<ILoggingEvent> events) {
+        return messagesOf(events.stream().filter(event -> event.getLevel() == level).toList());
+    }
 }
