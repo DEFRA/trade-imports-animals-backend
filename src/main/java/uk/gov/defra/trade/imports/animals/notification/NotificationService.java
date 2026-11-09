@@ -392,7 +392,7 @@ public class NotificationService {
     }
 
     public ReferenceNumberPageResponse findAllReferenceNumbers(int page) {
-        log.debug("Fetching notification reference numbers page {} (size {})", page, listPageSize);
+        log.debug("Fetching notification reference numbers page {} (size {})", page, adminPageSize);
         Page<NotificationReferenceOnly> result = notificationRepository.findAllReferencesBy(
             PageRequest.of(page, adminPageSize, Sort.by(Direction.DESC, "created")));
         log.debug("Found {} reference numbers on page {} of {}",

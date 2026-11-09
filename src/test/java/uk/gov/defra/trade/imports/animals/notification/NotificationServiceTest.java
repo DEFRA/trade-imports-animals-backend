@@ -26,6 +26,7 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.dest
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
+import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import java.time.Clock;
 import java.time.Duration;
@@ -793,6 +794,17 @@ class NotificationServiceTest {
 
     @Nested
     class FindAllReferenceNumbers {
+
+        @Test
+        void findAllReferenceNumbers_shouldLogTheAdminPageSizeItQueriesWith() {
+            when(notificationRepository.findAllReferencesBy(any(Pageable.class)))
+                .thenReturn(new PageImpl<>(Collections.emptyList(), PageRequest.of(0, 50), 0));
+
+            List<String> messages = messagesOf(logEventsDuring(NotificationService.class, Level.DEBUG,
+                () -> notificationService.findAllReferenceNumbers(0)));
+
+            assertThat(messages).first().isEqualTo("Fetching notification reference numbers page 0 (size 50)");
+        }
 
         @Test
         void findAllReferenceNumbers_shouldReturnEmptyPage_whenNoNotificationsExist() {
