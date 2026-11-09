@@ -534,6 +534,20 @@ class DocumentServiceTest {
     }
 
     @Test
+    void deleteForNotificationReferenceNumbers_shouldLogThatDocumentsAndSessionsAreDeleted() {
+      List<String> notificationReferenceNumbers = List.of("GBN-AG-26-000111", "GBN-AG-26-000222");
+
+      List<String> messages = logEventsDuring(DocumentService.class,
+          () -> documentService.deleteForNotificationReferenceNumbers(notificationReferenceNumbers))
+          .stream()
+          .map(ILoggingEvent::getFormattedMessage)
+          .toList();
+
+      assertThat(messages).containsExactly(
+          "Deleting accompanying documents and upload sessions for 2 notification(s)");
+    }
+
+    @Test
     void deleteForNotificationReferenceNumbers_shouldThrowNullPointerException_whenGivenNull() {
       assertThatThrownBy(() -> documentService.deleteForNotificationReferenceNumbers(null))
           .isInstanceOf(NullPointerException.class)

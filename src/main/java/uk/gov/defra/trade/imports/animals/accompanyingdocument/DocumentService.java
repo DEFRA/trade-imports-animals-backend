@@ -173,7 +173,7 @@ public class DocumentService {
   public void deleteForNotificationReferenceNumbers(List<String> notificationReferenceNumbers) {
     Objects.requireNonNull(
         notificationReferenceNumbers, "notificationReferenceNumbers must not be null");
-    log.info("Cascade deleting accompanying documents for {} notification(s)",
+    log.info("Deleting accompanying documents and upload sessions for {} notification(s)",
         notificationReferenceNumbers.size());
     accompanyingDocumentRepository
         .deleteAllByNotificationReferenceNumberIn(notificationReferenceNumbers);
