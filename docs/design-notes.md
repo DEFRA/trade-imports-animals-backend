@@ -27,6 +27,7 @@ Why the code is shaped the way it is. Code states what it does; this file holds 
 - The two snapshots are independent, and the notification snapshot keeps inline party details as they stood when the amendment started. Submitting or cancelling the amendment clears both.
 - `submittedAt` is the latest submission: set when a DRAFT is submitted and refreshed when an AMEND is resubmitted. Starting an amendment leaves it unchanged, and cancelling one returns to SUBMITTED and keeps it.
 - `fulfilments` is an opaque payload, stored as it arrives and never interpreted here.
+- `NotificationFulfilmentsView` leaves out the server-only fields (`preAmendNotification`, `preAmendFulfilments`, `expireAt`), so reading fulfilments does not load them.
 - Soft delete of an already DELETED notification returns it unchanged, so a repeated call after a lost response is harmless.
 
 ## Automatic expiry outside prod
