@@ -95,6 +95,34 @@ class DocumentServiceTest {
         .build();
   }
 
+  private void scanSessionIsOpen(
+      String notificationReferenceNumber, String uploadId, String correlationId) {
+    when(uploadSessionRepository.findByCorrelationId(correlationId)).thenReturn(
+        Optional.of(sessionOf(notificationReferenceNumber, uploadId, correlationId)));
+  }
+
+  private void documentAlreadyStored(AccompanyingDocument document) {
+    when(accompanyingDocumentRepository.findByCorrelationId(document.getCorrelationId()))
+        .thenReturn(Optional.of(document));
+  }
+
+  private void documentAlreadyStoredThenSaveReturnsIt(AccompanyingDocument document) {
+    documentAlreadyStored(document);
+    saveReturnsWhatItWasGiven();
+  }
+
+  private void sessionSaveReturnsWhatItWasGiven() {
+    when(uploadSessionRepository.save(any(UploadSession.class)))
+        .thenAnswer(invocation -> invocation.getArgument(0));
+  }
+
+  private AccompanyingDocument savedDocument() {
+    ArgumentCaptor<AccompanyingDocument> captor =
+        ArgumentCaptor.forClass(AccompanyingDocument.class);
+    verify(accompanyingDocumentRepository).save(captor.capture());
+    return captor.getValue();
+  }
+
   private static List<String> warningsLoggedDuring(Runnable action) {
     return logEventsDuring(DocumentService.class, action).stream()
         .filter(event -> event.getLevel() == Level.WARN)
@@ -110,8 +138,7 @@ class DocumentServiceTest {
       String notificationReferenceNumber = "GBN-AG-26-ABC123";
       String uploadId = UUID.randomUUID().toString();
       String correlationId = UUID.randomUUID().toString();
-      when(uploadSessionRepository.save(any(UploadSession.class)))
-          .thenAnswer(invocation -> invocation.getArgument(0));
+      sessionSaveReturnsWhatItWasGiven();
 
       UploadSession registered = documentService.registerUpload(
           notificationReferenceNumber, new RegisterUploadRequest(uploadId, correlationId));
@@ -123,8 +150,7 @@ class DocumentServiceTest {
 
     @Test
     void registerUpload_shouldNotWriteADocument() {
-      when(uploadSessionRepository.save(any(UploadSession.class)))
-          .thenAnswer(invocation -> invocation.getArgument(0));
+      sessionSaveReturnsWhatItWasGiven();
 
       documentService.registerUpload(
           "GBN-AG-26-NODOC0",
@@ -264,9 +290,7 @@ class DocumentServiceTest {
     @Test
     void claimUpload_shouldKeepTheScanResultAndWriteNoSecondDocument_whenTheCallbackArrivedFirst() {
       sessionIsOpen();
-      when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
-          .thenReturn(Optional.of(scanned()));
-      saveReturnsWhatItWasGiven();
+      documentAlreadyStoredThenSaveReturnsIt(scanned());
 
       AccompanyingDocument claimed = documentService.claimUpload(UPLOAD_ID, claimRequest());
 
@@ -281,9 +305,7 @@ class DocumentServiceTest {
       stored.setExpireAt(EXPIRE_AT);
       sessionIsOpen();
       notificationExpiresAt(NOTIFICATION_REFERENCE_NUMBER, EXPIRE_AT.plus(1, ChronoUnit.DAYS));
-      when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
-          .thenReturn(Optional.of(stored));
-      saveReturnsWhatItWasGiven();
+      documentAlreadyStoredThenSaveReturnsIt(stored);
 
       AccompanyingDocument claimed = documentService.claimUpload(UPLOAD_ID, claimRequest());
 
@@ -298,9 +320,7 @@ class DocumentServiceTest {
       alreadyClaimed.setDocumentReference("UKGBFIRST");
       alreadyClaimed.setDateOfIssue(LocalDate.parse("2026-01-15"));
       sessionIsOpen();
-      when(accompanyingDocumentRepository.findByCorrelationId(CORRELATION_ID))
-          .thenReturn(Optional.of(alreadyClaimed));
-      saveReturnsWhatItWasGiven();
+      documentAlreadyStoredThenSaveReturnsIt(alreadyClaimed);
 
       AccompanyingDocument claimed = documentService.claimUpload(
           UPLOAD_ID,
@@ -378,21 +398,16 @@ class DocumentServiceTest {
           .scanStatus(ScanStatus.PENDING)
           .files(new ArrayList<>())
           .build();
-      when(uploadSessionRepository.findByCorrelationId(correlationId)).thenReturn(
-          Optional.of(sessionOf("GBN-AG-26-NLR000", "upload-id-null-rejected", correlationId)));
-      when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
-          .thenReturn(Optional.of(document));
+      scanSessionIsOpen("GBN-AG-26-NLR000", "upload-id-null-rejected", correlationId);
+      documentAlreadyStored(document);
 
       CdpScanResultForm form = new CdpScanResultForm();
       CdpScanResultPayload payload = new CdpScanResultPayload(
           "ready", Map.of("correlationId", correlationId), form, null);
 
-      ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
-
       documentService.handleScanResult(payload);
 
-      verify(accompanyingDocumentRepository).save(captor.capture());
-      assertThat(captor.getValue().getScanStatus()).isEqualTo(ScanStatus.REJECTED);
+      assertThat(savedDocument().getScanStatus()).isEqualTo(ScanStatus.REJECTED);
     }
 
     @Test
@@ -408,16 +423,12 @@ class DocumentServiceTest {
           .files(new ArrayList<>())
           .build();
 
-      when(uploadSessionRepository.findByCorrelationId(targetCorrelationId)).thenReturn(
-          Optional.of(sessionOf(notificationReferenceNumber, "upload-target", targetCorrelationId)));
-      when(accompanyingDocumentRepository.findByCorrelationId(targetCorrelationId))
-          .thenReturn(Optional.of(target));
+      scanSessionIsOpen(notificationReferenceNumber, "upload-target", targetCorrelationId);
+      documentAlreadyStored(target);
 
       documentService.handleScanResult(readyPayload(targetCorrelationId));
 
-      ArgumentCaptor<AccompanyingDocument> captor = ArgumentCaptor.forClass(AccompanyingDocument.class);
-      verify(accompanyingDocumentRepository).save(captor.capture());
-      AccompanyingDocument saved = captor.getValue();
+      AccompanyingDocument saved = savedDocument();
       assertThat(saved.getCorrelationId()).isEqualTo(targetCorrelationId);
       assertThat(saved.getUploadId()).isEqualTo("upload-target");
       assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
@@ -438,17 +449,12 @@ class DocumentServiceTest {
           .claimed(true)
           .files(new ArrayList<>())
           .build();
-      when(uploadSessionRepository.findByCorrelationId(correlationId)).thenReturn(
-          Optional.of(sessionOf("GBN-AG-26-CLF001", "upload-claim-first", correlationId)));
-      when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
-          .thenReturn(Optional.of(claimedDocument));
+      scanSessionIsOpen("GBN-AG-26-CLF001", "upload-claim-first", correlationId);
+      documentAlreadyStored(claimedDocument);
 
       documentService.handleScanResult(readyPayload(correlationId));
 
-      ArgumentCaptor<AccompanyingDocument> captor =
-          ArgumentCaptor.forClass(AccompanyingDocument.class);
-      verify(accompanyingDocumentRepository, times(1)).save(captor.capture());
-      AccompanyingDocument saved = captor.getValue();
+      AccompanyingDocument saved = savedDocument();
       assertThat(saved.getId()).isEqualTo("doc-claim-first");
       assertThat(saved.isClaimed()).isTrue();
       assertThat(saved.getDocumentType()).isEqualTo(DocumentType.ITAHC);
@@ -459,16 +465,12 @@ class DocumentServiceTest {
     @Test
     void handleScanResult_shouldCreateAnUnclaimedDocument_whenItArrivesBeforeTheDetails() {
       String correlationId = "corr-scan-first";
-      when(uploadSessionRepository.findByCorrelationId(correlationId)).thenReturn(
-          Optional.of(sessionOf("GBN-AG-26-SCN001", "upload-scan-first", correlationId)));
+      scanSessionIsOpen("GBN-AG-26-SCN001", "upload-scan-first", correlationId);
       noDocumentYetThenSaveReturnsIt(correlationId);
 
       documentService.handleScanResult(readyPayload(correlationId));
 
-      ArgumentCaptor<AccompanyingDocument> captor =
-          ArgumentCaptor.forClass(AccompanyingDocument.class);
-      verify(accompanyingDocumentRepository).save(captor.capture());
-      AccompanyingDocument saved = captor.getValue();
+      AccompanyingDocument saved = savedDocument();
       assertThat(saved.getNotificationReferenceNumber()).isEqualTo("GBN-AG-26-SCN001");
       assertThat(saved.getUploadId()).isEqualTo("upload-scan-first");
       assertThat(saved.getScanStatus()).isEqualTo(ScanStatus.COMPLETE);
@@ -478,17 +480,13 @@ class DocumentServiceTest {
     @Test
     void handleScanResult_shouldGiveANewDocumentItsNotificationsExpireAt() {
       String correlationId = "corr-scan-expiry";
-      when(uploadSessionRepository.findByCorrelationId(correlationId)).thenReturn(
-          Optional.of(sessionOf("GBN-AG-26-SCN002", "upload-scan-expiry", correlationId)));
+      scanSessionIsOpen("GBN-AG-26-SCN002", "upload-scan-expiry", correlationId);
       notificationExpiresAt("GBN-AG-26-SCN002", EXPIRE_AT);
       noDocumentYetThenSaveReturnsIt(correlationId);
 
       documentService.handleScanResult(readyPayload(correlationId));
 
-      ArgumentCaptor<AccompanyingDocument> captor =
-          ArgumentCaptor.forClass(AccompanyingDocument.class);
-      verify(accompanyingDocumentRepository).save(captor.capture());
-      assertThat(captor.getValue().getExpireAt()).isEqualTo(EXPIRE_AT);
+      assertThat(savedDocument().getExpireAt()).isEqualTo(EXPIRE_AT);
     }
 
     @Test
@@ -503,18 +501,13 @@ class DocumentServiceTest {
           .files(new ArrayList<>())
           .expireAt(EXPIRE_AT)
           .build();
-      when(uploadSessionRepository.findByCorrelationId(correlationId)).thenReturn(
-          Optional.of(sessionOf("GBN-AG-26-SCN003", "upload-scan-stored-expiry", correlationId)));
+      scanSessionIsOpen("GBN-AG-26-SCN003", "upload-scan-stored-expiry", correlationId);
       notificationExpiresAt("GBN-AG-26-SCN003", EXPIRE_AT.plus(1, ChronoUnit.DAYS));
-      when(accompanyingDocumentRepository.findByCorrelationId(correlationId))
-          .thenReturn(Optional.of(stored));
+      documentAlreadyStored(stored);
 
       documentService.handleScanResult(readyPayload(correlationId));
 
-      ArgumentCaptor<AccompanyingDocument> captor =
-          ArgumentCaptor.forClass(AccompanyingDocument.class);
-      verify(accompanyingDocumentRepository).save(captor.capture());
-      assertThat(captor.getValue().getExpireAt()).isEqualTo(EXPIRE_AT);
+      assertThat(savedDocument().getExpireAt()).isEqualTo(EXPIRE_AT);
     }
   }
 
