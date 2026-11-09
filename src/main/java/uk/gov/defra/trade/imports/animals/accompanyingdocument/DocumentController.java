@@ -213,22 +213,22 @@ public class DocumentController {
   /**
    * Receive a scan-result callback from cdp-uploader.
    *
-   * @param uploadId the upload session identifier
-   * @param payload  the scan result payload
+   * @param pathSegment the fixed segment the session's callback URL was opened with
+   * @param payload     the scan result payload
    * @return 204 No Content
    */
-  @PostMapping("/document-uploads/{upload-id}/scan-results")
+  @PostMapping("/document-uploads/{path-segment}/scan-results")
   @Operation(
       summary = "Handle scan result",
       description = "Receives the cdp-uploader antivirus scan result callback")
   @ApiResponse(responseCode = "204", description = "Scan result processed", content = @Content)
   @Timed("document.scanResult")
   public ResponseEntity<Void> scanResult(
-      @PathVariable("upload-id") String uploadId,
+      @PathVariable("path-segment") String pathSegment,
       @RequestBody CdpScanResultPayload payload) {
 
-    log.info("POST /document-uploads/{}/scan-results uploadStatus={}", uploadId,
-        payload.uploadStatus());
+    log.info("POST /document-uploads/{}/scan-results correlationId={} uploadStatus={}", pathSegment,
+        payload.correlationId(), payload.uploadStatus());
     documentService.handleScanResult(payload);
     return ResponseEntity.noContent().build();
   }

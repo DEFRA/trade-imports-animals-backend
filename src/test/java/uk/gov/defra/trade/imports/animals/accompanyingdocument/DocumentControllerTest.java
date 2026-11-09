@@ -19,7 +19,9 @@ import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSess
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.UPLOAD_ID;
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registerUploadRequest;
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registeredSession;
+import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.util.List;
@@ -442,6 +444,27 @@ class DocumentControllerTest {
 
   @Nested
   class ScanResult {
+
+    @Test
+    void shouldLogTheCorrelationIdTheCallbackCarries() throws Exception {
+      CdpScanResultPayload payload = new CdpScanResultPayload(
+          "ready", Map.of("correlationId", CORRELATION_ID), new CdpScanResultForm(Map.of()), 0);
+      String body = objectMapper.writeValueAsString(payload);
+
+      List<ILoggingEvent> events = logEventsDuring(DocumentController.class, () -> {
+        try {
+          mockMvc.perform(post("/document-uploads/{path-segment}/scan-results", "pending")
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(body));
+        } catch (Exception e) {
+          throw new IllegalStateException(e);
+        }
+      });
+
+      assertThat(events).extracting(ILoggingEvent::getFormattedMessage).containsExactly(
+          "POST /document-uploads/pending/scan-results correlationId=" + CORRELATION_ID
+              + " uploadStatus=ready");
+    }
 
     @Test
     void shouldReturn204() throws Exception {

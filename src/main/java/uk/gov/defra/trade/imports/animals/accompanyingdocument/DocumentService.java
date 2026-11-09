@@ -260,7 +260,7 @@ public class DocumentService {
   }
 
   private static String extractCorrelationId(CdpScanResultPayload payload) {
-    String correlationId = payload.metadata().get("correlationId");
+    String correlationId = payload.correlationId();
     if (correlationId == null || correlationId.isBlank()) {
       throw new BadRequestException(
           "Scan callback missing required correlationId in metadata");
