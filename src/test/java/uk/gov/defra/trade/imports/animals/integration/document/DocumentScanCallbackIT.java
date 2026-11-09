@@ -19,14 +19,6 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepo
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 
-/**
- * Defensive scan-callback ITs: shapes the real cdp-uploader would never produce, but our handler
- * has to cope with anyway. Direct-POST fixture pattern is the right tool here — we're exercising
- * our routing/parsing/error mapping, not cdp-uploader.
- *
- * <p>The end-to-end CLEAN/REJECTED happy paths live in {@link DocumentControllerIT} and run
- * against a real cdp-uploader scan.
- */
 class DocumentScanCallbackIT extends IntegrationBase {
 
     private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-25-CB0001";
