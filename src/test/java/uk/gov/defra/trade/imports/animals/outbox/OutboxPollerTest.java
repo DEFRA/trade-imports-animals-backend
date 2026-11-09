@@ -62,13 +62,10 @@ class OutboxPollerTest {
 
         @Test
         void shouldPublishUnpublishedEvents_whenLockAcquired() {
-            // Given
             when(outboxPublishService.publishUnpublishedEvents()).thenReturn(2);
 
-            // When
             List<ILoggingEvent> events = logEventsDuring(OutboxPoller.class, Level.DEBUG, outboxPoller::poll);
 
-            // Then
             verify(outboxPublishService).publishUnpublishedEvents();
             assertThat(events)
                 .anyMatch(event -> event.getFormattedMessage()
@@ -77,10 +74,8 @@ class OutboxPollerTest {
 
         @Test
         void shouldAcquireOutboxPollerLock() {
-            // When
             outboxPoller.poll();
 
-            // Then
             ArgumentCaptor<LockConfiguration> captor = ArgumentCaptor.forClass(LockConfiguration.class);
             verify(lockProvider).lock(captor.capture());
             LockConfiguration lockConfiguration = captor.getValue();
@@ -91,25 +86,19 @@ class OutboxPollerTest {
 
         @Test
         void shouldNotPublish_whenLockNotAcquired() {
-            // Given
             when(lockProvider.lock(any())).thenReturn(Optional.empty());
 
-            // When
             outboxPoller.poll();
 
-            // Then
             verify(outboxPublishService, never()).publishUnpublishedEvents();
         }
 
         @Test
         void shouldNotLogPublishedCount_whenNoEventsPublished() {
-            // Given
             when(outboxPublishService.publishUnpublishedEvents()).thenReturn(0);
 
-            // When
             List<ILoggingEvent> events = logEventsDuring(OutboxPoller.class, Level.DEBUG, outboxPoller::poll);
 
-            // Then
             verify(outboxPublishService).publishUnpublishedEvents();
             assertThat(events)
                 .noneMatch(event -> event.getFormattedMessage().contains("Outbox poller published"));
