@@ -71,11 +71,6 @@ class NotificationExpiryIT extends IntegrationBase {
         auditRepository.deleteAll();
     }
 
-    @BeforeEach
-    void putTtlIndexesInPlace() {
-        notificationExpiryIndex.ensureTtlIndexes();
-    }
-
     @AfterEach
     void restoreTtlMonitorSleep() {
         setTtlMonitorSleepSecs(60);
