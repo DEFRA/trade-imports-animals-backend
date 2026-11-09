@@ -28,8 +28,7 @@ class NotificationExpiryIndexTest {
 
     private final ApplicationContextRunner contextRunner = new ApplicationContextRunner()
         .withUserConfiguration(TtlProperties.class, NotificationExpiryIndex.class)
-        .withBean(MongoTemplate.class, () -> mock(MongoTemplate.class))
-        .withPropertyValues("notification.ttl.environment=dev");
+        .withBean(MongoTemplate.class, () -> mock(MongoTemplate.class));
 
     @Configuration
     @EnableConfigurationProperties(NotificationTtlConfig.class)
