@@ -235,7 +235,7 @@ public class DocumentService {
           notificationReferenceNumber);
       return null;
     }
-    return expiry.get().getExpireAt();
+    return expiry.orElseThrow().getExpireAt();
   }
 
   private UploadSession saveSession(UploadSession session) {
