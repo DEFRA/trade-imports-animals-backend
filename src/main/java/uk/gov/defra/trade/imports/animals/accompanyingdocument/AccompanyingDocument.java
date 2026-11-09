@@ -44,7 +44,6 @@ public class AccompanyingDocument {
   @Indexed(unique = true)
   private String uploadId;
 
-  /** The handle the upload session was opened under. */
   @Indexed(unique = true)
   private String correlationId;
 
@@ -57,7 +56,6 @@ public class AccompanyingDocument {
 
   private ScanStatus scanStatus;
 
-  /** Whether the trader's document details have been supplied for this upload. */
   @Builder.Default
   private boolean claimed = false;
 

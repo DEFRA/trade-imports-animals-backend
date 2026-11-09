@@ -8,7 +8,7 @@ import java.util.Objects;
  *
  * @param notificationReferenceNumber the parent notification's reference number; never null
  * @param uploadId                    the identifier cdp-uploader assigned the session; never null
- * @param correlationId               the handle the session was opened under; never null
+ * @param correlationId               the correlationId the session was opened under; never null
  */
 @Schema(description = "A cdp-uploader upload session recorded against a notification")
 public record UploadSessionDto(
@@ -21,7 +21,7 @@ public record UploadSessionDto(
         requiredMode = Schema.RequiredMode.REQUIRED)
     String uploadId,
 
-    @Schema(description = "Handle the session was opened under, echoed back by the scan callback",
+    @Schema(description = "The correlationId the session was opened under, echoed back by the scan callback",
         requiredMode = Schema.RequiredMode.REQUIRED)
     String correlationId) {
 
