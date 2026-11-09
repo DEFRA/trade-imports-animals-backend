@@ -294,7 +294,7 @@ class DocumentControllerIT extends IntegrationBase {
     class CleanScan {
 
         @Test
-        void shouldEndUpAsCompleteViaRealScan() throws IOException {
+        void shouldEndUpAsCompleteWithItsFile_whenCdpUploaderReportsACleanScan() throws IOException {
             OpenedSession session = registeredSession();
             byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
@@ -318,7 +318,7 @@ class DocumentControllerIT extends IntegrationBase {
     class VirusScan {
 
         @Test
-        void shouldEndUpAsRejectedViaRealScan() throws IOException {
+        void shouldEndUpAsRejectedWithNoS3Key_whenCdpUploaderReportsAnInfectedScan() throws IOException {
             OpenedSession session = registeredSession();
             byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
