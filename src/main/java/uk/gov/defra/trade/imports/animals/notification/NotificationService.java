@@ -1,7 +1,7 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,6 +53,7 @@ public class NotificationService {
     private final NotificationContentMapper notificationContentMapper;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final NotificationTtlConfig ttlConfig;
+    private final Clock clock;
     private final Duration lockAtLeastFor;
     private final int listPageSize;
     private final int adminPageSize;
@@ -67,6 +68,7 @@ public class NotificationService {
         NotificationContentMapper notificationContentMapper,
         ReferenceNumberGenerator referenceNumberGenerator,
         NotificationTtlConfig ttlConfig,
+        Clock clock,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
         @Value("${notification.list.page-size}") int listPageSize,
         @Value("${notification.admin.page-size}") int adminPageSize) {
@@ -79,6 +81,7 @@ public class NotificationService {
         this.notificationContentMapper = notificationContentMapper;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.ttlConfig = ttlConfig;
+        this.clock = clock;
         this.lockAtLeastFor = lockAtLeastFor;
         this.listPageSize = listPageSize;
         this.adminPageSize = adminPageSize;
@@ -299,7 +302,7 @@ public class NotificationService {
                     applySubmission(notification);
                 }
                 notification.setStatus(targetStatus);
-                notification.setUpdated(Instant.now());
+                notification.setUpdated(clock.instant());
                 NotificationAggregate saved = notificationRepository.save(notification);
                 outboxService.appendEvent(saved, eventType, correlationId, actor);
                 return saved;
@@ -311,7 +314,7 @@ public class NotificationService {
             notification.setPreAmendFulfilments(null);
             notification.setPreAmendNotification(null);
         }
-        notification.setSubmittedAt(Instant.now());
+        notification.setSubmittedAt(clock.instant());
     }
 
     private <T> T executeWithOutboxLock(
@@ -334,7 +337,7 @@ public class NotificationService {
                 }
             }
             LockConfiguration lockConfig = new LockConfiguration(
-                Instant.now(), lockName, LOCK_AT_MOST_FOR, lockAtLeastFor);
+                clock.instant(), lockName, LOCK_AT_MOST_FOR, lockAtLeastFor);
             try {
                 LockingTaskExecutor.TaskResult<T> result =
                     lockingTaskExecutor.executeWithLock(task, lockConfig);
@@ -427,7 +430,7 @@ public class NotificationService {
 
     private NotificationAggregate createNotification(NotificationDto dto, String correlationId, Actor actor) {
         NotificationAggregate notificationAggregate = new NotificationAggregate();
-        notificationAggregate.setCreated(Instant.now());
+        notificationAggregate.setCreated(clock.instant());
         notificationAggregate.setStatus(NotificationStatus.DRAFT);
         stampExpiry(notificationAggregate);
         setNotificationDetails(dto, notificationAggregate);
@@ -499,7 +502,7 @@ public class NotificationService {
             .numberOfNotifications(referenceNumbers.size())
             .traceId(auditContext.traceId())
             .userId(auditContext.userId())
-            .timestamp(Instant.now())
+            .timestamp(clock.instant())
             .build();
 
         auditRepository.save(auditRecord);

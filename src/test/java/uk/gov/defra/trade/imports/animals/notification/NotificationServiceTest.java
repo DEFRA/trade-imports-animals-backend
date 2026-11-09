@@ -27,14 +27,17 @@ import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.spec
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.transporters;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.TimeZone;
 import org.bson.Document;
 import org.mapstruct.factory.Mappers;
 import org.springframework.data.domain.Page;
@@ -125,11 +128,15 @@ class NotificationServiceTest {
     }
 
     private NotificationService buildService(NotificationTtlConfig ttlConfig) {
+        return buildService(ttlConfig, Clock.systemUTC());
+    }
+
+    private NotificationService buildService(NotificationTtlConfig ttlConfig, Clock clock) {
         return new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
             new NotificationCopyMapper(),
             Mappers.getMapper(NotificationContentMapper.class),
-            referenceNumberGenerator, ttlConfig,
+            referenceNumberGenerator, ttlConfig, clock,
             Duration.ZERO, 54, 50);
     }
 
@@ -960,9 +967,29 @@ class NotificationServiceTest {
         }
 
         private NotificationAggregate create(NotificationTtlConfig ttlConfig) {
-            NotificationService service = buildService(ttlConfig);
+            return create(buildService(ttlConfig));
+        }
+
+        private NotificationAggregate create(NotificationService service) {
             return service.saveNotification(
                 NotificationDto.builder().origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF123").build()).build(), "", null);
+        }
+
+        @Test
+        void createNotification_stampsExpireAtAnExactNumberOfElapsedDays_whenAClockChangeFallsInTheWindow() {
+            ZoneId zoneWithAClockChangeOn28March = ZoneId.of("Europe/London");
+            Clock threeDaysBeforeTheClockChange =
+                Clock.fixed(Instant.parse("2027-03-25T12:00:00Z"), zoneWithAClockChangeOn28March);
+            TimeZone originalTimeZone = TimeZone.getDefault();
+            TimeZone.setDefault(TimeZone.getTimeZone(zoneWithAClockChangeOn28March));
+            try {
+                NotificationAggregate result = create(
+                    buildService(new NotificationTtlConfig(7, "dev"), threeDaysBeforeTheClockChange));
+
+                assertThat(result.getExpireAt()).isEqualTo(Instant.parse("2027-04-01T12:00:00Z"));
+            } finally {
+                TimeZone.setDefault(originalTimeZone);
+            }
         }
 
         @Test
