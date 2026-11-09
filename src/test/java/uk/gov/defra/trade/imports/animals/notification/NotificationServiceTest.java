@@ -2536,6 +2536,101 @@ class NotificationServiceTest {
         }
     }
 
+    @Nested
+    class StatusChangeLog {
+
+        private static final String REFERENCE = "GBN-AG-26-LOG001";
+
+        private NotificationAggregate repositoryHoldsAndEchoesSaves(NotificationStatus status) {
+            NotificationAggregate stored = NotificationAggregate.builder()
+                .referenceNumber(REFERENCE)
+                .status(status)
+                .notification(Notification.builder().build())
+                .fulfilments(new ArrayList<>())
+                .build();
+            when(notificationRepository.findByReferenceNumber(REFERENCE)).thenReturn(Optional.of(stored));
+            lenient().when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+            return stored;
+        }
+
+        private List<String> messagesLoggedDuring(Runnable action) {
+            return messagesOf(logEventsDuring(NotificationService.class, action));
+        }
+
+        @Test
+        void softDeleteNotification_shouldLogTheReferenceAndNothingChanged_whenAlreadyDeleted() {
+            repositoryHoldsAndEchoesSaves(DELETED);
+
+            List<String> messages = messagesLoggedDuring(
+                () -> notificationService.softDeleteNotification(REFERENCE, "trace", null));
+
+            assertThat(messages).containsExactly("Notification GBN-AG-26-LOG001 is already DELETED, nothing changed");
+        }
+
+        @Test
+        void softDeleteNotification_shouldLogTheStatusChange() {
+            repositoryHoldsAndEchoesSaves(DRAFT);
+
+            List<String> messages = messagesLoggedDuring(
+                () -> notificationService.softDeleteNotification(REFERENCE, "trace", null));
+
+            assertThat(messages).containsExactly("Notification GBN-AG-26-LOG001 status changed from DRAFT to DELETED");
+        }
+
+        @Test
+        void submitNotification_shouldLogTheStatusChange() {
+            repositoryHoldsAndEchoesSaves(AMEND);
+
+            List<String> messages = messagesLoggedDuring(
+                () -> notificationService.submitNotification(REFERENCE, SUBMIT_TOKEN, "trace", null));
+
+            assertThat(messages).containsExactly("Notification GBN-AG-26-LOG001 status changed from AMEND to SUBMITTED");
+        }
+
+        @Test
+        void amendNotification_shouldLogTheStatusChange() {
+            repositoryHoldsAndEchoesSaves(SUBMITTED);
+
+            List<String> messages = messagesLoggedDuring(
+                () -> notificationService.amendNotification(REFERENCE, "trace", null));
+
+            assertThat(messages).containsExactly("Notification GBN-AG-26-LOG001 status changed from SUBMITTED to AMEND");
+        }
+
+        @Test
+        void cancelAmendNotification_shouldLogTheStatusChange() {
+            repositoryHoldsAndEchoesSaves(AMEND).setPreAmendNotification(Notification.builder().build());
+
+            List<String> messages = messagesLoggedDuring(
+                () -> notificationService.cancelAmendNotification(REFERENCE, "trace", null));
+
+            assertThat(messages).containsExactly("Notification GBN-AG-26-LOG001 status changed from AMEND to SUBMITTED");
+        }
+
+        @Test
+        void replace_shouldLogOnlyTheUpdate_whenTheStatusStaysTheSame() {
+            repositoryHoldsAndEchoesSaves(DRAFT);
+
+            List<String> messages = messagesLoggedDuring(() -> notificationService.replace(REFERENCE,
+                NotificationDto.builder().concurrencyToken(SUBMIT_TOKEN).build(), "trace", null));
+
+            assertThat(messages).containsExactly("Updating notification GBN-AG-26-LOG001");
+        }
+
+        @Test
+        void saveNotification_shouldLogOnlyTheSavedReference_whenCreating() {
+            when(referenceNumberGenerator.generate()).thenReturn(REFERENCE);
+            when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+            List<String> messages = messagesLoggedDuring(
+                () -> notificationService.saveNotification(NotificationDto.builder().build(), "trace", null));
+
+            assertThat(messages).containsExactly("NotificationAggregate saved with reference number: GBN-AG-26-LOG001");
+        }
+    }
+
     private static NotificationViewBuilder notificationView() {
         return new NotificationViewBuilder();
     }

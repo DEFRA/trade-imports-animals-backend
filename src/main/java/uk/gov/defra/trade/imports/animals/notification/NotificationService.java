@@ -301,10 +301,15 @@ public class NotificationService {
                 if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)) {
                     applySubmission(notification);
                 }
+                NotificationStatus previousStatus = notification.getStatus();
                 notification.setStatus(targetStatus);
                 notification.setUpdated(clock.instant());
                 NotificationAggregate saved = notificationRepository.save(notification);
                 outboxService.appendEvent(saved, eventType, correlationId, actor);
+                if (previousStatus != null && previousStatus != targetStatus) {
+                    log.info("Notification {} status changed from {} to {}",
+                        saved.getReferenceNumber(), previousStatus, targetStatus);
+                }
                 return saved;
             });
     }
@@ -363,6 +368,7 @@ public class NotificationService {
             .orElseThrow(() -> new NotFoundException(
                 CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber));
         if (notificationAggregate.getStatus() == NotificationStatus.DELETED) {
+            log.info("Notification {} is already DELETED, nothing changed", referenceNumber);
             return notificationAggregate;
         }
         if (notificationAggregate.getStatus() != NotificationStatus.DRAFT
