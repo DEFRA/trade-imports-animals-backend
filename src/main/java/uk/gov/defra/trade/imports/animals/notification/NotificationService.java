@@ -437,7 +437,6 @@ public class NotificationService {
     private NotificationAggregate createNotification(NotificationDto dto, String correlationId, Actor actor) {
         NotificationAggregate notificationAggregate = new NotificationAggregate();
         notificationAggregate.setCreated(clock.instant());
-        notificationAggregate.setStatus(NotificationStatus.DRAFT);
         stampExpiry(notificationAggregate);
         setNotificationDetails(dto, notificationAggregate);
         int maxAttempts = 3;
