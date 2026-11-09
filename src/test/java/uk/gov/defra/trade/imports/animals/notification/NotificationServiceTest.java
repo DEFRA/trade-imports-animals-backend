@@ -250,7 +250,7 @@ class NotificationServiceTest {
             verify(notificationRepository, times(3)).save(any(NotificationAggregate.class));
         }
 
-        private Throwable saveWhoseThreeAttemptsCollide(DuplicateKeyException lastCollision) {
+        private Throwable failureOfSaveWhoseThreeAttemptsCollide(DuplicateKeyException lastCollision) {
             when(referenceNumberGenerator.generate())
                 .thenReturn("GBN-AG-26-ABC001", "GBN-AG-26-ABC002", "GBN-AG-26-ABC003");
             when(notificationRepository.save(any(NotificationAggregate.class)))
@@ -265,7 +265,7 @@ class NotificationServiceTest {
         @Test
         void saveNotification_shouldLogEachAttemptWithNoPromiseOfARetry_whenAllPersistenceAttemptsCollide() {
             List<ILoggingEvent> events = logEventsDuring(NotificationService.class,
-                () -> saveWhoseThreeAttemptsCollide(new DuplicateKeyException("last collision")));
+                () -> failureOfSaveWhoseThreeAttemptsCollide(new DuplicateKeyException("last collision")));
 
             assertThat(messagesOf(events)).containsExactly(
                 "Reference number GBN-AG-26-ABC001 collided on persistence attempt 1/3",
@@ -276,7 +276,7 @@ class NotificationServiceTest {
         @Test
         void saveNotification_shouldLogTheThrowableOfEachCollision_whenAllPersistenceAttemptsCollide() {
             List<ILoggingEvent> events = logEventsDuring(NotificationService.class,
-                () -> saveWhoseThreeAttemptsCollide(new DuplicateKeyException("last collision")));
+                () -> failureOfSaveWhoseThreeAttemptsCollide(new DuplicateKeyException("last collision")));
 
             assertThat(events)
                 .extracting(event -> event.getThrowableProxy().getMessage())
@@ -287,7 +287,7 @@ class NotificationServiceTest {
         void saveNotification_shouldKeepTheLastCollisionAsTheCause_whenAllPersistenceAttemptsCollide() {
             DuplicateKeyException lastCollision = new DuplicateKeyException("last collision");
 
-            Throwable thrown = saveWhoseThreeAttemptsCollide(lastCollision);
+            Throwable thrown = failureOfSaveWhoseThreeAttemptsCollide(lastCollision);
 
             assertThat(thrown).isInstanceOf(IllegalStateException.class).hasCauseReference(lastCollision);
         }
@@ -536,10 +536,10 @@ class NotificationServiceTest {
             assertThatThrownBy(() -> notificationService.saveNotification(dto, "trace-001", null))
                 .isInstanceOf(OutboxWriteException.class)
                 .satisfies(ex -> {
-                    OutboxWriteException owe = (OutboxWriteException) ex;
-                    assertThat(owe.getAggregateId())
+                    OutboxWriteException outboxWriteException = (OutboxWriteException) ex;
+                    assertThat(outboxWriteException.getAggregateId())
                         .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
-                    assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
+                    assertThat(outboxWriteException.getCorrelationId()).isEqualTo("trace-001");
                 });
 
             verify(lockProvider, times(3)).lock(any());
@@ -898,11 +898,11 @@ class NotificationServiceTest {
         void deleteByReferenceNumbers_shouldThrowNotFoundException_whenOneIsMissing() {
             String existingRef = "GBN-AG-26-000111";
             String missingRef = "GBN-AG-26-MSNG00";
-            NotificationReferenceOnly n1 = () -> existingRef;
+            NotificationReferenceOnly notificationRef1 = () -> existingRef;
 
             when(
                 notificationRepository.findAllReferencesByReferenceNumberIn(List.of(existingRef, missingRef)))
-                .thenReturn(List.of(n1));
+                .thenReturn(List.of(notificationRef1));
             when(auditRepository.save(any(Audit.class))).thenReturn(new Audit());
 
             List<String> referenceNumbers = List.of(existingRef, missingRef);
@@ -1227,10 +1227,10 @@ class NotificationServiceTest {
                 () -> notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-001", null))
                 .isInstanceOf(OutboxWriteException.class)
                 .satisfies(ex -> {
-                    OutboxWriteException owe = (OutboxWriteException) ex;
-                    assertThat(owe.getAggregateId())
+                    OutboxWriteException outboxWriteException = (OutboxWriteException) ex;
+                    assertThat(outboxWriteException.getAggregateId())
                         .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
-                    assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
+                    assertThat(outboxWriteException.getCorrelationId()).isEqualTo("trace-001");
                 });
 
             verify(lockProvider, times(3)).lock(any());
@@ -1319,15 +1319,15 @@ class NotificationServiceTest {
                 .build();
             when(notificationRepository.findByReferenceNumber(referenceNumber))
                 .thenReturn(Optional.of(notificationAggregate));
-            ArgumentCaptor<NotificationAggregate> saved = ArgumentCaptor.forClass(NotificationAggregate.class);
-            when(notificationRepository.save(saved.capture()))
+            ArgumentCaptor<NotificationAggregate> savedCaptor = ArgumentCaptor.forClass(NotificationAggregate.class);
+            when(notificationRepository.save(savedCaptor.capture()))
                 .thenThrow(new OptimisticLockingFailureException("stale"));
 
             assertThatThrownBy(
                 () -> notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-005", null))
                 .isInstanceOf(OptimisticLockingFailureException.class);
 
-            assertThat(saved.getValue().getConcurrencyToken()).isEqualTo(SUBMIT_TOKEN);
+            assertThat(savedCaptor.getValue().getConcurrencyToken()).isEqualTo(SUBMIT_TOKEN);
             verify(outboxService, never()).appendEvent(any(), any(), any(), any());
         }
 
@@ -1534,10 +1534,10 @@ class NotificationServiceTest {
                 () -> notificationService.amendNotification(referenceNumber, "trace-amd-6", null))
                 .isInstanceOf(OutboxWriteException.class)
                 .satisfies(ex -> {
-                    OutboxWriteException owe = (OutboxWriteException) ex;
-                    assertThat(owe.getAggregateId())
+                    OutboxWriteException outboxWriteException = (OutboxWriteException) ex;
+                    assertThat(outboxWriteException.getAggregateId())
                         .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
-                    assertThat(owe.getCorrelationId()).isEqualTo("trace-amd-6");
+                    assertThat(outboxWriteException.getCorrelationId()).isEqualTo("trace-amd-6");
                 });
 
             verify(lockProvider, times(3)).lock(any());
