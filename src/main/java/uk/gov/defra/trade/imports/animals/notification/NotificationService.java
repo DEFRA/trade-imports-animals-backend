@@ -88,10 +88,6 @@ public class NotificationService {
         this.adminPageSize = adminPageSize;
     }
 
-    /**
-     * Logs once the application is ready whether new notifications get an expiry stamped in this
-     * environment and, when they do not, why.
-     */
     @EventListener(ApplicationReadyEvent.class)
     public void logExpiryStamping() {
         String environment = ttlConfig.environment();
@@ -113,10 +109,6 @@ public class NotificationService {
         }
     }
 
-    /**
-     * Replaces the content of a DRAFT or AMEND notification and emits a {@code NOTIFICATION_EDITED}
-     * outbox event.
-     */
     @Transactional
     public NotificationAggregate replace(String referenceNumber, NotificationDto dto,
         String correlationId, Actor actor) {
