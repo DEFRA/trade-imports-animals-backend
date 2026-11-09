@@ -62,12 +62,12 @@ public class DocumentService {
   }
 
   /**
-   * Returns the upload session a notification opened under the given correlation handle.
+   * Returns the upload session a notification opened under the given correlationId.
    *
    * @param notificationReferenceNumber the parent notification reference number
-   * @param correlationId the handle the session was opened under
+   * @param correlationId the correlationId the session was opened under
    * @return the session
-   * @throws NotFoundException if that notification has no session under the handle
+   * @throws NotFoundException if that notification has no session under the correlationId
    */
   public UploadSession findSession(String notificationReferenceNumber, String correlationId) {
     return uploadSessionRepository

@@ -42,7 +42,7 @@ import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 @Slf4j
 public class DocumentController {
 
-  private static final String UPLOAD_HANDLE_PATTERN = "^[A-Za-z0-9._-]{1,100}$";
+  private static final String UPLOAD_SESSION_IDENTIFIER_PATTERN = "^[A-Za-z0-9._-]{1,100}$";
 
   private final DocumentService documentService;
   private final S3DocumentService s3DocumentService;
@@ -89,16 +89,16 @@ public class DocumentController {
   }
 
   /**
-   * Look up the upload session a notification opened under a correlation handle.
+   * Look up the upload session a notification opened under a correlationId.
    *
    * @param referenceNumber the notification reference number
-   * @param correlationId the handle the session was opened under
+   * @param correlationId the correlationId the session was opened under
    * @return 200 OK with the session
    */
   @GetMapping("/notifications/{referenceNumber}/document-upload-sessions/{correlationId}")
   @Operation(
       summary = "Get document upload session",
-      description = "Returns the upload session a notification opened under a correlation handle")
+      description = "Returns the upload session a notification opened under a correlationId")
   @ApiResponse(responseCode = "200", description = "Session returned",
       content = @Content(schema = @Schema(implementation = UploadSessionDto.class)))
   @ApiResponse(responseCode = "404", description = "Session not found", content = @Content)
@@ -107,7 +107,7 @@ public class DocumentController {
       @PathVariable @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
       String referenceNumber,
       @PathVariable
-      @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String correlationId) {
+      @Pattern(regexp = UPLOAD_SESSION_IDENTIFIER_PATTERN) String correlationId) {
 
     log.info("GET /notifications/{}/document-upload-sessions/{}", referenceNumber,
         correlationId);
@@ -134,7 +134,7 @@ public class DocumentController {
   @Timed("document.claim")
   public ResponseEntity<AccompanyingDocumentDto> claim(
       @PathVariable
-      @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String uploadId,
+      @Pattern(regexp = UPLOAD_SESSION_IDENTIFIER_PATTERN) String uploadId,
       @Valid @RequestBody ClaimUploadRequest request) {
 
     log.info("POST /document-uploads/{}/claim", uploadId);

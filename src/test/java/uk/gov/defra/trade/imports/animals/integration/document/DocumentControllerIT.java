@@ -208,7 +208,7 @@ class DocumentControllerIT extends IntegrationBase {
     class GetSessionByCorrelationId {
 
         @Test
-        void shouldReturnTheSessionByItsCorrelationHandle() {
+        void shouldReturnTheSessionByItsCorrelationId() {
             OpenedSession session = registeredSession();
 
             webClient("NoAuth")
@@ -222,7 +222,7 @@ class DocumentControllerIT extends IntegrationBase {
         }
 
         @Test
-        void shouldReturn404_whenTheHandleBelongsToAnotherNotification() {
+        void shouldReturn404_whenTheCorrelationIdBelongsToAnotherNotification() {
             OpenedSession session = registeredSession();
 
             webClient("NoAuth")

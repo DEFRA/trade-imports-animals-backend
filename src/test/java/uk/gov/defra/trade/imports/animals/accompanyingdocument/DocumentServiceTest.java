@@ -184,7 +184,7 @@ class DocumentServiceTest {
     }
 
     @Test
-    void findSession_shouldThrowNotFound_whenThatNotificationHasNoSessionUnderTheHandle() {
+    void findSession_shouldThrowNotFound_whenThatNotificationHasNoSessionUnderTheCorrelationId() {
       when(uploadSessionRepository.findByNotificationReferenceNumberAndCorrelationId(
           "GBN-AG-26-ANTHR1", "correlation-id-ses")).thenReturn(Optional.empty());
 
