@@ -1404,7 +1404,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getActor().getSource()).isEqualTo("dynamics-contact");
         assertThat(event.getActor().getUserType()).isEqualTo("B2C");
         assertThat(event.getActor().getDisplayName()).isEqualTo("Jane Farmer");
-        assertThat(event.getActor().getOrganisationId()).isEqualTo("org-001");
+        assertThat(event.getActor().getOrganisationId()).isEqualTo(DEFAULT_TRADER_ORG_ID);
         assertThat(event.getActor().getOnBehalfOfOrganisationId()).isNull();
 
         // statusChanges: DRAFT (from NOTIFICATION_CREATED, no actor) + SUBMITTED (with actor)
@@ -2539,8 +2539,9 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void organisationScope_shouldHideNotificationFromOtherOrganisation() {
-        String referenceNumber =
-            createNotificationAs(createNotificationDto("GB", "Live cattle"), DEFAULT_TRADER_ORG_ID);
+        NotificationDto dto = createNotificationDto("GB", "Live cattle");
+        dto.setFulfilments(sampleFulfilments());
+        String referenceNumber = createNotificationAs(dto, DEFAULT_TRADER_ORG_ID);
         String ownerCountryCode = "GB";
 
         submitAs(referenceNumber, DEFAULT_TRADER_ORG_ID);
