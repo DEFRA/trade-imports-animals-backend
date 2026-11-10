@@ -58,7 +58,7 @@ public class DocumentController {
   }
 
   /**
-   * Register an upload session for a notification.
+   * Register a cdp-uploader upload session for a notification.
    *
    * @param referenceNumber the notification reference number
    * @param request the upload session's identifiers
