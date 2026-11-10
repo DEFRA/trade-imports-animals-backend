@@ -40,6 +40,15 @@ public class GlobalExceptionHandler {
         URI.create("https://api.cdp.defra.cloud/problems/validation-error");
     private static final URI TYPE_MALFORMED_REQUEST =
         URI.create("https://api.cdp.defra.cloud/problems/malformed-request");
+    private static final URI TYPE_BAD_REQUEST =
+        URI.create("https://api.cdp.defra.cloud/problems/bad-request");
+    private static final URI TYPE_FORBIDDEN =
+        URI.create("https://api.cdp.defra.cloud/problems/forbidden");
+    private static final URI TYPE_NOT_FOUND =
+        URI.create("https://api.cdp.defra.cloud/problems/not-found");
+    private static final URI TYPE_CONFLICT =
+        URI.create("https://api.cdp.defra.cloud/problems/conflict");
+    private static final String MDC_ORGANISATION_ID = "organisationId";
 
     /**
      * Handle validation errors (400 Bad Request).
@@ -178,22 +187,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ProblemDetail> handleBadRequestException(BadRequestException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.warn("Bad request (trace: {})", traceId, ex);
+        return problemResponse(
+            HttpStatus.BAD_REQUEST, TYPE_BAD_REQUEST, "Bad Request", ex.getMessage());
+    }
 
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-            HttpStatus.BAD_REQUEST,
-            ex.getMessage()
-        );
-
-        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/bad-request"));
-        problemDetail.setTitle("Bad Request");
-
-        if (traceId != null) {
-            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
-        }
-
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-            .body(problemDetail);
+    @ExceptionHandler(ForbiddenException.class)
+    public ResponseEntity<ProblemDetail> handleForbiddenException(ForbiddenException ex) {
+        logClientRefusal("Forbidden", ex.getMessage());
+        return problemResponse(HttpStatus.FORBIDDEN, TYPE_FORBIDDEN, "Forbidden", ex.getMessage());
     }
 
     /**
@@ -201,24 +202,9 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(NotFoundException.class)
     public ResponseEntity<ProblemDetail> handleNotFoundException(NotFoundException ex) {
-        String traceId = MDC.get(MDC_TRACE_ID);
-        log.warn("Resource not found (trace: {})", traceId, ex);
-
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-            HttpStatus.NOT_FOUND,
-            ex.getMessage()
-        );
-
-        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/not-found"));
-        problemDetail.setTitle("Resource Not Found");
-
-        if (traceId != null) {
-            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
-        }
-
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
-            .contentType(MediaType.APPLICATION_PROBLEM_JSON)
-            .body(problemDetail);
+        logClientRefusal("Resource not found", ex.getMessage());
+        return problemResponse(
+            HttpStatus.NOT_FOUND, TYPE_NOT_FOUND, "Resource Not Found", ex.getMessage());
     }
 
     /**
@@ -228,20 +214,24 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ProblemDetail> handleConflictException(ConflictException ex) {
         String traceId = MDC.get(MDC_TRACE_ID);
         log.warn("Resource conflict (trace: {})", traceId, ex);
+        return problemResponse(
+            HttpStatus.CONFLICT, TYPE_CONFLICT, "Resource Conflict", ex.getMessage());
+    }
 
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(
-            HttpStatus.CONFLICT,
-            ex.getMessage()
-        );
+    private static void logClientRefusal(String outcome, String detail) {
+        log.warn(
+            "{}: {} (trace: {}, organisationId: {})",
+            outcome,
+            detail,
+            MDC.get(MDC_TRACE_ID),
+            MDC.get(MDC_ORGANISATION_ID));
+    }
 
-        problemDetail.setType(URI.create("https://api.cdp.defra.cloud/problems/conflict"));
-        problemDetail.setTitle("Resource Conflict");
-
-        if (traceId != null) {
-            problemDetail.setProperty(PROPERTY_TRACE_ID, traceId);
-        }
-
-        return ResponseEntity.status(HttpStatus.CONFLICT)
+    private ResponseEntity<ProblemDetail> problemResponse(
+        HttpStatus status, URI type, String title, String detail) {
+        ProblemDetail problemDetail =
+            ProblemDetailsFactory.problemDetail(status, type, title, detail);
+        return ResponseEntity.status(status)
             .contentType(MediaType.APPLICATION_PROBLEM_JSON)
             .body(problemDetail);
     }

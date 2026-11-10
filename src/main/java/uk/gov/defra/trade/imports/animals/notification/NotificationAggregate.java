@@ -10,6 +10,8 @@ import lombok.NoArgsConstructor;
 import org.bson.Document;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.Version;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
 
 import static java.util.Objects.requireNonNull;
@@ -20,6 +22,14 @@ import static java.util.Objects.requireNonNull;
  * Amend baselines snapshot the two sub-objects independently.
  */
 @org.springframework.data.mongodb.core.mapping.Document(collection = "notification")
+@CompoundIndexes({
+    @CompoundIndex(
+        name = "organisationId_status_created",
+        def = "{'organisationId': 1, 'status': 1, 'created': -1}"),
+    @CompoundIndex(
+        name = "organisationId_status_arrivalDate",
+        def = "{'organisationId': 1, 'status': 1, 'notification.transport.arrivalDate': -1}")
+})
 @Data
 @Builder(toBuilder = true)
 @NoArgsConstructor
@@ -31,6 +41,8 @@ public class NotificationAggregate {
 
     @Indexed(unique = true, sparse = true)
     private String referenceNumber;
+
+    private String organisationId;
 
     @Version
     private Long concurrencyToken;

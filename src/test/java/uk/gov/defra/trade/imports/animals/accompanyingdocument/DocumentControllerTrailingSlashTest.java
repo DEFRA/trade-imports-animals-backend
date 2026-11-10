@@ -19,6 +19,8 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
+import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
+import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
 @WebMvcTest(DocumentController.class)
@@ -30,6 +32,8 @@ import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 })
 class DocumentControllerTrailingSlashTest {
 
+  private static final String CALLER_ORGANISATION_ID = "5900002";
+
   @Autowired
   private MockMvc mockMvc;
 
@@ -38,6 +42,9 @@ class DocumentControllerTrailingSlashTest {
 
   @MockitoBean
   private DocumentService documentService;
+
+  @MockitoBean
+  private NotificationService notificationService;
 
   @MockitoBean
   private S3DocumentService s3DocumentService;
@@ -51,6 +58,7 @@ class DocumentControllerTrailingSlashTest {
 
     mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
             .contentType(MediaType.APPLICATION_JSON)
+            .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
             .content(objectMapper.writeValueAsString(registerUploadRequest())))
         .andExpect(status().isCreated())
         .andExpect(header().string(

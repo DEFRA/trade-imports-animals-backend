@@ -34,6 +34,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
 
@@ -215,7 +216,9 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     }
 
     protected Long currentConcurrencyToken(String referenceNumber) {
-        return notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow().getConcurrencyToken();
+        return NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
+            .orElseThrow()
+            .getConcurrencyToken();
     }
 
     protected String createAndSaveNotification(String traceId) {

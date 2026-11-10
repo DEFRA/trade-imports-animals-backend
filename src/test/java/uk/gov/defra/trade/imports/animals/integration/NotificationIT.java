@@ -37,6 +37,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationPageResponse;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.NotificationView;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
@@ -48,6 +49,7 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventType;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
+import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 class NotificationIT extends IntegrationBase {
@@ -58,8 +60,7 @@ class NotificationIT extends IntegrationBase {
     private static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
     private static final String REF_FORMAT_REGEX = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN;
     private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
-    /** The acting user's organisation, sent on submit and copy. */
-    private static final String ORG_ID = "5900002";
+    private static final String OTHER_ORG_ID = "9999999";
 
     @Autowired
     private NotificationRepository notificationRepository;
@@ -128,11 +129,12 @@ class NotificationIT extends IntegrationBase {
         assertThat(created).isNotNull();
         assertThat(created.getId()).isNotNull();
         assertThat(created.getReferenceNumber()).matches(REF_FORMAT_REGEX);
+        assertThat(created.getOrganisationId()).isEqualTo(DEFAULT_TRADER_ORG_ID);
         assertNotificationMappedFields(created);
         assertThat(created.getNotification().getOrigin().getRegionOfOriginCode()).isEqualTo("GB-ENG");
 
         // Verify persisted — reload via API
-        NotificationAggregate persisted = notificationRepository.findByReferenceNumber(created.getReferenceNumber())
+        NotificationAggregate persisted = NotificationTestSupport.findByReferenceNumber(mongoTemplate, created.getReferenceNumber())
             .orElseThrow();
         assertThat(persisted.getId()).isEqualTo(created.getId());
         assertNotificationMappedFields(persisted);
@@ -159,7 +161,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(created.getNotification().getOrigin().getCountryCode()).isEqualTo("ES");
         assertThat(created.getNotification().getOrigin().getCountrySubdivisionCode()).isEqualTo("ES-CN");
 
-        NotificationAggregate persisted = notificationRepository.findByReferenceNumber(created.getReferenceNumber())
+        NotificationAggregate persisted = NotificationTestSupport.findByReferenceNumber(mongoTemplate, created.getReferenceNumber())
             .orElseThrow();
         assertThat(persisted.getNotification().getOrigin().getCountrySubdivisionCode()).isEqualTo("ES-CN");
     }
@@ -185,7 +187,7 @@ class NotificationIT extends IntegrationBase {
 
         assertThat(created.getNotification().getCommodities()).isNotNull().isEmpty();
 
-        NotificationAggregate persisted = notificationRepository.findByReferenceNumber(created.getReferenceNumber())
+        NotificationAggregate persisted = NotificationTestSupport.findByReferenceNumber(mongoTemplate, created.getReferenceNumber())
             .orElseThrow();
         assertThat(persisted.getNotification().getCommodities()).isNotNull().isEmpty();
     }
@@ -349,11 +351,11 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody()
             .getReferenceNumber();
 
-        NotificationAggregate older = notificationRepository.findByReferenceNumber(refOlder).orElseThrow();
+        NotificationAggregate older = NotificationTestSupport.findByReferenceNumber(mongoTemplate, refOlder).orElseThrow();
         older.setCreated(Instant.parse("2026-01-01T10:00:00Z"));
         notificationRepository.save(older);
 
-        NotificationAggregate newer = notificationRepository.findByReferenceNumber(refNewer).orElseThrow();
+        NotificationAggregate newer = NotificationTestSupport.findByReferenceNumber(mongoTemplate, refNewer).orElseThrow();
         newer.setCreated(Instant.parse("2026-01-02T10:00:00Z"));
         notificationRepository.save(newer);
 
@@ -679,7 +681,7 @@ class NotificationIT extends IntegrationBase {
         // Verify only one notification exists and reload via API
         List<NotificationView> all = findAllNotifications();
         assertThat(all).hasSize(1);
-        NotificationAggregate persisted = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate persisted = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         assertNotificationMappedFields(persisted, "REF-updated");
     }
@@ -731,7 +733,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(updated.getNotification().getTransport().getMeansOfTransport()).isEqualTo(MeansOfTransport.VESSEL);
         assertThat(updated.getNotification().getTransport().getTransitedCountries()).isNullOrEmpty();
 
-        NotificationAggregate persisted = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate persisted = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         assertThat(persisted.getNotification().getTransport().getTransitedCountries()).isNullOrEmpty();
     }
@@ -950,7 +952,7 @@ class NotificationIT extends IntegrationBase {
     void amend_shouldPersistPreAmendSnapshotInMongo() {
         // Given — submitted notification with identifiable content
         String referenceNumber = createAndSubmitNotificationWithFullContent();
-        NotificationAggregate beforeAmend = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate beforeAmend = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber).orElseThrow();
 
         // When
         webClient("NoAuth")
@@ -959,7 +961,7 @@ class NotificationIT extends IntegrationBase {
             .expectStatus().isOk();
 
         // Then — pre-amend snapshot captured in Mongo at amend start
-        NotificationAggregate reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate reloaded = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber).orElseThrow();
         assertThat(reloaded.getStatus()).isEqualTo(NotificationStatus.AMEND);
         assertThat(reloaded.getPreAmendNotification()).isNotNull();
         assertThat(reloaded.getPreAmendNotification().getOrigin().getInternalReference())
@@ -1012,7 +1014,7 @@ class NotificationIT extends IntegrationBase {
         String referenceNumber = createNotificationWithLiteralConsignor();
 
         // When
-        submitAs(referenceNumber, ORG_ID);
+        submitAs(referenceNumber, DEFAULT_TRADER_ORG_ID);
 
         // Then — GBNAG carries exactly the stored details
         Map<String, Object> consignor = outboxConsignorParty(submittedOutboxEvent());
@@ -1029,7 +1031,7 @@ class NotificationIT extends IntegrationBase {
                 .containsEntry("telephoneUniversalCommunication", "+41 22 000 0000"));
 
         // And — storage keeps the literal the frontend supplied
-        NotificationAggregate stored = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         assertThat(stored.getNotification().getConsignor()).isEqualTo(literalConsignor());
     }
@@ -1043,10 +1045,10 @@ class NotificationIT extends IntegrationBase {
             Updates.set("notification.consignor.addressId", "665f1c2ab3e4d51a2c9d0e77"));
 
         // When
-        submitAs(referenceNumber, ORG_ID);
+        submitAs(referenceNumber, DEFAULT_TRADER_ORG_ID);
 
         // Then — the read ignores the unknown field and the event carries the literal
-        NotificationAggregate stored = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         assertThat(stored.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(stored.getNotification().getConsignor()).isEqualTo(literalConsignor());
@@ -1094,7 +1096,7 @@ class NotificationIT extends IntegrationBase {
     void cancelAmend_shouldRestoreBaselineAndRevertStatusInMongo() {
         // Given — submitted notification reloaded from Mongo as the golden baseline
         String referenceNumber = createAndSubmitNotificationWithFullContent();
-        NotificationAggregate submittedInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate submittedInMongo = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         assertThat(submittedInMongo.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
 
@@ -1103,7 +1105,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
             .exchange().expectStatus().isOk();
 
-        NotificationAggregate inAmendInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate inAmendInMongo = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         assertThat(inAmendInMongo.getStatus()).isEqualTo(NotificationStatus.AMEND);
         assertThat(inAmendInMongo.getPreAmendNotification()).isNotNull();
@@ -1117,7 +1119,7 @@ class NotificationIT extends IntegrationBase {
         inAmendInMongo.getNotification().setCphNumber("99/999/9999");
         notificationRepository.save(inAmendInMongo);
 
-        NotificationAggregate editedInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate editedInMongo = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         assertThat(editedInMongo.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-REF");
         assertThat(editedInMongo.getPreAmendNotification()).isNotNull();
@@ -1128,7 +1130,7 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         // Then — status reverted, pre-amend snapshot cleared, amendable fields restored
-        NotificationAggregate restoredInMongo = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate restoredInMongo = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         assertThat(restoredInMongo.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(restoredInMongo.getPreAmendNotification()).isNull();
@@ -1194,7 +1196,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
             .exchange().expectStatus().isOk();
 
-        NotificationAggregate inAmend = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate inAmend = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber).orElseThrow();
         inAmend.getNotification().getOrigin().setInternalReference("EDITED-AND-KEPT");
         notificationRepository.save(inAmend);
         assertThat(inAmend.getPreAmendNotification()).isNotNull();
@@ -1211,7 +1213,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(resubmitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(resubmitted.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
 
-        NotificationAggregate reloaded = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate reloaded = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber).orElseThrow();
         assertThat(reloaded.getPreAmendNotification()).isNull();
         assertThat(reloaded.getNotification().getOrigin().getInternalReference()).isEqualTo("EDITED-AND-KEPT");
 
@@ -1402,7 +1404,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getActor().getSource()).isEqualTo("dynamics-contact");
         assertThat(event.getActor().getUserType()).isEqualTo("B2C");
         assertThat(event.getActor().getDisplayName()).isEqualTo("Jane Farmer");
-        assertThat(event.getActor().getOrganisationId()).isEqualTo("org-001");
+        assertThat(event.getActor().getOrganisationId()).isEqualTo(DEFAULT_TRADER_ORG_ID);
         assertThat(event.getActor().getOnBehalfOfOrganisationId()).isNull();
 
         // statusChanges: DRAFT (from NOTIFICATION_CREATED, no actor) + SUBMITTED (with actor)
@@ -1493,7 +1495,7 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         // Reset status to DRAFT so we can submit again (simulates re-submission scenario)
-        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate notificationAggregate = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber).orElseThrow();
         notificationAggregate.setStatus(NotificationStatus.DRAFT);
         notificationRepository.save(notificationAggregate);
 
@@ -1727,7 +1729,7 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         NotificationAggregate notificationAggregate =
-            notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+            NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber).orElseThrow();
         notificationAggregate.setStatus(NotificationStatus.DRAFT);
         notificationRepository.save(notificationAggregate);
 
@@ -1874,7 +1876,7 @@ class NotificationIT extends IntegrationBase {
             .expectStatus().isNoContent();
 
         // Then — notification and its documents are both gone
-        assertThat(notificationRepository.findByReferenceNumber(referenceNumber)).isEmpty();
+        assertThat(NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)).isEmpty();
         assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(referenceNumber))
             .isEmpty();
     }
@@ -1990,6 +1992,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(copy.getReferenceNumber()).isNotEqualTo(sourceRef);
         assertThat(copy.getReferenceNumber()).matches(REF_FORMAT_REGEX);
         assertThat(copy.getStatus()).isEqualTo(NotificationStatus.DRAFT);
+        assertThat(copy.getOrganisationId()).isEqualTo(DEFAULT_TRADER_ORG_ID);
     }
 
     private void assertCopyRetainsIdentificationFields(NotificationAggregate copy) {
@@ -2020,7 +2023,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     private void assertSourceUnchangedAfterCopy(String sourceRef) {
-        NotificationAggregate original = notificationRepository.findByReferenceNumber(sourceRef).orElseThrow();
+        NotificationAggregate original = NotificationTestSupport.findByReferenceNumber(mongoTemplate, sourceRef).orElseThrow();
         assertThat(original.getNotification().getOrigin().getInternalReference()).isEqualTo("INTERNAL-DO-NOT-COPY");
         assertThat(original.getNotification().getAdditionalDetails().getUnweanedAnimals()).isEqualTo("yes");
         assertThat(original.getNotification().getTransport().getPortOfEntry()).isEqualTo("GBDVR");
@@ -2056,7 +2059,7 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
 
         // Reset status to DRAFT so we can submit again
-        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow();
+        NotificationAggregate notificationAggregate = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber).orElseThrow();
         notificationAggregate.setStatus(NotificationStatus.DRAFT);
         notificationRepository.save(notificationAggregate);
 
@@ -2209,7 +2212,7 @@ class NotificationIT extends IntegrationBase {
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", sourceRef, currentConcurrencyToken(sourceRef))
             .exchange().expectStatus().isOk();
 
-        Long submittedVersion = notificationRepository.findByReferenceNumber(sourceRef)
+        Long submittedVersion = NotificationTestSupport.findByReferenceNumber(mongoTemplate, sourceRef)
             .orElseThrow().getConcurrencyToken();
 
         // When — copy the submitted notification
@@ -2327,9 +2330,9 @@ class NotificationIT extends IntegrationBase {
     void copy_shouldCarryTheSourceConsignorLiteral_onCreatedOutbox_whenSourceIsSubmitted() {
         // Given — submitted notification whose consignor is a literal copy
         String sourceRef = createNotificationWithLiteralConsignor();
-        submitAs(sourceRef, ORG_ID);
+        submitAs(sourceRef, DEFAULT_TRADER_ORG_ID);
 
-        NotificationAggregate source = notificationRepository.findByReferenceNumber(sourceRef).orElseThrow();
+        NotificationAggregate source = NotificationTestSupport.findByReferenceNumber(mongoTemplate, sourceRef).orElseThrow();
         Long version = source.getConcurrencyToken();
 
         // When
@@ -2339,14 +2342,14 @@ class NotificationIT extends IntegrationBase {
                 .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
                 .queryParam("concurrencyToken", version)
                 .build(sourceRef))
-            .bodyValue(Map.of("organisationId", ORG_ID))
+            .bodyValue(Map.of("organisationId", DEFAULT_TRADER_ORG_ID))
             .exchange().expectStatus().isOk()
             .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody();
 
         // Then — stored draft and Created outbox both carry the source's literal party
         assertThat(copy).isNotNull();
-        NotificationAggregate stored = notificationRepository.findByReferenceNumber(copy.getReferenceNumber())
+        NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, copy.getReferenceNumber())
             .orElseThrow();
         assertThat(stored.getNotification().getConsignor()).isEqualTo(literalConsignor());
 
@@ -2443,7 +2446,7 @@ class NotificationIT extends IntegrationBase {
             .jsonPath("$.title").isEqualTo("Stale Concurrency Token");
 
         // And the stored notification reflects the first PUT's write, not the stale one.
-        NotificationAggregate stored = notificationRepository.findByReferenceNumber(ref).orElseThrow();
+        NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, ref).orElseThrow();
         assertThat(stored.getNotification().getOrigin().getInternalReference()).isEqualTo("FIRST");
     }
 
@@ -2486,7 +2489,7 @@ class NotificationIT extends IntegrationBase {
             .jsonPath("$.code").isEqualTo("STALE_CONCURRENCY_TOKEN");
 
         // Then — it stays a draft and no submission event is written
-        NotificationAggregate stored = notificationRepository.findByReferenceNumber(ref).orElseThrow();
+        NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, ref).orElseThrow();
         assertThat(stored.getStatus()).isEqualTo(NotificationStatus.DRAFT);
         assertThat(stored.getSubmittedAt()).isNull();
         assertThat(outboxEventRepository.count()).isEqualTo(eventsBeforeSubmit);
@@ -2513,13 +2516,148 @@ class NotificationIT extends IntegrationBase {
             .jsonPath("$.errors.concurrencyToken").exists();
 
         // Then — it stays a draft and no submission event is written
-        assertThat(notificationRepository.findByReferenceNumber(ref).orElseThrow().getStatus())
+        assertThat(NotificationTestSupport.findByReferenceNumber(mongoTemplate, ref).orElseThrow().getStatus())
             .isEqualTo(NotificationStatus.DRAFT);
         assertThat(outboxEventRepository.count()).isEqualTo(eventsBeforeSubmit);
     }
 
+    @Test
+    void traderRequests_shouldRejectMissingOrganisationHeader() {
+        webClient("NoAuth")
+            .mutate()
+            .defaultHeaders(headers -> headers.remove(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER))
+            .build()
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
+            .exchange()
+            .expectStatus().isBadRequest()
+            .expectBody()
+            .jsonPath("$.detail")
+            .value(Matchers.containsString(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER));
+    }
+
+    @Test
+    void organisationScope_shouldHideNotificationFromOtherOrganisation() {
+        NotificationDto dto = createNotificationDto("GB", "Live cattle");
+        dto.setFulfilments(sampleFulfilments());
+        String referenceNumber = createNotificationAs(dto, DEFAULT_TRADER_ORG_ID);
+        String ownerCountryCode = "GB";
+
+        submitAs(referenceNumber, DEFAULT_TRADER_ORG_ID);
+
+        webClient("NoAuth", DEFAULT_TRADER_ORG_ID)
+            .post()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .exchange()
+            .expectStatus().isOk();
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .get()
+            .uri(NOTIFICATION_ENDPOINT)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationPageResponse.class)
+            .value(page -> assertThat(page.content()).isEmpty());
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .get()
+            .uri(NOTIFICATION_ENDPOINT + "?referenceNumber={ref}", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationPageResponse.class)
+            .value(page -> assertThat(page.content()).isEmpty());
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .post()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .exchange()
+            .expectStatus().isNotFound();
+
+        Long concurrencyToken = currentConcurrencyToken(referenceNumber);
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .put()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
+            .bodyValue(SaveNotificationDto.of(
+                NotificationDto.builder().concurrencyToken(concurrencyToken).build()))
+            .exchange()
+            .expectStatus().isNotFound();
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .post()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, concurrencyToken)
+            .exchange()
+            .expectStatus().isNotFound();
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", concurrencyToken)
+                .build(referenceNumber))
+            .exchange()
+            .expectStatus().isNotFound();
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .post()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/cancel-amend", referenceNumber)
+            .exchange()
+            .expectStatus().isNotFound();
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .post()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .exchange()
+            .expectStatus().isNotFound();
+
+        NotificationAggregate unchanged =
+            NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber).orElseThrow();
+        assertThat(unchanged.getStatus()).isEqualTo(NotificationStatus.AMEND);
+        assertThat(unchanged.getOrganisationId()).isEqualTo(DEFAULT_TRADER_ORG_ID);
+        assertThat(unchanged.getNotification().getOrigin().getCountryCode()).isEqualTo(ownerCountryCode);
+    }
+
+    @Test
+    void organisationScope_post_shouldTakeOrganisationFromHeader_notBodyActor() {
+        NotificationDto dto = createNotificationDto("FR", "Live cattle");
+        SaveNotificationDto body = SaveNotificationDto.builder()
+            .notification(dto)
+            .actor(uk.gov.defra.trade.imports.animals.notification.ActorRequest.builder()
+                .organisationId(OTHER_ORG_ID)
+                .build())
+            .build();
+
+        NotificationAggregate created = webClient("NoAuth", DEFAULT_TRADER_ORG_ID)
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(body)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationAggregate.class)
+            .returnResult()
+            .getResponseBody();
+
+        assertThat(created.getOrganisationId()).isEqualTo(DEFAULT_TRADER_ORG_ID);
+    }
+
+    @Test
+    void organisationScope_shouldReturn403ForFulfilmentsWhenOrganisationDiffers() {
+        NotificationDto dto = createNotificationDto("GB", "Live cattle");
+        dto.setFulfilments(sampleFulfilments());
+        String referenceNumber = createNotificationAs(dto, DEFAULT_TRADER_ORG_ID);
+
+        submitAs(referenceNumber, DEFAULT_TRADER_ORG_ID);
+
+        webClient("NoAuth", OTHER_ORG_ID)
+            .get()
+            .uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", referenceNumber)
+            .exchange()
+            .expectStatus().isForbidden();
+    }
+
     private Long currentConcurrencyToken(String referenceNumber) {
-        return notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow().getConcurrencyToken();
+        return NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber).orElseThrow().getConcurrencyToken();
     }
 
     private String createAndSubmitNotificationWithFullContent() {
@@ -2574,10 +2712,22 @@ class NotificationIT extends IntegrationBase {
     }
 
     private void submitAs(String referenceNumber, String organisationId) {
-        webClient("NoAuth")
+        webClient("NoAuth", organisationId)
             .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
-            .bodyValue(Map.of("organisationId", organisationId))
             .exchange().expectStatus().isOk();
+    }
+
+    private String createNotificationAs(NotificationDto dto, String organisationId) {
+        return webClient("NoAuth", organisationId)
+            .post()
+            .uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(dto))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationAggregate.class)
+            .returnResult()
+            .getResponseBody()
+            .getReferenceNumber();
     }
 
     private OutboxEvent submittedOutboxEvent() {
@@ -2648,4 +2798,5 @@ class NotificationIT extends IntegrationBase {
         }
         return notification.getTransport().getArrivalDate();
     }
+
 }
