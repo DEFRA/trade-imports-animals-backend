@@ -51,7 +51,6 @@ public class AccompanyingDocument {
 
   private String documentReference;
 
-  /** Date of issue on the physical document. */
   private LocalDate dateOfIssue;
 
   private ScanStatus scanStatus;
