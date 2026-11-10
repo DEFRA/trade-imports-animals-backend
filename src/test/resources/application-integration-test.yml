@@ -73,6 +73,8 @@ management:
   health:
     mongo:
       enabled: false
+  # Keeps the EMF metrics publisher off: tests have no CloudWatch agent and a blank
+  # namespace, which fails every scheduled publish.
   metrics:
     enabled: false
 
@@ -86,6 +88,7 @@ notification:
   list:
     page-size: 2
   submit:
+    # No minimum hold on the submit lock, so a re-submission in the same test is not refused.
     lock-at-least-for: 0ms
   ttl:
     environment: ${ENVIRONMENT:local}
