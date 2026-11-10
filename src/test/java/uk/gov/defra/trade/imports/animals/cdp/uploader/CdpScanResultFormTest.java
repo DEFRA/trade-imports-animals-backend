@@ -159,8 +159,7 @@ class CdpScanResultFormTest {
     }
 
     @Test
-    void deserialize_shouldWarnNamingTheField_whenAFormValueIsAnObjectWithNoFileId()
-        throws JsonProcessingException {
+    void deserialize_shouldWarnNamingTheField_whenAFormValueIsAnObjectWithNoFileId() {
       String json = """
           {
             "declaration": {
