@@ -84,6 +84,8 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 class DocumentControllerIT extends IntegrationBase {
 
     private static final String NOTIFICATION_REF = "GBN-AG-25-TC0001";
+    private static final String OTHER_NOTIFICATION_REF = "GBN-AG-26-OTHER0";
+    private static final String OTHER_ORG_ID = "9999999";
     private static final String AWS_REGION = "eu-west-2";
 
     private static final Duration SCAN_TIMEOUT = Duration.ofSeconds(20);
@@ -178,7 +180,7 @@ class DocumentControllerIT extends IntegrationBase {
     void setUpDocuments() {
         uploadSessionRepository.deleteAll();
         accompanyingDocumentRepository.deleteAll();
-        ensureTraderNotification(notificationRepository, NOTIFICATION_REF);
+        seedDraftNotificationOwnedBy(notificationRepository, NOTIFICATION_REF);
         assertThat(port).isEqualTo(BACKEND_PORT);
     }
 
@@ -247,11 +249,54 @@ class DocumentControllerIT extends IntegrationBase {
         @Test
         void shouldReturn404_whenTheHandleBelongsToAnotherNotification() {
             OpenedSession session = registeredSession();
+            seedDraftNotificationOwnedBy(notificationRepository, OTHER_NOTIFICATION_REF);
 
             webClient("NoAuth")
                 .get()
-                .uri("/notifications/GBN-AG-26-OTHER0/document-upload-sessions/"
+                .uri("/notifications/" + OTHER_NOTIFICATION_REF + "/document-upload-sessions/"
                     + session.correlationId())
+                .exchange()
+                .expectStatus().isNotFound();
+        }
+    }
+
+    @Nested
+    class OtherOrganisation {
+
+        @Test
+        void register_shouldReturn404() {
+            OpenedSession session = openUploadSession();
+
+            webClient("NoAuth", OTHER_ORG_ID)
+                .post()
+                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(registerBody(session))
+                .exchange()
+                .expectStatus().isNotFound();
+
+            assertThat(uploadSessionRepository.findByUploadId(session.uploadId())).isEmpty();
+        }
+
+        @Test
+        void session_shouldReturn404() {
+            OpenedSession session = registeredSession();
+
+            webClient("NoAuth", OTHER_ORG_ID)
+                .get()
+                .uri("/notifications/" + NOTIFICATION_REF + "/document-upload-sessions/"
+                    + session.correlationId())
+                .exchange()
+                .expectStatus().isNotFound();
+        }
+
+        @Test
+        void list_shouldReturn404() {
+            registeredSession();
+
+            webClient("NoAuth", OTHER_ORG_ID)
+                .get()
+                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
                 .exchange()
                 .expectStatus().isNotFound();
         }

@@ -1,9 +1,7 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -12,7 +10,6 @@ import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSess
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registeredSession;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -35,6 +32,8 @@ import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 })
 class DocumentControllerTrailingSlashTest {
 
+  private static final String CALLER_ORGANISATION_ID = "5900002";
+
   @Autowired
   private MockMvc mockMvc;
 
@@ -50,11 +49,6 @@ class DocumentControllerTrailingSlashTest {
   @MockitoBean
   private S3DocumentService s3DocumentService;
 
-  @BeforeEach
-  void allowTraderNotificationAccess() {
-    doNothing().when(notificationService).requireTraderAccess(anyString(), anyString());
-  }
-
   @Test
   void shouldNormaliseTrailingSlashInLocationHeader() throws Exception {
     String ref = "GBN-AG-26-000001";
@@ -64,7 +58,7 @@ class DocumentControllerTrailingSlashTest {
 
     mockMvc.perform(post("/notifications/{ref}/document-uploads", ref)
             .contentType(MediaType.APPLICATION_JSON)
-              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, "5900002")
+            .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
             .content(objectMapper.writeValueAsString(registerUploadRequest())))
         .andExpect(status().isCreated())
         .andExpect(header().string(

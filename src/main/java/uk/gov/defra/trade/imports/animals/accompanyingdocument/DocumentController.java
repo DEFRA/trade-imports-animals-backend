@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -31,7 +32,7 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import org.springframework.validation.annotation.Validated;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
-import uk.gov.defra.trade.imports.animals.notification.NotificationController;
+import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
@@ -69,8 +70,9 @@ public class DocumentController {
   /**
    * Register an upload session the caller has opened with cdp-uploader.
    *
-   * @param ref     the notification reference number
-   * @param request the upload session's identifiers
+   * @param ref              the notification reference number
+   * @param organisationId   trader organisation from {@code Trade-Imports-Organisation-Id}
+   * @param request          the upload session's identifiers
    * @return 201 Created with the recorded session and a Location header
    */
   @PostMapping("/notifications/{ref}/document-uploads")
@@ -80,12 +82,16 @@ public class DocumentController {
   @ApiResponse(responseCode = "201", description = "Upload session registered",
       content = @Content(schema = @Schema(implementation = UploadSessionDto.class)))
   @ApiResponse(responseCode = "400", description = "Validation error", content = @Content)
+  @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
+      content = @Content)
+  @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
   @ApiResponse(responseCode = "409", description = "Upload session already registered",
       content = @Content)
   @Timed("document.register")
   public ResponseEntity<UploadSessionDto> register(
       @PathVariable @Pattern(regexp = NOTIFICATION_REF_PATTERN) String ref,
-      @RequestHeader(NotificationController.HEADER_ORGANISATION_ID) String organisationId,
+      @Parameter(hidden = true)
+      @RequestHeader(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId,
       @Valid @RequestBody RegisterUploadRequest request) {
 
     log.info("POST /notifications/{}/document-uploads uploadId={}", ref, request.uploadId());
@@ -100,8 +106,9 @@ public class DocumentController {
   /**
    * Look up the upload session a notification opened under a correlation handle.
    *
-   * @param ref           the notification reference number
-   * @param correlationId the handle the session was opened under
+   * @param ref              the notification reference number
+   * @param correlationId    the handle the session was opened under
+   * @param organisationId   trader organisation from {@code Trade-Imports-Organisation-Id}
    * @return 200 OK with the session
    */
   @GetMapping("/notifications/{ref}/document-upload-sessions/{correlation-id}")
@@ -110,13 +117,17 @@ public class DocumentController {
       description = "Returns the upload session a notification opened under a correlation handle")
   @ApiResponse(responseCode = "200", description = "Session returned",
       content = @Content(schema = @Schema(implementation = UploadSessionDto.class)))
-  @ApiResponse(responseCode = "404", description = "Session not found", content = @Content)
+  @ApiResponse(responseCode = "400", description = "Validation error", content = @Content)
+  @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
+      content = @Content)
+  @ApiResponse(responseCode = "404", description = "Session or notification not found", content = @Content)
   @Timed("document.session")
   public ResponseEntity<UploadSessionDto> session(
       @PathVariable @Pattern(regexp = NOTIFICATION_REF_PATTERN) String ref,
       @PathVariable("correlation-id")
       @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String correlationId,
-      @RequestHeader(NotificationController.HEADER_ORGANISATION_ID) String organisationId) {
+      @Parameter(hidden = true)
+      @RequestHeader(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
 
     log.info("GET /notifications/{}/document-upload-sessions/{}", ref, correlationId);
 
@@ -128,8 +139,9 @@ public class DocumentController {
   /**
    * Claim a registered upload into its notification, recording the submitted document details.
    *
-   * @param uploadId the upload session identifier
-   * @param request  the document details
+   * @param uploadId         the upload session identifier
+   * @param organisationId   trader organisation from {@code Trade-Imports-Organisation-Id}
+   * @param request          the document details
    * @return 200 OK with the claimed document
    */
   @PostMapping("/document-uploads/{upload-id}/claim")
@@ -139,15 +151,21 @@ public class DocumentController {
   @ApiResponse(responseCode = "200", description = "Document claimed",
       content = @Content(schema = @Schema(implementation = AccompanyingDocumentDto.class)))
   @ApiResponse(responseCode = "400", description = "Validation error", content = @Content)
+  @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
+      content = @Content)
   @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
   @Timed("document.claim")
   public ResponseEntity<AccompanyingDocumentDto> claim(
       @PathVariable("upload-id")
       @Pattern(regexp = UPLOAD_HANDLE_PATTERN) String uploadId,
+      @Parameter(hidden = true)
+      @RequestHeader(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId,
       @Valid @RequestBody ClaimUploadRequest request) {
 
     log.info("POST /document-uploads/{}/claim", uploadId);
 
+    String notificationRef = documentService.notificationRefForUploadId(uploadId);
+    notificationService.requireTraderAccess(notificationRef, organisationId);
     AccompanyingDocument document = documentService.claimUpload(uploadId, request);
 
     return ResponseEntity.ok(AccompanyingDocumentDto.from(document));
@@ -156,7 +174,8 @@ public class DocumentController {
   /**
    * List all accompanying document upload sessions for a notification.
    *
-   * @param ref the notification reference number
+   * @param ref              the notification reference number
+   * @param organisationId   trader organisation from {@code Trade-Imports-Organisation-Id}
    * @return 200 OK with a list of accompanying document DTOs
    */
   @GetMapping("/notifications/{ref}/document-uploads")
@@ -165,11 +184,15 @@ public class DocumentController {
       description = "Returns all accompanying documents for a notification reference")
   @ApiResponse(responseCode = "200", description = "Document list returned",
       content = @Content(schema = @Schema(implementation = DocumentListResponse.class)))
+  @ApiResponse(responseCode = "400", description = "Validation error", content = @Content)
+  @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
+      content = @Content)
   @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
   @Timed("document.list")
   public ResponseEntity<DocumentListResponse> list(
       @PathVariable String ref,
-      @RequestHeader(NotificationController.HEADER_ORGANISATION_ID) String organisationId) {
+      @Parameter(hidden = true)
+      @RequestHeader(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
     log.info("GET /notifications/{}/document-uploads", ref);
     notificationService.requireTraderAccess(ref, organisationId);
     List<AccompanyingDocumentDto> items = documentService.findByNotificationRef(ref).stream()
@@ -190,12 +213,18 @@ public class DocumentController {
       description = "Returns an accompanying document by upload ID")
   @ApiResponse(responseCode = "200", description = "Document returned",
       content = @Content(schema = @Schema(implementation = AccompanyingDocumentDto.class)))
+  @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
+      content = @Content)
   @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
   @Timed("document.get")
   public ResponseEntity<AccompanyingDocumentDto> get(
-      @PathVariable("upload-id") String uploadId) {
+      @PathVariable("upload-id") String uploadId,
+      @Parameter(hidden = true)
+      @RequestHeader(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
 
     log.info("GET /document-uploads/{}", uploadId);
+    String notificationRef = documentService.notificationRefForUploadId(uploadId);
+    notificationService.requireTraderAccess(notificationRef, organisationId);
     AccompanyingDocument document = documentService.findByUploadId(uploadId);
     return ResponseEntity.ok(AccompanyingDocumentDto.from(document));
   }
@@ -212,9 +241,16 @@ public class DocumentController {
       description = "Removes an accompanying document upload session from the notification")
   @ApiResponse(responseCode = "204", description = "Document deleted", content = @Content)
   @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
+  @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
+      content = @Content)
   @Timed("document.delete")
-  public ResponseEntity<Void> delete(@PathVariable("upload-id") String uploadId) {
+  public ResponseEntity<Void> delete(
+      @PathVariable("upload-id") String uploadId,
+      @Parameter(hidden = true)
+      @RequestHeader(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
     log.info("DELETE /document-uploads/{}", uploadId);
+    String notificationRef = documentService.notificationRefForUploadId(uploadId);
+    notificationService.requireTraderAccess(notificationRef, organisationId);
     documentService.deleteByUploadId(uploadId);
     return ResponseEntity.noContent().build();
   }
@@ -257,11 +293,17 @@ public class DocumentController {
   @ApiResponse(responseCode = "200", description = "File streamed",
       content = @Content(mediaType = MediaType.APPLICATION_OCTET_STREAM_VALUE))
   @ApiResponse(responseCode = "404", description = "File not found", content = @Content)
+  @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
+      content = @Content)
   @Timed("document.downloadFile")
   public ResponseEntity<StreamingResponseBody> downloadFile(
-      @PathVariable("upload-id") String uploadId) {
+      @PathVariable("upload-id") String uploadId,
+      @Parameter(hidden = true)
+      @RequestHeader(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
 
     log.info("GET /document-uploads/{}/file", uploadId);
+    String notificationRef = documentService.notificationRefForUploadId(uploadId);
+    notificationService.requireTraderAccess(notificationRef, organisationId);
     UploadedFile file = documentService.findFile(uploadId);
 
     StreamingResponseBody body = streamFromS3WithMdc(file);

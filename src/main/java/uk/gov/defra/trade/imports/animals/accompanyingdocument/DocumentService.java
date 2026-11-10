@@ -193,6 +193,13 @@ public class DocumentService {
             () -> new NotFoundException("No accompanying document found with uploadId: " + uploadId));
   }
 
+  public String notificationRefForUploadId(String uploadId) {
+    return uploadSessionRepository.findByUploadId(uploadId)
+        .map(UploadSession::getNotificationReferenceNumber)
+        .orElseThrow(() -> new NotFoundException(
+            "No upload session found with uploadId: " + uploadId));
+  }
+
   /**
    * Returns the uploaded file for the given upload session.
    *

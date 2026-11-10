@@ -603,6 +603,45 @@ class GlobalExceptionHandlerTest {
         );
     }
 
+    @Test
+    void handleForbiddenException_shouldReturnForbiddenWithDetail() {
+        String traceId = "test-trace-forbidden-1";
+        MDC.put("trace.id", traceId);
+        String detail = "Fulfilment read denied for referenceNumber=GBN-AG-26-ABC001 organisationId=5900002";
+
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleForbiddenException(new ForbiddenException(detail));
+        ProblemDetail problemDetail = response.getBody();
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PROBLEM_JSON);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
+        assertThat(problemDetail.getTitle()).isEqualTo("Forbidden");
+        assertThat(problemDetail.getDetail()).isEqualTo(detail);
+        assertThat(problemDetail.getType())
+            .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/forbidden"));
+        assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
+    }
+
+    @Test
+    void handleForbiddenException_shouldHandleNullTraceId() {
+        ForbiddenException exception = new ForbiddenException("Organisation may not access this resource");
+
+        ResponseEntity<ProblemDetail> response =
+            exceptionHandler.handleForbiddenException(exception);
+        ProblemDetail problemDetail = response.getBody();
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(problemDetail).isNotNull();
+        assertThat(problemDetail.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
+        Map<String, Object> properties = problemDetail.getProperties();
+        assertThat(properties).satisfiesAnyOf(
+            p -> assertThat(p).isNull(),
+            p -> assertThat(p).doesNotContainKey("traceId")
+        );
+    }
+
     private MethodArgumentNotValidException createValidationException(FieldError... fieldErrors) {
         try {
             // Create a real MethodParameter with an actual method to avoid NullPointerException

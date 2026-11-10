@@ -17,6 +17,7 @@ import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 
@@ -87,11 +88,11 @@ class NotificationExpiryIT extends IntegrationBase {
 
         assertThat(deleted).isEqualTo(1);
         // Due notification and its documents are gone.
-        assertThat(notificationRepository.findByReferenceNumber(expiredRef)).isEmpty();
+        assertThat(NotificationTestSupport.findByReferenceNumber(mongoTemplate, expiredRef)).isEmpty();
         assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(expiredRef))
             .isEmpty();
         // Non-due notification and its document survive.
-        assertThat(notificationRepository.findByReferenceNumber(activeRef)).isPresent();
+        assertThat(NotificationTestSupport.findByReferenceNumber(mongoTemplate, activeRef)).isPresent();
         assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(activeRef))
             .hasSize(1);
         // AC: audit records referencing the expired notification are left untouched.
@@ -111,7 +112,7 @@ class NotificationExpiryIT extends IntegrationBase {
         int deleted = notificationService.deleteExpired(10);
 
         assertThat(deleted).isZero();
-        assertThat(notificationRepository.findByReferenceNumber(legacyRef)).isPresent();
+        assertThat(NotificationTestSupport.findByReferenceNumber(mongoTemplate, legacyRef)).isPresent();
     }
 
     @Test

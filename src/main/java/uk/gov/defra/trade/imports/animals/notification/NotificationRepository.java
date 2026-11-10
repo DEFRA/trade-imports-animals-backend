@@ -12,8 +12,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface NotificationRepository extends MongoRepository<NotificationAggregate, String> {
 
-    Optional<NotificationAggregate> findByReferenceNumber(String referenceNumber);
-
     boolean existsByReferenceNumber(String referenceNumber);
 
     Optional<NotificationAggregate> findByReferenceNumberAndOrganisationId(

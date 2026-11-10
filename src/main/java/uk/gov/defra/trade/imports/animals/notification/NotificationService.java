@@ -141,10 +141,6 @@ public class NotificationService {
         return createNotification(notificationCopyMapper.toCopyDto(source), correlationId, actor, organisationId);
     }
 
-    public NotificationPageResponse findAll(int page, String sort, String organisationId) {
-        return findAll(page, sort, null, organisationId);
-    }
-
     public NotificationFulfilmentsView findFulfilmentsView(String referenceNumber, String organisationId) {
         Optional<NotificationFulfilmentsView> scoped =
             notificationRepository.findFulfilmentsViewByReferenceNumberAndOrganisationId(
@@ -153,10 +149,6 @@ public class NotificationService {
             return scoped.get();
         }
         if (notificationRepository.existsByReferenceNumber(referenceNumber)) {
-            log.warn(
-                "Fulfilment read denied for referenceNumber={} organisationId={}",
-                referenceNumber,
-                organisationId);
             throw new ForbiddenException(
                 "Cannot read fulfilments for notification with reference number: "
                     + referenceNumber + " organisationId: " + organisationId);
@@ -448,12 +440,6 @@ public class NotificationService {
             notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, organisationId);
         if (scoped.isPresent()) {
             return scoped.get();
-        }
-        if (notificationRepository.existsByReferenceNumber(referenceNumber)) {
-            log.warn(
-                "Trader notification access denied for referenceNumber={} organisationId={}",
-                referenceNumber,
-                organisationId);
         }
         throw new NotFoundException(CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber);
     }

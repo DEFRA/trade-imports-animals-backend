@@ -41,7 +41,6 @@ public class NotificationController {
 
     public static final String HEADER_TRACE_ID = "x-cdp-request-id";
     public static final String HEADER_USER_ID = "User-Id";
-    public static final String HEADER_ORGANISATION_ID = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER;
 
     private final NotificationService notificationService;
     private final OutboxService outboxService;
@@ -53,9 +52,9 @@ public class NotificationController {
     public ResponseEntity<NotificationAggregate> post(
         @Valid @RequestBody SaveNotificationDto saveNotificationDto,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
-        @RequestHeader(value = HEADER_ORGANISATION_ID) String organisationId) {
+        @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
         NotificationDto notificationDto = saveNotificationDto.getNotification();
-        Actor actor = resolveActor(saveNotificationDto.getActor());
+        Actor actor = resolveActor(saveNotificationDto.getActor(), organisationId);
         log.info("POST /notifications - referenceNumber={} userId={} organisationId={}",
             notificationDto.getReferenceNumber(), userIdOf(actor), organisationId);
         return ResponseEntity.ok(
@@ -74,8 +73,8 @@ public class NotificationController {
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @Valid @RequestBody SaveNotificationDto saveNotificationDto,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
-        @RequestHeader(value = HEADER_ORGANISATION_ID) String organisationId) {
-        Actor actor = resolveActor(saveNotificationDto.getActor());
+        @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
+        Actor actor = resolveActor(saveNotificationDto.getActor(), organisationId);
         log.info("PUT /notifications/{} - Replacing notification content userId={}",
             referenceNumber, userIdOf(actor));
         return ResponseEntity.ok(notificationService.replace(
@@ -95,8 +94,8 @@ public class NotificationController {
         @RequestParam Long concurrencyToken,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest,
-        @RequestHeader(value = HEADER_ORGANISATION_ID) String organisationId) {
-        Actor actor = resolveActor(actorRequest);
+        @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
+        Actor actor = resolveActor(actorRequest, organisationId);
         log.info("POST /notifications/{}/copy - Copying notification at expectedConcurrencyToken={} userId={}",
             referenceNumber, concurrencyToken, userIdOf(actor));
         return ResponseEntity.ok(
@@ -128,8 +127,8 @@ public class NotificationController {
         @RequestParam Long concurrencyToken,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest,
-        @RequestHeader(value = HEADER_ORGANISATION_ID) String organisationId) {
-        Actor actor = resolveActor(actorRequest);
+        @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
+        Actor actor = resolveActor(actorRequest, organisationId);
         log.info("POST /notifications/{}/submit - Submitting notification at expectedConcurrencyToken={} userId={}",
             referenceNumber, concurrencyToken, userIdOf(actor));
         return ResponseEntity.ok(
@@ -151,8 +150,8 @@ public class NotificationController {
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest,
-        @RequestHeader(value = HEADER_ORGANISATION_ID) String organisationId) {
-        Actor actor = resolveActor(actorRequest);
+        @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
+        Actor actor = resolveActor(actorRequest, organisationId);
         log.info("POST /notifications/{}/amend - Amending notification userId={}", referenceNumber, userIdOf(actor));
         return ResponseEntity.ok(
             notificationService.amendNotification(referenceNumber, traceId, actor, organisationId));
@@ -171,8 +170,8 @@ public class NotificationController {
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest,
-        @RequestHeader(value = HEADER_ORGANISATION_ID) String organisationId) {
-        Actor actor = resolveActor(actorRequest);
+        @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
+        Actor actor = resolveActor(actorRequest, organisationId);
         log.info("POST /notifications/{}/cancel-amend - Cancelling amendment userId={}",
             referenceNumber, userIdOf(actor));
         return ResponseEntity.ok(
@@ -191,7 +190,7 @@ public class NotificationController {
         @RequestParam(defaultValue = "1") @Min(1) int page,
         @RequestParam(required = false) String sort,
         @RequestParam(required = false) String referenceNumber,
-        @RequestHeader(value = HEADER_ORGANISATION_ID) String organisationId) {
+        @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
         log.debug("GET /notifications?page={}&sort={}&referenceNumber={}", page, sort, referenceNumber);
         return notificationService.findAll(page, sort, referenceNumber, organisationId);
     }
@@ -206,7 +205,7 @@ public class NotificationController {
     @Timed("controller.getFulfilments.time")
     public ResponseEntity<NotificationFulfilmentsView> findFulfilments(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @RequestHeader(value = HEADER_ORGANISATION_ID) String organisationId) {
+        @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
         log.debug("GET /notifications/{}/fulfilments - Fetching fulfilment view", referenceNumber);
         return ResponseEntity.ok(notificationService.findFulfilmentsView(referenceNumber, organisationId));
     }
@@ -268,16 +267,27 @@ public class NotificationController {
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest,
-        @RequestHeader(value = HEADER_ORGANISATION_ID) String organisationId) {
-        Actor actor = resolveActor(actorRequest);
+        @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
+        Actor actor = resolveActor(actorRequest, organisationId);
         log.info("POST /notifications/{}/soft-delete - Soft deleting notification userId={}",
             referenceNumber, userIdOf(actor));
         return ResponseEntity.ok(
             notificationService.softDeleteNotification(referenceNumber, traceId, actor, organisationId));
     }
 
-    private static Actor resolveActor(ActorRequest actorRequest) {
-        return actorRequest != null ? actorRequest.toActor() : null;
+    private static Actor resolveActor(ActorRequest actorRequest, String organisationId) {
+        if (actorRequest == null) {
+            return null;
+        }
+        Actor actor = actorRequest.toActor();
+        return Actor.builder()
+            .id(actor.getId())
+            .source(actor.getSource())
+            .userType(actor.getUserType())
+            .displayName(actor.getDisplayName())
+            .organisationId(organisationId)
+            .onBehalfOfOrganisationId(actor.getOnBehalfOfOrganisationId())
+            .build();
     }
 
     private static String userIdOf(Actor actor) {

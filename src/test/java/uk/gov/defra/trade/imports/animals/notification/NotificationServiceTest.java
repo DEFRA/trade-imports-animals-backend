@@ -174,10 +174,25 @@ class NotificationServiceTest {
             assertThat(result.getReferenceNumber()).isEqualTo(expectedRef);
             assertThat(result.getId()).isEqualTo(generatedId);
             assertThat(result.getNotification().getOrigin()).isEqualTo(origin);
-            assertThat(savedAggregate.getValue().getOrganisationId()).isEqualTo(ORG_ID);
             verify(referenceNumberGenerator).generate();
             verify(notificationRepository, times(1)).save(any(NotificationAggregate.class));
             verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_CREATED), any(), any());
+        }
+
+        @Test
+        void saveNotification_shouldStoreCallersOrganisationAsOwner_onCreate() {
+            NotificationDto notificationDto = NotificationDto.builder()
+                .origin(Origin.builder().countryCode("GB").build())
+                .build();
+            when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-ORG001");
+            ArgumentCaptor<NotificationAggregate> savedAggregate =
+                ArgumentCaptor.forClass(NotificationAggregate.class);
+            when(notificationRepository.save(savedAggregate.capture()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+            notificationService.saveNotification(notificationDto, "", null, ORG_ID);
+
+            assertThat(savedAggregate.getValue().getOrganisationId()).isEqualTo(ORG_ID);
         }
 
         @Test
@@ -612,7 +627,7 @@ class NotificationServiceTest {
                 .thenReturn(emptyPage);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1, null, ORG_ID);
+            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
 
             // Then
             assertThat(result).isNotNull();
@@ -639,7 +654,7 @@ class NotificationServiceTest {
                 .thenReturn(page);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1, null, ORG_ID);
+            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
 
             // Then
             assertThat(result.content()).hasSize(2);
@@ -665,7 +680,7 @@ class NotificationServiceTest {
                 .thenReturn(page);
 
             // When
-            NotificationPageResponse result = notificationService.findAll(1, null, ORG_ID);
+            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
 
             // Then
             assertThat(result.content()).hasSize(1);
@@ -688,7 +703,7 @@ class NotificationServiceTest {
             when(notificationRepository.findAllViewByStatusInAndOrganisationId(eq(List.of(DRAFT, SUBMITTED, AMEND)), eq(ORG_ID), any(Pageable.class)))
                 .thenReturn(page);
 
-            NotificationPageResponse result = notificationService.findAll(1, null, ORG_ID);
+            NotificationPageResponse result = notificationService.findAll(1, null, null, ORG_ID);
 
             assertThat(result.content()).hasSize(1);
             assertThat(result.content()).extracting(NotificationView::getStatus)
@@ -702,7 +717,7 @@ class NotificationServiceTest {
             when(notificationRepository.findAllViewByStatusInAndOrganisationId(eq(List.of(DRAFT, SUBMITTED, AMEND)), eq(ORG_ID), any(Pageable.class)))
                 .thenReturn(emptyPage);
 
-            notificationService.findAll(1, "createdAt,asc", ORG_ID);
+            notificationService.findAll(1, "createdAt,asc", null, ORG_ID);
 
             ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
             verify(notificationRepository).findAllViewByStatusInAndOrganisationId(
@@ -802,6 +817,34 @@ class NotificationServiceTest {
 
             assertThatThrownBy(() -> notificationService.findFulfilmentsView(ref, ORG_ID))
                 .isInstanceOf(ForbiddenException.class)
+                .hasMessageContaining(ref);
+        }
+    }
+
+    @Nested
+    class RequireTraderAccess {
+
+        @Test
+        void requireTraderAccess_shouldSucceed_whenReferenceOwnedByOrganisation() {
+            String ref = "GBN-AG-26-OWNED";
+            NotificationAggregate owned = NotificationAggregate.builder()
+                .referenceNumber(ref)
+                .organisationId(ORG_ID)
+                .build();
+            when(notificationRepository.findByReferenceNumberAndOrganisationId(ref, ORG_ID))
+                .thenReturn(Optional.of(owned));
+
+            notificationService.requireTraderAccess(ref, ORG_ID);
+        }
+
+        @Test
+        void requireTraderAccess_shouldThrowNotFound_whenReferenceNotOwnedByOrganisation() {
+            String ref = "GBN-AG-26-OTHER-ORG";
+            when(notificationRepository.findByReferenceNumberAndOrganisationId(ref, ORG_ID))
+                .thenReturn(Optional.empty());
+
+            assertThatThrownBy(() -> notificationService.requireTraderAccess(ref, ORG_ID))
+                .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining(ref);
         }
     }
@@ -1853,7 +1896,9 @@ class NotificationServiceTest {
             when(notificationRepository.findByReferenceNumberAndOrganisationId(sourceRef, ORG_ID))
                 .thenReturn(Optional.of(source));
             when(referenceNumberGenerator.generate()).thenReturn(newRef);
-            when(notificationRepository.save(any(NotificationAggregate.class))).thenReturn(created);
+            ArgumentCaptor<NotificationAggregate> savedCaptor =
+                ArgumentCaptor.forClass(NotificationAggregate.class);
+            when(notificationRepository.save(savedCaptor.capture())).thenReturn(created);
 
             // When
             NotificationAggregate result = notificationService.copyNotification(sourceRef, 0L, "trace", null, ORG_ID);
@@ -1861,6 +1906,7 @@ class NotificationServiceTest {
             // Then
             assertThat(result.getReferenceNumber()).isEqualTo(newRef);
             assertThat(result.getStatus()).isEqualTo(NotificationStatus.DRAFT);
+            assertThat(savedCaptor.getValue().getOrganisationId()).isEqualTo(ORG_ID);
         }
 
         @Test

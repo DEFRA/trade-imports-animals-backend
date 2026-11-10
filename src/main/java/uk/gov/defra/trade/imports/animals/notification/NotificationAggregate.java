@@ -42,11 +42,6 @@ public class NotificationAggregate {
     @Indexed(unique = true, sparse = true)
     private String referenceNumber;
 
-    /**
-     * Organisation that owns this notification. Set once at create from
-     * {@code Trade-Imports-Organisation-Id}; never updated on later writes.
-     */
-    @Indexed
     private String organisationId;
 
     @Version

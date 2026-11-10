@@ -21,27 +21,30 @@ import java.util.UUID;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.mockserver.client.MockServerClient;
 import org.mockserver.model.JsonBody;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
-import uk.gov.defra.trade.imports.animals.notification.Notification;
-import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
-import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
-import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.mockserver.MockServerContainer;
 import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
+import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
+import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
+import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 
 /**
  * Base class for Spring Boot integration tests, activating the {@code integration-test} profile
@@ -54,7 +57,9 @@ import org.testcontainers.utility.DockerImageName;
  * <p>{@link #webClient(String)} returns a {@link WebTestClient} pre-authenticated with a token
  * minted by the mock OAuth server using {@code clientType} as the {@code client_id}; the token
  * is decided by the {@code /integration/oauth2-mock-server.json} fixture, and tests currently
- * pass {@code "NoAuth"}. Subclasses inherit an {@code @AfterEach} hook that resets all
+ * pass {@code "NoAuth"}. {@link #webClient(String)} also sends
+ * {@link TraderOrganisationHeaderFilter#ORGANISATION_ID_HEADER} defaulting to
+ * {@link #DEFAULT_TRADER_ORG_ID}. Subclasses inherit an {@code @AfterEach} hook that resets all
  * MockServer expectations, so per-test stubs do not leak across tests.
  */
 @Slf4j
@@ -71,6 +76,8 @@ public abstract class IntegrationBase {
     @LocalServerPort
     protected int port;
 
+    @Autowired
+    protected MongoTemplate mongoTemplate;
 
     private MockServerClient mockServerClient;
 
@@ -154,21 +161,12 @@ public abstract class IntegrationBase {
             .build();
     }
 
-    /**
-     * Seeds a notification owned by the trader organisation so document routes can enforce
-     * {@code requireTraderAccess} without going through notification create APIs.
-     */
-    protected void ensureTraderNotification(
+    protected void seedDraftNotificationOwnedBy(
             NotificationRepository repository, String referenceNumber) {
-        ensureTraderNotification(repository, referenceNumber, DEFAULT_TRADER_ORG_ID);
-    }
-
-    protected void ensureTraderNotification(
-            NotificationRepository repository, String referenceNumber, String organisationId) {
-        repository.findByReferenceNumber(referenceNumber).ifPresent(repository::delete);
+        NotificationTestSupport.deleteByReferenceNumber(mongoTemplate, referenceNumber);
         NotificationAggregate aggregate = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
-                .organisationId(organisationId)
+                .organisationId(DEFAULT_TRADER_ORG_ID)
                 .status(NotificationStatus.DRAFT)
                 .created(Instant.now())
                 .notification(new Notification())
