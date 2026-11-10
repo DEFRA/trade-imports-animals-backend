@@ -26,6 +26,8 @@ spring:
     timeout-per-shutdown-phase: 30s
   jackson:
     serialization:
+      # Pinned to the Spring Boot default. Enabling it would serialise Instants as epoch numbers
+      # and LocalDates as [year, month, day] arrays, breaking the API contract silently.
       write-dates-as-timestamps: false
 
 # CDP platform configuration
@@ -46,6 +48,8 @@ app:
   base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:}
   aws:
     endpoint-override: ${APP_AWS_ENDPOINT_OVERRIDE:}
+    # For a local stand-in such as LocalStack only. Never set real credentials here: with an
+    # endpoint override set, these keys are used in any environment.
     # access-key-id: ${APP_AWS_ACCESS_KEY_ID:}
     # secret-access-key: ${APP_AWS_SECRET_ACCESS_KEY:}
 
@@ -124,6 +128,8 @@ notification:
     page-size: 25
   submit:
     lock-at-least-for: 50ms
+  # Prod-safe defaults: nothing is stamped or expired. Non-prod opts in by setting
+  # NOTIFICATION_TTL_DAYS and NOTIFICATION_TTL_EXPIRY_ENABLED=true.
   ttl:
     days: ${NOTIFICATION_TTL_DAYS:}
     environment: ${ENVIRONMENT:local}
