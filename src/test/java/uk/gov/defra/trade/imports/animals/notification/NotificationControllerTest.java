@@ -87,12 +87,6 @@ class NotificationControllerTest {
     @MockitoBean
     private OutboxReplayService outboxReplayService;
 
-
-    private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder traderRequest(
-            org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request) {
-        return request.header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, ORG_ID);
-    }
-
     @Nested
     class ReplaceNotification {
 

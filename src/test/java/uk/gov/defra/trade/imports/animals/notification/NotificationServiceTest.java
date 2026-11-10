@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -834,7 +835,9 @@ class NotificationServiceTest {
             when(notificationRepository.findByReferenceNumberAndOrganisationId(ref, ORG_ID))
                 .thenReturn(Optional.of(owned));
 
-            notificationService.requireTraderAccess(ref, ORG_ID);
+            assertThatCode(() -> notificationService.requireTraderAccess(ref, ORG_ID))
+                .doesNotThrowAnyException();
+            verify(notificationRepository).findByReferenceNumberAndOrganisationId(ref, ORG_ID);
         }
 
         @Test
