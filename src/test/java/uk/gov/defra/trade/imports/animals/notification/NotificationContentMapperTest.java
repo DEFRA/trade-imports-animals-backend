@@ -27,7 +27,6 @@ class NotificationContentMapperTest {
             .name("Cow")
             .commodityCode("0102")
             .description("Live cattle")
-            .typeOfCommodity("LIVE")
             .totalNoOfAnimals(10)
             .build();
         Notification source = Notification.builder()
@@ -41,7 +40,6 @@ class NotificationContentMapperTest {
                 assertThat(c.getName()).isEqualTo("Cow");
                 assertThat(c.getCommodityCode()).isEqualTo("0102");
                 assertThat(c.getDescription()).isEqualTo("Live cattle");
-                assertThat(c.getTypeOfCommodity()).isEqualTo("LIVE");
                 assertThat(c.getTotalNoOfAnimals()).isEqualTo(10);
             });
     }
@@ -51,11 +49,9 @@ class NotificationContentMapperTest {
         Species sourceSpecies = Species.builder()
             .value("BOV")
             .text("Bovine")
-            .typeOfCommodity("Domestic")
             .build();
         Commodity complement = Commodity.builder()
             .name("Cattle")
-            .typeOfCommodity("LIVE")
             .species(List.of(sourceSpecies))
             .build();
         Notification source = Notification.builder()
@@ -66,12 +62,12 @@ class NotificationContentMapperTest {
         Notification clone = mapper.deepClone(source);
         clone.setReasonForImport("MUTATED");
         clone.getCommodities().getFirst().setName("MutatedCattle");
-        clone.getCommodities().getFirst().getSpecies().getFirst().setTypeOfCommodity("Game");
+        clone.getCommodities().getFirst().getSpecies().getFirst().setText("MutatedBovine");
 
         assertThat(source.getReasonForImport()).isEqualTo("PERMANENT");
         assertThat(source.getCommodities().getFirst().getName()).isEqualTo("Cattle");
-        assertThat(source.getCommodities().getFirst().getSpecies().getFirst().getTypeOfCommodity())
-            .isEqualTo("Domestic");
+        assertThat(source.getCommodities().getFirst().getSpecies().getFirst().getText())
+            .isEqualTo("Bovine");
     }
 
     @Test

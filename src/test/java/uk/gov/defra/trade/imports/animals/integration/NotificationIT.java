@@ -93,7 +93,6 @@ class NotificationIT extends IntegrationBase {
             .name("Live bovine animals")
             .commodityCode("0102")
             .description("Live cattle")
-            .typeOfCommodity("LIVE")
             .totalNoOfAnimals(10)
             .totalNoOfPackages(5)
             .species(List.of(species))
@@ -617,7 +616,6 @@ class NotificationIT extends IntegrationBase {
             .name("Live ovine animals")
             .commodityCode("0104")
             .description("Live sheep")
-            .typeOfCommodity("LIVE")
             .totalNoOfAnimals(5)
             .totalNoOfPackages(2)
             .species(List.of(initialSpecies))
@@ -644,7 +642,6 @@ class NotificationIT extends IntegrationBase {
             .name("Live bovine animals")
             .commodityCode("0102")
             .description("Live cattle")
-            .typeOfCommodity("LIVE")
             .totalNoOfAnimals(10)
             .totalNoOfPackages(5)
             .species(List.of(updatedSpecies))
@@ -1060,6 +1057,48 @@ class NotificationIT extends IntegrationBase {
             .find(Filters.eq("referenceNumber", referenceNumber)).first()
             .get("notification", Document.class);
         assertThat(rawNotification.get("consignor", Document.class)).doesNotContainKey("addressId");
+    }
+
+    @Test
+    void putAndSubmit_shouldSucceedAndShedTypeOfCommodity_whenStoredCommodityStillHoldsIt() {
+        // Given — a draft written before the commodity type was removed still carries typeOfCommodity
+        String referenceNumber = webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .bodyValue(SaveNotificationDto.of(createNotificationDto("CH", "Live cattle")))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody().getReferenceNumber();
+        mongoTemplate.getCollection("notification").updateOne(
+            Filters.eq("referenceNumber", referenceNumber),
+            Updates.set("notification.commodities.0.typeOfCommodity", "Domestic"));
+
+        // When — the stored draft is read and saved again by a client that still sends the field
+        NotificationAggregate stored = notificationRepository.findByReferenceNumber(referenceNumber)
+            .orElseThrow();
+        assertThat(stored.getNotification().getCommodities()).singleElement()
+            .satisfies(commodity -> assertThat(commodity.getName()).isEqualTo("Live cattle"));
+        Map<String, Object> staleClientBody = Map.of("notification", Map.of(
+            "referenceNumber", referenceNumber,
+            "concurrencyToken", stored.getConcurrencyToken(),
+            "origin", Map.of("countryCode", "CH", "requiresRegionCode", "no"),
+            "commodities", List.of(Map.of("name", "Live cattle", "typeOfCommodity", "Domestic"))));
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
+            .bodyValue(staleClientBody)
+            .exchange().expectStatus().isOk();
+        submitAs(referenceNumber, ORG_ID);
+
+        // Then — the notification is submitted and the outbound event never carries the field
+        assertThat(notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow().getStatus())
+            .isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(submittedOutboxEvent().getData().toString()).doesNotContain("typeOfCommodity");
+
+        // And — the re-save sheds the field from the stored document
+        Document rawNotification = mongoTemplate.getCollection("notification")
+            .find(Filters.eq("referenceNumber", referenceNumber)).first()
+            .get("notification", Document.class);
+        assertThat(rawNotification.getList("commodities", Document.class)).singleElement()
+            .satisfies(commodity -> assertThat(commodity).doesNotContainKey("typeOfCommodity"));
     }
 
     @Test
@@ -1944,10 +1983,9 @@ class NotificationIT extends IntegrationBase {
                 Commodity::getName,
                 Commodity::getCommodityCode,
                 Commodity::getDescription,
-                Commodity::getTypeOfCommodity,
                 Commodity::getTotalNoOfAnimals,
                 Commodity::getTotalNoOfPackages)
-            .containsExactly("Live bovine animals", "0102", "Live cattle", "LIVE", 10, 5);
+            .containsExactly("Live bovine animals", "0102", "Live cattle", 10, 5);
 
         Species species = complement.getSpecies().getFirst();
         assertThat(species)
@@ -2015,11 +2053,10 @@ class NotificationIT extends IntegrationBase {
         assertThat(notification.getConsignment()).isNull();
         assertThat(notification.getCommodities().getFirst())
             .extracting(
-                Commodity::getTypeOfCommodity,
                 Commodity::getTotalNoOfAnimals,
                 Commodity::getTotalNoOfPackages,
                 Commodity::getSpecies)
-            .containsExactly("LIVE", null, null, List.of());
+            .containsExactly(null, null, List.of());
     }
 
     private void assertSourceUnchangedAfterCopy(String sourceRef) {
@@ -2767,7 +2804,6 @@ class NotificationIT extends IntegrationBase {
     private NotificationDto sourceNotificationWithAllOperators() {
         Commodity complement = Commodity.builder()
             .name("Live bovine animals")
-            .typeOfCommodity("LIVE")
             .totalNoOfAnimals(10)
             .totalNoOfPackages(5)
             .species(List.of(NotificationTestData.species()))

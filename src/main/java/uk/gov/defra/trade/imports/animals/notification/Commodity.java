@@ -19,7 +19,6 @@ public class Commodity {
 
     private String description;
 
-    private String typeOfCommodity;
     private Integer totalNoOfAnimals;
     private Integer totalNoOfPackages;
     @Builder.Default
