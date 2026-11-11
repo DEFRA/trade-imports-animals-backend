@@ -61,7 +61,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 class DocumentControllerIT extends IntegrationBase {
 
     private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-25-TC0001";
-    private static final String OTHER_NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-26-OTHER0";
+    private static final String OTHER_NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-26-ANTHR1";
     private static final String OTHER_ORG_ID = "9999999";
     private static final String AWS_REGION = "eu-west-2";
 

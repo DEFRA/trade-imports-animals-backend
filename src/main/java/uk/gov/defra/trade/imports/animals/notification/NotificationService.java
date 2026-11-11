@@ -14,8 +14,6 @@ import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.apache.commons.lang3.StringUtils;
 import org.bson.Document;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -87,19 +85,6 @@ public class NotificationService {
         this.lockAtLeastFor = lockAtLeastFor;
         this.listPageSize = listPageSize;
         this.adminPageSize = adminPageSize;
-    }
-
-    @EventListener(ApplicationReadyEvent.class)
-    public void logExpiryStamping() {
-        String environment = ttlConfig.environment();
-        Optional<Integer> daysToStamp = ttlConfig.daysToStamp();
-        if (daysToStamp.isPresent()) {
-            log.info("Notification expiry stamping is on: {} days in environment {}", daysToStamp.get(), environment);
-        } else if (ttlConfig.isProd()) {
-            log.info("Notification expiry stamping is off: environment {} is prod", environment);
-        } else {
-            log.info("Notification expiry stamping is off: no days set in environment {}", environment);
-        }
     }
 
     public NotificationAggregate saveNotification(

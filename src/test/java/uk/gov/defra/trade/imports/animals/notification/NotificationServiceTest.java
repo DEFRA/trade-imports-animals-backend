@@ -60,8 +60,6 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Sort.Direction;
@@ -1089,41 +1087,6 @@ class NotificationServiceTest {
             NotificationAggregate result = create(new NotificationTtlConfig(null, "dev"));
 
             assertThat(result.getExpireAt()).isNull();
-        }
-    }
-
-    @Nested
-    class ExpiryStampingLog {
-
-        private List<String> messagesLoggedBy(NotificationTtlConfig ttlConfig) {
-            return messagesOf(logEventsDuring(NotificationService.class, buildService(ttlConfig)::logExpiryStamping));
-        }
-
-        @Test
-        void logExpiryStamping_shouldGiveDaysAndEnvironment_whenStampingIsOn() {
-            assertThat(messagesLoggedBy(new NotificationTtlConfig(7, "dev")))
-                .containsExactly("Notification expiry stamping is on: 7 days in environment dev");
-        }
-
-        @Test
-        void logExpiryStamping_shouldNameProdAsTheReason_whenDaysAreSetInProd() {
-            assertThat(messagesLoggedBy(new NotificationTtlConfig(7, "prod")))
-                .containsExactly("Notification expiry stamping is off: environment prod is prod");
-        }
-
-        @Test
-        void logExpiryStamping_shouldNameMissingDaysAsTheReason_whenNoDaysAreSetOutsideProd() {
-            assertThat(messagesLoggedBy(new NotificationTtlConfig(null, "dev")))
-                .containsExactly("Notification expiry stamping is off: no days set in environment dev");
-        }
-
-        @Test
-        void logExpiryStamping_shouldListenForTheApplicationBeingReady() throws NoSuchMethodException {
-            EventListener listener = NotificationService.class
-                .getMethod("logExpiryStamping")
-                .getAnnotation(EventListener.class);
-
-            assertThat(listener.value()).containsExactly(ApplicationReadyEvent.class);
         }
     }
 
