@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import software.amazon.awssdk.services.sqs.model.Message;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
+import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxPublishService;
@@ -93,7 +94,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
     void publishUnpublishedEvents_shouldPublishAggregateVersionsInOrder() throws Exception {
         // create → NOTIFICATION_CREATED (v1), submit → NOTIFICATION_SUBMITTED (v2)
         String referenceNumber = createAndSubmitNotification("trace-v1");
-        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(
+        NotificationAggregate notificationAggregate = NotificationTestSupport.findByReferenceNumber(mongoTemplate, 
                 referenceNumber)
             .orElseThrow();
         notificationAggregate.setStatus(NotificationStatus.DRAFT);

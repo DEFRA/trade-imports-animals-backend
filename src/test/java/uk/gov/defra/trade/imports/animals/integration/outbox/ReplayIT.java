@@ -14,6 +14,7 @@ import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
+import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.ReplayResponse;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
@@ -103,7 +104,7 @@ class ReplayIT extends OutboxIntegrationBase {
     void replay_shouldRepublishMultipleEventsInVersionOrder() throws Exception {
         // Given — create (v1), submit (v2), direct DRAFT reset, submit again (v3)
         String referenceNumber = createAndSubmitNotification("trace-v1");
-        NotificationAggregate notificationAggregate = notificationRepository.findByReferenceNumber(
+        NotificationAggregate notificationAggregate = NotificationTestSupport.findByReferenceNumber(mongoTemplate, 
             referenceNumber).orElseThrow();
         notificationAggregate.setStatus(NotificationStatus.DRAFT);
         notificationRepository.save(notificationAggregate);

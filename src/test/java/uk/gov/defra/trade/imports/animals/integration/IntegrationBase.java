@@ -14,18 +14,21 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.AfterEach;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.mockserver.client.MockServerClient;
 import org.mockserver.model.JsonBody;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.client.HttpComponentsClientHttpRequestFactory;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -36,6 +39,12 @@ import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.mockserver.MockServerContainer;
 import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
+import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
+import uk.gov.defra.trade.imports.animals.notification.Notification;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
+import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 
 /**
  * Base class for Spring Boot integration tests, activating the {@code integration-test} profile
@@ -48,13 +57,17 @@ import org.testcontainers.utility.DockerImageName;
  * <p>{@link #webClient(String)} returns a {@link WebTestClient} pre-authenticated with a token
  * minted by the mock OAuth server using {@code clientType} as the {@code client_id}; the token
  * is decided by the {@code /integration/oauth2-mock-server.json} fixture, and tests currently
- * pass {@code "NoAuth"}. Subclasses inherit an {@code @AfterEach} hook that resets all
+ * pass {@code "NoAuth"}. {@link #webClient(String)} also sends
+ * {@link TraderOrganisationHeaderFilter#ORGANISATION_ID_HEADER} defaulting to
+ * {@link #DEFAULT_TRADER_ORG_ID}. Subclasses inherit an {@code @AfterEach} hook that resets all
  * MockServer expectations, so per-test stubs do not leak across tests.
  */
 @Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
 public abstract class IntegrationBase {
+
+    protected static final String DEFAULT_TRADER_ORG_ID = "5900002";
 
     static final List<String> SERVICES_TO_MOCK = List.of();
 
@@ -63,6 +76,8 @@ public abstract class IntegrationBase {
     @LocalServerPort
     protected int port;
 
+    @Autowired
+    protected MongoTemplate mongoTemplate;
 
     private MockServerClient mockServerClient;
 
@@ -132,13 +147,31 @@ public abstract class IntegrationBase {
     }
 
     protected WebTestClient webClient(String clientType) {
+        return webClient(clientType, DEFAULT_TRADER_ORG_ID);
+    }
+
+    protected WebTestClient webClient(String clientType, String organisationId) {
         return WebTestClient.bindToServer()
             .baseUrl("http://localhost:%d".formatted(port))
             .defaultHeader("Authorization", "Bearer " + getToken(clientType))
             .defaultHeader("Content-Type", "application/json")
             .defaultHeader("INS-ConversationId", UUID.randomUUID().toString())
+            .defaultHeader(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, organisationId)
             .responseTimeout(FIRST_REQUEST_WARM_UP_ALLOWANCE)
             .build();
+    }
+
+    protected void seedDraftNotificationOwnedBy(
+            NotificationRepository repository, String referenceNumber) {
+        NotificationTestSupport.deleteByReferenceNumber(mongoTemplate, referenceNumber);
+        NotificationAggregate aggregate = NotificationAggregate.builder()
+                .referenceNumber(referenceNumber)
+                .organisationId(DEFAULT_TRADER_ORG_ID)
+                .status(NotificationStatus.DRAFT)
+                .created(Instant.now())
+                .notification(new Notification())
+                .build();
+        repository.save(aggregate);
     }
 
     String getToken(String clientType) {

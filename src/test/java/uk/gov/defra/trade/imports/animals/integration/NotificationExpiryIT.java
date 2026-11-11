@@ -37,6 +37,7 @@ import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationExpiryIndex;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 
 @TestPropertySource(
@@ -118,12 +119,15 @@ class NotificationExpiryIT extends IntegrationBase {
         await()
             .atMost(Duration.ofSeconds(30))
             .untilAsserted(() -> {
-                assertThat(notificationRepository.findByReferenceNumber(expiredReference)).isEmpty();
+                assertThat(NotificationTestSupport.findByReferenceNumber(mongoTemplate, expiredReference))
+                    .isEmpty();
                 assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(expiredReference))
                     .isEmpty();
             });
-        assertThat(notificationRepository.findByReferenceNumber(undatedReference)).isPresent();
-        assertThat(notificationRepository.findByReferenceNumber(unexpiredReference)).isPresent();
+        assertThat(NotificationTestSupport.findByReferenceNumber(mongoTemplate, undatedReference))
+            .isPresent();
+        assertThat(NotificationTestSupport.findByReferenceNumber(mongoTemplate, unexpiredReference))
+            .isPresent();
         assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(undatedReference))
             .hasSize(1);
         assertThat(accompanyingDocumentRepository.findAllByNotificationReferenceNumber(unexpiredReference))

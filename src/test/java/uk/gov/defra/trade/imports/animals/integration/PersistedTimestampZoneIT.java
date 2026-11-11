@@ -26,6 +26,7 @@ import uk.gov.defra.trade.imports.animals.audit.Result;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 import uk.gov.defra.trade.imports.animals.notification.NotificationSort;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
@@ -140,7 +141,7 @@ class PersistedTimestampZoneIT extends IntegrationBase {
 
         // When
         TimeZone.setDefault(TimeZone.getTimeZone(zoneId));
-        NotificationAggregate read = notificationRepository.findByReferenceNumber(REF).orElseThrow();
+        NotificationAggregate read = NotificationTestSupport.findByReferenceNumber(mongoTemplate, REF).orElseThrow();
 
         // Then
         assertThat(read.getNotification().getTransport().getArrivalDate()).isEqualTo(ARRIVAL_DATE);
@@ -171,7 +172,7 @@ class PersistedTimestampZoneIT extends IntegrationBase {
         try {
             // When
             NotificationAggregate read =
-                notificationRepository.findByReferenceNumber(REF).orElseThrow();
+                NotificationTestSupport.findByReferenceNumber(mongoTemplate, REF).orElseThrow();
             OutboxEvent event = mongoTemplate.findById(eventId, OutboxEvent.class);
 
             // Then
@@ -215,7 +216,7 @@ class PersistedTimestampZoneIT extends IntegrationBase {
             .append("expireAt", Date.from(EXPIRE_AT)));
 
         // When
-        NotificationAggregate read = notificationRepository.findByReferenceNumber(REF).orElseThrow();
+        NotificationAggregate read = NotificationTestSupport.findByReferenceNumber(mongoTemplate, REF).orElseThrow();
 
         // Then
         assertThat(read.getCreated()).isEqualTo(CREATED);

@@ -62,8 +62,7 @@ final class CdpUploaderTestSupport {
      * <ul>
      *   <li>{@code NODE_ENV=development} switches cdp-uploader into dev mode, which relaxes
      *       redirect handling and enables the mock-scanner code paths.</li>
-     *   <li>{@code MOCK_VIRUS_SCAN_ENABLED} and {@code MOCK_VIRUS_RESULT_DELAY=0} turn the
-     *       in-process mock scanner on and drop its artificial delay.</li>
+     *   <li>{@code MOCK_VIRUS_SCAN_ENABLED} turns the in-process mock scanner on.</li>
      *   <li>The {@code SQS_*_WAIT_TIME_SECONDS} values cut long-poll waits from the 20-second
      *       default so an upload, scan and callback round trip finishes inside a test timeout.</li>
      *   <li>{@code S3_ENDPOINT}, {@code AWS_REGION} and the static credentials point the
@@ -82,7 +81,6 @@ final class CdpUploaderTestSupport {
             .withEnv("CONSUMER_BUCKETS", consumerBuckets)
             .withEnv("NODE_ENV", "development")
             .withEnv("MOCK_VIRUS_SCAN_ENABLED", "true")
-            .withEnv("MOCK_VIRUS_RESULT_DELAY", "0")
             .withEnv("SQS_SCAN_RESULTS_WAIT_TIME_SECONDS", "1")
             .withEnv("SQS_SCAN_RESULTS_CALLBACK_WAIT_TIME_SECONDS", "1")
             .withEnv("SQS_DOWNLOAD_REQUESTS_WAIT_TIME_SECONDS", "1")

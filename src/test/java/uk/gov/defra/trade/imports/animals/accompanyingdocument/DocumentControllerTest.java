@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -27,6 +28,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.hamcrest.Matchers;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -48,6 +50,8 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultForm;
 import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
+import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 
 @WebMvcTest(DocumentController.class)
 @EnableConfigurationProperties(AppConfig.class)
@@ -57,6 +61,9 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
     "outbox.sns.topic-arn=arn:aws:sns:eu-west-2:000000000000:unit-test-outbox.fifo"
 })
 class DocumentControllerTest {
+
+  private static final String CALLER_ORGANISATION_ID = "5900002";
+  private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-26-000001";
 
   @Autowired
   private MockMvc mockMvc;
@@ -68,12 +75,19 @@ class DocumentControllerTest {
   private DocumentService documentService;
 
   @MockitoBean
+  private NotificationService notificationService;
+
+  @MockitoBean
   private S3DocumentService s3DocumentService;
+
+  @BeforeEach
+  void stubUploadSessionNotificationReferenceNumber() {
+    when(documentService.notificationReferenceNumberForUploadId(anyString()))
+        .thenReturn(NOTIFICATION_REFERENCE_NUMBER);
+  }
 
   @Nested
   class Register {
-
-    private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-26-000001";
 
     @Test
     void shouldReturn201WithLocationHeaderAndTheRegisteredSession() throws Exception {
@@ -83,6 +97,7 @@ class DocumentControllerTest {
 
       mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .content(objectMapper.writeValueAsString(registerUploadRequest())))
           .andExpect(status().isCreated())
           .andExpect(header().string(
@@ -114,6 +129,7 @@ class DocumentControllerTest {
 
       mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .content(body))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.errors.uploadId").exists());
@@ -129,6 +145,7 @@ class DocumentControllerTest {
 
       mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .content(body))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.errors.correlationId").exists());
@@ -143,6 +160,7 @@ class DocumentControllerTest {
 
       mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .content(body))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.errors.uploadId").exists());
@@ -157,9 +175,26 @@ class DocumentControllerTest {
 
       mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .content(body))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.errors.correlationId").exists());
+
+      verify(documentService, never()).registerUpload(any(), any());
+    }
+
+    @Test
+    void shouldReturn404_whenCallerDoesNotOwnTheNotification() throws Exception {
+      doThrow(new NotFoundException(
+          "Cannot find notification with reference number: " + NOTIFICATION_REFERENCE_NUMBER))
+          .when(notificationService)
+          .requireTraderAccess(NOTIFICATION_REFERENCE_NUMBER, CALLER_ORGANISATION_ID);
+
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
+              .contentType(MediaType.APPLICATION_JSON)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
+              .content(objectMapper.writeValueAsString(registerUploadRequest())))
+          .andExpect(status().isNotFound());
 
       verify(documentService, never()).registerUpload(any(), any());
     }
@@ -199,6 +234,7 @@ class DocumentControllerTest {
       givenClaimAccepted();
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(objectMapper.writeValueAsString(request)))
           .andExpect(status().isOk())
@@ -223,6 +259,7 @@ class DocumentControllerTest {
           .thenReturn(claimedWith(DocumentType.AIR_WAYBILL));
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isOk());
@@ -244,6 +281,7 @@ class DocumentControllerTest {
       String body = claimBody(reference);
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isOk());
@@ -256,6 +294,7 @@ class DocumentControllerTest {
       String body = claimBody(reference);
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -267,6 +306,7 @@ class DocumentControllerTest {
       String body = claimBody("");
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -280,6 +320,7 @@ class DocumentControllerTest {
       givenClaimAccepted();
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isOk());
@@ -290,6 +331,7 @@ class DocumentControllerTest {
       String body = claimBody("A".repeat(59));
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -303,6 +345,7 @@ class DocumentControllerTest {
           """;
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -319,6 +362,7 @@ class DocumentControllerTest {
           """.formatted(dateOfIssue);
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -339,6 +383,7 @@ class DocumentControllerTest {
           """;
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isBadRequest())
@@ -354,6 +399,7 @@ class DocumentControllerTest {
       givenClaimAccepted();
 
       mockMvc.perform(post("/document-uploads/{uploadId}/claim", UPLOAD_ID)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON)
               .content(body))
           .andExpect(status().isOk());
@@ -389,7 +435,8 @@ class DocumentControllerTest {
           .thenReturn(List.of(doc));
 
       mockMvc.perform(get("/notifications/{referenceNumber}/document-uploads", notificationReferenceNumber)
-              .contentType(MediaType.APPLICATION_JSON))
+              .contentType(MediaType.APPLICATION_JSON)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.items").isArray())
           .andExpect(jsonPath("$.items.length()").value(1))
@@ -405,10 +452,27 @@ class DocumentControllerTest {
           .thenReturn(List.of());
 
       mockMvc.perform(get("/notifications/{referenceNumber}/document-uploads", notificationReferenceNumber)
-              .contentType(MediaType.APPLICATION_JSON))
+              .contentType(MediaType.APPLICATION_JSON)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.items").isArray())
           .andExpect(jsonPath("$.items.length()").value(0));
+    }
+
+    @Test
+    void shouldReturn404_whenCallerDoesNotOwnTheNotification() throws Exception {
+      String notificationReferenceNumber = "GBN-AG-26-000001";
+      doThrow(new NotFoundException(
+          "Cannot find notification with reference number: " + notificationReferenceNumber))
+          .when(notificationService)
+          .requireTraderAccess(notificationReferenceNumber, CALLER_ORGANISATION_ID);
+
+      mockMvc.perform(get("/notifications/{referenceNumber}/document-uploads", notificationReferenceNumber)
+              .contentType(MediaType.APPLICATION_JSON)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
+          .andExpect(status().isNotFound());
+
+      verify(documentService, never()).findByNotificationReferenceNumber(anyString());
     }
   }
 
@@ -433,6 +497,7 @@ class DocumentControllerTest {
       when(documentService.findByUploadId(uploadId)).thenReturn(doc);
 
       mockMvc.perform(get("/document-uploads/{uploadId}", uploadId)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.uploadId").value(uploadId))
@@ -448,6 +513,7 @@ class DocumentControllerTest {
           .thenThrow(new NotFoundException("No accompanying document found with uploadId: " + unknownId));
 
       mockMvc.perform(get("/document-uploads/{uploadId}", unknownId)
+              .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON))
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.detail").value(
@@ -543,7 +609,8 @@ class DocumentControllerTest {
       when(documentService.findFile(uploadId)).thenReturn(uploadedFile);
       doNothing().when(s3DocumentService).streamToOutput(any(String.class), any());
 
-      mockMvc.perform(get("/document-uploads/{uploadId}/file", uploadId))
+      mockMvc.perform(get("/document-uploads/{uploadId}/file", uploadId)
+          .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
           .andExpect(status().isOk())
           .andExpect(header().string(
               "Content-Disposition",
@@ -570,7 +637,8 @@ class DocumentControllerTest {
       when(documentService.findFile(uploadId)).thenReturn(uploadedFile);
       doNothing().when(s3DocumentService).streamToOutput(any(String.class), any());
 
-      mockMvc.perform(get("/document-uploads/{uploadId}/file", uploadId))
+      mockMvc.perform(get("/document-uploads/{uploadId}/file", uploadId)
+          .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
           .andExpect(status().isOk())
           .andExpect(header().string("Content-Type", "application/octet-stream"));
     }
@@ -581,7 +649,8 @@ class DocumentControllerTest {
       when(documentService.findFile(unknownId))
           .thenThrow(new NotFoundException("No accompanying document found with uploadId: " + unknownId));
 
-      mockMvc.perform(get("/document-uploads/{uploadId}/file", unknownId))
+      mockMvc.perform(get("/document-uploads/{uploadId}/file", unknownId)
+          .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.detail").value(
               "No accompanying document found with uploadId: " + unknownId));
@@ -596,7 +665,8 @@ class DocumentControllerTest {
       String uploadId = "upload-abc-123";
       doNothing().when(documentService).deleteByUploadId(uploadId);
 
-      mockMvc.perform(delete("/document-uploads/{uploadId}", uploadId))
+      mockMvc.perform(delete("/document-uploads/{uploadId}", uploadId)
+          .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
           .andExpect(status().isNoContent());
     }
 
@@ -606,7 +676,8 @@ class DocumentControllerTest {
       doThrow(new NotFoundException("No accompanying document found with uploadId: " + unknownId))
           .when(documentService).deleteByUploadId(unknownId);
 
-      mockMvc.perform(delete("/document-uploads/{uploadId}", unknownId))
+      mockMvc.perform(delete("/document-uploads/{uploadId}", unknownId)
+          .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.detail").value(
               "No accompanying document found with uploadId: " + unknownId));

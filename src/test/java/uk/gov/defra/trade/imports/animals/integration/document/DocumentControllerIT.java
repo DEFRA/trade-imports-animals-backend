@@ -54,13 +54,15 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepo
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
-import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
+import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 
 @Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class DocumentControllerIT extends IntegrationBase {
 
     private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-25-TC0001";
+    private static final String OTHER_NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-26-OTHER0";
+    private static final String OTHER_ORG_ID = "9999999";
     private static final String AWS_REGION = "eu-west-2";
 
     private static final Duration SCAN_TIMEOUT = Duration.ofSeconds(20);
@@ -156,6 +158,7 @@ class DocumentControllerIT extends IntegrationBase {
         uploadSessionRepository.deleteAll();
         accompanyingDocumentRepository.deleteAll();
         notificationRepository.deleteAll();
+        seedDraftNotificationOwnedBy(notificationRepository, NOTIFICATION_REFERENCE_NUMBER);
         assertThat(port).isEqualTo(BACKEND_PORT);
     }
 
@@ -224,11 +227,54 @@ class DocumentControllerIT extends IntegrationBase {
         @Test
         void shouldReturn404_whenTheCorrelationIdBelongsToAnotherNotification() {
             OpenedSession session = registeredSession();
+            seedDraftNotificationOwnedBy(notificationRepository, OTHER_NOTIFICATION_REFERENCE_NUMBER);
 
             webClient("NoAuth")
                 .get()
-                .uri("/notifications/GBN-AG-26-ANTHR1/document-upload-sessions/"
+                .uri("/notifications/" + OTHER_NOTIFICATION_REFERENCE_NUMBER + "/document-upload-sessions/"
                     + session.correlationId())
+                .exchange()
+                .expectStatus().isNotFound();
+        }
+    }
+
+    @Nested
+    class OtherOrganisation {
+
+        @Test
+        void register_shouldReturn404() {
+            OpenedSession session = openUploadSession();
+
+            webClient("NoAuth", OTHER_ORG_ID)
+                .post()
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(registerBody(session))
+                .exchange()
+                .expectStatus().isNotFound();
+
+            assertThat(uploadSessionRepository.findByUploadId(session.uploadId())).isEmpty();
+        }
+
+        @Test
+        void session_shouldReturn404() {
+            OpenedSession session = registeredSession();
+
+            webClient("NoAuth", OTHER_ORG_ID)
+                .get()
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-upload-sessions/"
+                    + session.correlationId())
+                .exchange()
+                .expectStatus().isNotFound();
+        }
+
+        @Test
+        void list_shouldReturn404() {
+            registeredSession();
+
+            webClient("NoAuth", OTHER_ORG_ID)
+                .get()
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
                 .exchange()
                 .expectStatus().isNotFound();
         }
@@ -264,11 +310,10 @@ class DocumentControllerIT extends IntegrationBase {
         @Test
         void shouldStoreTheDocumentWithItsNotificationsExpireAt() {
             Instant expireAt = Instant.parse("2030-01-01T00:00:00Z");
-            notificationRepository.save(NotificationAggregate.builder()
-                .referenceNumber(NOTIFICATION_REFERENCE_NUMBER)
-                .status(NotificationStatus.DRAFT)
-                .expireAt(expireAt)
-                .build());
+            NotificationAggregate notification = NotificationTestSupport
+                .findByReferenceNumber(mongoTemplate, NOTIFICATION_REFERENCE_NUMBER).orElseThrow();
+            notification.setExpireAt(expireAt);
+            notificationRepository.save(notification);
             String uploadId = registeredUploadId();
 
             claimUpload(uploadId);
