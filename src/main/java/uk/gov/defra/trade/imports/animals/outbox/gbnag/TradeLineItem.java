@@ -9,17 +9,11 @@ public record TradeLineItem(
     List<String> description,
     String scientificName,
     String commonName,
-    String typeCode,
-    String urlId,
     List<LineTradeDelivery> specifiedLineTradeDelivery,
     List<LogisticsPackage> physicalReferencedLogisticsPackage,
     List<TradeProductInstance> individualTradeProductInstance
 ) {
 
-    /**
-     * One line per species on the complement, each carrying that species' own counts. A complement
-     * with no species still gets one line, from the complement totals.
-     */
     static List<TradeLineItem> linesFrom(Commodity entry) {
         List<Species> species = entry.getSpecies();
         if (species == null || species.isEmpty()) {
@@ -36,8 +30,6 @@ public record TradeLineItem(
             descriptionOf(entry.getDescription()),
             species.getText(),
             tradeLineCommonName(entry, species),
-            typeCodeFor(species, entry),
-            null,
             LineTradeDelivery.headCount(species.getNoOfAnimals()),
             LogisticsPackage.packageCount(species.getNoOfPackages()),
             TradeProductInstance.instancesFrom(species));
@@ -49,18 +41,9 @@ public record TradeLineItem(
             descriptionOf(entry.getDescription()),
             null,
             textOrNull(entry.getName()),
-            entry.getTypeOfCommodity(),
-            null,
             LineTradeDelivery.headCount(entry.getTotalNoOfAnimals()),
             LogisticsPackage.packageCount(entry.getTotalNoOfPackages()),
             null);
-    }
-
-    private static String typeCodeFor(Species species, Commodity entry) {
-        if (species.getTypeOfCommodity() != null && !species.getTypeOfCommodity().isBlank()) {
-            return species.getTypeOfCommodity();
-        }
-        return entry.getTypeOfCommodity();
     }
 
     @SuppressWarnings("java:S1168")

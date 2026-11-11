@@ -236,8 +236,6 @@ class GbnAgMapperTest {
             assertThat(line.description()).containsExactly("Live bovine animals");
             assertThat(line.commonName()).isEqualTo("Domestic cattle");
             assertThat(line.scientificName()).isEqualTo("Bos taurus");
-            assertThat(line.typeCode()).isNull();
-            assertThat(line.urlId()).isNull();
             assertThat(line.applicableClassification()).singleElement().satisfies(c -> {
                 assertThat(c.systemId()).isEqualTo("CN");
                 assertThat(c.classCode().value()).isEqualTo("01020000");
@@ -536,7 +534,6 @@ class GbnAgMapperTest {
             .referenceNumber("GBN-AG-26-PKG001")
             .notification(Notification.builder()
                 .commodities(List.of(Commodity.builder()
-                        .typeOfCommodity("01020000")
                         .totalNoOfPackages(null)
                         .build()))
                 .build())
@@ -555,7 +552,6 @@ class GbnAgMapperTest {
             .referenceNumber("GBN-AG-26-SPC001")
             .notification(Notification.builder()
                 .commodities(List.of(Commodity.builder()
-                        .typeOfCommodity("01020000")
                         .build()))
                 .build())
             .build();
@@ -574,7 +570,6 @@ class GbnAgMapperTest {
             .referenceNumber("GBN-AG-26-CN001")
             .notification(Notification.builder()
                 .commodities(List.of(Commodity.builder()
-                        .typeOfCommodity(null)
                         .build()))
                 .build())
             .build();
@@ -592,7 +587,6 @@ class GbnAgMapperTest {
             .referenceNumber("GBN-AG-26-SPC004")
             .notification(Notification.builder()
                 .commodities(List.of(Commodity.builder()
-                        .typeOfCommodity("01020000")
                         .species(List.of())
                         .build()))
                 .build())
@@ -662,46 +656,6 @@ class GbnAgMapperTest {
     }
 
     @Test
-    void shouldPreferSpeciesTypeOfCommodityAsTradeLineTypeCode() {
-        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-            .referenceNumber("GBN-AG-26-TYPE")
-            .notification(Notification.builder()
-                .commodities(List.of(Commodity.builder()
-                        .typeOfCommodity("COMPLEMENT-TYPE")
-                        .species(List.of(Species.builder()
-                            .value("1148346")
-                            .text("Bos taurus")
-                            .typeOfCommodity("SPECIES-TYPE")
-                            .build()))
-                        .build()))
-                .build())
-            .build();
-
-        TradeLineItem line = firstLineOf(notificationAggregate);
-
-        assertThat(line.typeCode()).isEqualTo("SPECIES-TYPE");
-    }
-
-    @Test
-    void shouldFallBackToComplementTypeOfCommodity_whenSpeciesTypeBlank() {
-        NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-            .referenceNumber("GBN-AG-26-TYPE2")
-            .notification(Notification.builder()
-                .commodities(List.of(Commodity.builder()
-                        .typeOfCommodity("COMPLEMENT-TYPE")
-                        .species(List.of(Species.builder()
-                            .value("1148346")
-                            .text("Bos taurus")
-                            .typeOfCommodity("  ")
-                            .build()))
-                        .build()))
-                .build())
-            .build();
-
-        assertThat(firstLineOf(notificationAggregate).typeCode()).isEqualTo("COMPLEMENT-TYPE");
-    }
-
-    @Test
     void shouldOmitBlankCommonNameDescriptionAndClassification() {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
             .referenceNumber("GBN-AG-26-BLANK")
@@ -731,7 +685,6 @@ class GbnAgMapperTest {
             .referenceNumber("GBN-AG-26-CMD001")
             .notification(Notification.builder()
                 .commodities(List.of(Commodity.builder()
-                        .typeOfCommodity("01020000")
                         .build()))
                 .build())
             .build();
@@ -1113,7 +1066,6 @@ class GbnAgMapperTest {
             .referenceNumber(reference)
             .notification(Notification.builder()
                 .commodities(List.of(Commodity.builder()
-                        .typeOfCommodity("01020000")
                         .species(List.of(species))
                         .build()))
                 .build())
@@ -1172,12 +1124,11 @@ class GbnAgMapperTest {
     }
 
     @Test
-    void shouldOmitClassification_whenOnlyTypeOfCommodityIsSet() {
+    void shouldOmitClassification_whenComplementHasNoCommodityCode() {
         NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-            .referenceNumber("GBN-AG-26-LEGACY")
+            .referenceNumber("GBN-AG-26-NOCODE")
             .notification(Notification.builder()
                 .commodities(List.of(Commodity.builder()
-                        .typeOfCommodity("01020000")
                         .totalNoOfAnimals(1)
                         .totalNoOfPackages(1)
                         .species(List.of(Species.builder()
@@ -1192,7 +1143,6 @@ class GbnAgMapperTest {
 
         TradeLineItem line = firstLineOf(notificationAggregate);
         assertThat(line.applicableClassification()).isNull();
-        assertThat(line.typeCode()).isEqualTo("01020000");
     }
 
     private static NotificationAggregate fullyPopulatedNotification() {
