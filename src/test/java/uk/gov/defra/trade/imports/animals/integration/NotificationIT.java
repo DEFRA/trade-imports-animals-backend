@@ -1073,7 +1073,7 @@ class NotificationIT extends IntegrationBase {
             Updates.set("notification.commodities.0.typeOfCommodity", "Domestic"));
 
         // When — the stored draft is read and saved again by a client that still sends the field
-        NotificationAggregate stored = notificationRepository.findByReferenceNumber(referenceNumber)
+        NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         assertThat(stored.getNotification().getCommodities()).singleElement()
             .satisfies(commodity -> assertThat(commodity.getName()).isEqualTo("Live cattle"));
@@ -1086,10 +1086,11 @@ class NotificationIT extends IntegrationBase {
             .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
             .bodyValue(staleClientBody)
             .exchange().expectStatus().isOk();
-        submitAs(referenceNumber, ORG_ID);
+        submitAs(referenceNumber, DEFAULT_TRADER_ORG_ID);
 
         // Then — the notification is submitted and the outbound event never carries the field
-        assertThat(notificationRepository.findByReferenceNumber(referenceNumber).orElseThrow().getStatus())
+        assertThat(NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
+            .orElseThrow().getStatus())
             .isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(submittedOutboxEvent().getData().toString()).doesNotContain("typeOfCommodity");
 
