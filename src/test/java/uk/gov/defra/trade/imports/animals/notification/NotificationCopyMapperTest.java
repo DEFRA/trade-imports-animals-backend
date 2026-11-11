@@ -57,7 +57,6 @@ class NotificationCopyMapperTest {
                     .name("Live bovine animals")
                     .commodityCode("0102")
                     .description("Live cattle")
-                    .typeOfCommodity("LIVE")
                     .totalNoOfAnimals(10)
                     .totalNoOfPackages(5)
                     .species(List.of(species()))
@@ -66,7 +65,6 @@ class NotificationCopyMapperTest {
                     .name("Sheep")
                     .commodityCode("0104")
                     .description("Live sheep")
-                    .typeOfCommodity("LIVE")
                     .totalNoOfAnimals(3)
                     .species(List.of(species()))
                     .build());
@@ -81,7 +79,6 @@ class NotificationCopyMapperTest {
                 assertThat(c.getName()).isEqualTo("Live bovine animals");
                 assertThat(c.getCommodityCode()).isEqualTo("0102");
                 assertThat(c.getDescription()).isEqualTo("Live cattle");
-                assertThat(c.getTypeOfCommodity()).isEqualTo("LIVE");
                 assertThat(c.getTotalNoOfAnimals()).isNull();
                 assertThat(c.getTotalNoOfPackages()).isNull();
                 assertThat(c.getSpecies()).isEmpty();
@@ -90,7 +87,6 @@ class NotificationCopyMapperTest {
                 assertThat(c.getName()).isEqualTo("Sheep");
                 assertThat(c.getCommodityCode()).isEqualTo("0104");
                 assertThat(c.getDescription()).isEqualTo("Live sheep");
-                assertThat(c.getTypeOfCommodity()).isEqualTo("LIVE");
             });
         }
 
@@ -100,7 +96,6 @@ class NotificationCopyMapperTest {
                 .commodities(List.of(Commodity.builder()
                     .name("Cow")
                     .commodityCode("0102")
-                    .typeOfCommodity("LIVE")
                     .build()))
                 .build());
 
@@ -299,7 +294,6 @@ class NotificationCopyMapperTest {
             Commodity complement = Commodity.builder()
                 .name("Ovine")
                 .commodityCode("0104")
-                .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(10)
                 .totalNoOfPackages(5)
                 .species(List.of(species()))
@@ -322,7 +316,6 @@ class NotificationCopyMapperTest {
                 Commodity.builder()
                     .name("First")
                     .commodityCode("0102")
-                    .typeOfCommodity("LIVE")
                     .totalNoOfAnimals(3)
                     .totalNoOfPackages(1)
                     .species(List.of(species()))
@@ -330,7 +323,6 @@ class NotificationCopyMapperTest {
                 Commodity.builder()
                     .name("Second")
                     .commodityCode("0104")
-                    .typeOfCommodity("GERM")
                     .totalNoOfAnimals(7)
                     .totalNoOfPackages(2)
                     .species(List.of(species()))
@@ -406,7 +398,6 @@ class NotificationCopyMapperTest {
             Commodity complement = Commodity.builder()
                 .name("Cattle")
                 .commodityCode("0102")
-                .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(10)
                 .totalNoOfPackages(5)
                 .species(List.of(speciesWithIdentifiers))
