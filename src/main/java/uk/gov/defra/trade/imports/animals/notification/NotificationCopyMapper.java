@@ -63,7 +63,6 @@ public class NotificationCopyMapper {
                 .name(entry.getName())
                 .commodityCode(entry.getCommodityCode())
                 .description(entry.getDescription())
-                .typeOfCommodity(entry.getTypeOfCommodity())
                 .build())
             .toList();
     }

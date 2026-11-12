@@ -154,7 +154,6 @@ class NotificationControllerTest {
             Species species = species();
             Commodity complement = Commodity.builder()
                 .name("Live bovine animals")
-                .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(5)
                 .species(List.of(species))
                 .build();
@@ -195,7 +194,6 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.notification.origin.countryCode").value("GB"))
                 .andExpect(jsonPath("$.notification.origin.internalReference").value("CUSTOMER-REF-123"))
                 .andExpect(jsonPath("$.notification.commodities[0].name").value("Live bovine animals"))
-                .andExpect(jsonPath("$.notification.commodities[0].typeOfCommodity").value("LIVE"))
                 .andExpect(jsonPath("$.notification.commodities[0].species[0].value").value("BOV"))
                 .andExpect(jsonPath("$.notification.commodities[0].species[0].earTag").value(
                     "UK01234567890"))
@@ -317,7 +315,6 @@ class NotificationControllerTest {
                 .build();
             Commodity complement = Commodity.builder()
                 .name("Cow")
-                .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(2)
                 .totalNoOfPackages(1)
                 .species(List.of(species))

@@ -333,7 +333,6 @@ class NotificationServiceTest {
                 .build();
             List<Commodity> commodities = List.of(Commodity.builder()
                 .name("Fish")
-                .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(5)
                 .species(List.of(species()))
                 .build());
@@ -1593,7 +1592,7 @@ class NotificationServiceTest {
         @Test
         void cancelAmendNotification_shouldRestorePreAmendSnapshotAndSetSubmitted() {
             String referenceNumber = "GBN-AG-26-CAN001";
-            Notification preAmendSnapshot =Notification.builder()
+            Notification preAmendSnapshot = Notification.builder()
                 .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("ORIGINAL-REF").build())
                 .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
@@ -1773,9 +1772,8 @@ class NotificationServiceTest {
                 .internalReference("INTERNAL-REF")
                 .build();
             AdditionalDetails additionalDetails = new AdditionalDetails("Breeding", "yes");
-            Commodity commodity =Commodity.builder()
+            Commodity commodity = Commodity.builder()
                 .name("Live bovine animals")
-                .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(10)
                 .totalNoOfPackages(5)
                 .species(List.of(species()))
@@ -1828,11 +1826,10 @@ class NotificationServiceTest {
         @Test
         void copyNotification_shouldResetExcludedFields() {
             String sourceRef = "GBN-AG-26-SRC003";
-            Commodity commodity =Commodity.builder()
+            Commodity commodity = Commodity.builder()
                 .name("Cattle")
                 .commodityCode("0102")
                 .description("Live cattle")
-                .typeOfCommodity("LIVE")
                 .totalNoOfAnimals(10)
                 .totalNoOfPackages(5)
                 .species(List.of(species()))
@@ -1869,11 +1866,10 @@ class NotificationServiceTest {
             assertThat(saved.getNotification().getAdditionalDetails().getUnweanedAnimals()).isNull();
             assertThat(saved.getNotification().getTransport()).isNull();
             assertThat(saved.getNotification().getConsignment()).isNull();
-            Commodity copiedCommodity =saved.getNotification().getCommodities().getFirst();
+            Commodity copiedCommodity = saved.getNotification().getCommodities().getFirst();
             assertThat(copiedCommodity.getName()).isEqualTo("Cattle");
             assertThat(copiedCommodity.getCommodityCode()).isEqualTo("0102");
             assertThat(copiedCommodity.getDescription()).isEqualTo("Live cattle");
-            assertThat(copiedCommodity.getTypeOfCommodity()).isEqualTo("LIVE");
             assertThat(copiedCommodity.getTotalNoOfAnimals()).isNull();
             assertThat(copiedCommodity.getTotalNoOfPackages()).isNull();
             assertThat(copiedCommodity.getSpecies()).isEmpty();
@@ -2247,7 +2243,7 @@ class NotificationServiceTest {
             String ref = "GBN-AG-26-CAN001";
             Instant originalSubmittedAt = Instant.parse("2026-04-15T10:00:00Z");
             List<Document> preAmendFulfilments = List.of(new Document("obligationId", "prior"));
-            Notification preAmendSnapshot =Notification.builder()
+            Notification preAmendSnapshot = Notification.builder()
                 .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("ORIGINAL").build())
                 .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
