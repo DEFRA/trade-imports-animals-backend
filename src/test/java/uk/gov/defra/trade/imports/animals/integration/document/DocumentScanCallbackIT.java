@@ -19,25 +19,16 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepo
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 
-/**
- * Defensive scan-callback ITs: shapes the real cdp-uploader would never produce, but our handler
- * has to cope with anyway. Direct-POST fixture pattern is the right tool here — we're exercising
- * our routing/parsing/error mapping, not cdp-uploader.
- *
- * <p>The end-to-end CLEAN/REJECTED happy paths live in {@link DocumentControllerIT} and run
- * against a real cdp-uploader scan.
- */
 class DocumentScanCallbackIT extends IntegrationBase {
 
-    private static final String NOTIFICATION_REF = "GBN-AG-25-CB0001";
-    private static final String DOCUMENTS_BUCKET = "trade-imports-animals-documents";
+    private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-25-CB0001";
     private static final String S3_KEY_FROM_FIXTURE =
         "44f1a20e-0a27-4d61-9aa7-7afa7fb82d85/c1ec2432-54ed-4153-bd6f-d69a35f598f4";
     private static final String FILE_ID_FROM_FIXTURE = "c1ec2432-54ed-4153-bd6f-d69a35f598f4";
 
     @DynamicPropertySource
     static void registerStubProperties(DynamicPropertyRegistry registry) {
-        registry.add("cdp.s3.documents-bucket", () -> DOCUMENTS_BUCKET);
+        registry.add("cdp.s3.documents-bucket", () -> CdpUploaderTestSupport.DOCUMENTS_BUCKET);
         registry.add("aws.sts.token.audience", () -> "test-audience");
         registry.add("aws.sts.token.expiration", () -> "3600");
     }
@@ -84,7 +75,7 @@ class DocumentScanCallbackIT extends IntegrationBase {
               },
               "form": {}
             }
-            """.formatted(NOTIFICATION_REF);
+            """.formatted(NOTIFICATION_REFERENCE_NUMBER);
 
         webClient("NoAuth")
             .post()
@@ -127,7 +118,8 @@ class DocumentScanCallbackIT extends IntegrationBase {
                 }
               }
             }
-            """.formatted(NOTIFICATION_REF, correlationId, FILE_ID_FROM_FIXTURE, S3_KEY_FROM_FIXTURE);
+            """.formatted(
+                NOTIFICATION_REFERENCE_NUMBER, correlationId, FILE_ID_FROM_FIXTURE, S3_KEY_FROM_FIXTURE);
 
         webClient("NoAuth")
             .post()
@@ -187,7 +179,7 @@ class DocumentScanCallbackIT extends IntegrationBase {
                 }
               }
             }
-            """.formatted(correlationId, uploadId, DOCUMENTS_BUCKET);
+            """.formatted(correlationId, uploadId, CdpUploaderTestSupport.DOCUMENTS_BUCKET);
 
         webClient("NoAuth")
             .post()
@@ -260,12 +252,12 @@ class DocumentScanCallbackIT extends IntegrationBase {
         String correlationId = UUID.randomUUID().toString();
         String uploadId = UUID.randomUUID().toString();
         uploadSessionRepository.save(UploadSession.builder()
-            .notificationReferenceNumber(NOTIFICATION_REF)
+            .notificationReferenceNumber(NOTIFICATION_REFERENCE_NUMBER)
             .uploadId(uploadId)
             .correlationId(correlationId)
             .build());
         AccompanyingDocument doc = AccompanyingDocument.builder()
-            .notificationReferenceNumber(NOTIFICATION_REF)
+            .notificationReferenceNumber(NOTIFICATION_REFERENCE_NUMBER)
             .uploadId(uploadId)
             .correlationId(correlationId)
             .scanStatus(ScanStatus.PENDING)

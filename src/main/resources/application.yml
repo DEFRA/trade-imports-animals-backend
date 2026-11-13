@@ -26,10 +26,8 @@ spring:
     timeout-per-shutdown-phase: 30s
   jackson:
     serialization:
-      # Timestamps on this API are Instants and date-only fields are LocalDates. Enabling this
-      # would serialise an Instant as a decimal epoch and a LocalDate as a [year, month, day]
-      # array instead of ISO-8601 strings — a silent contract break. Pinned to the Spring Boot
-      # default so it cannot change by accident.
+      # Pinned to the Spring Boot default. Enabling it would serialise Instants as epoch numbers
+      # and LocalDates as [year, month, day] arrays, breaking the API contract silently.
       write-dates-as-timestamps: false
 
 # CDP platform configuration
@@ -46,13 +44,12 @@ cdp:
   s3:
     documents-bucket: ${CDP_DOCUMENTS_BUCKET:trade-imports-animals-documents}
 
-# Application-level AWS overrides
 app:
   base-url: ${TRADE_IMPORTS_ANIMALS_BACKEND_BASE_URL:}
   aws:
     endpoint-override: ${APP_AWS_ENDPOINT_OVERRIDE:}
-    # Local development only — set via environment variables or application-local.yml.
-    # Do NOT set real credentials here; these keys are ignored in deployed environments.
+    # For a local stand-in such as LocalStack only. Never set real credentials here: with an
+    # endpoint override set, these keys are used in any environment.
     # access-key-id: ${APP_AWS_ACCESS_KEY_ID:}
     # secret-access-key: ${APP_AWS_SECRET_ACCESS_KEY:}
 
@@ -82,8 +79,6 @@ logging:
     io.netty.handler.logging.LoggingHandler: WARN
 
 # Actuator endpoints
-# Production: Only health endpoint exposed (secure by default)
-# Development: Use dev profile (application-local.yml) for debugging endpoints
 management:
   endpoints:
     web:
@@ -126,7 +121,6 @@ springdoc:
   swagger-ui:
     enabled: false
 
-# Notification submission outbox lock configuration
 notification:
   admin:
     page-size: 50
@@ -134,18 +128,13 @@ notification:
     page-size: 25
   submit:
     lock-at-least-for: 50ms
-  # Automatic expiry of app-created notifications in non-prod environments.
-  # Defaults here are the prod-safe values: days unset (no stamping) and sweep disabled.
-  # Non-prod environments opt in via NOTIFICATION_TTL_DAYS and NOTIFICATION_TTL_SWEEP_ENABLED.
+  # Prod-safe defaults: nothing is stamped or expired. Non-prod opts in by setting
+  # NOTIFICATION_TTL_DAYS and NOTIFICATION_TTL_EXPIRY_ENABLED=true.
   ttl:
     days: ${NOTIFICATION_TTL_DAYS:}
     environment: ${ENVIRONMENT:local}
-    sweep:
-      enabled: ${NOTIFICATION_TTL_SWEEP_ENABLED:false}
-      interval-ms: 3600000
-      batch-size: 10
-      lock-at-least-for: 1s
-      lock-at-most-for: 30s
+    expiry:
+      enabled: ${NOTIFICATION_TTL_EXPIRY_ENABLED:false}
 
 mongo:
   transaction:
@@ -157,7 +146,7 @@ mongo:
       timeout-ms: ${MONGO_TX_COMMIT_RETRY_TIMEOUT_MS:120000}
       backoff-ms: ${MONGO_TX_COMMIT_RETRY_BACKOFF_MS:100}
 
-# Transactional outbox SNS relay (ADR-EUDP-001)
+# Transactional outbox SNS relay
 outbox:
   poller:
     interval-ms: 2000

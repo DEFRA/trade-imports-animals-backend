@@ -2,11 +2,10 @@ package uk.gov.defra.trade.imports.animals.cdp.uploader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
 
 import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
-import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
@@ -16,7 +15,6 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.slf4j.LoggerFactory;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 
 class CdpScanResultFormTest {
@@ -161,8 +159,7 @@ class CdpScanResultFormTest {
     }
 
     @Test
-    void deserialize_shouldWarnNamingTheField_whenAFormValueIsAnObjectWithNoFileId()
-        throws JsonProcessingException {
+    void deserialize_shouldWarnNamingTheField_whenAFormValueIsAnObjectWithNoFileId() {
       String json = """
           {
             "declaration": {
@@ -221,18 +218,14 @@ class CdpScanResultFormTest {
       assertThat(form.getFiles().get("file").fileStatus()).isEqualTo(FileStatus.REJECTED);
     }
 
-    private List<ILoggingEvent> logEventsWhileDeserializing(String json)
-        throws JsonProcessingException {
-      Logger logger = (Logger) LoggerFactory.getLogger(CdpScanResultForm.Deserializer.class);
-      ListAppender<ILoggingEvent> appender = new ListAppender<>();
-      appender.start();
-      logger.addAppender(appender);
-      try {
-        objectMapper.readValue(json, CdpScanResultForm.class);
-      } finally {
-        logger.detachAppender(appender);
-      }
-      return appender.list;
+    private List<ILoggingEvent> logEventsWhileDeserializing(String json) {
+      return logEventsDuring(CdpScanResultForm.Deserializer.class, () -> {
+        try {
+          objectMapper.readValue(json, CdpScanResultForm.class);
+        } catch (JsonProcessingException e) {
+          throw new IllegalStateException(e);
+        }
+      });
     }
   }
 

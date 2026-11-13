@@ -93,8 +93,6 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-cache</artifactId>
     </dependency>
-    <!-- Hot-reload in docker-compose-dev (dev-run stage); optional so it never
-         ships to consumers, and repackage excludes it from the production jar. -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-devtools</artifactId>
@@ -267,9 +265,6 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
         <configuration>
-          <!-- @{argLine} picks up JaCoCo's -javaagent via late-binding.
-               -XX:+EnableDynamicAgentLoading suppresses JDK warnings about Mockito
-               and ByteBuddy self-attaching as dynamic agents. -->
           <argLine>@{argLine} -XX:+EnableDynamicAgentLoading</argLine>
         </configuration>
       </plugin>
@@ -286,7 +281,6 @@
         </executions>
         <configuration>
           <skipTests>${skipTests}</skipTests>
-          <!-- See Surefire comment above for argLine rationale. -->
           <argLine>@{argLine} -XX:+EnableDynamicAgentLoading</argLine>
         </configuration>
       </plugin>

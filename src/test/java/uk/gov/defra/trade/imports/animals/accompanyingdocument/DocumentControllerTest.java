@@ -20,7 +20,9 @@ import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSess
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.UPLOAD_ID;
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registerUploadRequest;
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registeredSession;
+import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
 
+import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.util.List;
@@ -40,6 +42,7 @@ import org.springframework.test.context.TestPropertySource;
 import uk.gov.defra.trade.imports.animals.configuration.AppConfig;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.FileStatus;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.file.UploadedFile;
@@ -60,7 +63,7 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 class DocumentControllerTest {
 
   private static final String CALLER_ORGANISATION_ID = "5900002";
-  private static final String NOTIFICATION_REF = "GBN-AG-26-000001";
+  private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-26-000001";
 
   @Autowired
   private MockMvc mockMvc;
@@ -78,21 +81,21 @@ class DocumentControllerTest {
   private S3DocumentService s3DocumentService;
 
   @BeforeEach
-  void stubUploadSessionNotificationRef() {
-    when(documentService.notificationRefForUploadId(anyString())).thenReturn(NOTIFICATION_REF);
+  void stubUploadSessionNotificationReferenceNumber() {
+    when(documentService.notificationReferenceNumberForUploadId(anyString()))
+        .thenReturn(NOTIFICATION_REFERENCE_NUMBER);
   }
 
   @Nested
   class Register {
 
-    private static final String REF = "GBN-AG-26-000001";
-
     @Test
     void shouldReturn201WithLocationHeaderAndTheRegisteredSession() throws Exception {
-      when(documentService.registerUpload(eq(REF), any(RegisterUploadRequest.class)))
-          .thenReturn(registeredSession(REF));
+      when(documentService.registerUpload(
+          eq(NOTIFICATION_REFERENCE_NUMBER), any(RegisterUploadRequest.class)))
+          .thenReturn(registeredSession(NOTIFICATION_REFERENCE_NUMBER));
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .content(objectMapper.writeValueAsString(registerUploadRequest())))
@@ -102,7 +105,20 @@ class DocumentControllerTest {
               "http://localhost:8085/document-uploads/" + UPLOAD_ID))
           .andExpect(jsonPath("$.uploadId").value(UPLOAD_ID))
           .andExpect(jsonPath("$.correlationId").value(CORRELATION_ID))
-          .andExpect(jsonPath("$.notificationReferenceNumber").value(REF));
+          .andExpect(
+              jsonPath("$.notificationReferenceNumber").value(NOTIFICATION_REFERENCE_NUMBER));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"GBN-AG-26-OTHER0", "GBN-HRP-26-000001", "LOGGING-TEST"})
+    void shouldReturn400_whenTheReferenceIsNotANotificationReferenceNumber(String reference)
+        throws Exception {
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", reference)
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(objectMapper.writeValueAsString(registerUploadRequest())))
+          .andExpect(status().isBadRequest());
+
+      verify(documentService, never()).registerUpload(any(), any());
     }
 
     @Test
@@ -111,7 +127,7 @@ class DocumentControllerTest {
           {"uploadId":"","correlationId":"correlation-abc-123"}
           """;
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .content(body))
@@ -127,7 +143,7 @@ class DocumentControllerTest {
           {"uploadId":"upload-abc-123"}
           """;
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .content(body))
@@ -142,7 +158,7 @@ class DocumentControllerTest {
       String body = String.format(
           "{\"uploadId\":\"%s\",\"correlationId\":\"correlation-abc-123\"}", "A".repeat(101));
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .content(body))
@@ -157,7 +173,7 @@ class DocumentControllerTest {
       String body = String.format(
           "{\"uploadId\":\"upload-abc-123\",\"correlationId\":\"%s\"}", "A".repeat(101));
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .content(body))
@@ -169,10 +185,12 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn404_whenCallerDoesNotOwnTheNotification() throws Exception {
-      doThrow(new NotFoundException("Cannot find notification with reference number: " + REF))
-          .when(notificationService).requireTraderAccess(REF, CALLER_ORGANISATION_ID);
+      doThrow(new NotFoundException(
+          "Cannot find notification with reference number: " + NOTIFICATION_REFERENCE_NUMBER))
+          .when(notificationService)
+          .requireTraderAccess(NOTIFICATION_REFERENCE_NUMBER, CALLER_ORGANISATION_ID);
 
-      mockMvc.perform(post("/notifications/{ref}/document-uploads", REF)
+      mockMvc.perform(post("/notifications/{referenceNumber}/document-uploads", NOTIFICATION_REFERENCE_NUMBER)
               .contentType(MediaType.APPLICATION_JSON)
               .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .content(objectMapper.writeValueAsString(registerUploadRequest())))
@@ -400,11 +418,11 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn200WithDocumentList() throws Exception {
-      String ref = "GBN-AG-26-000001";
+      String notificationReferenceNumber = "GBN-AG-26-000001";
 
       AccompanyingDocument doc = AccompanyingDocument.builder()
           .id("doc-id-1")
-          .notificationReferenceNumber(ref)
+          .notificationReferenceNumber(notificationReferenceNumber)
           .uploadId("upload-abc-123")
           .documentType(DocumentType.ITAHC)
           .documentReference("UKGB2026001")
@@ -413,9 +431,10 @@ class DocumentControllerTest {
           .files(List.of())
           .build();
 
-      when(documentService.findByNotificationRef(ref)).thenReturn(List.of(doc));
+      when(documentService.findByNotificationReferenceNumber(notificationReferenceNumber))
+          .thenReturn(List.of(doc));
 
-      mockMvc.perform(get("/notifications/{ref}/document-uploads", ref)
+      mockMvc.perform(get("/notifications/{referenceNumber}/document-uploads", notificationReferenceNumber)
               .contentType(MediaType.APPLICATION_JSON)
               .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
           .andExpect(status().isOk())
@@ -428,10 +447,11 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn200WithEmptyList() throws Exception {
-      String ref = "GBN-AG-26-000001";
-      when(documentService.findByNotificationRef(ref)).thenReturn(List.of());
+      String notificationReferenceNumber = "GBN-AG-26-000001";
+      when(documentService.findByNotificationReferenceNumber(notificationReferenceNumber))
+          .thenReturn(List.of());
 
-      mockMvc.perform(get("/notifications/{ref}/document-uploads", ref)
+      mockMvc.perform(get("/notifications/{referenceNumber}/document-uploads", notificationReferenceNumber)
               .contentType(MediaType.APPLICATION_JSON)
               .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
           .andExpect(status().isOk())
@@ -441,16 +461,18 @@ class DocumentControllerTest {
 
     @Test
     void shouldReturn404_whenCallerDoesNotOwnTheNotification() throws Exception {
-      String ref = "GBN-AG-26-000001";
-      doThrow(new NotFoundException("Cannot find notification with reference number: " + ref))
-          .when(notificationService).requireTraderAccess(ref, CALLER_ORGANISATION_ID);
+      String notificationReferenceNumber = "GBN-AG-26-000001";
+      doThrow(new NotFoundException(
+          "Cannot find notification with reference number: " + notificationReferenceNumber))
+          .when(notificationService)
+          .requireTraderAccess(notificationReferenceNumber, CALLER_ORGANISATION_ID);
 
-      mockMvc.perform(get("/notifications/{ref}/document-uploads", ref)
+      mockMvc.perform(get("/notifications/{referenceNumber}/document-uploads", notificationReferenceNumber)
               .contentType(MediaType.APPLICATION_JSON)
               .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
           .andExpect(status().isNotFound());
 
-      verify(documentService, never()).findByNotificationRef(anyString());
+      verify(documentService, never()).findByNotificationReferenceNumber(anyString());
     }
   }
 
@@ -474,7 +496,7 @@ class DocumentControllerTest {
 
       when(documentService.findByUploadId(uploadId)).thenReturn(doc);
 
-      mockMvc.perform(get("/document-uploads/{id}", uploadId)
+      mockMvc.perform(get("/document-uploads/{uploadId}", uploadId)
               .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON))
           .andExpect(status().isOk())
@@ -490,7 +512,7 @@ class DocumentControllerTest {
       when(documentService.findByUploadId(unknownId))
           .thenThrow(new NotFoundException("No accompanying document found with uploadId: " + unknownId));
 
-      mockMvc.perform(get("/document-uploads/{id}", unknownId)
+      mockMvc.perform(get("/document-uploads/{uploadId}", unknownId)
               .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID)
               .contentType(MediaType.APPLICATION_JSON))
           .andExpect(status().isNotFound())
@@ -502,53 +524,61 @@ class DocumentControllerTest {
   @Nested
   class ScanResult {
 
+    private static CdpScanResultPayload payloadWithMetadata(Map<String, String> metadata) {
+      return new CdpScanResultPayload("ready", metadata, new CdpScanResultForm(Map.of()), 0);
+    }
+
+    private ResultActions postScanResult(CdpScanResultPayload payload) throws Exception {
+      return mockMvc.perform(post("/document-uploads/{pathSegment}/scan-results", "pending")
+          .contentType(MediaType.APPLICATION_JSON)
+          .content(objectMapper.writeValueAsString(payload)));
+    }
+
     @Test
-    void shouldReturn204() throws Exception {
-      String uploadId = "upload-abc-123";
-      CdpScanResultForm form = new CdpScanResultForm(Map.of());
-      CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
+    void shouldLogTheCorrelationIdTheCallbackCarries() {
+      CdpScanResultPayload payload = payloadWithMetadata(Map.of("correlationId", CORRELATION_ID));
 
-      doNothing().when(documentService).handleScanResult(eq(uploadId), any(CdpScanResultPayload.class));
+      List<ILoggingEvent> events = logEventsDuring(DocumentController.class, () -> {
+        try {
+          postScanResult(payload);
+        } catch (Exception e) {
+          throw new IllegalStateException(e);
+        }
+      });
 
-      mockMvc.perform(post("/document-uploads/{id}/scan-results", uploadId)
-              .contentType(MediaType.APPLICATION_JSON)
-              .content(objectMapper.writeValueAsString(payload)))
+      assertThat(events).extracting(ILoggingEvent::getFormattedMessage).containsExactly(
+          "POST /document-uploads/pending/scan-results correlationId=" + CORRELATION_ID
+              + " uploadStatus=ready");
+    }
+
+    @Test
+    void shouldReturn204_whenTheServiceAcceptsTheScanResult() throws Exception {
+      doNothing().when(documentService).handleScanResult(any(CdpScanResultPayload.class));
+
+      postScanResult(payloadWithMetadata(Map.of("correlationId", CORRELATION_ID)))
           .andExpect(status().isNoContent());
     }
 
     @Test
-    void shouldReturn404_whenCorrelationIdUnknown() throws Exception {
-      String pathSegment = "pending";
+    void shouldReturn404_whenTheServiceFindsNoUploadSession() throws Exception {
       String unknownCorrelationId = "unknown-correlation-id";
-      CdpScanResultForm form = new CdpScanResultForm(Map.of());
-      CdpScanResultPayload payload = new CdpScanResultPayload(
-          "ready", Map.of("correlationId", unknownCorrelationId), form, 0);
-
       doThrow(new NotFoundException(
-          "No accompanying document found with correlationId: " + unknownCorrelationId))
-          .when(documentService).handleScanResult(eq(pathSegment), any(CdpScanResultPayload.class));
+          "No upload session found with correlationId: " + unknownCorrelationId))
+          .when(documentService).handleScanResult(any(CdpScanResultPayload.class));
 
-      mockMvc.perform(post("/document-uploads/{id}/scan-results", pathSegment)
-              .contentType(MediaType.APPLICATION_JSON)
-              .content(objectMapper.writeValueAsString(payload)))
+      postScanResult(payloadWithMetadata(Map.of("correlationId", unknownCorrelationId)))
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.detail").value(
-              "No accompanying document found with correlationId: " + unknownCorrelationId));
+              "No upload session found with correlationId: " + unknownCorrelationId));
     }
 
     @Test
-    void shouldReturn400_whenCorrelationIdMissing() throws Exception {
-      String pathSegment = "pending";
-      CdpScanResultForm form = new CdpScanResultForm(Map.of());
-      CdpScanResultPayload payload = new CdpScanResultPayload("ready", Map.of(), form, 0);
-
+    void shouldReturn400_whenTheServiceRefusesTheScanResult() throws Exception {
       doThrow(new BadRequestException(
           "Scan callback missing required correlationId in metadata"))
-          .when(documentService).handleScanResult(eq(pathSegment), any(CdpScanResultPayload.class));
+          .when(documentService).handleScanResult(any(CdpScanResultPayload.class));
 
-      mockMvc.perform(post("/document-uploads/{id}/scan-results", pathSegment)
-              .contentType(MediaType.APPLICATION_JSON)
-              .content(objectMapper.writeValueAsString(payload)))
+      postScanResult(payloadWithMetadata(Map.of()))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.detail").value(
               "Scan callback missing required correlationId in metadata"));
@@ -635,7 +665,7 @@ class DocumentControllerTest {
       String uploadId = "upload-abc-123";
       doNothing().when(documentService).deleteByUploadId(uploadId);
 
-      mockMvc.perform(delete("/document-uploads/{id}", uploadId)
+      mockMvc.perform(delete("/document-uploads/{uploadId}", uploadId)
           .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
           .andExpect(status().isNoContent());
     }
@@ -646,7 +676,7 @@ class DocumentControllerTest {
       doThrow(new NotFoundException("No accompanying document found with uploadId: " + unknownId))
           .when(documentService).deleteByUploadId(unknownId);
 
-      mockMvc.perform(delete("/document-uploads/{id}", unknownId)
+      mockMvc.perform(delete("/document-uploads/{uploadId}", unknownId)
           .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, CALLER_ORGANISATION_ID))
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.detail").value(

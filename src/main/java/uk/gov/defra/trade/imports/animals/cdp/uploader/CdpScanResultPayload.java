@@ -22,4 +22,13 @@ public record CdpScanResultPayload(
   public CdpScanResultPayload {
     metadata = Collections.unmodifiableMap(metadata != null ? metadata : Map.of());
   }
+
+  /**
+   * The correlationId the upload session was opened under, as echoed back in {@code metadata}.
+   *
+   * @return the correlationId, or {@code null} when the metadata carries none
+   */
+  public String correlationId() {
+    return metadata.get("correlationId");
+  }
 }

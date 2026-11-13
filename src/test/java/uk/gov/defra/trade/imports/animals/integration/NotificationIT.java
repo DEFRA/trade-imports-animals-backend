@@ -270,7 +270,7 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/soft-delete", referenceNumber)
             .exchange().expectStatus().isOk();
 
         NotificationPageResponse page = findAllNotificationsPage(1, null, referenceNumber);
@@ -483,7 +483,7 @@ class NotificationIT extends IntegrationBase {
 
         webClient("NoAuth")
             .post()
-            .uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", submittedRef, currentConcurrencyToken(submittedRef))
+            .uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", submittedRef, currentConcurrencyToken(submittedRef))
             .exchange()
             .expectStatus().isOk();
 
@@ -537,11 +537,11 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", submittedRef, currentConcurrencyToken(submittedRef))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", submittedRef, currentConcurrencyToken(submittedRef))
             .exchange().expectStatus().isOk();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", deletedRef)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/soft-delete", deletedRef)
             .exchange().expectStatus().isOk();
 
         // When
@@ -912,7 +912,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — submit the notification
         NotificationAggregate submitted = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationAggregate.class)
@@ -932,7 +932,7 @@ class NotificationIT extends IntegrationBase {
 
         // When
         NotificationAggregate amended = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", referenceNumber)
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationAggregate.class)
@@ -953,7 +953,7 @@ class NotificationIT extends IntegrationBase {
 
         // When
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", referenceNumber)
             .exchange()
             .expectStatus().isOk();
 
@@ -975,7 +975,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — amend with a trace ID
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", referenceNumber)
             .header(HEADER_TRACE_ID, "trace-amend-001")
             .exchange()
             .expectStatus().isOk();
@@ -1105,7 +1105,7 @@ class NotificationIT extends IntegrationBase {
     @Test
     void amend_shouldReturn404_whenReferenceNumberDoesNotExist() {
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", NONEXISTENT_REF)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", NONEXISTENT_REF)
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
@@ -1125,7 +1125,7 @@ class NotificationIT extends IntegrationBase {
 
         // When / Then
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", referenceNumber)
             .exchange()
             .expectStatus().isBadRequest()
             .expectBody()
@@ -1142,7 +1142,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — start amendment (baseline written to Mongo via the real amend path)
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", referenceNumber)
             .exchange().expectStatus().isOk();
 
         NotificationAggregate inAmendInMongo = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
@@ -1166,7 +1166,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — cancel amendment via API
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/cancel-amend", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/cancel-amend", referenceNumber)
             .exchange().expectStatus().isOk();
 
         // Then — status reverted, pre-amend snapshot cleared, amendable fields restored
@@ -1180,7 +1180,7 @@ class NotificationIT extends IntegrationBase {
     @Test
     void cancelAmend_shouldReturn404_whenReferenceNumberDoesNotExist() {
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/cancel-amend", NONEXISTENT_REF)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/cancel-amend", NONEXISTENT_REF)
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
@@ -1195,7 +1195,7 @@ class NotificationIT extends IntegrationBase {
 
         // When / Then
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/cancel-amend", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/cancel-amend", referenceNumber)
             .exchange()
             .expectStatus().isBadRequest()
             .expectBody()
@@ -1208,14 +1208,14 @@ class NotificationIT extends IntegrationBase {
         String referenceNumber = createAndSubmitNotificationWithFullContent();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", referenceNumber)
             .exchange().expectStatus().isOk();
 
         long eventsBeforeCancel = outboxEventRepository.count();
 
         // When
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/cancel-amend", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/cancel-amend", referenceNumber)
             .exchange().expectStatus().isOk();
 
         // Then — NOTIFICATION_AMENDMENT_CANCELLED event added
@@ -1233,7 +1233,7 @@ class NotificationIT extends IntegrationBase {
         String referenceNumber = createAndSubmitNotificationWithFullContent();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", referenceNumber)
             .exchange().expectStatus().isOk();
 
         NotificationAggregate inAmend = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber).orElseThrow();
@@ -1243,7 +1243,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — resubmit amended notification
         NotificationAggregate resubmitted = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationAggregate.class)
@@ -1271,7 +1271,7 @@ class NotificationIT extends IntegrationBase {
     void submit_shouldReturn404_whenReferenceNumberDoesNotExist() {
         // When / Then
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken=0", NONEXISTENT_REF)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken=0", NONEXISTENT_REF)
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
@@ -1292,7 +1292,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — submit it with a trace ID
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .header(HEADER_TRACE_ID, "trace-outbox-001")
             .exchange()
             .expectStatus().isOk();
@@ -1345,7 +1345,7 @@ class NotificationIT extends IntegrationBase {
             DocumentType.VETERINARY_HEALTH_CERTIFICATE, "VHC-REJ-1", LocalDate.parse("2026-09-03"));
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange()
             .expectStatus().isOk();
 
@@ -1427,7 +1427,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — submit with actor body
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .bodyValue(actorBody)
             .exchange()
             .expectStatus().isOk();
@@ -1473,13 +1473,13 @@ class NotificationIT extends IntegrationBase {
             "userType", "B2C", "displayName", "Bob", "organisationId", "org-002");
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .bodyValue(submitActor)
             .exchange().expectStatus().isOk();
 
         // When — amend
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", referenceNumber)
             .bodyValue(amendActor)
             .exchange().expectStatus().isOk();
 
@@ -1531,7 +1531,7 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange().expectStatus().isOk();
 
         // Reset status to DRAFT so we can submit again (simulates re-submission scenario)
@@ -1541,7 +1541,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — submit again (version 2)
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange().expectStatus().isOk();
 
         // Then — CREATED(v1) + SUBMITTED(v2) + SUBMITTED(v3) with incrementing versions
@@ -1560,7 +1560,7 @@ class NotificationIT extends IntegrationBase {
     void submit_shouldNotWriteOutboxEvent_whenNotificationDoesNotExist() {
         // When
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken=0", NONEXISTENT_REF)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken=0", NONEXISTENT_REF)
             .exchange()
             .expectStatus().isNotFound();
 
@@ -1596,7 +1596,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — soft-delete the notification
         NotificationAggregate result = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/soft-delete", referenceNumber)
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationAggregate.class)
@@ -1620,12 +1620,12 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange().expectStatus().isOk();
 
         // When — soft-delete the submitted notification
         NotificationAggregate result = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/soft-delete", referenceNumber)
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationAggregate.class)
@@ -1642,7 +1642,7 @@ class NotificationIT extends IntegrationBase {
     void softDelete_shouldReturn404_whenReferenceNumberDoesNotExist() {
         // When / Then
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", NONEXISTENT_REF)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/soft-delete", NONEXISTENT_REF)
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
@@ -1662,12 +1662,12 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/soft-delete", referenceNumber)
             .exchange().expectStatus().isOk();
 
         // When — a repeat soft-delete returns the already-DELETED notification unchanged (REST DELETE idempotency).
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/soft-delete", referenceNumber)
             .exchange()
             .expectStatus().isOk()
             .expectBody(NotificationAggregate.class)
@@ -1686,7 +1686,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — soft-delete the draft
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/soft-delete", referenceNumber)
             .exchange().expectStatus().isOk();
 
         // Then — NOTIFICATION_DELETED emitted at v2 (DRAFT never submitted, no versionId)
@@ -1712,12 +1712,12 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange().expectStatus().isOk();
 
         // When — soft-delete the submitted notification
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/soft-delete", referenceNumber)
             .exchange().expectStatus().isOk();
 
         // Then — NOTIFICATION_SUBMISSION_DELETED emitted at v3, carrying versionId=1
@@ -1744,7 +1744,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — submit
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange().expectStatus().isOk();
 
         // Then — NOTIFICATION_SUBMITTED carries versionId=1
@@ -1765,7 +1765,7 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange().expectStatus().isOk();
 
         NotificationAggregate notificationAggregate =
@@ -1775,7 +1775,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — resubmit
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange().expectStatus().isOk();
 
         // Then — second NOTIFICATION_SUBMITTED carries versionId=2
@@ -1879,7 +1879,7 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate copy = webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .path(NOTIFICATION_ENDPOINT + "/{referenceNumber}/copy")
                 .queryParam("concurrencyToken", source.getConcurrencyToken())
                 .build(source.getReferenceNumber()))
             .exchange().expectStatus().isOk()
@@ -2093,7 +2093,7 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange().expectStatus().isOk();
 
         // Reset status to DRAFT so we can submit again
@@ -2103,12 +2103,12 @@ class NotificationIT extends IntegrationBase {
 
         // Submit again (version 2)
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange().expectStatus().isOk();
 
         // When
         List<OutboxEvent> events = webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/outbox-events", referenceNumber)
+            .get().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/outbox-events", referenceNumber)
             .exchange().expectStatus().isOk()
             .expectBodyList(OutboxEvent.class).returnResult()
             .getResponseBody();
@@ -2136,7 +2136,7 @@ class NotificationIT extends IntegrationBase {
 
         // When
         List<OutboxEvent> events = webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/outbox-events", referenceNumber)
+            .get().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/outbox-events", referenceNumber)
             .exchange().expectStatus().isOk()
             .expectBodyList(OutboxEvent.class).returnResult()
             .getResponseBody();
@@ -2168,7 +2168,7 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate copy = webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .path(NOTIFICATION_ENDPOINT + "/{referenceNumber}/copy")
                 .queryParam("concurrencyToken", source.getConcurrencyToken())
                 .build(sourceRef))
             .exchange()
@@ -2196,7 +2196,7 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate copy = webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .path(NOTIFICATION_ENDPOINT + "/{referenceNumber}/copy")
                 .queryParam("concurrencyToken", source.getConcurrencyToken())
                 .build(source.getReferenceNumber()))
             .exchange().expectStatus().isOk()
@@ -2221,7 +2221,7 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", source.getReferenceNumber())
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/soft-delete", source.getReferenceNumber())
             .exchange().expectStatus().isOk();
 
         // When — the user with the stale copy clicks copy. 
@@ -2229,7 +2229,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .path(NOTIFICATION_ENDPOINT + "/{referenceNumber}/copy")
                 .queryParam("concurrencyToken", source.getConcurrencyToken())
                 .build(source.getReferenceNumber()))
             .exchange()
@@ -2247,7 +2247,7 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", sourceRef, currentConcurrencyToken(sourceRef))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", sourceRef, currentConcurrencyToken(sourceRef))
             .exchange().expectStatus().isOk();
 
         Long submittedVersion = NotificationTestSupport.findByReferenceNumber(mongoTemplate, sourceRef)
@@ -2257,7 +2257,7 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate copy = webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .path(NOTIFICATION_ENDPOINT + "/{referenceNumber}/copy")
                 .queryParam("concurrencyToken", submittedVersion)
                 .build(sourceRef))
             .exchange()
@@ -2290,7 +2290,7 @@ class NotificationIT extends IntegrationBase {
             .concurrencyToken(oldVersion.getConcurrencyToken())
             .build();
         webClient("NoAuth")
-            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", oldVersion.getReferenceNumber())
+            .put().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", oldVersion.getReferenceNumber())
             .bodyValue(SaveNotificationDto.of(newVersion))
             .exchange()
             .expectStatus().isOk();
@@ -2300,7 +2300,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .path(NOTIFICATION_ENDPOINT + "/{referenceNumber}/copy")
                 .queryParam("concurrencyToken", oldVersion.getConcurrencyToken())
                 .build(oldVersion.getReferenceNumber()))
             .exchange()
@@ -2317,7 +2317,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .path(NOTIFICATION_ENDPOINT + "/{referenceNumber}/copy")
                 .queryParam("concurrencyToken", 0L)
                 .build(NONEXISTENT_REF))
             .exchange()
@@ -2341,7 +2341,7 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate copy = webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .path(NOTIFICATION_ENDPOINT + "/{referenceNumber}/copy")
                 .queryParam("concurrencyToken", source.getConcurrencyToken())
                 .build(source.getReferenceNumber()))
             .exchange().expectStatus().isOk()
@@ -2377,7 +2377,7 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate copy = webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .path(NOTIFICATION_ENDPOINT + "/{referenceNumber}/copy")
                 .queryParam("concurrencyToken", version)
                 .build(sourceRef))
             .bodyValue(Map.of("organisationId", DEFAULT_TRADER_ORG_ID))
@@ -2419,7 +2419,7 @@ class NotificationIT extends IntegrationBase {
 
         // When / Then
         webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", referenceNumber)
+            .get().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/fulfilments", referenceNumber)
             .exchange()
             .expectStatus().isOk()
             .expectBody()
@@ -2432,7 +2432,7 @@ class NotificationIT extends IntegrationBase {
     @Test
     void findFulfilments_shouldReturn404_whenReferenceNumberUnknown() {
         webClient("NoAuth")
-            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", NONEXISTENT_REF)
+            .get().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/fulfilments", NONEXISTENT_REF)
             .exchange()
             .expectStatus().isNotFound()
             .expectBody()
@@ -2459,7 +2459,7 @@ class NotificationIT extends IntegrationBase {
             .concurrencyToken(staleVersion)
             .build();
         webClient("NoAuth")
-            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", ref)
+            .put().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", ref)
             .bodyValue(SaveNotificationDto.of(firstEdit))
             .exchange()
             .expectStatus().isOk();
@@ -2474,7 +2474,7 @@ class NotificationIT extends IntegrationBase {
 
         // Then — the update is rejected with 409 STALE_CONCURRENCY_TOKEN
         webClient("NoAuth")
-            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", ref)
+            .put().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", ref)
             .bodyValue(SaveNotificationDto.of(staleEdit))
             .exchange()
             .expectStatus().isEqualTo(org.springframework.http.HttpStatus.CONFLICT)
@@ -2502,7 +2502,7 @@ class NotificationIT extends IntegrationBase {
 
         // And another tab or user then edits it
         webClient("NoAuth")
-            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", ref)
+            .put().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", ref)
             .bodyValue(SaveNotificationDto.of(NotificationDto.builder()
                 .referenceNumber(ref)
                 .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("EDITED").build())
@@ -2517,7 +2517,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .post()
             .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/submit")
+                .path(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit")
                 .queryParam("concurrencyToken", reviewedToken)
                 .build(ref))
             .exchange()
@@ -2546,7 +2546,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — submit without a concurrency token
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit", ref)
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit", ref)
             .exchange()
             .expectStatus().isBadRequest()
             .expectHeader().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON)
@@ -2707,7 +2707,7 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody().getReferenceNumber();
 
         webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange().expectStatus().isOk();
 
         return referenceNumber;
@@ -2751,7 +2751,7 @@ class NotificationIT extends IntegrationBase {
 
     private void submitAs(String referenceNumber, String organisationId) {
         webClient("NoAuth", organisationId)
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
             .exchange().expectStatus().isOk();
     }
 

@@ -957,14 +957,14 @@ class NotificationControllerTest {
     }
 
     @Nested
-    class FindAll {
+    class FindDashboardPage {
 
         private static final Instant VIEW_CREATED = Instant.parse("2026-07-21T00:30:00.456Z");
 
         @Test
-        void findAll_shouldReturnEmptyPage() throws Exception {
+        void findDashboardPage_shouldReturnEmptyPage() throws Exception {
             // Given
-            when(notificationService.findAll(eq(1), isNull(), isNull(), eq(ORG_ID))).thenReturn(
+            when(notificationService.findDashboardPage(eq(1), isNull(), isNull(), eq(ORG_ID))).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
             // When & Then
@@ -982,7 +982,7 @@ class NotificationControllerTest {
         }
 
         @Test
-        void findAll_shouldReturnPageOfNotifications() throws Exception {
+        void findDashboardPage_shouldReturnPageOfNotifications() throws Exception {
             // Given
             NotificationView notification1 = testView(REF_1, NotificationStatus.DRAFT,
                 Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF-GB-001").build(),
@@ -996,7 +996,7 @@ class NotificationControllerTest {
                 consignors().getLast(),
                 Transport.builder().transporter(transporters().getLast()).build());
 
-            when(notificationService.findAll(eq(1), isNull(), isNull(), eq(ORG_ID))).thenReturn(
+            when(notificationService.findDashboardPage(eq(1), isNull(), isNull(), eq(ORG_ID))).thenReturn(
                 new NotificationPageResponse(List.of(notification1, notification2), 1, 25, 2, 2,
                     1));
 
@@ -1028,9 +1028,9 @@ class NotificationControllerTest {
         }
 
         @Test
-        void findAll_shouldPassPageParam() throws Exception {
+        void findDashboardPage_shouldPassPageParam() throws Exception {
             // Given
-            when(notificationService.findAll(eq(2), isNull(), isNull(), eq(ORG_ID))).thenReturn(
+            when(notificationService.findDashboardPage(eq(2), isNull(), isNull(), eq(ORG_ID))).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 2, 25, 0, 120, 3));
 
             // When & Then
@@ -1046,8 +1046,8 @@ class NotificationControllerTest {
         }
 
         @Test
-        void findAll_shouldPassSortParam() throws Exception {
-            when(notificationService.findAll(eq(1), eq("createdAt,desc"), isNull(), eq(ORG_ID))).thenReturn(
+        void findDashboardPage_shouldPassSortParam() throws Exception {
+            when(notificationService.findDashboardPage(eq(1), eq("createdAt,desc"), isNull(), eq(ORG_ID))).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
             mockMvc.perform(get("/notifications")
@@ -1056,12 +1056,12 @@ class NotificationControllerTest {
                     .header(ORGANISATION_ID_HEADER, ORG_ID))
                 .andExpect(status().isOk());
 
-            verify(notificationService).findAll(1, "createdAt,desc", null, ORG_ID);
+            verify(notificationService).findDashboardPage(1, "createdAt,desc", null, ORG_ID);
         }
 
         @Test
-        void findAll_shouldPassReferenceNumberParam() throws Exception {
-            when(notificationService.findAll(eq(1), isNull(), eq(REF_1), eq(ORG_ID))).thenReturn(
+        void findDashboardPage_shouldPassReferenceNumberParam() throws Exception {
+            when(notificationService.findDashboardPage(eq(1), isNull(), eq(REF_1), eq(ORG_ID))).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
             mockMvc.perform(get("/notifications")
@@ -1070,12 +1070,12 @@ class NotificationControllerTest {
                     .header(ORGANISATION_ID_HEADER, ORG_ID))
                 .andExpect(status().isOk());
 
-            verify(notificationService).findAll(1, null, REF_1, ORG_ID);
+            verify(notificationService).findDashboardPage(1, null, REF_1, ORG_ID);
         }
 
         @Test
-        void findAll_shouldPassInvalidReferenceNumberToService() throws Exception {
-            when(notificationService.findAll(eq(1), isNull(), eq("invalid-ref"), eq(ORG_ID))).thenReturn(
+        void findDashboardPage_shouldPassInvalidReferenceNumberToService() throws Exception {
+            when(notificationService.findDashboardPage(eq(1), isNull(), eq("invalid-ref"), eq(ORG_ID))).thenReturn(
                 new NotificationPageResponse(Collections.emptyList(), 1, 25, 0, 0, 0));
 
             mockMvc.perform(get("/notifications")
@@ -1084,7 +1084,7 @@ class NotificationControllerTest {
                     .header(ORGANISATION_ID_HEADER, ORG_ID))
                 .andExpect(status().isOk());
 
-            verify(notificationService).findAll(1, null, "invalid-ref", ORG_ID);
+            verify(notificationService).findDashboardPage(1, null, "invalid-ref", ORG_ID);
         }
     }
 
@@ -1298,7 +1298,7 @@ class NotificationControllerTest {
             when(outboxService.findByReferenceNumber(referenceNumber)).thenReturn(events);
 
             // When & Then
-            mockMvc.perform(get("/notifications/{ref}/outbox-events", referenceNumber)
+            mockMvc.perform(get("/notifications/{referenceNumber}/outbox-events", referenceNumber)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
@@ -1314,7 +1314,7 @@ class NotificationControllerTest {
             when(outboxService.findByReferenceNumber(referenceNumber)).thenReturn(List.of());
 
             // When & Then
-            mockMvc.perform(get("/notifications/{ref}/outbox-events", referenceNumber)
+            mockMvc.perform(get("/notifications/{referenceNumber}/outbox-events", referenceNumber)
                     .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$").isArray())
