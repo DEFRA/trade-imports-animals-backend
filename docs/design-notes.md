@@ -82,3 +82,4 @@ Open gaps, where the event leaves a field empty until the source data or a decis
 - `applicableClassification` `urlId` values are not set.
 - Address `countryName` is not set: the notification holds only the country code.
 - The final destination has no name or address: nothing collected says which address belongs to the holding.
+- An animal identifier unit's `identificationDetails` and `description` are not carried into `individualTradeProductInstance`: `gbn-ag-animal-identifier-types.json` in trade-imports-schemas lists only EAR_TAG, PASSPORT, MICROCHIP and TATTOO, and which type code each of the two free-text answers takes is undecided. A unit holding only those two answers therefore reaches PIMS with `name`, `identifier` and the description all absent.
