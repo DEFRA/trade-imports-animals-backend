@@ -5,7 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-/** One animal-identifier unit on a {@link Species} line — every unit, not just the first. */
+/** One animal-identifier unit on a {@link Species} line. */
 @Data
 @Builder
 @NoArgsConstructor
