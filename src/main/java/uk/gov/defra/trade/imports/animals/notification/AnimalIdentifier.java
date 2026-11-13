@@ -17,5 +17,7 @@ public class AnimalIdentifier {
     private String tattoo;
     private String earTag;
     private String horseName;
+    private String identificationDetails;
+    private String description;
     private ConsignmentParty permanentAddress;
 }
