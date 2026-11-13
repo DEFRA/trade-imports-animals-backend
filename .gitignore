@@ -136,6 +136,10 @@ pids
 *.seed
 *.pid.lock
 
+# SonarCloud scanner working directory (Spring context model, analysis report)
+.sonar/
+.scannerwork/
+
 # Coverage directory used by tools like istanbul
 coverage/
 *.lcov
