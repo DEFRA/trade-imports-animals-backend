@@ -193,7 +193,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ForbiddenException.class)
     public ResponseEntity<ProblemDetail> handleForbiddenException(ForbiddenException ex) {
-        logClientRefusal("Forbidden", ex.getMessage());
+        log.warn("Forbidden: {} (trace: {})", ex.getMessage(), MDC.get(MDC_TRACE_ID));
         return problemResponse(HttpStatus.FORBIDDEN, TYPE_FORBIDDEN, "Forbidden", ex.getMessage());
     }
 
