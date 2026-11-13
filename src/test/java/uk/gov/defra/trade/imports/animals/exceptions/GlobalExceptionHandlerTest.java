@@ -7,6 +7,8 @@ import static org.mockito.Mockito.when;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 
 import java.lang.reflect.Method;
 import java.net.URI;
@@ -622,6 +624,31 @@ class GlobalExceptionHandlerTest {
         assertThat(problemDetail.getType())
             .isEqualTo(URI.create("https://api.cdp.defra.cloud/problems/forbidden"));
         assertThat(problemDetail.getProperties()).containsEntry("traceId", traceId);
+    }
+
+    @Test
+    void handleForbiddenException_shouldLogTheReferenceAndOrganisationOnceWithoutAStackTrace() {
+        String traceId = "test-trace-forbidden-1";
+        MDC.put("trace.id", traceId);
+        String detail =
+            "Cannot read fulfilments for notification with reference number: "
+                + "GBN-AG-26-ABC001 organisationId: 5900002";
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        HANDLER_LOGGER.addAppender(appender);
+        HANDLER_LOGGER.setLevel(Level.WARN);
+        try {
+            exceptionHandler.handleForbiddenException(new ForbiddenException(detail));
+
+            assertThat(appender.list).singleElement().satisfies(event -> {
+                assertThat(event.getFormattedMessage())
+                    .isEqualTo("Forbidden: " + detail + " (trace: " + traceId + ")");
+                assertThat(event.getFormattedMessage()).containsOnlyOnce("organisationId");
+                assertThat(event.getThrowableProxy()).isNull();
+            });
+        } finally {
+            HANDLER_LOGGER.detachAppender(appender);
+        }
     }
 
     @Test
