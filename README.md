@@ -34,8 +34,8 @@ Redis):
 ./scripts/stack/run-stack.sh --profile database --profile infrastructure
 ```
 
-After editing Java source in `-d` mode, pick the change up with
-`./scripts/stack/bounce-backend.sh`.
+In `-d` mode, edited Java source reloads on its own. After a `pom.xml` or
+dependency change, rebuild the backend with `tim docker bounce-backend`.
 
 #### Floci init script
 
