@@ -231,6 +231,7 @@ public class NotificationService {
                 "Cannot amend notification: fulfilments payload is missing");
         }
         notificationAggregate.setPreAmendFulfilments(deepCopyFulfilments(currentFulfilments));
+        notificationAggregate.setAnswersDifferFromSubmitted(false);
 
         return writeWithOutbox(
             notificationAggregate,
@@ -263,6 +264,7 @@ public class NotificationService {
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
         notificationAggregate.setPreAmendFulfilments(null);
         notificationAggregate.setPreAmendNotification(null);
+        notificationAggregate.setAnswersDifferFromSubmitted(null);
         return writeWithOutbox(
             notificationAggregate,
             referenceNumber,
@@ -285,6 +287,7 @@ public class NotificationService {
                     && notification.getStatus() == NotificationStatus.AMEND) {
                     notification.setPreAmendFulfilments(null);
                     notification.setPreAmendNotification(null);
+                    notification.setAnswersDifferFromSubmitted(null);
                 }
                 notification.setStatus(targetStatus);
                 notification.setUpdated(Instant.now());
@@ -513,6 +516,19 @@ public class NotificationService {
         notification.setPortOfExit(dto.getPortOfExit());
         notification.setExitDate(dto.getExitDate());
         notificationAggregate.setFulfilments(dto.getFulfilments());
+        if (notificationAggregate.getStatus() == NotificationStatus.AMEND) {
+            notificationAggregate.setAnswersDifferFromSubmitted(
+                answersDifferFromSubmitted(notificationAggregate));
+        }
+    }
+
+    private boolean answersDifferFromSubmitted(NotificationAggregate notificationAggregate) {
+        Notification submittedNotification = notificationAggregate.getPreAmendNotification();
+        if (submittedNotification == null) {
+            return false;
+        }
+        return !notificationContentMapper.deepClone(submittedNotification)
+            .equals(notificationContentMapper.deepClone(notificationAggregate.getNotification()));
     }
 
     private List<Commodity> commoditiesFromDto(List<Commodity> fromDto) {

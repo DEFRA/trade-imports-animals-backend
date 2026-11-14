@@ -19,7 +19,6 @@ import static java.util.Objects.requireNonNull;
 /**
  * Aggregate root: identity + metadata at the top, with the well-structured content held as a
  * composed {@link Notification} sub-object (symmetric with the opaque {@link #fulfilments} payload).
- * Amend baselines snapshot the two sub-objects independently.
  */
 @org.springframework.data.mongodb.core.mapping.Document(collection = "notification")
 @CompoundIndexes({
@@ -53,48 +52,44 @@ public class NotificationAggregate {
 
     private Instant updated;
 
-    /**
-     * Timestamp of the most recent submission — set the first time the notification is submitted
-     * (from DRAFT) and refreshed whenever it is re-submitted from AMEND. Left unchanged by amend
-     * and cancel-amend, so it always points at the latest submission event rather than the
-     * original one. Set by {@code submitNotification}; carried into the fulfilment-view projection.
-     */
+    /** The moment of the most recent submission; null until the notification is first submitted. */
     private Instant submittedAt;
 
     /**
-     * When this notification becomes eligible for automatic expiry, anchored to {@code created}.
-     * Set only for app-created notifications in non-prod environments (see
-     * {@code NotificationService.stampExpiry}); {@code null} in prod and for notifications created
-     * before this field existed. Backed by a <em>plain</em> index (not a Mongo TTL index) so the
-     * expiry sweep can cascade to accompanying documents.
+     * When this notification becomes eligible for automatic expiry, counted from {@code created};
+     * null where expiry does not apply.
      */
     @JsonIgnore
     @Indexed
     private Instant expireAt;
 
-    /** The notification content — parties, commodity, transport, etc. Symmetric to {@link #fulfilments}. */
+    /** The notification content — parties, commodity, transport, etc. */
     private Notification notification;
 
     /** Opaque obligation-fulfilment payload — persisted byte-faithfully; never interpreted by the backend. */
     private List<Document> fulfilments;
 
     /**
-     * Pre-amend snapshot of {@link #notification}. Amend-only scratchpad: captured when an
-     * amendment starts, restored by cancel-amend, and cleared when the amendment is submitted.
-     * Independent of {@link #preAmendFulfilments}; carries inline party details as they
-     * stood when the trader opened the amendment.
+     * The {@link #notification} content as it stood when the open amendment started, including
+     * inline party details; null when no amendment is open.
      */
     @JsonIgnore
     private Notification preAmendNotification;
 
     /**
-     * Pre-amend snapshot of {@link #fulfilments}. Amend-only scratchpad: restored by cancel-amend
-     * and cleared when the amendment is submitted. Independent of the content freeze.
+     * The {@link #fulfilments} payload as it stood when the open amendment started; null when no
+     * amendment is open.
      */
     @JsonIgnore
     private List<Document> preAmendFulfilments;
 
-    /** Returns the notification sub-object, failing fast if absent. Use at seams that require content. */
+    /**
+     * True when the {@link #notification} content differs from {@link #preAmendNotification},
+     * false when it matches; null when no amendment is open.
+     */
+    private Boolean answersDifferFromSubmitted;
+
+    /** Returns the notification sub-object, failing fast if absent. */
     public Notification requireNotification() {
         return requireNonNull(notification,
             "NotificationAggregate requires a notification sub-object at this seam");

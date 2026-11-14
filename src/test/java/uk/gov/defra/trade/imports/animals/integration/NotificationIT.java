@@ -2441,6 +2441,56 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void findFulfilments_shouldReportAnswersNotDiffering_whenAnAmendmentStarts() {
+        String referenceNumber = startAmendment();
+
+        assertThat(answersDifferFromSubmitted(referenceNumber)).isFalse();
+    }
+
+    @Test
+    void findFulfilments_shouldReportAnswersDiffering_whenANotificationAnswerChangesDuringAmendment() {
+        String referenceNumber = startAmendment();
+
+        changeInternalReferenceWhileAmending(referenceNumber);
+
+        assertThat(answersDifferFromSubmitted(referenceNumber)).isTrue();
+    }
+
+    @Test
+    void findFulfilments_shouldReportAnswersNotDiffering_whenOnlyFulfilmentsChangeDuringAmendment() {
+        String referenceNumber = startAmendment();
+        NotificationDto fulfilmentsOnlyChange = sourceNotificationWithAllOperators();
+        fulfilmentsOnlyChange.setFulfilments(List.of(new Document("obligationId", "edited")));
+
+        putWhileAmending(referenceNumber, fulfilmentsOnlyChange);
+
+        assertThat(answersDifferFromSubmitted(referenceNumber)).isFalse();
+    }
+
+    @Test
+    void findFulfilments_shouldReportAnswersNotDiffering_whenTheChangedAnswerIsReverted() {
+        String referenceNumber = startAmendment();
+        changeInternalReferenceWhileAmending(referenceNumber);
+
+        putWhileAmending(referenceNumber, sourceNotificationWithAllOperators());
+
+        assertThat(answersDifferFromSubmitted(referenceNumber)).isFalse();
+    }
+
+    @Test
+    void submit_shouldClearTheAnswersDifferFlag_whenAnAmendmentIsResubmitted() {
+        String referenceNumber = startAmendment();
+        changeInternalReferenceWhileAmending(referenceNumber);
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
+            .exchange().expectStatus().isOk();
+
+        NotificationAggregate resubmitted = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber).orElseThrow();
+        assertThat(resubmitted.getAnswersDifferFromSubmitted()).isNull();
+    }
+
+    @Test
     void put_shouldReturn409StaleConcurrencyToken_whenTokenIsStale() {
         // Given a notification with a version that has been progressed by an update.
         NotificationAggregate created = webClient("NoAuth")
@@ -2834,6 +2884,41 @@ class NotificationIT extends IntegrationBase {
             return null;
         }
         return notification.getTransport().getArrivalDate();
+    }
+
+    private String startAmendment() {
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/amend", referenceNumber)
+            .exchange().expectStatus().isOk();
+        return referenceNumber;
+    }
+
+    private void putWhileAmending(String referenceNumber, NotificationDto dto) {
+        dto.setReferenceNumber(referenceNumber);
+        dto.setConcurrencyToken(currentConcurrencyToken(referenceNumber));
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{ref}", referenceNumber)
+            .bodyValue(SaveNotificationDto.of(dto))
+            .exchange().expectStatus().isOk();
+    }
+
+    private void changeInternalReferenceWhileAmending(String referenceNumber) {
+        NotificationDto internalReferenceChange = sourceNotificationWithAllOperators();
+        internalReferenceChange.getOrigin().setInternalReference("EDITED-REF");
+        putWhileAmending(referenceNumber, internalReferenceChange);
+    }
+
+    private boolean answersDifferFromSubmitted(String referenceNumber) {
+        Map<?, ?> fulfilmentsView = webClient("NoAuth")
+            .get().uri(NOTIFICATION_ENDPOINT + "/{ref}/fulfilments", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(Map.class)
+            .returnResult()
+            .getResponseBody();
+        assertThat(fulfilmentsView).isNotNull();
+        return (Boolean) fulfilmentsView.get("answersDifferFromSubmitted");
     }
 
 }

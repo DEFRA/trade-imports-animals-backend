@@ -24,6 +24,8 @@ Why the code is shaped the way it is. Code states what it does; this file holds 
 - `submitNotification` saves at the caller's `concurrencyToken`, so `@Version` refuses the save atomically when the notification changed after the caller read it.
 - `amendNotification` stores deep copies of the notification and its fulfilments as the pre-amend snapshot, so `cancelAmendNotification` restores exactly what was submitted. A shared reference at any depth would let a later edit change the snapshot.
 - Only a submission sets a new `submittedAt`. Cancelling an amendment returns to SUBMITTED and keeps the original `submittedAt`.
+- `answersDifferFromSubmitted` is stored on write rather than computed on read, because the fulfilments projection (`NotificationFulfilmentsView`) leaves out the pre-amend snapshots and `expireAt` so a read does not load them. It is set false when an amendment starts, recalculated on every content save while the status is AMEND, and cleared when the amendment is resubmitted or cancelled.
+- Only the `notification` content sub-object is compared with its snapshot, both through the same deep clone, so uploaded documents and the opaque fulfilments payload never count as a change. Putting an answer back reads as unchanged.
 - Soft delete of an already DELETED notification returns it unchanged, so a repeated call after a lost response is harmless.
 
 ## Automatic expiry outside prod
@@ -33,7 +35,7 @@ Two independent safeguards keep expiry out of prod; both must fail before prod l
 - Stamping: `expireAt` is set at creation only when `NOTIFICATION_TTL_DAYS` is configured and `ENVIRONMENT` is not `prod`.
 - Sweeping: `NotificationExpirySweeper` exists only when `NOTIFICATION_TTL_SWEEP_ENABLED=true`, with no `matchIfMissing`.
 
-`expireAt` counts from `created`, so later edits do not extend it. Notifications created without `expireAt` are never swept. The sweep polls hourly and deletes a bounded batch, because expiry is measured in days. It writes no audit record, because it is not a user action.
+`expireAt` carries a plain index, not a Mongo TTL index, so the sweep can delete the notification's accompanying documents along with it. It counts from `created`, so later edits do not extend it. Notifications created without `expireAt` are never swept. The sweep polls hourly and deletes a bounded batch, because expiry is measured in days. It writes no audit record, because it is not a user action.
 
 ## Accompanying documents and cdp-uploader
 

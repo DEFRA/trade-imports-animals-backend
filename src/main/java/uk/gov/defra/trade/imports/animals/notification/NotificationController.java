@@ -197,7 +197,7 @@ public class NotificationController {
 
     @GetMapping("/{referenceNumber}/fulfilments")
     @Operation(summary = "Get fulfilment view by reference number",
-        description = "Returns the fulfilment-view projection (referenceNumber, status, dates, opaque fulfilments payload) of the notification at the given reference. Backs the frontend engine's rehydrate path.")
+        description = "Returns the fulfilment-view projection (referenceNumber, concurrencyToken, status, created and submitted dates, opaque fulfilments payload, and whether an open amendment's answers differ from the submitted version) of the notification at the given reference.")
     @ApiResponse(responseCode = "200", description = "Fulfilment view returned",
         content = @Content(schema = @Schema(implementation = NotificationFulfilmentsView.class)))
     @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
