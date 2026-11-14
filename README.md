@@ -23,7 +23,7 @@ workspace stack in
 ./scripts/stack/run-stack.sh        # full stack from published images
 ./scripts/stack/run-stack.sh -d     # built from local source under repos/
 ./scripts/stack/run-stack.sh -e backend   # everything except this service (run it from your IDE)
-./scripts/stack/stop-stack.sh       # tear down and wipe volumes
+tim docker down                     # tear down and wipe volumes
 ```
 
 To run only the infrastructure this service needs rather than the full stack,
