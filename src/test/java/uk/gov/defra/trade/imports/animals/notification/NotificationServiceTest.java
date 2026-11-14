@@ -2202,6 +2202,149 @@ class NotificationServiceTest {
     }
 
     @Nested
+    class AnswersDifferFromSubmitted {
+
+        private static final String REF = "GBN-AG-26-DIF001";
+
+        @BeforeEach
+        void setUp() {
+            lenient().when(lockProvider.lock(any()))
+                .thenReturn(Optional.of(mock(SimpleLock.class)));
+            lenient().when(notificationRepository.save(any(NotificationAggregate.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+        }
+
+        private Origin origin(String internalReference) {
+            return Origin.builder().countryCode("GB").requiresRegionCode("no")
+                .internalReference(internalReference).build();
+        }
+
+        private NotificationAggregate submittedAggregate(List<Commodity> commodities) {
+            NotificationAggregate submitted = NotificationAggregate.builder()
+                .id("db-id-dif")
+                .referenceNumber(REF)
+                .status(SUBMITTED)
+                .notification(Notification.builder()
+                    .origin(origin("ORIGINAL"))
+                    .commodities(commodities)
+                    .build())
+                .fulfilments(new ArrayList<>(List.of(new Document("obligationId", "original"))))
+                .build();
+            when(notificationRepository.findByReferenceNumberAndOrganisationId(REF, ORG_ID))
+                .thenReturn(Optional.of(submitted));
+            return submitted;
+        }
+
+        private NotificationDto.NotificationDtoBuilder<?, ?> putOf(Origin origin) {
+            return NotificationDto.builder()
+                .referenceNumber(REF)
+                .concurrencyToken(0L)
+                .origin(origin)
+                .commodities(new ArrayList<>())
+                .fulfilments(List.of(new Document("obligationId", "original")));
+        }
+
+        @Test
+        void amendNotification_shouldStartWithAnswersMatchingTheSubmittedVersion() {
+            submittedAggregate(new ArrayList<>());
+
+            NotificationAggregate result = notificationService.amendNotification(REF, "trace", null, ORG_ID);
+
+            assertThat(result.getAnswersDifferFromSubmitted()).isFalse();
+        }
+
+        @Test
+        void replace_shouldFlagAnswersAsDifferent_whenAmendChangesAnAnswer() {
+            submittedAggregate(new ArrayList<>());
+            notificationService.amendNotification(REF, "trace", null, ORG_ID);
+
+            NotificationAggregate result = notificationService.replace(
+                REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
+
+            assertThat(result.getAnswersDifferFromSubmitted()).isTrue();
+        }
+
+        @Test
+        void replace_shouldNotFlagAnswersAsDifferent_whenSpeciesNullMatchesSnapshotEmptyList() {
+            submittedAggregate(new ArrayList<>(List.of(
+                Commodity.builder().name("Cattle").species(new ArrayList<>()).build())));
+            notificationService.amendNotification(REF, "trace", null, ORG_ID);
+
+            NotificationAggregate result = notificationService.replace(REF,
+                putOf(origin("ORIGINAL"))
+                    .commodities(List.of(Commodity.builder().name("Cattle").species(null).build()))
+                    .build(),
+                "trace", null, ORG_ID);
+
+            assertThat(result.getAnswersDifferFromSubmitted()).isFalse();
+        }
+
+        @Test
+        void replace_shouldNotFlagAnswersAsDifferent_whenOnlyTheFulfilmentsPayloadChanges() {
+            submittedAggregate(new ArrayList<>());
+            notificationService.amendNotification(REF, "trace", null, ORG_ID);
+
+            NotificationAggregate result = notificationService.replace(REF,
+                putOf(origin("ORIGINAL")).fulfilments(List.of(new Document("obligationId", "edited"))).build(),
+                "trace", null, ORG_ID);
+
+            assertThat(result.getAnswersDifferFromSubmitted()).isFalse();
+        }
+
+        @Test
+        void replace_shouldClearTheFlag_whenTheOriginalAnswerIsPutBack() {
+            submittedAggregate(new ArrayList<>());
+            notificationService.amendNotification(REF, "trace", null, ORG_ID);
+            notificationService.replace(REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
+
+            NotificationAggregate result = notificationService.replace(
+                REF, putOf(origin("ORIGINAL")).build(), "trace", null, ORG_ID);
+
+            assertThat(result.getAnswersDifferFromSubmitted()).isFalse();
+        }
+
+        @Test
+        void replace_shouldLeaveTheFlagNull_whenSavingADraft() {
+            NotificationAggregate draft = NotificationAggregate.builder()
+                .referenceNumber(REF)
+                .status(DRAFT)
+                .notification(Notification.builder().origin(origin("ORIGINAL")).build())
+                .build();
+            when(notificationRepository.findByReferenceNumberAndOrganisationId(REF, ORG_ID))
+                .thenReturn(Optional.of(draft));
+
+            NotificationAggregate result = notificationService.replace(
+                REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
+
+            assertThat(result.getAnswersDifferFromSubmitted()).isNull();
+        }
+
+        @Test
+        void submitNotification_shouldClearTheFlag_whenResubmittingAnAmendment() {
+            submittedAggregate(new ArrayList<>());
+            notificationService.amendNotification(REF, "trace", null, ORG_ID);
+            notificationService.replace(REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
+
+            NotificationAggregate result = notificationService.submitNotification(
+                REF, 0L, "trace", null, ORG_ID);
+
+            assertThat(result.getAnswersDifferFromSubmitted()).isNull();
+        }
+
+        @Test
+        void cancelAmendNotification_shouldClearTheFlag() {
+            submittedAggregate(new ArrayList<>());
+            notificationService.amendNotification(REF, "trace", null, ORG_ID);
+            notificationService.replace(REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
+
+            NotificationAggregate result = notificationService.cancelAmendNotification(
+                REF, "trace", null, ORG_ID);
+
+            assertThat(result.getAnswersDifferFromSubmitted()).isNull();
+        }
+    }
+
+    @Nested
     class Fulfilments {
 
         @BeforeEach

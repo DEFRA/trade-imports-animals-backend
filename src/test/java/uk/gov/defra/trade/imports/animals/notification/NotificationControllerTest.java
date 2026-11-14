@@ -1199,6 +1199,7 @@ class NotificationControllerTest {
                 @Override public java.util.List<org.bson.Document> getFulfilments() {
                     return java.util.List.of(new org.bson.Document("obligationId", "abc"));
                 }
+                @Override public Boolean getAnswersDifferFromSubmitted() { return true; }
             };
             when(notificationService.findFulfilmentsView(eq(REF_1), eq(ORG_ID))).thenReturn(view);
 
@@ -1211,7 +1212,8 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.status").value("SUBMITTED"))
                 .andExpect(jsonPath("$.created").value("2026-07-21T06:42:17.123Z"))
                 .andExpect(jsonPath("$.submittedAt").value("2026-07-21T14:09:05Z"))
-                .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"));
+                .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"))
+                .andExpect(jsonPath("$.answersDifferFromSubmitted").value(true));
         }
 
         @Test

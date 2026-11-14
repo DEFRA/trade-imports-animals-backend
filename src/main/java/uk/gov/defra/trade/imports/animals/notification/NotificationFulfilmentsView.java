@@ -5,10 +5,9 @@ import java.util.List;
 import org.bson.Document;
 
 /**
- * Spring Data interface projection over the {@code notification} collection backing
- * {@code GET /notifications/{ref}/fulfilments}. Server-only fields
- * ({@code preAmendNotification}, {@code preAmendFulfilments}, {@code expireAt}) are
- * intentionally omitted so they aren't loaded on read.
+ * Spring Data interface projection over the {@code notification} collection: the reference number,
+ * concurrency token, status, created and submitted timestamps, the opaque fulfilments payload and
+ * whether an open amendment's answers differ from the submitted version.
  */
 public interface NotificationFulfilmentsView {
 
@@ -23,4 +22,6 @@ public interface NotificationFulfilmentsView {
     Instant getSubmittedAt();
 
     List<Document> getFulfilments();
+
+    Boolean getAnswersDifferFromSubmitted();
 }
