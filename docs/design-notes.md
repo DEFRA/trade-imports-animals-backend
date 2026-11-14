@@ -23,7 +23,8 @@ Why the code is shaped the way it is. Code states what it does; this file holds 
 
 - `submitNotification` saves at the caller's `concurrencyToken`, so `@Version` refuses the save atomically when the notification changed after the caller read it.
 - `amendNotification` stores deep copies of the notification and its fulfilments as the pre-amend snapshot, so `cancelAmendNotification` restores exactly what was submitted. A shared reference at any depth would let a later edit change the snapshot.
-- Only a submission sets a new `submittedAt`. Cancelling an amendment returns to SUBMITTED and keeps the original `submittedAt`.
+- Each submission, first or from an amendment, works out what is still owed from the documents the journey claimed that passed their virus scan, stores it as the aggregate's outstanding items, and records SUBMITTED_ACTION_REQUIRED when no ITAHC is among them and SUBMITTED otherwise. The items are stored but not sent on the API: callers read the status.
+- Only a submission sets a new `submittedAt`. Cancelling an amendment returns to the status the last submission recorded and keeps the original `submittedAt`.
 - `answersDifferFromSubmitted` is stored on write rather than computed on read, because the fulfilments projection (`NotificationFulfilmentsView`) leaves out the pre-amend snapshots and `expireAt` so a read does not load them. It is set false when an amendment starts, recalculated on every content save while the status is AMEND, and cleared when the amendment is resubmitted or cancelled.
 - Only the `notification` content sub-object is compared with its snapshot, both through the same deep clone, so uploaded documents and the opaque fulfilments payload never count as a change. Putting an answer back reads as unchanged.
 - Soft delete of an already DELETED notification returns it unchanged, so a repeated call after a lost response is harmless.

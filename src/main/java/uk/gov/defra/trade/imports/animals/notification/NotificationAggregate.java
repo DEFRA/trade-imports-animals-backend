@@ -55,6 +55,10 @@ public class NotificationAggregate {
     /** The moment of the most recent submission; null until the notification is first submitted. */
     private Instant submittedAt;
 
+    /** What the most recent submission found still owing; null until the notification is first submitted. */
+    @JsonIgnore
+    private List<OutstandingItem> outstandingItems;
+
     /**
      * When this notification becomes eligible for automatic expiry, counted from {@code created};
      * null where expiry does not apply.

@@ -104,7 +104,8 @@ public class NotificationController {
 
     @PostMapping("/{referenceNumber}/submit")
     @Operation(summary = "Submit notification",
-        description = "Transitions notification status to SUBMITTED. Accepts DRAFT or AMEND as the source state. "
+        description = "Transitions notification status to SUBMITTED, or to SUBMITTED_ACTION_REQUIRED when no "
+            + "ITAHC that passed its virus scan was uploaded. Accepts DRAFT or AMEND as the source state. "
             + "Submits only if the notification is still at concurrencyToken, so the submitted content is exactly "
             + "what the caller last read.")
     @ApiResponse(responseCode = "200", description = "Notification submitted",
@@ -138,7 +139,7 @@ public class NotificationController {
 
     @PostMapping("/{referenceNumber}/amend")
     @Operation(summary = "Amend notification",
-        description = "Transitions notification status from SUBMITTED to AMEND. Emits an outbox event.")
+        description = "Transitions notification status from SUBMITTED or SUBMITTED_ACTION_REQUIRED to AMEND. Emits an outbox event.")
     @ApiResponse(responseCode = "200", description = "Notification moved to AMEND",
         content = @Content(schema = @Schema(implementation = NotificationAggregate.class)))
     @ApiResponse(responseCode = "400", description = "Notification not in an amendable state", content = @Content)
@@ -159,7 +160,7 @@ public class NotificationController {
 
     @PostMapping("/{referenceNumber}/cancel-amend")
     @Operation(summary = "Cancel notification amendment",
-        description = "Restores the submitted notification content and transitions status from AMEND to SUBMITTED.")
+        description = "Restores the submitted notification content and transitions status from AMEND back to the status the last submission recorded.")
     @ApiResponse(responseCode = "200", description = "Amendment cancelled",
         content = @Content(schema = @Schema(implementation = NotificationAggregate.class)))
     @ApiResponse(responseCode = "400", description = "Notification not in AMEND status or baseline missing", content = @Content)
@@ -256,7 +257,7 @@ public class NotificationController {
 
     @PostMapping("/{referenceNumber}/soft-delete")
     @Operation(summary = "Soft-delete notification",
-        description = "Transitions notification status to DELETED (soft delete). Only DRAFT, SUBMITTED and AMEND notifications can be deleted.")
+        description = "Transitions notification status to DELETED (soft delete). Only DRAFT, SUBMITTED, SUBMITTED_ACTION_REQUIRED and AMEND notifications can be deleted.")
     @ApiResponse(responseCode = "200", description = "Notification soft-deleted",
         content = @Content(schema = @Schema(implementation = NotificationAggregate.class)))
     @ApiResponse(responseCode = "400", description = "Notification not in a deletable state", content = @Content)

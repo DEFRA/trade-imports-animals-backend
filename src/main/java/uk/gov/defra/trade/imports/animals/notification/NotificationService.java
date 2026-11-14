@@ -122,7 +122,7 @@ public class NotificationService {
         String correlationId, Actor actor, String organisationId) {
         NotificationAggregate source = requireTraderNotification(referenceNumber, organisationId);
         if (source.getStatus() != NotificationStatus.DRAFT
-            && source.getStatus() != NotificationStatus.SUBMITTED
+            && !source.getStatus().isSubmitted()
             && source.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException("Cannot copy notification with status: " + source.getStatus());
         }
@@ -158,7 +158,8 @@ public class NotificationService {
 
     public NotificationPageResponse findAll(int page, String sort, String referenceNumber, String organisationId) {
         List<NotificationStatus> dashboardStatuses = List.of(
-            NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
+            NotificationStatus.DRAFT, NotificationStatus.SUBMITTED,
+            NotificationStatus.SUBMITTED_ACTION_REQUIRED, NotificationStatus.AMEND);
         var pageable = PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort));
 
         String trimmedReference = StringUtils.trimToNull(referenceNumber);
@@ -203,11 +204,18 @@ public class NotificationService {
             ? OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED
             : OutboxEventType.NOTIFICATION_SUBMITTED;
 
+        List<OutstandingItem> outstandingItems = OutstandingItem.outstandingAmong(
+            documentService.findClaimedScannedCleanByNotificationRef(referenceNumber));
+        NotificationStatus recordedStatus = OutstandingItem.submittedStatusFor(outstandingItems);
+        notificationAggregate.setOutstandingItems(outstandingItems);
+        log.info("Submitting notification {} as {}, outstanding items {}",
+            referenceNumber, recordedStatus, outstandingItems);
+
         return writeWithOutbox(
             notificationAggregate,
             referenceNumber,
             correlationId,
-            NotificationStatus.SUBMITTED,
+            recordedStatus,
             eventType,
             actor);
     }
@@ -218,7 +226,7 @@ public class NotificationService {
         NotificationAggregate notificationAggregate =
             requireTraderNotification(referenceNumber, organisationId);
 
-        if (notificationAggregate.getStatus() != NotificationStatus.SUBMITTED) {
+        if (!notificationAggregate.getStatus().isSubmitted()) {
             throw new BadRequestException(
                 "Cannot amend notification with status: " + notificationAggregate.getStatus());
         }
@@ -265,11 +273,15 @@ public class NotificationService {
         notificationAggregate.setPreAmendFulfilments(null);
         notificationAggregate.setPreAmendNotification(null);
         notificationAggregate.setAnswersDifferFromSubmitted(null);
+        NotificationStatus restoredStatus =
+            OutstandingItem.submittedStatusFor(notificationAggregate.getOutstandingItems());
+        log.info("Cancelling amendment of notification {}, restoring status {}",
+            referenceNumber, restoredStatus);
         return writeWithOutbox(
             notificationAggregate,
             referenceNumber,
             correlationId,
-            NotificationStatus.SUBMITTED,
+            restoredStatus,
             OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED,
             actor);
     }
@@ -349,7 +361,7 @@ public class NotificationService {
             return notificationAggregate;
         }
         if (notificationAggregate.getStatus() != NotificationStatus.DRAFT
-            && notificationAggregate.getStatus() != NotificationStatus.SUBMITTED
+            && !notificationAggregate.getStatus().isSubmitted()
             && notificationAggregate.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException(
                 "Cannot delete notification with status: " + notificationAggregate.getStatus());

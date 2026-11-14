@@ -168,6 +168,19 @@ public class DocumentService {
   }
 
   /**
+   * Returns the documents the journey claimed for the given notification that passed their virus
+   * scan, oldest first.
+   *
+   * @param ref the notification reference number
+   * @return list of documents, possibly empty
+   */
+  public List<AccompanyingDocument> findClaimedScannedCleanByNotificationRef(String ref) {
+    return accompanyingDocumentRepository
+        .findAllByNotificationReferenceNumberAndScanStatusAndClaimedIsTrueOrderByCreatedAsc(
+            ref, ScanStatus.COMPLETE);
+  }
+
+  /**
    * Deletes all accompanying documents belonging to the given notification reference numbers.
    * Called as part of cascade deletion when notifications are removed.
    *
