@@ -301,6 +301,8 @@ class NotificationControllerTest {
             AnimalIdentifier secondUnit = AnimalIdentifier.builder()
                 .horseName("Silver")
                 .microchip("900123456789012")
+                .identificationDetails("Scar on left flank")
+                .description("Brown and white patches")
                 .permanentAddress(ConsignmentParty.builder()
                     .name("Owner")
                     .address(Address.builder().addressLine1("8 Stable Close").countryCode("GB").build())
@@ -376,6 +378,12 @@ class NotificationControllerTest {
                 .andExpect(jsonPath(
                     "$.notification.commodities[0].species[0].animalIdentifiers[1].microchip")
                     .value("900123456789012"))
+                .andExpect(jsonPath(
+                    "$.notification.commodities[0].species[0].animalIdentifiers[1].identificationDetails")
+                    .value("Scar on left flank"))
+                .andExpect(jsonPath(
+                    "$.notification.commodities[0].species[0].animalIdentifiers[1].description")
+                    .value("Brown and white patches"))
                 .andExpect(jsonPath(
                     "$.notification.commodities[0].species[0].animalIdentifiers[1].permanentAddress.name")
                     .value("Owner"))
