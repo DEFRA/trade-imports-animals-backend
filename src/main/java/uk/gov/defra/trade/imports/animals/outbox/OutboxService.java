@@ -79,7 +79,7 @@ public class OutboxService {
         Integer versionId = computeVersionId(aggregateId, eventType);
 
         List<AccompanyingDocument> claimedScannedDocuments = documentService
-            .findClaimedScannedCleanByNotificationRef(notificationAggregate.getReferenceNumber());
+            .findClaimedScannedCleanByNotificationReferenceNumber(notificationAggregate.getReferenceNumber());
 
         Map<String, Object> data = objectMapper.convertValue(
             gbnAgEventDataMapper.toGbnAgEventData(notificationAggregate, versionId, claimedScannedDocuments),

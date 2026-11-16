@@ -33,6 +33,7 @@ import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
@@ -51,6 +52,9 @@ class OutboxServiceTest {
     @Mock
     private UploadSessionRepository uploadSessionRepository;
 
+    @Mock
+    private NotificationRepository notificationRepository;
+
     private OutboxService outboxService;
 
     @BeforeEach
@@ -58,7 +62,7 @@ class OutboxServiceTest {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         outboxService = new OutboxService(
             outboxEventRepository, objectMapper, new GbnAgEventDataMapper(),
-            new DocumentService(accompanyingDocumentRepository, uploadSessionRepository));
+            new DocumentService(accompanyingDocumentRepository, uploadSessionRepository, notificationRepository));
     }
 
     private NotificationAggregate aggregateFor(String referenceNumber, NotificationStatus status) {

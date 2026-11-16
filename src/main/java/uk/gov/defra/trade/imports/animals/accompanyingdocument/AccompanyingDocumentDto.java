@@ -17,7 +17,7 @@ public record AccompanyingDocumentDto(
     String notificationReferenceNumber,
     String uploadId,
 
-    @Schema(description = "The handle the upload session was opened under",
+    @Schema(description = "The correlationId the upload session was opened under",
         requiredMode = Schema.RequiredMode.REQUIRED)
     String correlationId,
     DocumentType documentType,

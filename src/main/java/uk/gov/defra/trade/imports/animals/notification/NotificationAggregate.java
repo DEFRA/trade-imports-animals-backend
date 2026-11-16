@@ -17,8 +17,8 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import static java.util.Objects.requireNonNull;
 
 /**
- * Aggregate root: identity + metadata at the top, with the well-structured content held as a
- * composed {@link Notification} sub-object (symmetric with the opaque {@link #fulfilments} payload).
+ * A notification's identity and metadata, with its structured content in a {@link Notification}
+ * sub-object and its obligation fulfilments as opaque documents.
  */
 @org.springframework.data.mongodb.core.mapping.Document(collection = "notification")
 @CompoundIndexes({
@@ -52,50 +52,28 @@ public class NotificationAggregate {
 
     private Instant updated;
 
-    /** The moment of the most recent submission; null until the notification is first submitted. */
     private Instant submittedAt;
 
-    /** What the most recent submission found still owing; null until the notification is first submitted. */
     @JsonIgnore
     private List<OutstandingItem> outstandingItems;
 
-    /**
-     * When this notification becomes eligible for automatic expiry, counted from {@code created};
-     * null where expiry does not apply.
-     */
     @JsonIgnore
-    @Indexed
     private Instant expireAt;
 
-    /** The notification content — parties, commodity, transport, etc. */
     private Notification notification;
 
-    /** Opaque obligation-fulfilment payload — persisted byte-faithfully; never interpreted by the backend. */
     private List<Document> fulfilments;
 
-    /**
-     * The {@link #notification} content as it stood when the open amendment started, including
-     * inline party details; null when no amendment is open.
-     */
     @JsonIgnore
     private Notification preAmendNotification;
 
-    /**
-     * The {@link #fulfilments} payload as it stood when the open amendment started; null when no
-     * amendment is open.
-     */
     @JsonIgnore
     private List<Document> preAmendFulfilments;
 
-    /**
-     * True when the {@link #notification} content differs from {@link #preAmendNotification},
-     * false when it matches; null when no amendment is open.
-     */
     private Boolean answersDifferFromSubmitted;
 
     /** Returns the notification sub-object, failing fast if absent. */
     public Notification requireNotification() {
-        return requireNonNull(notification,
-            "NotificationAggregate requires a notification sub-object at this seam");
+        return requireNonNull(notification, "NotificationAggregate has no notification sub-object");
     }
 }
