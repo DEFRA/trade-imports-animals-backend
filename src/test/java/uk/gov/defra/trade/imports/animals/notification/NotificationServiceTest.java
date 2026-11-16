@@ -44,6 +44,7 @@ import org.springframework.data.domain.Sort;
 import net.javacrumbs.shedlock.core.DefaultLockingTaskExecutor;
 import net.javacrumbs.shedlock.core.LockProvider;
 import net.javacrumbs.shedlock.core.SimpleLock;
+import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -153,6 +154,15 @@ class NotificationServiceTest {
         verify(notificationRepository).save(notificationAggregate);
     }
 
+    private void assertSoftDeleteEmits(NotificationAggregate stored, OutboxEventType eventType) {
+        givenStored(stored);
+        givenSaveReturnsItsArgument();
+
+        notificationService.softDeleteNotification(stored.getReferenceNumber(), "trace", null, ORG_ID);
+
+        verify(outboxService).appendEvent(any(), eq(eventType), any(), any());
+    }
+
     private NotificationAggregate storedIn(String referenceNumber, NotificationStatus status) {
         NotificationAggregate stored = NotificationAggregate.builder()
             .id("id-" + referenceNumber)
@@ -161,11 +171,55 @@ class NotificationServiceTest {
             .notification(Notification.builder().build())
             .fulfilments(List.of(new Document("obligationId", referenceNumber)))
             .build();
-        when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-            .thenReturn(Optional.of(stored));
+        givenStored(stored);
         lenient().when(notificationRepository.save(any(NotificationAggregate.class)))
             .thenAnswer(inv -> inv.getArgument(0));
         return stored;
+    }
+
+    private static NotificationAggregate.NotificationAggregateBuilder aggregateIn(
+        String referenceNumber, NotificationStatus status) {
+        return NotificationAggregate.builder()
+            .referenceNumber(referenceNumber)
+            .status(status)
+            .notification(Notification.builder().build());
+    }
+
+    private void givenStored(NotificationAggregate stored) {
+        when(notificationRepository.findByReferenceNumberAndOrganisationId(stored.getReferenceNumber(), ORG_ID))
+            .thenReturn(Optional.of(stored));
+    }
+
+    private void givenSaveReturnsItsArgument() {
+        when(notificationRepository.save(any(NotificationAggregate.class)))
+            .thenAnswer(inv -> inv.getArgument(0));
+    }
+
+    private NotificationAggregate copyAndCaptureSaved(NotificationAggregate source, String newReferenceNumber) {
+        givenStored(source);
+        when(referenceNumberGenerator.generate()).thenReturn(newReferenceNumber);
+        givenSaveReturnsItsArgument();
+
+        notificationService.copyNotification(source.getReferenceNumber(), 0L, "trace", null, ORG_ID);
+
+        ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
+        verify(notificationRepository).save(captor.capture());
+        return captor.getValue();
+    }
+
+    private void assertOutboxWriteFailsAfterThreeLockAttempts(
+        ThrowingCallable call, String referenceNumber, String traceId) {
+        assertThatThrownBy(call)
+            .isInstanceOf(OutboxWriteException.class)
+            .satisfies(ex -> {
+                OutboxWriteException owe = (OutboxWriteException) ex;
+                assertThat(owe.getAggregateId())
+                    .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
+                assertThat(owe.getCorrelationId()).isEqualTo(traceId);
+            });
+
+        verify(lockProvider, times(3)).lock(any());
+        verify(notificationRepository, never()).save(any());
     }
 
     private void withClaimedCleanDocument(String referenceNumber, DocumentType type) {
@@ -585,26 +639,15 @@ class NotificationServiceTest {
         void saveNotification_shouldThrowOutboxWriteException_whenLockNotAcquired() {
             // Given
             String referenceNumber = "GBN-AG-26-LOCK01";
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-                .thenReturn(Optional.of(NotificationAggregate.builder()
-                    .referenceNumber(referenceNumber).status(DRAFT).build()));
+            givenStored(NotificationAggregate.builder().referenceNumber(referenceNumber).status(DRAFT).build());
             when(lockProvider.lock(any())).thenReturn(Optional.empty());
 
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(referenceNumber).concurrencyToken(0L).build();
 
             // When / Then
-            assertThatThrownBy(() -> notificationService.saveNotification(dto, "trace-001", null, ORG_ID))
-                .isInstanceOf(OutboxWriteException.class)
-                .satisfies(ex -> {
-                    OutboxWriteException owe = (OutboxWriteException) ex;
-                    assertThat(owe.getAggregateId())
-                        .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
-                    assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
-                });
-
-            verify(lockProvider, times(3)).lock(any());
-            verify(notificationRepository, never()).save(any());
+            assertOutboxWriteFailsAfterThreeLockAttempts(
+                () -> notificationService.saveNotification(dto, "trace-001", null, ORG_ID), referenceNumber, "trace-001");
             verify(outboxService, never()).appendEvent(any(), any(), any(), any());
         }
 
@@ -1340,31 +1383,14 @@ class NotificationServiceTest {
         void submitNotification_shouldThrowOutboxWriteException_whenLockNotAcquired() {
             // Given
             String referenceNumber = "GBN-AG-26-ABC123";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("notif-id-001")
-                .referenceNumber(referenceNumber)
-                .status(DRAFT)
-                .notification(Notification.builder().build())
-                .build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
+            givenStored(aggregateIn(referenceNumber, DRAFT).id("notif-id-001").build());
 
             when(lockProvider.lock(any())).thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(
-                () -> notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-001", null, ORG_ID))
-                .isInstanceOf(OutboxWriteException.class)
-                .satisfies(ex -> {
-                    OutboxWriteException owe = (OutboxWriteException) ex;
-                    assertThat(owe.getAggregateId())
-                        .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
-                    assertThat(owe.getCorrelationId()).isEqualTo("trace-001");
-                });
-
-            verify(lockProvider, times(3)).lock(any());
-            verify(notificationRepository, never()).save(any());
+            assertOutboxWriteFailsAfterThreeLockAttempts(
+                () -> notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN, "trace-001", null, ORG_ID),
+                referenceNumber, "trace-001");
         }
 
         @Test
@@ -1391,15 +1417,7 @@ class NotificationServiceTest {
         void submitNotification_shouldThrowBadRequest_whenAlreadySubmitted() {
             // Given
             String referenceNumber = "GBN-AG-26-ALREADY";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("notif-id-already")
-                .referenceNumber(referenceNumber)
-                .status(SUBMITTED)
-                .notification(Notification.builder().build())
-                .build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
+            givenStored(aggregateIn(referenceNumber, SUBMITTED).id("notif-id-already").build());
 
             // When / Then
             assertThatThrownBy(
@@ -1416,15 +1434,7 @@ class NotificationServiceTest {
         void submitNotification_shouldThrowBadRequest_whenDeleted() {
             // Given
             String referenceNumber = "GBN-AG-26-DELETED";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("notif-id-deleted")
-                .referenceNumber(referenceNumber)
-                .status(NotificationStatus.DELETED)
-                .notification(Notification.builder().build())
-                .build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
+            givenStored(aggregateIn(referenceNumber, DELETED).id("notif-id-deleted").build());
 
             // When / Then
             assertThatThrownBy(
@@ -1595,15 +1605,7 @@ class NotificationServiceTest {
         void amendNotification_shouldThrow_whenFulfilmentsMissing() {
             // Given — a submitted row with no fulfilments payload is corrupt server state.
             String referenceNumber = "GBN-AG-26-AMD009";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("notif-id-amd-9")
-                .referenceNumber(referenceNumber)
-                .status(SUBMITTED)
-                .notification(Notification.builder().build())
-                .build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
+            givenStored(aggregateIn(referenceNumber, SUBMITTED).id("notif-id-amd-9").build());
 
             // When / Then
             assertThatThrownBy(
@@ -1619,15 +1621,7 @@ class NotificationServiceTest {
         void amendNotification_shouldThrowBadRequest_whenDraft() {
             // Given
             String referenceNumber = "GBN-AG-26-AMD003";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("notif-id-amd-3")
-                .referenceNumber(referenceNumber)
-                .status(DRAFT)
-                .notification(Notification.builder().build())
-                .build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
+            givenStored(aggregateIn(referenceNumber, DRAFT).id("notif-id-amd-3").build());
 
             // When / Then
             assertThatThrownBy(
@@ -1644,15 +1638,7 @@ class NotificationServiceTest {
         void amendNotification_shouldThrowBadRequest_whenAlreadyAmend() {
             // Given
             String referenceNumber = "GBN-AG-26-AMD004";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("notif-id-amd-4")
-                .referenceNumber(referenceNumber)
-                .status(AMEND)
-                .notification(Notification.builder().build())
-                .build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
+            givenStored(aggregateIn(referenceNumber, AMEND).id("notif-id-amd-4").build());
 
             // When / Then
             assertThatThrownBy(
@@ -1686,32 +1672,17 @@ class NotificationServiceTest {
         void amendNotification_shouldThrowOutboxWriteException_whenLockNotAcquired() {
             // Given
             String referenceNumber = "GBN-AG-26-AMD006";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
+            givenStored(aggregateIn(referenceNumber, SUBMITTED)
                 .id("notif-id-amd-6")
-                .referenceNumber(referenceNumber)
-                .status(SUBMITTED)
-                .notification(Notification.builder().build())
                 .fulfilments(List.of(new Document("obligationId", "amd-6")))
-                .build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
+                .build());
 
             when(lockProvider.lock(any())).thenReturn(Optional.empty());
 
             // When / Then
-            assertThatThrownBy(
-                () -> notificationService.amendNotification(referenceNumber, "trace-amd-6", null, ORG_ID))
-                .isInstanceOf(OutboxWriteException.class)
-                .satisfies(ex -> {
-                    OutboxWriteException owe = (OutboxWriteException) ex;
-                    assertThat(owe.getAggregateId())
-                        .isEqualTo("Imports.Notification.GBN-AG." + referenceNumber);
-                    assertThat(owe.getCorrelationId()).isEqualTo("trace-amd-6");
-                });
-
-            verify(lockProvider, times(3)).lock(any());
-            verify(notificationRepository, never()).save(any());
+            assertOutboxWriteFailsAfterThreeLockAttempts(
+                () -> notificationService.amendNotification(referenceNumber, "trace-amd-6", null, ORG_ID),
+                referenceNumber, "trace-amd-6");
         }
 
         @Test
@@ -1840,14 +1811,7 @@ class NotificationServiceTest {
         void cancelAmendNotification_shouldThrowBadRequest_whenNotAmend() {
             // Given
             String referenceNumber = "GBN-AG-26-CAN002";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .referenceNumber(referenceNumber)
-                .status(SUBMITTED)
-                .notification(Notification.builder().build())
-                .build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
+            givenStored(aggregateIn(referenceNumber, SUBMITTED).build());
 
             // When / Then
             assertThatThrownBy(() -> notificationService.cancelAmendNotification(referenceNumber, "trace", null, ORG_ID))
@@ -1999,10 +1963,7 @@ class NotificationServiceTest {
                 .species(List.of(species()))
                 .build();
 
-            NotificationAggregate source = NotificationAggregate.builder()
-                .referenceNumber(sourceRef)
-                .status(NotificationStatus.DRAFT)
-                .notification(Notification.builder().build())
+            NotificationAggregate source = aggregateIn(sourceRef, DRAFT)
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
                     .origin(origin)
@@ -2021,21 +1982,10 @@ class NotificationServiceTest {
                     .build())
                 .build();
 
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(sourceRef, ORG_ID))
-                .thenReturn(Optional.of(source));
-            when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-CPY002");
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
-
             // When
-            notificationService.copyNotification(sourceRef, 0L, "trace", null, ORG_ID);
+            NotificationAggregate saved = copyAndCaptureSaved(source, "GBN-AG-26-CPY002");
 
-            // Then — capture what was saved and assert retained fields
-            ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
-            verify(notificationRepository).save(captor.capture());
-            NotificationAggregate saved = captor.getValue();
-
-            // Retained
+            // Then — retained
             assertThat(saved.getStatus()).isEqualTo(NotificationStatus.DRAFT);
             assertThat(saved.getNotification().getOrigin().getCountryCode()).isEqualTo("DE");
             assertThat(saved.getNotification().getOrigin().getRequiresRegionCode()).isEqualTo("yes");
@@ -2059,10 +2009,7 @@ class NotificationServiceTest {
                 .totalNoOfPackages(5)
                 .species(List.of(species()))
                 .build();
-            NotificationAggregate source = NotificationAggregate.builder()
-                .referenceNumber(sourceRef)
-                .status(NotificationStatus.DRAFT)
-                .notification(Notification.builder().build())
+            NotificationAggregate source = aggregateIn(sourceRef, DRAFT)
                 .concurrencyToken(0L)
                 .notification(Notification.builder()
                     .origin(Origin.builder().countryCode("FR").requiresRegionCode("no").internalReference("DO-NOT-COPY").build())
@@ -2076,20 +2023,10 @@ class NotificationServiceTest {
                     .build())
                 .build();
 
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(sourceRef, ORG_ID))
-                .thenReturn(Optional.of(source));
-            when(referenceNumberGenerator.generate()).thenReturn("GBN-AG-26-CPY003");
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
-
             // When
-            notificationService.copyNotification(sourceRef, 0L, "trace", null, ORG_ID);
+            NotificationAggregate saved = copyAndCaptureSaved(source, "GBN-AG-26-CPY003");
 
             // Then — excluded fields must be null on the saved copy
-            ArgumentCaptor<NotificationAggregate> captor = ArgumentCaptor.forClass(NotificationAggregate.class);
-            verify(notificationRepository).save(captor.capture());
-            NotificationAggregate saved = captor.getValue();
-
             assertThat(saved.getNotification().getOrigin().getInternalReference()).isNull();
             assertThat(saved.getNotification().getAdditionalDetails().getUnweanedAnimals()).isNull();
             assertThat(saved.getNotification().getTransport()).isNull();
@@ -2460,10 +2397,8 @@ class NotificationServiceTest {
                 .fulfilments(newFulfilments)
                 .build();
 
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(ref, ORG_ID))
-                .thenReturn(Optional.of(existing));
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+            givenStored(existing);
+            givenSaveReturnsItsArgument();
 
             // When
             NotificationAggregate result = notificationService.replace(ref, dto, "trace", null, ORG_ID);
@@ -2481,11 +2416,6 @@ class NotificationServiceTest {
         void replace_shouldReplaceContentIncludingFulfilments_whenAmend() {
             // Given
             String ref = "GBN-AG-26-REP002";
-            NotificationAggregate existing = NotificationAggregate.builder()
-                .referenceNumber(ref)
-                .status(AMEND)
-                .notification(Notification.builder().build())
-                .build();
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(ref)
                 .concurrencyToken(0L)
@@ -2493,10 +2423,8 @@ class NotificationServiceTest {
                 .fulfilments(List.of(new Document("obligationId", "xyz")))
                 .build();
 
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(ref, ORG_ID))
-                .thenReturn(Optional.of(existing));
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+            givenStored(aggregateIn(ref, AMEND).build());
+            givenSaveReturnsItsArgument();
 
             // When
             NotificationAggregate result = notificationService.replace(ref, dto, "trace", null, ORG_ID);
@@ -2511,15 +2439,8 @@ class NotificationServiceTest {
         void replace_shouldThrowBadRequest_whenSubmitted() {
             // Given
             String ref = "GBN-AG-26-REP003";
-            NotificationAggregate existing = NotificationAggregate.builder()
-                .referenceNumber(ref)
-                .status(SUBMITTED)
-                .notification(Notification.builder().build())
-                .build();
+            givenStored(aggregateIn(ref, SUBMITTED).build());
             NotificationDto dto = NotificationDto.builder().referenceNumber(ref).build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(ref, ORG_ID))
-                .thenReturn(Optional.of(existing));
 
             // When / Then
             assertThatThrownBy(() -> notificationService.replace(ref, dto, "trace", null, ORG_ID))
@@ -2532,15 +2453,8 @@ class NotificationServiceTest {
         void replace_shouldThrowBadRequest_whenDeleted() {
             // Given
             String ref = "GBN-AG-26-REP004";
-            NotificationAggregate existing = NotificationAggregate.builder()
-                .referenceNumber(ref)
-                .status(DELETED)
-                .notification(Notification.builder().build())
-                .build();
+            givenStored(aggregateIn(ref, DELETED).build());
             NotificationDto dto = NotificationDto.builder().referenceNumber(ref).build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(ref, ORG_ID))
-                .thenReturn(Optional.of(existing));
 
             // When / Then
             assertThatThrownBy(() -> notificationService.replace(ref, dto, "trace", null, ORG_ID))
@@ -2604,10 +2518,8 @@ class NotificationServiceTest {
                 .fulfilments(fulfilments)
                 .build();
 
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(ref, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+            givenStored(notificationAggregate);
+            givenSaveReturnsItsArgument();
 
             // When
             NotificationAggregate result = notificationService.amendNotification(ref, "trace", null, ORG_ID);
@@ -2636,10 +2548,8 @@ class NotificationServiceTest {
                 .fulfilments(List.of(new Document("obligationId", "amd-snapshot")))
                 .build();
 
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(ref, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
+            givenStored(notificationAggregate);
+            givenSaveReturnsItsArgument();
 
             // When
             NotificationAggregate result = notificationService.amendNotification(ref, "trace", null, ORG_ID);
@@ -2909,71 +2819,20 @@ class NotificationServiceTest {
 
         @Test
         void softDeleteNotification_shouldEmitNotificationDeleted_whenDraft() {
-            // Given
-            String referenceNumber = "GBN-AG-26-DEL-DRAFT";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("notif-id-del-draft")
-                .referenceNumber(referenceNumber)
-                .status(DRAFT)
-                .notification(Notification.builder().build())
-                .build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
-
-            // When
-            notificationService.softDeleteNotification(referenceNumber, "trace", null, ORG_ID);
-
-            // Then
-            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_DELETED), any(), any());
+            assertSoftDeleteEmits(aggregateIn("GBN-AG-26-DEL-DRAFT", DRAFT).id("notif-id-del-draft").build(),
+                OutboxEventType.NOTIFICATION_DELETED);
         }
 
         @Test
         void softDeleteNotification_shouldEmitNotificationSubmissionDeleted_whenSubmitted() {
-            // Given
-            String referenceNumber = "GBN-AG-26-DEL-SUB";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("notif-id-del-sub")
-                .referenceNumber(referenceNumber)
-                .status(SUBMITTED)
-                .notification(Notification.builder().build())
-                .build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
-
-            // When
-            notificationService.softDeleteNotification(referenceNumber, "trace", null, ORG_ID);
-
-            // Then
-            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_SUBMISSION_DELETED), any(), any());
+            assertSoftDeleteEmits(aggregateIn("GBN-AG-26-DEL-SUB", SUBMITTED).id("notif-id-del-sub").build(),
+                OutboxEventType.NOTIFICATION_SUBMISSION_DELETED);
         }
 
         @Test
         void softDeleteNotification_shouldEmitNotificationSubmissionDeleted_whenAmend() {
-            // Given
-            String referenceNumber = "GBN-AG-26-DEL-AMD";
-            NotificationAggregate notificationAggregate = NotificationAggregate.builder()
-                .id("notif-id-del-amd")
-                .referenceNumber(referenceNumber)
-                .status(AMEND)
-                .notification(Notification.builder().build())
-                .build();
-
-            when(notificationRepository.findByReferenceNumberAndOrganisationId(referenceNumber, ORG_ID))
-                .thenReturn(Optional.of(notificationAggregate));
-            when(notificationRepository.save(any(NotificationAggregate.class)))
-                .thenAnswer(inv -> inv.getArgument(0));
-
-            // When
-            notificationService.softDeleteNotification(referenceNumber, "trace", null, ORG_ID);
-
-            // Then
-            verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_SUBMISSION_DELETED), any(), any());
+            assertSoftDeleteEmits(aggregateIn("GBN-AG-26-DEL-AMD", AMEND).id("notif-id-del-amd").build(),
+                OutboxEventType.NOTIFICATION_SUBMISSION_DELETED);
         }
 
         @Test

@@ -1350,6 +1350,40 @@ class NotificationIT extends IntegrationBase {
             .getResponseBody().getReferenceNumber();
     }
 
+    private NotificationAggregate createAndRead(NotificationDto dto) {
+        return webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(dto))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
+    }
+
+    private NotificationAggregate copyAndRead(NotificationAggregate source) {
+        return webClient("NoAuth")
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
+                .queryParam("concurrencyToken", source.getConcurrencyToken())
+                .build(source.getReferenceNumber()))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
+    }
+
+    private NotificationAggregate softDeleteAndRead(String referenceNumber) {
+        return webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationAggregate.class)
+            .returnResult().getResponseBody();
+    }
+
+    private static void assertSoftDeleted(NotificationAggregate result, String referenceNumber) {
+        assertThat(result).isNotNull();
+        assertThat(result.getReferenceNumber()).isEqualTo(referenceNumber);
+        assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
+        assertThat(result.getUpdated()).isNotNull();
+    }
+
     private NotificationAggregate submitAndRead(String referenceNumber) {
         return submitRequest(referenceNumber)
             .exchange().expectStatus().isOk()
@@ -1575,18 +1609,10 @@ class NotificationIT extends IntegrationBase {
         String referenceNumber = createDraftReference();
 
         // When — soft-delete the notification
-        NotificationAggregate result = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(NotificationAggregate.class)
-            .returnResult().getResponseBody();
+        NotificationAggregate result = softDeleteAndRead(referenceNumber);
 
         // Then — status transitions to DELETED
-        assertThat(result).isNotNull();
-        assertThat(result.getReferenceNumber()).isEqualTo(referenceNumber);
-        assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
-        assertThat(result.getUpdated()).isNotNull();
+        assertSoftDeleted(result, referenceNumber);
     }
 
     @Test
@@ -1597,18 +1623,10 @@ class NotificationIT extends IntegrationBase {
         submit(referenceNumber);
 
         // When — soft-delete the submitted notification
-        NotificationAggregate result = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{ref}/soft-delete", referenceNumber)
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(NotificationAggregate.class)
-            .returnResult().getResponseBody();
+        NotificationAggregate result = softDeleteAndRead(referenceNumber);
 
         // Then — status transitions to DELETED
-        assertThat(result).isNotNull();
-        assertThat(result.getReferenceNumber()).isEqualTo(referenceNumber);
-        assertThat(result.getStatus()).isEqualTo(NotificationStatus.DELETED);
-        assertThat(result.getUpdated()).isNotNull();
+        assertSoftDeleted(result, referenceNumber);
     }
 
     @Test
@@ -1793,22 +1811,12 @@ class NotificationIT extends IntegrationBase {
         NotificationDto sourceDto = createNotificationDto("DE", "Live cattle");
         sourceDto.setConsignor(literalConsignor());
 
-        NotificationAggregate source = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(sourceDto))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
+        NotificationAggregate source = createAndRead(sourceDto);
 
         assertThat(source).isNotNull();
         assertThat(source.getNotification().getConsignor()).isEqualTo(literalConsignor());
 
-        NotificationAggregate copy = webClient("NoAuth")
-            .post()
-            .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
-                .queryParam("concurrencyToken", source.getConcurrencyToken())
-                .build(source.getReferenceNumber()))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
+        NotificationAggregate copy = copyAndRead(source);
 
         assertThat(copy).isNotNull();
         assertThat(copy.getNotification().getConsignor()).isEqualTo(literalConsignor());
@@ -2092,21 +2100,11 @@ class NotificationIT extends IntegrationBase {
     void copy_shouldRetainAllOperatorAddresses() {
         NotificationDto sourceDto = sourceNotificationWithAllOperators();
 
-        NotificationAggregate source = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(sourceDto))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
+        NotificationAggregate source = createAndRead(sourceDto);
 
         assertThat(source).isNotNull();
 
-        NotificationAggregate copy = webClient("NoAuth")
-            .post()
-            .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
-                .queryParam("concurrencyToken", source.getConcurrencyToken())
-                .build(source.getReferenceNumber()))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
+        NotificationAggregate copy = copyAndRead(source);
 
         assertThat(copy).isNotNull();
         assertThat(copy.getNotification().getPlaceOfOrigin()).isEqualTo(NotificationTestData.placesOfOrigin().getFirst());
@@ -2229,23 +2227,10 @@ class NotificationIT extends IntegrationBase {
     @Test
     void copy_shouldWriteNotificationCreatedEvent_forNewNotification() {
         // Given — source notification
-        NotificationAggregate source = webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(createNotificationDto("GB", "Live cattle")))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult()
-            .getResponseBody();
+        NotificationAggregate source = createAndRead(createNotificationDto("GB", "Live cattle"));
 
         // When — copy it
-        NotificationAggregate copy = webClient("NoAuth")
-            .post()
-            .uri(uriBuilder -> uriBuilder
-                .path(NOTIFICATION_ENDPOINT + "/{ref}/copy")
-                .queryParam("concurrencyToken", source.getConcurrencyToken())
-                .build(source.getReferenceNumber()))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult()
-            .getResponseBody();
+        NotificationAggregate copy = copyAndRead(source);
 
         // Then — NOTIFICATION_CREATED written for the new notification (not for the source)
         List<OutboxEvent> allEvents = outboxEventRepository.findAll();
