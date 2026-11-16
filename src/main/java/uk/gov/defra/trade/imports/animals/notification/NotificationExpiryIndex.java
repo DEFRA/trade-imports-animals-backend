@@ -13,10 +13,6 @@ import org.springframework.stereotype.Component;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.configuration.NotificationTtlConfig;
 
-/**
- * Once the application is ready, ensures the Mongo TTL indexes on {@code expireAt} exist. Exists
- * only when {@code notification.ttl.expiry.enabled=true}, and touches no index in prod.
- */
 @Component
 @Slf4j
 @RequiredArgsConstructor
