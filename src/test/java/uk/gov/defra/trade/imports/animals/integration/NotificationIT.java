@@ -865,7 +865,6 @@ class NotificationIT extends IntegrationBase {
         // When — submit the notification
         NotificationAggregate submitted = submitAndRead(referenceNumber);
 
-        // Then — status is SUBMITTED_ACTION_REQUIRED
         assertThat(submitted).isNotNull();
         assertThat(submitted.getReferenceNumber()).isEqualTo(referenceNumber);
         assertThat(submitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
@@ -981,8 +980,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submit_shouldIgnoreALegacyAddressIdOnAStoredParty() {
-        // Given — a draft written before parties became literals still carries addressId
+    void submit_shouldDropAddressId_whenStoredPartyHoldsUnknownAddressIdField() {
         String referenceNumber = createNotificationWithLiteralConsignor();
         mongoTemplate.getCollection("notification").updateOne(
             Filters.eq("referenceNumber", referenceNumber),
@@ -999,7 +997,6 @@ class NotificationIT extends IntegrationBase {
         assertThat(outboxConsignorParty(submittedOutboxEvent()))
             .containsEntry("name", "Astra Rosales");
 
-        // And — the submit re-save sheds the legacy field from the stored document
         Document rawNotification = mongoTemplate.getCollection("notification")
             .find(Filters.eq("referenceNumber", referenceNumber)).first()
             .get("notification", Document.class);
@@ -1007,8 +1004,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void putAndSubmit_shouldSucceedAndShedTypeOfCommodity_whenStoredCommodityStillHoldsIt() {
-        // Given — a draft written before the commodity type was removed still carries typeOfCommodity
+    void putAndSubmit_shouldRecordSubmittedActionRequiredAndShedTypeOfCommodity_whenStoredCommodityHoldsIt() {
         String referenceNumber = createDraftReference(createNotificationDto("CH", "Live cattle"));
         mongoTemplate.getCollection("notification").updateOne(
             Filters.eq("referenceNumber", referenceNumber),
@@ -1030,7 +1026,6 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk();
         submitAs(referenceNumber, DEFAULT_TRADER_ORG_ID);
 
-        // Then — the notification is submitted and the outbound event never carries the field
         assertThat(NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow().getStatus())
             .isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
@@ -1305,7 +1300,9 @@ class NotificationIT extends IntegrationBase {
         NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         assertThat(stored.getOutstandingItems()).containsExactly(OutstandingItem.HEALTH_CERTIFICATE);
-        assertThat(submittedOutboxEvent().getData().toString()).contains("SUBMITTED_ACTION_REQUIRED");
+        Map<String, Object> exchangedDocument =
+            (Map<String, Object>) submittedOutboxEvent().getData().get("exchangedDocument");
+        assertThat(exchangedDocument.get("notificationStatusCode")).isEqualTo("SUBMITTED_ACTION_REQUIRED");
     }
 
     @Test

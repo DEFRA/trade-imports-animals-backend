@@ -24,8 +24,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
@@ -46,13 +48,17 @@ class OutboxServiceTest {
     @Mock
     private AccompanyingDocumentRepository accompanyingDocumentRepository;
 
+    @Mock
+    private UploadSessionRepository uploadSessionRepository;
+
     private OutboxService outboxService;
 
     @BeforeEach
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         outboxService = new OutboxService(
-            outboxEventRepository, objectMapper, new GbnAgEventDataMapper(), accompanyingDocumentRepository);
+            outboxEventRepository, objectMapper, new GbnAgEventDataMapper(),
+            new DocumentService(accompanyingDocumentRepository, uploadSessionRepository));
     }
 
     private NotificationAggregate aggregateFor(String referenceNumber, NotificationStatus status) {

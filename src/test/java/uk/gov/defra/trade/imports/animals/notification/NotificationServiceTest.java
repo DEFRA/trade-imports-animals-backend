@@ -57,6 +57,9 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Sort.Direction;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
@@ -87,6 +90,11 @@ class NotificationServiceTest {
     private AuditRepository auditRepository;
 
     @Mock
+    private AccompanyingDocumentRepository accompanyingDocumentRepository;
+
+    @Mock
+    private UploadSessionRepository uploadSessionRepository;
+
     private DocumentService documentService;
 
     @Mock
@@ -105,6 +113,7 @@ class NotificationServiceTest {
 
     @BeforeEach
     void setUp() {
+        documentService = new DocumentService(accompanyingDocumentRepository, uploadSessionRepository);
         notificationService = buildService(new NotificationTtlConfig(null, "local", sweep(false)));
     }
 
@@ -160,7 +169,9 @@ class NotificationServiceTest {
     }
 
     private void withClaimedCleanDocument(String referenceNumber, DocumentType type) {
-        when(documentService.findClaimedScannedCleanByNotificationRef(referenceNumber))
+        when(accompanyingDocumentRepository
+            .findAllByNotificationReferenceNumberAndScanStatusAndClaimedIsTrueOrderByCreatedAsc(
+                referenceNumber, ScanStatus.COMPLETE))
             .thenReturn(List.of(AccompanyingDocument.builder().documentType(type).build()));
     }
 
@@ -985,7 +996,7 @@ class NotificationServiceTest {
             verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
 
             // And cascade document deletion is triggered for the same refs
-            verify(documentService).deleteForNotificationRefs(List.of(ref1, ref2));
+            verify(accompanyingDocumentRepository).deleteAllByNotificationReferenceNumberIn(List.of(ref1, ref2));
 
             // And an audit record is saved with SUCCESS
             ArgumentCaptor<Audit> auditCaptor = ArgumentCaptor.forClass(Audit.class);
@@ -1079,10 +1090,10 @@ class NotificationServiceTest {
                 new AuditContext(TEST_TRACE_ID, TEST_USER_ID));
 
             // Then
-            InOrder inOrder = inOrder(notificationRepository, documentService);
+            InOrder inOrder = inOrder(notificationRepository, accompanyingDocumentRepository);
             inOrder.verify(notificationRepository)
                 .deleteAllByReferenceNumberIn(List.of(referenceNumber));
-            inOrder.verify(documentService).deleteForNotificationRefs(List.of(referenceNumber));
+            inOrder.verify(accompanyingDocumentRepository).deleteAllByNotificationReferenceNumberIn(List.of(referenceNumber));
         }
     }
 
@@ -1147,9 +1158,9 @@ class NotificationServiceTest {
             int deleted = notificationService.deleteExpired(10);
 
             assertThat(deleted).isEqualTo(2);
-            InOrder inOrder = inOrder(notificationRepository, documentService);
+            InOrder inOrder = inOrder(notificationRepository, accompanyingDocumentRepository);
             inOrder.verify(notificationRepository).deleteAllByReferenceNumberIn(List.of(ref1, ref2));
-            inOrder.verify(documentService).deleteForNotificationRefs(List.of(ref1, ref2));
+            inOrder.verify(accompanyingDocumentRepository).deleteAllByNotificationReferenceNumberIn(List.of(ref1, ref2));
             verify(auditRepository, never()).save(any(Audit.class));
         }
 
@@ -1162,7 +1173,7 @@ class NotificationServiceTest {
             assertThat(notificationService.deleteExpired(10)).isZero();
 
             verify(notificationRepository, never()).deleteAllByReferenceNumberIn(anyList());
-            verify(documentService, never()).deleteForNotificationRefs(anyList());
+            verify(accompanyingDocumentRepository, never()).deleteAllByNotificationReferenceNumberIn(anyList());
         }
 
         @Test
@@ -2359,6 +2370,22 @@ class NotificationServiceTest {
 
             NotificationAggregate result = notificationService.replace(
                 REF, putOf(origin("ORIGINAL")).build(), "trace", null, ORG_ID);
+
+            assertThat(result.getAnswersDifferFromSubmitted()).isFalse();
+        }
+
+        @Test
+        void replace_shouldKeepTheReviewHeadingAsReviewYourNotification_whenAnAmendmentHasNoSubmittedSnapshot() {
+            NotificationAggregate amendWithoutSnapshot = NotificationAggregate.builder()
+                .referenceNumber(REF)
+                .status(AMEND)
+                .notification(Notification.builder().origin(origin("ORIGINAL")).build())
+                .build();
+            when(notificationRepository.findByReferenceNumberAndOrganisationId(REF, ORG_ID))
+                .thenReturn(Optional.of(amendWithoutSnapshot));
+
+            NotificationAggregate result = notificationService.replace(
+                REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
 
             assertThat(result.getAnswersDifferFromSubmitted()).isFalse();
         }

@@ -537,6 +537,8 @@ public class NotificationService {
     private boolean answersDifferFromSubmitted(NotificationAggregate notificationAggregate) {
         Notification submittedNotification = notificationAggregate.getPreAmendNotification();
         if (submittedNotification == null) {
+            log.warn("Amendment {} has no submitted snapshot, review shows it as unchanged",
+                notificationAggregate.getReferenceNumber());
             return false;
         }
         return !notificationContentMapper.deepClone(submittedNotification)

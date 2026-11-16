@@ -16,8 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
@@ -46,7 +45,7 @@ public class OutboxService {
     private final OutboxEventRepository outboxEventRepository;
     private final ObjectMapper objectMapper;
     private final GbnAgEventDataMapper gbnAgEventDataMapper;
-    private final AccompanyingDocumentRepository accompanyingDocumentRepository;
+    private final DocumentService documentService;
 
     public void appendEvent(NotificationAggregate notificationAggregate, OutboxEventType eventType, String correlationId, Actor actor) {
         String aggregateId = buildAggregateId(notificationAggregate.getReferenceNumber());
@@ -79,9 +78,8 @@ public class OutboxService {
 
         Integer versionId = computeVersionId(aggregateId, eventType);
 
-        List<AccompanyingDocument> claimedScannedDocuments = accompanyingDocumentRepository
-            .findAllByNotificationReferenceNumberAndScanStatusAndClaimedIsTrueOrderByCreatedAsc(
-                notificationAggregate.getReferenceNumber(), ScanStatus.COMPLETE);
+        List<AccompanyingDocument> claimedScannedDocuments = documentService
+            .findClaimedScannedCleanByNotificationRef(notificationAggregate.getReferenceNumber());
 
         Map<String, Object> data = objectMapper.convertValue(
             gbnAgEventDataMapper.toGbnAgEventData(notificationAggregate, versionId, claimedScannedDocuments),
