@@ -1,8 +1,10 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -13,12 +15,12 @@ import uk.gov.defra.trade.imports.animals.cdp.uploader.CdpScanResultPayload;
 import uk.gov.defra.trade.imports.animals.exceptions.BadRequestException;
 import uk.gov.defra.trade.imports.animals.exceptions.ConflictException;
 import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
+import uk.gov.defra.trade.imports.animals.notification.NotificationExpiry;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 
 /**
  * Business logic for accompanying documents: recording an upload session, taking the document that
  * comes through it on, recording the scan result, and reading or removing what was stored.
- *
- * <p>Why a session and a document are separate records is in {@code docs/design-notes.md}.
  */
 @Service
 @Slf4j
@@ -26,65 +28,57 @@ public class DocumentService {
 
   private final AccompanyingDocumentRepository accompanyingDocumentRepository;
   private final UploadSessionRepository uploadSessionRepository;
+  private final NotificationRepository notificationRepository;
 
   public DocumentService(
       AccompanyingDocumentRepository accompanyingDocumentRepository,
-      UploadSessionRepository uploadSessionRepository) {
+      UploadSessionRepository uploadSessionRepository,
+      NotificationRepository notificationRepository) {
     this.accompanyingDocumentRepository = accompanyingDocumentRepository;
     this.uploadSessionRepository = uploadSessionRepository;
+    this.notificationRepository = notificationRepository;
   }
 
   /**
-   * Records an upload session the caller has opened with cdp-uploader, so that whatever arrives
-   * through it can be matched to its notification. No document is written here: a session is opened
-   * every time the upload page is painted, and most are never uploaded through.
+   * Records an upload session for a notification, which may already hold others. No document is
+   * written.
    *
-   * <p>Several open sessions per notification are deliberately allowed — a trader may start a
-   * second document while the first is still being checked.
-   *
-   * @param notificationRef the parent notification reference number
-   * @param request         the upload session's identifiers
+   * @param notificationReferenceNumber the parent notification reference number
+   * @param request the upload session's identifiers
    * @return the recorded session
    * @throws ConflictException if either identifier is already recorded
    */
-  public UploadSession registerUpload(String notificationRef, RegisterUploadRequest request) {
+  public UploadSession registerUpload(
+      String notificationReferenceNumber, RegisterUploadRequest request) {
     UploadSession session = UploadSession.builder()
-        .notificationReferenceNumber(notificationRef)
+        .notificationReferenceNumber(notificationReferenceNumber)
         .uploadId(request.uploadId())
         .correlationId(request.correlationId())
         .build();
 
-    return saveOrThrowOnDuplicate(session, notificationRef);
+    return saveSession(session);
   }
 
   /**
-   * Returns the upload session a notification opened under the given correlation handle, which is
-   * how the uploading journey recovers the session it opened when the browser comes back to it.
+   * Returns the upload session a notification opened under the given correlationId.
    *
-   * <p>Scoped to the notification deliberately: the handle alone must not be enough to reach a
-   * session opened by someone else's notification.
-   *
-   * @param notificationRef the parent notification reference number
-   * @param correlationId   the handle the session was opened under
+   * @param notificationReferenceNumber the parent notification reference number
+   * @param correlationId the correlationId the session was opened under
    * @return the session
-   * @throws NotFoundException if that notification has no session under the handle
+   * @throws NotFoundException if that notification has no session under the correlationId
    */
-  public UploadSession findSession(String notificationRef, String correlationId) {
+  public UploadSession findSession(String notificationReferenceNumber, String correlationId) {
     return uploadSessionRepository
-        .findByNotificationReferenceNumberAndCorrelationId(notificationRef, correlationId)
+        .findByNotificationReferenceNumberAndCorrelationId(
+            notificationReferenceNumber, correlationId)
         .orElseThrow(() -> new NotFoundException(
-            "No upload session found for notification " + notificationRef
+            "No upload session found for notification " + notificationReferenceNumber
                 + " with correlationId: " + correlationId));
   }
 
   /**
-   * Takes a trader's validated answers on as the notification's document, which is the point at
-   * which a document is known to exist. Only claimed documents are published on a notification's
-   * events, so a file the trader walked away from never reaches one.
-   *
-   * <p>The scan callback may land first, so the document is written where one is already waiting
-   * and created where it is not. Claiming twice replaces the details rather than adding a second
-   * document.
+   * Writes the given details onto the session's document and marks it claimed, creating the
+   * document when none exists yet. Claiming again replaces the details.
    *
    * @param uploadId the upload session identifier
    * @param request  the document details the trader gave
@@ -111,17 +105,15 @@ public class DocumentService {
   }
 
   /**
-   * Records a cdp-uploader scan result against the document the session opened under
-   * {@code metadata.correlationId}, creating the document when neither the claim nor an earlier
-   * callback has written it yet.
+   * Records a scan result against the document of the session opened under
+   * {@code metadata.correlationId}, creating the document when none exists yet.
    *
-   * @param uploadId the upload session identifier from the callback path, used only in logs
-   * @param payload  the callback payload
+   * @param payload the callback payload
    * @throws BadRequestException if the payload metadata does not include a correlationId
    * @throws NotFoundException   if no session was opened under that correlationId
    */
   @Transactional
-  public void handleScanResult(String uploadId, CdpScanResultPayload payload) {
+  public void handleScanResult(CdpScanResultPayload payload) {
     String correlationId = extractCorrelationId(payload);
     UploadSession session = uploadSessionRepository.findByCorrelationId(correlationId)
         .orElseThrow(() -> new NotFoundException(
@@ -143,8 +135,8 @@ public class DocumentService {
   }
 
   /**
-   * Deletes the accompanying document with the given upload ID, and the session it was uploaded
-   * through, so a scan result arriving afterwards cannot bring the document back.
+   * Deletes the accompanying document with the given upload ID and the session it was uploaded
+   * through.
    *
    * @param uploadId the upload session identifier
    * @throws NotFoundException if not found
@@ -158,26 +150,32 @@ public class DocumentService {
   }
 
   /**
-   * Returns all accompanying documents for the given notification reference.
+   * Returns all accompanying documents for the given notification reference number.
    *
-   * @param ref the notification reference number
+   * @param notificationReferenceNumber the notification reference number
    * @return list of documents, possibly empty
    */
-  public List<AccompanyingDocument> findByNotificationRef(String ref) {
-    return accompanyingDocumentRepository.findAllByNotificationReferenceNumber(ref);
+  public List<AccompanyingDocument> findByNotificationReferenceNumber(
+      String notificationReferenceNumber) {
+    return accompanyingDocumentRepository
+        .findAllByNotificationReferenceNumber(notificationReferenceNumber);
   }
 
   /**
-   * Deletes all accompanying documents belonging to the given notification reference numbers.
-   * Called as part of cascade deletion when notifications are removed.
+   * Deletes all accompanying documents and upload sessions belonging to the given notification
+   * reference numbers.
    *
-   * @param referenceNumbers the parent notification reference numbers whose documents should be deleted
+   * @param notificationReferenceNumbers the parent notification reference numbers whose documents
+   *     and sessions should be deleted
    */
-  public void deleteForNotificationRefs(List<String> referenceNumbers) {
-    Objects.requireNonNull(referenceNumbers, "referenceNumbers must not be null");
-    log.info("Cascade deleting accompanying documents for {} notification(s)", referenceNumbers.size());
-    accompanyingDocumentRepository.deleteAllByNotificationReferenceNumberIn(referenceNumbers);
-    uploadSessionRepository.deleteAllByNotificationReferenceNumberIn(referenceNumbers);
+  public void deleteForNotificationReferenceNumbers(List<String> notificationReferenceNumbers) {
+    Objects.requireNonNull(
+        notificationReferenceNumbers, "notificationReferenceNumbers must not be null");
+    log.info("Deleting accompanying documents and upload sessions for {} notification(s)",
+        notificationReferenceNumbers.size());
+    accompanyingDocumentRepository
+        .deleteAllByNotificationReferenceNumberIn(notificationReferenceNumbers);
+    uploadSessionRepository.deleteAllByNotificationReferenceNumberIn(notificationReferenceNumbers);
   }
 
   /**
@@ -193,7 +191,7 @@ public class DocumentService {
             () -> new NotFoundException("No accompanying document found with uploadId: " + uploadId));
   }
 
-  public String notificationRefForUploadId(String uploadId) {
+  public String notificationReferenceNumberForUploadId(String uploadId) {
     return uploadSessionRepository.findByUploadId(uploadId)
         .map(UploadSession::getNotificationReferenceNumber)
         .orElseThrow(() -> new NotFoundException(
@@ -201,16 +199,12 @@ public class DocumentService {
   }
 
   /**
-   * Returns the uploaded file for the given upload session.
-   *
-   * <p>The upload workflow enforces a one-file-per-session invariant, so {@code findFirst()} is
-   * safe here. This method does not enforce that invariant structurally — it relies on the workflow
-   * contract. Throws {@link NotFoundException} if the session has no file or if the file was
-   * rejected (s3Key is null).
+   * Returns the first uploaded file for the given upload session.
    *
    * @param uploadId the upload session identifier
    * @return the uploaded file record
-   * @throws NotFoundException if the document has no file or the file was rejected
+   * @throws NotFoundException if no document exists for the uploadId, it has no file, or its file
+   *     was rejected
    */
   public UploadedFile findFile(String uploadId) {
     AccompanyingDocument document = findByUploadId(uploadId);
@@ -226,11 +220,6 @@ public class DocumentService {
     return file;
   }
 
-  /**
-   * The document recorded for a session, creating an unsaved one when neither the claim nor the
-   * scan callback has written it yet. Both resolve the same document by the session's correlation
-   * handle, so the second to arrive adds to what the first wrote.
-   */
   private AccompanyingDocument existingOrNewDocumentFor(UploadSession session) {
     return accompanyingDocumentRepository
         .findByCorrelationId(session.getCorrelationId())
@@ -240,24 +229,36 @@ public class DocumentService {
             .correlationId(session.getCorrelationId())
             .scanStatus(ScanStatus.PENDING)
             .files(new ArrayList<>())
+            .expireAt(notificationExpireAt(session.getNotificationReferenceNumber()))
             .build());
   }
 
-  private UploadSession saveOrThrowOnDuplicate(UploadSession session, String notificationRef) {
+  private Instant notificationExpireAt(String notificationReferenceNumber) {
+    Optional<NotificationExpiry> expiry =
+        notificationRepository.findExpiryByReferenceNumber(notificationReferenceNumber);
+    if (expiry.isEmpty()) {
+      log.warn("Notification {} not found, so its new document has no expireAt",
+          notificationReferenceNumber);
+      return null;
+    }
+    return expiry.orElseThrow().getExpireAt();
+  }
+
+  private UploadSession saveSession(UploadSession session) {
     try {
       UploadSession saved = uploadSessionRepository.save(session);
       log.info(
           "Registered uploadId {} correlationId {} for notification {}",
           session.getUploadId(),
           session.getCorrelationId(),
-          notificationRef);
+          session.getNotificationReferenceNumber());
       return saved;
     } catch (DuplicateKeyException _) {
       log.warn(
           "Duplicate uploadId {} or correlationId {} for notification {}",
           session.getUploadId(),
           session.getCorrelationId(),
-          notificationRef);
+          session.getNotificationReferenceNumber());
       throw new ConflictException(
           "An upload session already exists for uploadId " + session.getUploadId()
               + " or correlationId " + session.getCorrelationId());
@@ -265,7 +266,7 @@ public class DocumentService {
   }
 
   private static String extractCorrelationId(CdpScanResultPayload payload) {
-    String correlationId = payload.metadata().get("correlationId");
+    String correlationId = payload.correlationId();
     if (correlationId == null || correlationId.isBlank()) {
       throw new BadRequestException(
           "Scan callback missing required correlationId in metadata");
@@ -283,10 +284,6 @@ public class DocumentService {
     return files;
   }
 
-  /**
-   * Fail-closed: treat a missing or non-zero rejected count as REJECTED to avoid silently
-   * accepting a file when cdp-uploader omits the field.
-   */
   private static ScanStatus resolveScanStatus(CdpScanResultPayload payload) {
     Integer rejectedCount = payload.numberOfRejectedFiles();
     return rejectedCount != null && rejectedCount == 0

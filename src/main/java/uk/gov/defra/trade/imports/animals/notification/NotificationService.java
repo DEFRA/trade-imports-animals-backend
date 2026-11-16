@@ -1,7 +1,7 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import java.time.Clock;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,7 +42,6 @@ public class NotificationService {
 
     private static final String CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER = "Cannot find notification with reference number: ";
     private static final Duration LOCK_AT_MOST_FOR = Duration.ofSeconds(10);
-    private static final int MAX_REF_RETRIES = 3;
     private static final int MAX_LOCK_RETRIES = 2;
 
     private final NotificationRepository notificationRepository;
@@ -54,6 +53,7 @@ public class NotificationService {
     private final NotificationContentMapper notificationContentMapper;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final NotificationTtlConfig ttlConfig;
+    private final Clock clock;
     private final Duration lockAtLeastFor;
     private final int listPageSize;
     private final int adminPageSize;
@@ -68,6 +68,7 @@ public class NotificationService {
         NotificationContentMapper notificationContentMapper,
         ReferenceNumberGenerator referenceNumberGenerator,
         NotificationTtlConfig ttlConfig,
+        Clock clock,
         @Value("${notification.submit.lock-at-least-for}") Duration lockAtLeastFor,
         @Value("${notification.list.page-size}") int listPageSize,
         @Value("${notification.admin.page-size}") int adminPageSize) {
@@ -80,6 +81,7 @@ public class NotificationService {
         this.notificationContentMapper = notificationContentMapper;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.ttlConfig = ttlConfig;
+        this.clock = clock;
         this.lockAtLeastFor = lockAtLeastFor;
         this.listPageSize = listPageSize;
         this.adminPageSize = adminPageSize;
@@ -90,16 +92,18 @@ public class NotificationService {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
             return createNotification(notificationDto, correlationId, actor, organisationId);
         } else {
-            return updateNotification(notificationDto, correlationId, actor, organisationId);
+            return replaceContent(
+                notificationDto.getReferenceNumber(), notificationDto, correlationId, actor, organisationId);
         }
     }
 
-    /**
-     * Replaces the content of a DRAFT or AMEND notification and emits a {@code NOTIFICATION_EDITED}
-     * outbox event.
-     */
     @Transactional
     public NotificationAggregate replace(String referenceNumber, NotificationDto dto,
+        String correlationId, Actor actor, String organisationId) {
+        return replaceContent(referenceNumber, dto, correlationId, actor, organisationId);
+    }
+
+    private NotificationAggregate replaceContent(String referenceNumber, NotificationDto dto,
         String correlationId, Actor actor, String organisationId) {
         NotificationAggregate notificationAggregate =
             requireTraderNotification(referenceNumber, organisationId);
@@ -112,8 +116,9 @@ public class NotificationService {
             throw new BadRequestException("concurrencyToken is required to replace a notification");
         }
         notificationAggregate.setConcurrencyToken(dto.getConcurrencyToken());
+        log.info("Updating notification {}", referenceNumber);
         setNotificationDetails(dto, notificationAggregate);
-        return writeWithOutbox(notificationAggregate, referenceNumber, correlationId,
+        return saveWithStatusAndOutboxEvent(notificationAggregate, referenceNumber, correlationId,
             notificationAggregate.getStatus(), OutboxEventType.NOTIFICATION_EDITED, actor);
     }
 
@@ -156,22 +161,23 @@ public class NotificationService {
         throw new NotFoundException(CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber);
     }
 
-    public NotificationPageResponse findAll(int page, String sort, String referenceNumber, String organisationId) {
+    public NotificationPageResponse findDashboardPage(
+        int page, String sort, String referenceNumber, String organisationId) {
         List<NotificationStatus> dashboardStatuses = List.of(
             NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
         var pageable = PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort));
 
-        String trimmedReference = StringUtils.trimToNull(referenceNumber);
-        if (trimmedReference != null) {
-            log.debug("Fetching notification by reference {} for dashboard", trimmedReference);
+        String trimmedReferenceNumber = StringUtils.trimToNull(referenceNumber);
+        if (trimmedReferenceNumber != null) {
+            log.debug("Fetching notification by reference {} for dashboard", trimmedReferenceNumber);
             Page<NotificationView> matched = notificationRepository
                 .findViewByReferenceNumberAndStatusInAndOrganisationId(
-                    trimmedReference, dashboardStatuses, organisationId)
+                    trimmedReferenceNumber, dashboardStatuses, organisationId)
                 .<Page<NotificationView>>map(notification ->
                     new PageImpl<>(List.of(notification), pageable, 1))
                 .orElseGet(() -> Page.empty(pageable));
             log.debug("Found {} notifications for reference {}", matched.getNumberOfElements(),
-                trimmedReference);
+                trimmedReferenceNumber);
             return NotificationPageResponse.from(matched);
         }
 
@@ -203,7 +209,7 @@ public class NotificationService {
             ? OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED
             : OutboxEventType.NOTIFICATION_SUBMITTED;
 
-        return writeWithOutbox(
+        return saveWithStatusAndOutboxEvent(
             notificationAggregate,
             referenceNumber,
             correlationId,
@@ -232,7 +238,7 @@ public class NotificationService {
         }
         notificationAggregate.setPreAmendFulfilments(deepCopyFulfilments(currentFulfilments));
 
-        return writeWithOutbox(
+        return saveWithStatusAndOutboxEvent(
             notificationAggregate,
             referenceNumber,
             correlationId,
@@ -263,7 +269,7 @@ public class NotificationService {
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
         notificationAggregate.setPreAmendFulfilments(null);
         notificationAggregate.setPreAmendNotification(null);
-        return writeWithOutbox(
+        return saveWithStatusAndOutboxEvent(
             notificationAggregate,
             referenceNumber,
             correlationId,
@@ -272,7 +278,7 @@ public class NotificationService {
             actor);
     }
 
-    private NotificationAggregate writeWithOutbox(
+    private NotificationAggregate saveWithStatusAndOutboxEvent(
         NotificationAggregate notification,
         String referenceNumber,
         String correlationId,
@@ -281,20 +287,28 @@ public class NotificationService {
         Actor actor) {
         return executeWithOutboxLock(
             OutboxService.buildAggregateId(referenceNumber), correlationId, eventType.name(), () -> {
-                if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)
-                    && notification.getStatus() == NotificationStatus.AMEND) {
-                    notification.setPreAmendFulfilments(null);
-                    notification.setPreAmendNotification(null);
-                }
-                notification.setStatus(targetStatus);
-                notification.setUpdated(Instant.now());
                 if (OutboxEventType.SUBMISSION_EVENTS.contains(eventType)) {
-                    notification.setSubmittedAt(Instant.now());
+                    applySubmission(notification);
                 }
+                NotificationStatus previousStatus = notification.getStatus();
+                notification.setStatus(targetStatus);
+                notification.setUpdated(clock.instant());
                 NotificationAggregate saved = notificationRepository.save(notification);
                 outboxService.appendEvent(saved, eventType, correlationId, actor);
+                if (previousStatus != null && previousStatus != targetStatus) {
+                    log.info("Notification {} status changed from {} to {}",
+                        saved.getReferenceNumber(), previousStatus, targetStatus);
+                }
                 return saved;
             });
+    }
+
+    private void applySubmission(NotificationAggregate notification) {
+        if (notification.getStatus() == NotificationStatus.AMEND) {
+            notification.setPreAmendFulfilments(null);
+            notification.setPreAmendNotification(null);
+        }
+        notification.setSubmittedAt(clock.instant());
     }
 
     private <T> T executeWithOutboxLock(
@@ -317,7 +331,7 @@ public class NotificationService {
                 }
             }
             LockConfiguration lockConfig = new LockConfiguration(
-                Instant.now(), lockName, LOCK_AT_MOST_FOR, lockAtLeastFor);
+                clock.instant(), lockName, LOCK_AT_MOST_FOR, lockAtLeastFor);
             try {
                 LockingTaskExecutor.TaskResult<T> result =
                     lockingTaskExecutor.executeWithLock(task, lockConfig);
@@ -343,6 +357,7 @@ public class NotificationService {
         NotificationAggregate notificationAggregate =
             requireTraderNotification(referenceNumber, organisationId);
         if (notificationAggregate.getStatus() == NotificationStatus.DELETED) {
+            log.info("Notification {} is already DELETED, nothing changed", referenceNumber);
             return notificationAggregate;
         }
         if (notificationAggregate.getStatus() != NotificationStatus.DRAFT
@@ -354,7 +369,7 @@ public class NotificationService {
         OutboxEventType eventType = notificationAggregate.getStatus() == NotificationStatus.DRAFT
             ? OutboxEventType.NOTIFICATION_DELETED
             : OutboxEventType.NOTIFICATION_SUBMISSION_DELETED;
-        return writeWithOutbox(
+        return saveWithStatusAndOutboxEvent(
             notificationAggregate,
             referenceNumber,
             correlationId,
@@ -364,8 +379,8 @@ public class NotificationService {
     }
 
     public ReferenceNumberPageResponse findAllReferenceNumbers(int page) {
-        log.debug("Fetching notification reference numbers page {} (size {})", page, listPageSize);
-        Page<NotificationReferenceOnly> result = notificationRepository.findAllProjectedBy(
+        log.debug("Fetching notification reference numbers page {} (size {})", page, adminPageSize);
+        Page<NotificationReferenceOnly> result = notificationRepository.findAllReferencesBy(
             PageRequest.of(page, adminPageSize, Sort.by(Direction.DESC, "created")));
         log.debug("Found {} reference numbers on page {} of {}",
             result.getNumberOfElements(), result.getNumber() + 1, result.getTotalPages());
@@ -377,58 +392,32 @@ public class NotificationService {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return;
         }
-        List<NotificationReferenceOnly> found = notificationRepository.findAllByReferenceNumberIn(
+        List<NotificationReferenceOnly> found = notificationRepository.findAllReferencesByReferenceNumberIn(
             referenceNumbers);
-        Set<String> foundRefs = found.stream()
+        Set<String> foundReferenceNumbers = found.stream()
             .map(NotificationReferenceOnly::getReferenceNumber)
             .collect(Collectors.toSet());
         List<String> missing = referenceNumbers.stream()
-            .filter(ref -> !foundRefs.contains(ref))
+            .filter(referenceNumber -> !foundReferenceNumbers.contains(referenceNumber))
             .toList();
         if (!missing.isEmpty()) {
             createNotificationAuditRecord(referenceNumbers, auditContext, Result.FAILURE);
             throw new NotFoundException(
                 "Cannot find notifications with reference numbers: " + String.join(", ", missing));
         }
-        log.info("Deleting {} notifications", found.size());
+        log.info("Deleting {} notifications: {}", found.size(), referenceNumbers);
         deleteNotificationsAndDocuments(referenceNumbers);
         createNotificationAuditRecord(referenceNumbers, auditContext, Result.SUCCESS);
     }
 
-    /**
-     * Deletes up to {@code batchSize} notifications whose {@code expireAt} has passed, with their
-     * accompanying documents. Writes no audit record. Notifications with no {@code expireAt} are
-     * never selected.
-     *
-     * @param batchSize maximum number of notifications to remove in this run
-     * @return the number of notifications deleted
-     */
-    @Transactional
-    public int deleteExpired(int batchSize) {
-        List<NotificationReferenceOnly> due =
-            notificationRepository.findExpired(Instant.now(), PageRequest.of(0, batchSize));
-        if (due.isEmpty()) {
-            return 0;
-        }
-        List<String> referenceNumbers = due.stream()
-            .map(NotificationReferenceOnly::getReferenceNumber)
-            .toList();
-        log.info("Expiring {} notification(s)", referenceNumbers.size());
-        deleteNotificationsAndDocuments(referenceNumbers);
-        return referenceNumbers.size();
-    }
-
     private void deleteNotificationsAndDocuments(List<String> referenceNumbers) {
         notificationRepository.deleteAllByReferenceNumberIn(referenceNumbers);
-        documentService.deleteForNotificationRefs(referenceNumbers);
+        documentService.deleteForNotificationReferenceNumbers(referenceNumbers);
     }
 
     private void stampExpiry(NotificationAggregate notificationAggregate) {
-        Integer days = ttlConfig.days();
-        if (days == null || ttlConfig.isProd()) {
-            return;
-        }
-        notificationAggregate.setExpireAt(notificationAggregate.getCreated().plus(days, ChronoUnit.DAYS));
+        ttlConfig.daysToStamp().ifPresent(days ->
+            notificationAggregate.setExpireAt(notificationAggregate.getCreated().plus(days, ChronoUnit.DAYS)));
     }
 
     public void requireTraderAccess(String referenceNumber, String organisationId) {
@@ -447,15 +436,16 @@ public class NotificationService {
     private NotificationAggregate createNotification(
         NotificationDto dto, String correlationId, Actor actor, String organisationId) {
         NotificationAggregate notificationAggregate = new NotificationAggregate();
-        notificationAggregate.setCreated(Instant.now());
-        notificationAggregate.setStatus(NotificationStatus.DRAFT);
+        notificationAggregate.setCreated(clock.instant());
         notificationAggregate.setOrganisationId(organisationId);
         stampExpiry(notificationAggregate);
         setNotificationDetails(dto, notificationAggregate);
-        for (int attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
+        int maxAttempts = 3;
+        DuplicateKeyException lastCollision = null;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             notificationAggregate.setReferenceNumber(referenceNumberGenerator.generate());
             try {
-                NotificationAggregate saved = writeWithOutbox(
+                NotificationAggregate saved = saveWithStatusAndOutboxEvent(
                     notificationAggregate,
                     notificationAggregate.getReferenceNumber(),
                     correlationId,
@@ -464,31 +454,14 @@ public class NotificationService {
                     actor);
                 log.info("NotificationAggregate saved with reference number: {}", saved.getReferenceNumber());
                 return saved;
-            } catch (DuplicateKeyException _) {
-                log.warn("Reference number collision on persistence attempt {}/{}; retrying", attempt, MAX_REF_RETRIES);
+            } catch (DuplicateKeyException collision) {
+                log.warn("Reference number {} collided on persistence attempt {}/{}",
+                    notificationAggregate.getReferenceNumber(), attempt, maxAttempts, collision);
+                lastCollision = collision;
             }
         }
         throw new IllegalStateException(
-            "Failed to generate a unique reference number after " + MAX_REF_RETRIES + " attempts");
-    }
-
-    private NotificationAggregate updateNotification(
-        NotificationDto dto, String correlationId, Actor actor, String organisationId) {
-        String referenceNumber = dto.getReferenceNumber();
-        NotificationAggregate existing = requireTraderNotification(referenceNumber, organisationId);
-        if (existing.getStatus() != NotificationStatus.DRAFT
-            && existing.getStatus() != NotificationStatus.AMEND) {
-            throw new BadRequestException(
-                "Cannot save notification with status: " + existing.getStatus());
-        }
-        if (dto.getConcurrencyToken() == null) {
-            throw new BadRequestException("concurrencyToken is required to update a notification");
-        }
-        existing.setConcurrencyToken(dto.getConcurrencyToken());
-        log.info("Updating notification {}", referenceNumber);
-        setNotificationDetails(dto, existing);
-        return writeWithOutbox(existing, referenceNumber, correlationId, existing.getStatus(),
-            OutboxEventType.NOTIFICATION_EDITED, actor);
+            "Failed to generate a unique reference number after " + maxAttempts + " attempts", lastCollision);
     }
 
     private void setNotificationDetails(NotificationDto dto, NotificationAggregate notificationAggregate) {
@@ -535,7 +508,7 @@ public class NotificationService {
             .numberOfNotifications(referenceNumbers.size())
             .traceId(auditContext.traceId())
             .userId(auditContext.userId())
-            .timestamp(Instant.now())
+            .timestamp(clock.instant())
             .build();
 
         auditRepository.save(auditRecord);

@@ -22,7 +22,6 @@ import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.MongoTransactionManager;
 import org.springframework.data.mongodb.config.EnableMongoAuditing;
 import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
-import org.springframework.scheduling.annotation.EnableScheduling;
 import uk.gov.defra.trade.imports.animals.configuration.tls.TrustStoreConfiguration;
 
 /**
@@ -38,7 +37,6 @@ import uk.gov.defra.trade.imports.animals.configuration.tls.TrustStoreConfigurat
  */
 @Configuration
 @EnableMongoAuditing
-@EnableScheduling
 @Slf4j
 public class MongoConfig {
 
