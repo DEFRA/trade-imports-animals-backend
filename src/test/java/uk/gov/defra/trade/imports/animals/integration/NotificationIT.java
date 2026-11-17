@@ -1,7 +1,6 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.tuple;
 
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Updates;
@@ -858,7 +857,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submit_shouldTransitionStatusFromDraftToSubmittedActionRequired_whenNoItahcWasUploaded() {
+    void submit_shouldTransitionStatusFromDraftToSubmitted_whenNoItahcWasUploaded() {
         // Given — create a notification (starts as DRAFT)
         String referenceNumber = createDraftReference();
 
@@ -867,7 +866,7 @@ class NotificationIT extends IntegrationBase {
 
         assertThat(submitted).isNotNull();
         assertThat(submitted.getReferenceNumber()).isEqualTo(referenceNumber);
-        assertThat(submitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
+        assertThat(submitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(submitted.getUpdated()).isNotNull();
     }
 
@@ -992,7 +991,7 @@ class NotificationIT extends IntegrationBase {
         // Then — the read ignores the unknown field and the event carries the literal
         NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
-        assertThat(stored.getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
+        assertThat(stored.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(stored.getNotification().getConsignor()).isEqualTo(literalConsignor());
         assertThat(outboxConsignorParty(submittedOutboxEvent()))
             .containsEntry("name", "Astra Rosales");
@@ -1004,7 +1003,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void putAndSubmit_shouldRecordSubmittedActionRequiredAndShedTypeOfCommodity_whenStoredCommodityHoldsIt() {
+    void putAndSubmit_shouldRecordSubmittedAndShedTypeOfCommodity_whenStoredCommodityHoldsIt() {
         String referenceNumber = createDraftReference(createNotificationDto("CH", "Live cattle"));
         mongoTemplate.getCollection("notification").updateOne(
             Filters.eq("referenceNumber", referenceNumber),
@@ -1028,7 +1027,7 @@ class NotificationIT extends IntegrationBase {
 
         assertThat(NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow().getStatus())
-            .isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
+            .isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(submittedOutboxEvent().getData().toString()).doesNotContain("typeOfCommodity");
 
         // And — the re-save sheds the field from the stored document
@@ -1237,7 +1236,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(gbnAgIdentifier(event)).isEqualTo(referenceNumber);
         assertThat(event.getActor()).isNull();
         assertThat(event.getStatusChanges()).hasSize(2);
-        assertThat(event.getStatusChanges().getLast().getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
+        assertThat(event.getStatusChanges().getLast().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(event.getStatusChanges().getLast().getDateChanged()).isNotNull();
         assertThat(event.getStatusChanges().getLast().getActor()).isNull();
         // No accompanying documents: the key is omitted rather than sent as an empty array
@@ -1285,7 +1284,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submit_shouldRecordSubmittedActionRequired_whenTheItahcIsUnclaimedStillScanningOrRejected() {
+    void submit_shouldRecordSubmitted_whenTheItahcIsUnclaimedStillScanningOrRejected() {
         String referenceNumber = createDraftReference();
         saveUnclaimedCleanDocument(referenceNumber, "itahc-unclaimed",
             DocumentType.ITAHC, "ITAHC-1", LocalDate.parse("2026-09-01"));
@@ -1296,31 +1295,17 @@ class NotificationIT extends IntegrationBase {
 
         NotificationAggregate submitted = submitAndRead(referenceNumber);
 
-        assertThat(submitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
+        assertThat(submitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         assertThat(stored.getOutstandingItems()).containsExactly(OutstandingItem.HEALTH_CERTIFICATE);
         Map<String, Object> exchangedDocument =
             (Map<String, Object>) submittedOutboxEvent().getData().get("exchangedDocument");
-        assertThat(exchangedDocument.get("notificationStatusCode")).isEqualTo("SUBMITTED_ACTION_REQUIRED");
+        assertThat(exchangedDocument.get("notificationStatusCode")).isEqualTo("SUBMITTED");
     }
 
     @Test
-    void list_shouldIncludeASubmittedActionRequiredNotification() {
-        String referenceNumber = createDraftReference();
-        submitAndRead(referenceNumber);
-
-        assertThat(findAllNotificationsPage(1).content())
-            .extracting(NotificationView::getReferenceNumber, NotificationView::getStatus)
-            .contains(tuple(
-                referenceNumber, NotificationStatus.SUBMITTED_ACTION_REQUIRED));
-        assertThat(findAllNotificationsPage(1, null, referenceNumber).content())
-            .extracting(NotificationView::getReferenceNumber)
-            .containsExactly(referenceNumber);
-    }
-
-    @Test
-    void cancelAmend_shouldReturnToSubmittedActionRequiredWithTheOriginalSubmittedAt() {
+    void cancelAmend_shouldReturnToSubmittedWithTheOriginalSubmittedAt() {
         String referenceNumber = createAndSubmitNotificationWithFullContent();
         Instant submittedAt = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow().getSubmittedAt();
@@ -1333,7 +1318,7 @@ class NotificationIT extends IntegrationBase {
             .exchange().expectStatus().isOk()
             .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
 
-        assertThat(restored.getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
+        assertThat(restored.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(restored.getSubmittedAt()).isEqualTo(submittedAt);
     }
 
@@ -1486,7 +1471,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(event.getActor().getOnBehalfOfOrganisationId()).isNull();
 
         assertThat(event.getStatusChanges()).hasSize(2);
-        assertThat(event.getStatusChanges().getLast().getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
+        assertThat(event.getStatusChanges().getLast().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(event.getStatusChanges().getLast().getActor()).isEqualTo(event.getActor());
     }
 
@@ -1522,7 +1507,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(events).hasSize(3);
         OutboxEvent amendEvent = events.get(2);
         assertThat(amendEvent.getStatusChanges()).hasSize(3);
-        assertThat(amendEvent.getStatusChanges().get(1).getStatus()).isEqualTo(NotificationStatus.SUBMITTED_ACTION_REQUIRED);
+        assertThat(amendEvent.getStatusChanges().get(1).getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(amendEvent.getStatusChanges().get(1).getActor().getId()).isEqualTo("contact-sub-001");
         assertThat(amendEvent.getStatusChanges().get(2).getStatus()).isEqualTo(NotificationStatus.AMEND);
         assertThat(amendEvent.getStatusChanges().get(2).getActor().getId()).isEqualTo("contact-sub-002");

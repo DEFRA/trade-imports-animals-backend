@@ -17,11 +17,4 @@ public enum OutstandingItem {
             .anyMatch(document -> document.getDocumentType() == DocumentType.ITAHC);
         return hasItahc ? List.of() : List.of(HEALTH_CERTIFICATE);
     }
-
-    /** The submitted status a notification owing these items takes. */
-    public static NotificationStatus submittedStatusFor(List<OutstandingItem> outstandingItems) {
-        return outstandingItems == null || outstandingItems.isEmpty()
-            ? NotificationStatus.SUBMITTED
-            : NotificationStatus.SUBMITTED_ACTION_REQUIRED;
-    }
 }

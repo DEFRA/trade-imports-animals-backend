@@ -164,8 +164,7 @@ public class NotificationService {
     public NotificationPageResponse findDashboardPage(
         int page, String sort, String referenceNumber, String organisationId) {
         List<NotificationStatus> dashboardStatuses = List.of(
-            NotificationStatus.DRAFT, NotificationStatus.SUBMITTED,
-            NotificationStatus.SUBMITTED_ACTION_REQUIRED, NotificationStatus.AMEND);
+            NotificationStatus.DRAFT, NotificationStatus.SUBMITTED, NotificationStatus.AMEND);
         var pageable = PageRequest.of(page - 1, listPageSize, NotificationSort.toSort(sort));
 
         String trimmedReferenceNumber = StringUtils.trimToNull(referenceNumber);
@@ -212,14 +211,13 @@ public class NotificationService {
 
         List<OutstandingItem> outstandingItems = OutstandingItem.outstandingAmong(
             documentService.findClaimedScannedCleanByNotificationReferenceNumber(referenceNumber));
-        NotificationStatus recordedStatus = OutstandingItem.submittedStatusFor(outstandingItems);
         notificationAggregate.setOutstandingItems(outstandingItems);
 
         return saveWithStatusAndOutboxEvent(
             notificationAggregate,
             referenceNumber,
             correlationId,
-            recordedStatus,
+            NotificationStatus.SUBMITTED,
             eventType,
             actor);
     }
@@ -277,13 +275,11 @@ public class NotificationService {
         notificationAggregate.setPreAmendFulfilments(null);
         notificationAggregate.setPreAmendNotification(null);
         notificationAggregate.setAnswersDifferFromSubmitted(null);
-        NotificationStatus restoredStatus =
-            OutstandingItem.submittedStatusFor(notificationAggregate.getOutstandingItems());
         return saveWithStatusAndOutboxEvent(
             notificationAggregate,
             referenceNumber,
             correlationId,
-            restoredStatus,
+            NotificationStatus.SUBMITTED,
             OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED,
             actor);
     }
