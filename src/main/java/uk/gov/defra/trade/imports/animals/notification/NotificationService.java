@@ -480,7 +480,6 @@ public class NotificationService {
         notification.setDestination(dto.getDestination());
         notification.setCphNumber(dto.getCphNumber());
         notification.setTransport(dto.getTransport());
-        notification.setConsignment(dto.getConsignment());
         notification.setPurposeInInternalMarket(dto.getPurposeInInternalMarket());
         notification.setDestinationCountry(dto.getDestinationCountry());
         notification.setPortOfExit(dto.getPortOfExit());

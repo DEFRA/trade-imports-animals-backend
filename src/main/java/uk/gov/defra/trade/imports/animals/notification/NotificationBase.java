@@ -33,8 +33,6 @@ public abstract class NotificationBase {
 
     private ConsignmentParty destination;
 
-    private ConsignmentParty consignment;
-
     private String cphNumber;
 
     private Transport transport;

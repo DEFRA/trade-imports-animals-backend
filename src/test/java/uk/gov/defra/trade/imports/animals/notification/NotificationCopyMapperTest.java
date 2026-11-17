@@ -365,17 +365,6 @@ class NotificationCopyMapperTest {
         }
 
         @Test
-        void toCopyDto_shouldOmitConsignment() {
-            NotificationAggregate source = aggregateOf(Notification.builder()
-                .consignment(consignments().getFirst())
-                .build());
-
-            NotificationDto result = mapper.toCopyDto(source);
-
-            assertThat(result.getConsignment()).isNull();
-        }
-
-        @Test
         void toCopyDto_shouldOmitExitDate() {
             NotificationAggregate source = aggregateOf(Notification.builder()
                 .exitDate(LocalDate.parse("2026-12-20"))
