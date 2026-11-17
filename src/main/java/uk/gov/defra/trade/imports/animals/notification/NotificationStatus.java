@@ -1,9 +1,5 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
 public enum NotificationStatus {
-    DRAFT, SUBMITTED, AMEND, DELETED;
-
-    public boolean isSubmitted() {
-        return this == SUBMITTED;
-    }
+    DRAFT, SUBMITTED, AMEND, DELETED
 }

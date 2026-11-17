@@ -127,7 +127,7 @@ public class NotificationService {
         String correlationId, Actor actor, String organisationId) {
         NotificationAggregate source = requireTraderNotification(referenceNumber, organisationId);
         if (source.getStatus() != NotificationStatus.DRAFT
-            && !source.getStatus().isSubmitted()
+            && source.getStatus() != NotificationStatus.SUBMITTED
             && source.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException("Cannot copy notification with status: " + source.getStatus());
         }
@@ -228,7 +228,7 @@ public class NotificationService {
         NotificationAggregate notificationAggregate =
             requireTraderNotification(referenceNumber, organisationId);
 
-        if (!notificationAggregate.getStatus().isSubmitted()) {
+        if (notificationAggregate.getStatus() != NotificationStatus.SUBMITTED) {
             throw new BadRequestException(
                 "Cannot amend notification with status: " + notificationAggregate.getStatus());
         }
@@ -368,7 +368,7 @@ public class NotificationService {
             return notificationAggregate;
         }
         if (notificationAggregate.getStatus() != NotificationStatus.DRAFT
-            && !notificationAggregate.getStatus().isSubmitted()
+            && notificationAggregate.getStatus() != NotificationStatus.SUBMITTED
             && notificationAggregate.getStatus() != NotificationStatus.AMEND) {
             throw new BadRequestException(
                 "Cannot delete notification with status: " + notificationAggregate.getStatus());
@@ -502,7 +502,7 @@ public class NotificationService {
     private boolean answersDifferFromSubmitted(NotificationAggregate notificationAggregate) {
         Notification submittedNotification = notificationAggregate.getPreAmendNotification();
         if (submittedNotification == null) {
-            log.warn("Amendment {} has no submitted snapshot, review shows it as unchanged",
+            log.warn("Amendment {} has no submitted snapshot, answers reported as not differing",
                 notificationAggregate.getReferenceNumber());
             return false;
         }

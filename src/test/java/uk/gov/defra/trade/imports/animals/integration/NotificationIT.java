@@ -477,8 +477,6 @@ class NotificationIT extends IntegrationBase {
             .exchange()
             .expectStatus().isOk();
 
-        saveClaimedCleanDocument(submittedRef, "itahc-clean",
-            DocumentType.ITAHC, "ITAHC-1", LocalDate.parse("2026-09-01"));
         submit(submittedRef);
 
         // When — page-size=2 in test profile
@@ -1066,7 +1064,7 @@ class NotificationIT extends IntegrationBase {
     @Test
     void cancelAmend_shouldRestoreBaselineAndRevertStatusInMongo() {
         // Given — submitted notification reloaded from Mongo as the golden baseline
-        String referenceNumber = createAndSubmitNotificationWithFullContentAndItahc();
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
         NotificationAggregate submittedInMongo = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         assertThat(submittedInMongo.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
@@ -1122,7 +1120,7 @@ class NotificationIT extends IntegrationBase {
     @Test
     void cancelAmend_shouldReturn400_whenNotificationNotInAmendStatus() {
         // Given — submitted notification (not in AMEND)
-        String referenceNumber = createAndSubmitNotificationWithFullContentAndItahc();
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
 
         // When / Then
         webClient("NoAuth")
@@ -1160,7 +1158,7 @@ class NotificationIT extends IntegrationBase {
     @Test
     void submitFromAmend_shouldClearPreAmendSnapshot_andKeepEditedContent() {
         // Given — notification amended with edited content
-        String referenceNumber = createAndSubmitNotificationWithFullContentAndItahc();
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", referenceNumber)
@@ -1327,19 +1325,11 @@ class NotificationIT extends IntegrationBase {
     }
 
     private String createDraftReference(NotificationDto dto) {
-        return webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(dto))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult()
-            .getResponseBody().getReferenceNumber();
+        return createAndRead(dto).getReferenceNumber();
     }
 
     private NotificationAggregate createAndRead(NotificationDto dto) {
-        return webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT).bodyValue(SaveNotificationDto.of(dto))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
+        return createNotificationWith(webClient("NoAuth"), dto);
     }
 
     private NotificationAggregate copyAndRead(NotificationAggregate source) {
@@ -2599,16 +2589,6 @@ class NotificationIT extends IntegrationBase {
         return referenceNumber;
     }
 
-    private String createAndSubmitNotificationWithFullContentAndItahc() {
-        String referenceNumber = createDraftReference(sourceNotificationWithAllOperators());
-        saveClaimedCleanDocument(referenceNumber, "itahc-clean",
-            DocumentType.ITAHC, "ITAHC-1", LocalDate.parse("2026-09-01"));
-
-        submit(referenceNumber);
-
-        return referenceNumber;
-    }
-
     private NotificationDto createNotificationDto(String countryCode, String commodity) {
         Origin origin = Origin.builder().build();
         origin.setCountryCode(countryCode);
@@ -2646,16 +2626,15 @@ class NotificationIT extends IntegrationBase {
     }
 
     private String createNotificationAs(NotificationDto dto, String organisationId) {
-        return webClient("NoAuth", organisationId)
-            .post()
-            .uri(NOTIFICATION_ENDPOINT)
+        return createNotificationWith(webClient("NoAuth", organisationId), dto).getReferenceNumber();
+    }
+
+    private NotificationAggregate createNotificationWith(WebTestClient client, NotificationDto dto) {
+        return client
+            .post().uri(NOTIFICATION_ENDPOINT)
             .bodyValue(SaveNotificationDto.of(dto))
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(NotificationAggregate.class)
-            .returnResult()
-            .getResponseBody()
-            .getReferenceNumber();
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult().getResponseBody();
     }
 
     private OutboxEvent submittedOutboxEvent() {
