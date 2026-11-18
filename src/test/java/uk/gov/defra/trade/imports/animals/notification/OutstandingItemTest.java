@@ -10,17 +10,17 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 class OutstandingItemTest {
 
     @Test
-    void outstandingAmong_shouldOweTheHealthCertificate_whenThereAreNoDocuments() {
+    void outstandingAmong_shouldOweTheItahc_whenThereAreNoDocuments() {
         assertThat(OutstandingItem.outstandingAmong(List.of()))
-            .containsExactly(OutstandingItem.HEALTH_CERTIFICATE);
+            .containsExactly(OutstandingItem.ITAHC);
     }
 
     @Test
-    void outstandingAmong_shouldOweTheHealthCertificate_whenOnlyAVeterinaryCertificateWasUploaded() {
+    void outstandingAmong_shouldOweTheItahc_whenOnlyAVeterinaryCertificateWasUploaded() {
         List<AccompanyingDocument> documents = List.of(document(DocumentType.VETERINARY_HEALTH_CERTIFICATE));
 
         assertThat(OutstandingItem.outstandingAmong(documents))
-            .containsExactly(OutstandingItem.HEALTH_CERTIFICATE);
+            .containsExactly(OutstandingItem.ITAHC);
     }
 
     @Test

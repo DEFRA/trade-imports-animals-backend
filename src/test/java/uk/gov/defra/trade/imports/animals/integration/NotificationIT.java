@@ -1282,7 +1282,7 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submit_shouldRecordSubmitted_whenTheItahcIsUnclaimedStillScanningOrRejected() {
+    void submit_shouldRecordSubmittedWithTheItahcOutstanding_whenTheItahcIsUnclaimedStillScanningOrRejected() {
         String referenceNumber = createDraftReference();
         saveUnclaimedCleanDocument(referenceNumber, "itahc-unclaimed",
             DocumentType.ITAHC, "ITAHC-1", LocalDate.parse("2026-09-01"));
@@ -1296,7 +1296,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(submitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
-        assertThat(stored.getOutstandingItems()).containsExactly(OutstandingItem.HEALTH_CERTIFICATE);
+        assertThat(stored.getOutstandingItems()).containsExactly(OutstandingItem.ITAHC);
         Map<String, Object> exchangedDocument =
             (Map<String, Object>) submittedOutboxEvent().getData().get("exchangedDocument");
         assertThat(exchangedDocument.get("notificationStatusCode")).isEqualTo("SUBMITTED");

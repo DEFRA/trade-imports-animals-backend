@@ -1181,7 +1181,7 @@ class NotificationServiceTest {
     class SubmitNotification {
 
         @Test
-        void submitNotification_shouldSetStatusToSubmittedAndSave_whenAnItahcWasUploaded() {
+        void submitNotification_shouldRecordSubmittedWithNothingOutstanding_whenAnItahcWasUploaded() {
             String referenceNumber = "GBN-AG-26-WITITA";
             NotificationAggregate notificationAggregate = storedIn(referenceNumber, DRAFT);
             withClaimedCleanDocument(referenceNumber, DocumentType.ITAHC);
@@ -1208,7 +1208,7 @@ class NotificationServiceTest {
                 "trace-001", null, ORG_ID);
 
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
-            assertThat(result.getOutstandingItems()).containsExactly(OutstandingItem.HEALTH_CERTIFICATE);
+            assertThat(result.getOutstandingItems()).containsExactly(OutstandingItem.ITAHC);
             assertThat(result.getSubmittedAt()).isNotNull();
         }
 
@@ -1328,7 +1328,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void submitNotification_shouldSetStatusToSubmittedAndRecordTheHealthCertificateOutstanding_whenAmendHasNoHealthCertificate() {
+        void submitNotification_shouldSetStatusToSubmittedAndRecordTheItahcOutstanding_whenAmendHasNoItahc() {
             String referenceNumber = "GBN-AG-26-AMEND2";
             NotificationAggregate notificationAggregate = storedIn(referenceNumber, AMEND);
 
@@ -1336,7 +1336,7 @@ class NotificationServiceTest {
                 "trace-003", null, ORG_ID);
 
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
-            assertThat(result.getOutstandingItems()).containsExactly(OutstandingItem.HEALTH_CERTIFICATE);
+            assertThat(result.getOutstandingItems()).containsExactly(OutstandingItem.ITAHC);
             verify(notificationRepository).save(notificationAggregate);
             verify(outboxService).appendEvent(any(NotificationAggregate.class),
                 eq(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED), eq("trace-003"), eq(null));
@@ -1628,16 +1628,15 @@ class NotificationServiceTest {
         }
 
         @Test
-        void cancelAmendNotification_shouldRestoreSubmitted_whenTheLastSubmissionLeftTheHealthCertificateOutstanding() {
-            String referenceNumber = "GBN-AG-26-CAN002";
+        void cancelAmendNotification_shouldKeepTheOutstandingItemsOfTheLastSubmission() {
+            String referenceNumber = "GBN-AG-26-CAN004";
             NotificationAggregate notificationAggregate = storedIn(referenceNumber, AMEND);
-            notificationAggregate.setOutstandingItems(List.of(OutstandingItem.HEALTH_CERTIFICATE));
+            notificationAggregate.setOutstandingItems(List.of(OutstandingItem.ITAHC));
             notificationAggregate.setPreAmendNotification(Notification.builder().build());
 
             NotificationAggregate result = notificationService.cancelAmendNotification(referenceNumber, "trace", null, ORG_ID);
 
-            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
-            assertThat(result.getOutstandingItems()).containsExactly(OutstandingItem.HEALTH_CERTIFICATE);
+            assertThat(result.getOutstandingItems()).containsExactly(OutstandingItem.ITAHC);
         }
 
         @Test
