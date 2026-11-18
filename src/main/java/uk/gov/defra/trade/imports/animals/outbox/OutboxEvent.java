@@ -44,11 +44,8 @@ public class OutboxEvent {
     private Actor actor;
     private List<StatusChange> statusChanges;
 
-    /** Owning organisation on the notification aggregate, not the session actor. */
     private String organisationId;
 
-    /** Publish timestamp set before SNS publish. 
-     * Ignored from published event but stores the published timestamp */
     @JsonIgnore
     private Instant publishedAt;
 }
