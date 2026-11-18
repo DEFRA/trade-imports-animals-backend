@@ -249,13 +249,23 @@ class OutboxServiceTest {
         void appendEvent_shouldStampOwningOrganisation_fromAggregate() {
             NotificationAggregate notificationAggregate =
                 aggregateFor("GBN-AG-26-ORG001", NotificationStatus.SUBMITTED);
+            Actor actor = Actor.builder()
+                .id("contact-guid-acting")
+                .source("dynamics-contact")
+                .userType("B2C")
+                .displayName("Acting Agent")
+                .organisationId("org-acting-agent")
+                .build();
             stubNoPriorEvents("GBN-AG-26-ORG001");
             stubSaveEchoesItsArgument();
 
             outboxService.appendEvent(
-                notificationAggregate, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-org-1", null);
+                notificationAggregate, OutboxEventType.NOTIFICATION_SUBMITTED, "trace-org-1", actor);
 
-            assertThat(savedEvent().getOrganisationId()).isEqualTo("5900001");
+            OutboxEvent saved = savedEvent();
+            assertThat(saved.getOrganisationId())
+                .isEqualTo(notificationAggregate.getOrganisationId())
+                .isNotEqualTo(actor.getOrganisationId());
         }
 
         @Test
