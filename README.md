@@ -20,10 +20,10 @@ workspace stack in
 
 ```bash
 # from the workspace root
-./scripts/stack/run-stack.sh        # full stack from published images
-./scripts/stack/run-stack.sh -d     # built from local source under repos/
-./scripts/stack/run-stack.sh -e backend   # everything except this service (run it from your IDE)
-./scripts/stack/stop-stack.sh       # tear down and wipe volumes
+tim docker up             # full stack from published images
+tim docker dev            # built from local source under repos/
+tim docker up -e backend  # everything except this service (run it from your IDE)
+tim docker down           # tear down and wipe volumes
 ```
 
 To run only the infrastructure this service needs rather than the full stack,
@@ -31,11 +31,11 @@ limit it to the `database` and `infrastructure` profiles (MongoDB, Floci,
 Redis):
 
 ```bash
-./scripts/stack/run-stack.sh --profile database --profile infrastructure
+tim docker up --profile database --profile infrastructure
 ```
 
-After editing Java source in `-d` mode, pick the change up with
-`./scripts/stack/bounce-backend.sh`.
+In `-d` mode, edited Java source reloads on its own. After a `pom.xml` or
+dependency change, rebuild the backend with `tim docker bounce-backend`.
 
 #### Floci init script
 
