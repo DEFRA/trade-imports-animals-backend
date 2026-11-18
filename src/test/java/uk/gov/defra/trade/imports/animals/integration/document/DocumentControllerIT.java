@@ -7,6 +7,7 @@ import com.jayway.jsonpath.JsonPath;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
@@ -51,40 +52,16 @@ import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionDto;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
+import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
+import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 
-/**
- * Integration tests for the accompanying document upload flow.
- *
- * <p>Drives the full upload→scan→callback round-trip against a real cdp-uploader Testcontainer:
- * the test posts a multipart file to cdp-uploader; cdp-uploader stores it in the Floci-emulated
- * quarantine bucket; an S3 → SQS notification triggers cdp-uploader's mock virus scanner; the
- * scanner publishes a result to {@code cdp-clamav-results}; cdp-uploader's listener picks it up,
- * promotes the file to the consumer bucket (CLEAN) or marks it rejected (INFECTED), and POSTs the
- * scan-result callback back to this backend.
- *
- * <p>Mock scanner behaviour: the scanner reads the upload's stored {@code encodedfilename} S3
- * metadata and tests it against {@code MOCK_VIRUS_REGEX} (default {@code .*virus.*}). So an
- * upload named {@code virus.pdf} comes back as INFECTED, anything else as CLEAN.
- *
- * <p>Defensive / edge-case scan callbacks (missing correlationId, mixed file results, etc.) live
- * in {@link DocumentScanCallbackIT} — they exercise our handler in shapes the real cdp-uploader
- * wouldn't produce, so the direct-POST fixture pattern is the right tool there.
- *
- * <p>Infrastructure:
- * <ul>
- *   <li>MongoDB — real Testcontainer from {@link IntegrationBase}
- *   <li>cdp-uploader — real {@code defradigital/cdp-uploader} Testcontainer
- *   <li>Redis — real Testcontainer (required by cdp-uploader)
- *   <li>Floci — emulates S3 + SQS, with a quarantine→mock-clamav bucket notification wired up
- * </ul>
- */
 @Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
 class DocumentControllerIT extends IntegrationBase {
 
-    private static final String NOTIFICATION_REF = "GBN-AG-25-TC0001";
-    private static final String OTHER_NOTIFICATION_REF = "GBN-AG-26-OTHER0";
+    private static final String NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-25-TC0001";
+    private static final String OTHER_NOTIFICATION_REFERENCE_NUMBER = "GBN-AG-26-ANTHR1";
     private static final String OTHER_ORG_ID = "9999999";
     private static final String AWS_REGION = "eu-west-2";
 
@@ -171,16 +148,17 @@ class DocumentControllerIT extends IntegrationBase {
     private UploadSessionRepository uploadSessionRepository;
 
     @Autowired
-    private MongoTemplate mongoTemplate;
+    private NotificationRepository notificationRepository;
 
     @Autowired
-    private NotificationRepository notificationRepository;
+    private MongoTemplate mongoTemplate;
 
     @BeforeEach
     void setUpDocuments() {
         uploadSessionRepository.deleteAll();
         accompanyingDocumentRepository.deleteAll();
-        seedDraftNotificationOwnedBy(notificationRepository, NOTIFICATION_REF);
+        notificationRepository.deleteAll();
+        seedDraftNotificationOwnedBy(notificationRepository, NOTIFICATION_REFERENCE_NUMBER);
         assertThat(port).isEqualTo(BACKEND_PORT);
     }
 
@@ -193,7 +171,7 @@ class DocumentControllerIT extends IntegrationBase {
 
             EntityExchangeResult<UploadSessionDto> result = webClient("NoAuth")
                 .post()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(registerBody(session))
                 .exchange()
@@ -205,14 +183,14 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(responseBody).isNotNull();
             assertThat(responseBody.uploadId()).isEqualTo(session.uploadId());
             assertThat(responseBody.correlationId()).isEqualTo(session.correlationId());
-            assertThat(responseBody.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+            assertThat(responseBody.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REFERENCE_NUMBER);
 
             assertThat(result.getResponseHeaders().getFirst(HttpHeaders.LOCATION))
                 .endsWith("/document-uploads/" + session.uploadId());
 
             assertThat(uploadSessionRepository.findByUploadId(session.uploadId())).isPresent();
             assertThat(accompanyingDocumentRepository
-                .findAllByNotificationReferenceNumber(NOTIFICATION_REF)).isEmpty();
+                .findAllByNotificationReferenceNumber(NOTIFICATION_REFERENCE_NUMBER)).isEmpty();
         }
 
         @Test
@@ -221,7 +199,7 @@ class DocumentControllerIT extends IntegrationBase {
 
             webClient("NoAuth")
                 .post()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(registerBody(session))
                 .exchange()
@@ -233,12 +211,12 @@ class DocumentControllerIT extends IntegrationBase {
     class GetSessionByCorrelationId {
 
         @Test
-        void shouldReturnTheSessionByItsCorrelationHandle() {
+        void shouldReturnTheSessionByItsCorrelationId() {
             OpenedSession session = registeredSession();
 
             webClient("NoAuth")
                 .get()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-upload-sessions/"
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-upload-sessions/"
                     + session.correlationId())
                 .exchange()
                 .expectStatus().isOk()
@@ -247,13 +225,13 @@ class DocumentControllerIT extends IntegrationBase {
         }
 
         @Test
-        void shouldReturn404_whenTheHandleBelongsToAnotherNotification() {
+        void shouldReturn404_whenTheCorrelationIdBelongsToAnotherNotification() {
             OpenedSession session = registeredSession();
-            seedDraftNotificationOwnedBy(notificationRepository, OTHER_NOTIFICATION_REF);
+            seedDraftNotificationOwnedBy(notificationRepository, OTHER_NOTIFICATION_REFERENCE_NUMBER);
 
             webClient("NoAuth")
                 .get()
-                .uri("/notifications/" + OTHER_NOTIFICATION_REF + "/document-upload-sessions/"
+                .uri("/notifications/" + OTHER_NOTIFICATION_REFERENCE_NUMBER + "/document-upload-sessions/"
                     + session.correlationId())
                 .exchange()
                 .expectStatus().isNotFound();
@@ -269,7 +247,7 @@ class DocumentControllerIT extends IntegrationBase {
 
             webClient("NoAuth", OTHER_ORG_ID)
                 .post()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(registerBody(session))
                 .exchange()
@@ -284,7 +262,7 @@ class DocumentControllerIT extends IntegrationBase {
 
             webClient("NoAuth", OTHER_ORG_ID)
                 .get()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-upload-sessions/"
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-upload-sessions/"
                     + session.correlationId())
                 .exchange()
                 .expectStatus().isNotFound();
@@ -296,7 +274,7 @@ class DocumentControllerIT extends IntegrationBase {
 
             webClient("NoAuth", OTHER_ORG_ID)
                 .get()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
                 .exchange()
                 .expectStatus().isNotFound();
         }
@@ -323,10 +301,26 @@ class DocumentControllerIT extends IntegrationBase {
             AccompanyingDocument doc =
                 accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
             assertThat(doc.isClaimed()).isTrue();
-            assertThat(doc.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+            assertThat(doc.getNotificationReferenceNumber()).isEqualTo(NOTIFICATION_REFERENCE_NUMBER);
             assertThat(doc.getDocumentType()).isEqualTo(DocumentType.ITAHC);
             assertThat(doc.getDocumentReference()).isEqualTo("UKGB2026001234");
             assertThat(doc.getDateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
+        }
+
+        @Test
+        void shouldStoreTheDocumentWithItsNotificationsExpireAt() {
+            Instant expireAt = Instant.parse("2030-01-01T00:00:00Z");
+            NotificationAggregate notification = NotificationTestSupport
+                .findByReferenceNumber(mongoTemplate, NOTIFICATION_REFERENCE_NUMBER).orElseThrow();
+            notification.setExpireAt(expireAt);
+            notificationRepository.save(notification);
+            String uploadId = registeredUploadId();
+
+            claimUpload(uploadId);
+
+            AccompanyingDocument stored =
+                accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
+            assertThat(stored.getExpireAt()).isEqualTo(expireAt);
         }
 
         @Test
@@ -345,7 +339,7 @@ class DocumentControllerIT extends IntegrationBase {
     class CleanScan {
 
         @Test
-        void shouldEndUpAsCompleteViaRealScan() throws IOException {
+        void shouldEndUpAsCompleteWithItsFile_whenCdpUploaderReportsACleanScan() throws IOException {
             OpenedSession session = registeredSession();
             byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
@@ -369,7 +363,7 @@ class DocumentControllerIT extends IntegrationBase {
     class VirusScan {
 
         @Test
-        void shouldEndUpAsRejectedViaRealScan() throws IOException {
+        void shouldEndUpAsRejectedWithNoS3Key_whenCdpUploaderReportsAnInfectedScan() throws IOException {
             OpenedSession session = registeredSession();
             byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
 
@@ -402,7 +396,7 @@ class DocumentControllerIT extends IntegrationBase {
             awaitScanCallback(infectedSession.uploadId());
 
             assertThat(accompanyingDocumentRepository
-                .findAllByNotificationReferenceNumber(NOTIFICATION_REF)).hasSize(2);
+                .findAllByNotificationReferenceNumber(NOTIFICATION_REFERENCE_NUMBER)).hasSize(2);
 
             assertThat(accompanyingDocumentRepository
                 .findByCorrelationId(cleanSession.correlationId()))
@@ -422,6 +416,25 @@ class DocumentControllerIT extends IntegrationBase {
                     assertThat(doc.getScanStatus()).isEqualTo(ScanStatus.REJECTED);
                 });
         }
+
+        @Test
+        void shouldLeaveTheOtherSessionsStoredDocumentPendingWithNoFiles_whenOneSessionIsScanned()
+            throws IOException {
+            OpenedSession scannedSession = registeredSession();
+            OpenedSession otherSession = registeredSession();
+            claimUpload(otherSession.uploadId());
+            byte[] pdfBytes = loadFixtureAsBytes("fixtures/test-document.pdf");
+
+            uploadFile(scannedSession.uploadId(), pdfBytes, "clean.pdf", "application/pdf");
+
+            assertThat(awaitScanCallback(scannedSession.uploadId()).getScanStatus())
+                .isEqualTo(ScanStatus.COMPLETE);
+            AccompanyingDocument other = accompanyingDocumentRepository
+                .findByCorrelationId(otherSession.correlationId())
+                .orElseThrow();
+            assertThat(other.getScanStatus()).isEqualTo(ScanStatus.PENDING);
+            assertThat(other.getFiles()).isEmpty();
+        }
     }
 
     @Nested
@@ -434,7 +447,7 @@ class DocumentControllerIT extends IntegrationBase {
 
             EntityExchangeResult<DocumentListResponse> result = webClient("NoAuth")
                 .get()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody(DocumentListResponse.class)
@@ -445,17 +458,16 @@ class DocumentControllerIT extends IntegrationBase {
             assertThat(listResponse.items()).hasSize(1);
             AccompanyingDocumentDto item = listResponse.items().get(0);
             assertThat(item.uploadId()).isEqualTo(uploadId);
-            assertThat(item.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+            assertThat(item.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REFERENCE_NUMBER);
             assertThat(item.scanStatus()).isEqualTo(ScanStatus.PENDING);
             assertThat(item.id()).isNotNull();
             assertThat(item.documentType()).isEqualTo(DocumentType.ITAHC);
             assertThat(item.documentReference()).isEqualTo("UKGB2026001234");
             assertThat(item.dateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
 
-            // The typed read above would accept any shape Jackson can decode; this pins the wire.
             webClient("NoAuth")
                 .get()
-                .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+                .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
@@ -482,14 +494,14 @@ class DocumentControllerIT extends IntegrationBase {
             AccompanyingDocumentDto dto = result.getResponseBody();
             assertThat(dto).isNotNull();
             assertThat(dto.uploadId()).isEqualTo(uploadId);
-            assertThat(dto.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REF);
+            assertThat(dto.notificationReferenceNumber()).isEqualTo(NOTIFICATION_REFERENCE_NUMBER);
             assertThat(dto.scanStatus()).isEqualTo(ScanStatus.PENDING);
             assertThat(dto.id()).isNotNull();
             assertThat(dto.created()).isNotNull();
         }
 
         @Test
-        void shouldReturn404_whenTheSessionWasOnlyOpened() {
+        void shouldReturn404_whenTheRegisteredSessionHasNoDocument() {
             String uploadId = registeredUploadId();
 
             webClient("NoAuth")
@@ -612,8 +624,6 @@ class DocumentControllerIT extends IntegrationBase {
                 accompanyingDocumentRepository.findByUploadId(uploadId).orElseThrow();
             assertThat(doc.getDateOfIssue()).isEqualTo(LocalDate.parse("2026-01-15"));
 
-            // The raw document, not a repository round trip: a round trip would pass whether
-            // the field is stored as a string or as a BSON date.
             org.bson.Document stored = mongoTemplate.getCollection("accompanying_documents")
                 .find(new org.bson.Document("uploadId", uploadId))
                 .first();
@@ -668,8 +678,8 @@ class DocumentControllerIT extends IntegrationBase {
                   "s3Path": "%s",
                   "metadata": {"correlationId": "%s"}
                 }
-                """.formatted(NOTIFICATION_REF, callbackUrl,
-                    CdpUploaderTestSupport.DOCUMENTS_BUCKET, NOTIFICATION_REF, correlationId))
+                """.formatted(NOTIFICATION_REFERENCE_NUMBER, callbackUrl,
+                    CdpUploaderTestSupport.DOCUMENTS_BUCKET, NOTIFICATION_REFERENCE_NUMBER, correlationId))
             .exchange()
             .expectStatus().is2xxSuccessful()
             .expectBody().returnResult().getResponseBody();
@@ -684,7 +694,7 @@ class DocumentControllerIT extends IntegrationBase {
         OpenedSession session = openUploadSession();
         webClient("NoAuth")
             .post()
-            .uri("/notifications/" + NOTIFICATION_REF + "/document-uploads")
+            .uri("/notifications/" + NOTIFICATION_REFERENCE_NUMBER + "/document-uploads")
             .contentType(MediaType.APPLICATION_JSON)
             .bodyValue(registerBody(session))
             .exchange()

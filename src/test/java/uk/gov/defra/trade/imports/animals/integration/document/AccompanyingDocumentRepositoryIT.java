@@ -165,7 +165,7 @@ class AccompanyingDocumentRepositoryIT extends IntegrationBase {
    * the list when multiple reference numbers are provided.
    */
   @Test
-  void deleteAllByNotificationReferenceNumberIn_shouldDeleteAcrossMultipleRefs() {
+  void deleteAllByNotificationReferenceNumberIn_shouldDeleteAcrossMultipleReferenceNumbers() {
     // Arrange — correlationId is unique-indexed; populate distinct values per doc.
     AccompanyingDocument docE = AccompanyingDocument.builder()
         .uploadId("repo-test-del-E")

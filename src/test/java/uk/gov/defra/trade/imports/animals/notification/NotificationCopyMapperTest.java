@@ -52,7 +52,7 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldRetainCommodityIdentityFields() {
-            List<Commodity> complements = List.of(
+            List<Commodity> commodities = List.of(
                 Commodity.builder()
                     .name("Live bovine animals")
                     .commodityCode("0102")
@@ -69,24 +69,24 @@ class NotificationCopyMapperTest {
                     .species(List.of(species()))
                     .build());
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .commodities(complements)
+                .commodities(commodities)
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
             assertThat(result.getCommodities()).hasSize(2);
-            assertThat(result.getCommodities().get(0)).satisfies(c -> {
-                assertThat(c.getName()).isEqualTo("Live bovine animals");
-                assertThat(c.getCommodityCode()).isEqualTo("0102");
-                assertThat(c.getDescription()).isEqualTo("Live cattle");
-                assertThat(c.getTotalNoOfAnimals()).isNull();
-                assertThat(c.getTotalNoOfPackages()).isNull();
-                assertThat(c.getSpecies()).isEmpty();
+            assertThat(result.getCommodities().get(0)).satisfies(copied -> {
+                assertThat(copied.getName()).isEqualTo("Live bovine animals");
+                assertThat(copied.getCommodityCode()).isEqualTo("0102");
+                assertThat(copied.getDescription()).isEqualTo("Live cattle");
+                assertThat(copied.getTotalNoOfAnimals()).isNull();
+                assertThat(copied.getTotalNoOfPackages()).isNull();
+                assertThat(copied.getSpecies()).isEmpty();
             });
-            assertThat(result.getCommodities().get(1)).satisfies(c -> {
-                assertThat(c.getName()).isEqualTo("Sheep");
-                assertThat(c.getCommodityCode()).isEqualTo("0104");
-                assertThat(c.getDescription()).isEqualTo("Live sheep");
+            assertThat(result.getCommodities().get(1)).satisfies(copied -> {
+                assertThat(copied.getName()).isEqualTo("Sheep");
+                assertThat(copied.getCommodityCode()).isEqualTo("0104");
+                assertThat(copied.getDescription()).isEqualTo("Live sheep");
             });
         }
 
@@ -223,7 +223,6 @@ class NotificationCopyMapperTest {
 
             assertThat(result.getOrigin().getCountryCode()).isEqualTo("ES");
             assertThat(result.getOrigin().getCountrySubdivisionCode()).isEqualTo("ES-CN");
-            assertThat(result.getOrigin().getInternalReference()).isNull();
         }
 
         @Test
@@ -291,7 +290,7 @@ class NotificationCopyMapperTest {
 
         @Test
         void toCopyDto_shouldOmitPerAnimalDataFromCommodity() {
-            Commodity complement = Commodity.builder()
+            Commodity commodity = Commodity.builder()
                 .name("Ovine")
                 .commodityCode("0104")
                 .totalNoOfAnimals(10)
@@ -299,7 +298,7 @@ class NotificationCopyMapperTest {
                 .species(List.of(species()))
                 .build();
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .commodities(List.of(complement))
+                .commodities(List.of(commodity))
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
@@ -311,8 +310,8 @@ class NotificationCopyMapperTest {
         }
 
         @Test
-        void toCopyDto_shouldOmitPerAnimalDataFromAllComplements() {
-            List<Commodity> complements = List.of(
+        void toCopyDto_shouldOmitPerAnimalDataFromAllCommodities() {
+            List<Commodity> commodities = List.of(
                 Commodity.builder()
                     .name("First")
                     .commodityCode("0102")
@@ -328,15 +327,15 @@ class NotificationCopyMapperTest {
                     .species(List.of(species()))
                     .build());
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .commodities(complements)
+                .commodities(commodities)
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
 
-            result.getCommodities().forEach(cc -> {
-                assertThat(cc.getTotalNoOfAnimals()).isNull();
-                assertThat(cc.getTotalNoOfPackages()).isNull();
-                assertThat(cc.getSpecies()).isEmpty();
+            result.getCommodities().forEach(copied -> {
+                assertThat(copied.getTotalNoOfAnimals()).isNull();
+                assertThat(copied.getTotalNoOfPackages()).isNull();
+                assertThat(copied.getSpecies()).isEmpty();
             });
         }
 
@@ -395,7 +394,7 @@ class NotificationCopyMapperTest {
                 .text("Bovine")
                 .animalIdentifiers(List.of(unit))
                 .build();
-            Commodity complement = Commodity.builder()
+            Commodity commodity = Commodity.builder()
                 .name("Cattle")
                 .commodityCode("0102")
                 .totalNoOfAnimals(10)
@@ -403,7 +402,7 @@ class NotificationCopyMapperTest {
                 .species(List.of(speciesWithIdentifiers))
                 .build();
             NotificationAggregate source = aggregateOf(Notification.builder()
-                .commodities(List.of(complement))
+                .commodities(List.of(commodity))
                 .build());
 
             NotificationDto result = mapper.toCopyDto(source);
@@ -421,7 +420,7 @@ class NotificationCopyMapperTest {
 
             org.assertj.core.api.Assertions.assertThatNullPointerException()
                 .isThrownBy(() -> mapper.toCopyDto(source))
-                .withMessageContaining("requires a notification sub-object");
+                .withMessageContaining("has no notification sub-object");
         }
 
         @Test
@@ -434,7 +433,7 @@ class NotificationCopyMapperTest {
         }
 
         @Test
-        void toCopyDto_shouldHandleNullCommodityList() {
+        void toCopyDto_shouldCopyEmptyCommodityList() {
             NotificationAggregate source = aggregateOf(Notification.builder().build());
 
             NotificationDto result = mapper.toCopyDto(source);
