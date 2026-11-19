@@ -35,6 +35,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -64,12 +65,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Sort.Direction;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
@@ -217,13 +215,6 @@ class NotificationServiceTest {
 
         verify(lockProvider, times(3)).lock(any());
         verify(notificationRepository, never()).save(any());
-    }
-
-    private void withClaimedCleanDocument(String referenceNumber, DocumentType type) {
-        when(accompanyingDocumentRepository
-            .findAllByNotificationReferenceNumberAndScanStatusAndClaimedIsTrueOrderByCreatedAsc(
-                referenceNumber, ScanStatus.COMPLETE))
-            .thenReturn(List.of(AccompanyingDocument.builder().documentType(type).build()));
     }
 
     private NotificationService buildService(NotificationTtlConfig ttlConfig) {
@@ -862,21 +853,37 @@ class NotificationServiceTest {
     class FindFulfilmentsView {
 
         @Test
-        void findFulfilmentsView_shouldReturnProjection_whenNotificationExists() {
+        void findFulfilmentsView_shouldCarryTheStoredValues_whenNotificationExists() {
             String ref = "GBN-AG-26-FUL001";
-            NotificationFulfilmentsView view = mock(NotificationFulfilmentsView.class);
-            when(notificationRepository.findFulfilmentsViewByReferenceNumberAndOrganisationId(ref, ORG_ID))
-                .thenReturn(Optional.of(view));
+            Instant created = Instant.parse("2026-11-18T09:00:00Z");
+            Instant submittedAt = Instant.parse("2026-11-19T10:15:30Z");
+            List<Document> fulfilments = List.of(new Document("obligationId", ref));
+            when(notificationRepository.findFulfilmentFieldsByReferenceNumberAndOrganisationId(ref, ORG_ID))
+                .thenReturn(Optional.of(NotificationAggregate.builder()
+                    .referenceNumber(ref)
+                    .concurrencyToken(4L)
+                    .status(AMEND)
+                    .created(created)
+                    .submittedAt(submittedAt)
+                    .fulfilments(fulfilments)
+                    .answersDifferFromSubmitted(true)
+                    .build()));
 
             NotificationFulfilmentsView result = notificationService.findFulfilmentsView(ref, ORG_ID);
 
-            assertThat(result).isSameAs(view);
+            assertThat(result.getReferenceNumber()).isEqualTo(ref);
+            assertThat(result.getConcurrencyToken()).isEqualTo(4L);
+            assertThat(result.getStatus()).isEqualTo(AMEND);
+            assertThat(result.getCreated()).isEqualTo(created);
+            assertThat(result.getSubmittedAt()).isEqualTo(submittedAt);
+            assertThat(result.getFulfilments()).isEqualTo(fulfilments);
+            assertThat(result.isAnswersDifferFromSubmitted()).isTrue();
         }
 
         @Test
         void findFulfilmentsView_shouldThrowNotFound_whenReferenceNumberUnknown() {
             String ref = "GBN-AG-26-ABSENT";
-            when(notificationRepository.findFulfilmentsViewByReferenceNumberAndOrganisationId(ref, ORG_ID))
+            when(notificationRepository.findFulfilmentFieldsByReferenceNumberAndOrganisationId(ref, ORG_ID))
                 .thenReturn(Optional.empty());
             when(notificationRepository.existsByReferenceNumber(ref)).thenReturn(false);
 
@@ -888,7 +895,7 @@ class NotificationServiceTest {
         @Test
         void findFulfilmentsView_shouldThrowForbidden_whenReferenceBelongsToAnotherOrganisation() {
             String ref = "GBN-AG-26-OTHER-ORG";
-            when(notificationRepository.findFulfilmentsViewByReferenceNumberAndOrganisationId(ref, ORG_ID))
+            when(notificationRepository.findFulfilmentFieldsByReferenceNumberAndOrganisationId(ref, ORG_ID))
                 .thenReturn(Optional.empty());
             when(notificationRepository.existsByReferenceNumber(ref)).thenReturn(true);
 
@@ -1181,16 +1188,18 @@ class NotificationServiceTest {
     class SubmitNotification {
 
         @Test
-        void submitNotification_shouldRecordSubmittedWithNothingOutstanding_whenAnItahcWasUploaded() {
-            String referenceNumber = "GBN-AG-26-WITITA";
+        void submitNotification_shouldRecordSubmittedAndTheSubmittedDate_whenADraftIsSubmitted() {
+            String referenceNumber = "GBN-AG-26-SUBDRF";
+            Instant submittedAt = Instant.parse("2026-11-19T10:15:30Z");
+            NotificationService serviceOnFixedClock = buildService(
+                new NotificationTtlConfig(null, "local"), Clock.fixed(submittedAt, ZoneOffset.UTC));
             NotificationAggregate notificationAggregate = storedIn(referenceNumber, DRAFT);
-            withClaimedCleanDocument(referenceNumber, DocumentType.ITAHC);
 
-            NotificationAggregate result = notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN,
+            NotificationAggregate result = serviceOnFixedClock.submitNotification(referenceNumber, SUBMIT_TOKEN,
                 "trace-001", null, ORG_ID);
 
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
-            assertThat(result.getOutstandingItems()).isEmpty();
+            assertThat(result.getSubmittedAt()).isEqualTo(submittedAt);
             assertThat(result.getUpdated()).isNotNull();
             assertThat(result.getPreAmendNotification()).isNull();
             verify(notificationRepository).save(notificationAggregate);
@@ -1199,17 +1208,22 @@ class NotificationServiceTest {
         }
 
         @Test
-        void submitNotification_shouldSetStatusToSubmittedAndStoreTheOutstandingItem_whenNoItahcWasUploaded() {
-            String referenceNumber = "GBN-AG-26-NOITAH";
-            storedIn(referenceNumber, DRAFT);
-            withClaimedCleanDocument(referenceNumber, DocumentType.VETERINARY_HEALTH_CERTIFICATE);
+        void submitNotification_shouldBeSubmittedWithARefreshedSubmittedDateAndAnOutboxEvent_whenAnAmendmentIsResubmitted() {
+            String referenceNumber = "GBN-AG-26-RESUBM";
+            Instant resubmittedAt = Instant.parse("2026-11-20T08:00:00Z");
+            NotificationService serviceOnFixedClock = buildService(
+                new NotificationTtlConfig(null, "local"), Clock.fixed(resubmittedAt, ZoneOffset.UTC));
+            NotificationAggregate notificationAggregate = storedIn(referenceNumber, AMEND);
+            notificationAggregate.setSubmittedAt(Instant.parse("2026-11-19T10:15:30Z"));
 
-            NotificationAggregate result = notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN,
+            NotificationAggregate result = serviceOnFixedClock.submitNotification(referenceNumber, SUBMIT_TOKEN,
                 "trace-001", null, ORG_ID);
 
             assertThat(result.getStatus()).isEqualTo(SUBMITTED);
-            assertThat(result.getOutstandingItems()).containsExactly(OutstandingItem.ITAHC);
-            assertThat(result.getSubmittedAt()).isNotNull();
+            assertThat(result.getSubmittedAt()).isEqualTo(resubmittedAt);
+            verify(notificationRepository).save(notificationAggregate);
+            verify(outboxService).appendEvent(any(NotificationAggregate.class),
+                eq(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED), eq("trace-001"), eq(null));
         }
 
         @Test
@@ -1325,21 +1339,6 @@ class NotificationServiceTest {
             verify(notificationRepository).save(notificationAggregate);
             verify(outboxService).appendEvent(any(NotificationAggregate.class),
                 eq(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED), eq("trace-002"), eq(null));
-        }
-
-        @Test
-        void submitNotification_shouldSetStatusToSubmittedAndRecordTheItahcOutstanding_whenAmendHasNoItahc() {
-            String referenceNumber = "GBN-AG-26-AMEND2";
-            NotificationAggregate notificationAggregate = storedIn(referenceNumber, AMEND);
-
-            NotificationAggregate result = notificationService.submitNotification(referenceNumber, SUBMIT_TOKEN,
-                "trace-003", null, ORG_ID);
-
-            assertThat(result.getStatus()).isEqualTo(SUBMITTED);
-            assertThat(result.getOutstandingItems()).containsExactly(OutstandingItem.ITAHC);
-            verify(notificationRepository).save(notificationAggregate);
-            verify(outboxService).appendEvent(any(NotificationAggregate.class),
-                eq(OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED), eq("trace-003"), eq(null));
         }
 
         @Test
@@ -1625,18 +1624,6 @@ class NotificationServiceTest {
             assertThat(result.getUpdated()).isNotNull();
             verify(notificationRepository).save(notificationAggregate);
             verify(outboxService).appendEvent(any(), eq(OutboxEventType.NOTIFICATION_AMENDMENT_CANCELLED), any(), any());
-        }
-
-        @Test
-        void cancelAmendNotification_shouldKeepTheOutstandingItemsOfTheLastSubmission() {
-            String referenceNumber = "GBN-AG-26-CAN004";
-            NotificationAggregate notificationAggregate = storedIn(referenceNumber, AMEND);
-            notificationAggregate.setOutstandingItems(List.of(OutstandingItem.ITAHC));
-            notificationAggregate.setPreAmendNotification(Notification.builder().build());
-
-            NotificationAggregate result = notificationService.cancelAmendNotification(referenceNumber, "trace", null, ORG_ID);
-
-            assertThat(result.getOutstandingItems()).containsExactly(OutstandingItem.ITAHC);
         }
 
         @Test
@@ -2044,7 +2031,7 @@ class NotificationServiceTest {
 
             NotificationAggregate result = notificationService.amendNotification(REF, "trace", null, ORG_ID);
 
-            assertThat(result.getAnswersDifferFromSubmitted()).isFalse();
+            assertThat(result.isAnswersDifferFromSubmitted()).isFalse();
         }
 
         @Test
@@ -2055,7 +2042,7 @@ class NotificationServiceTest {
             NotificationAggregate result = notificationService.replace(
                 REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
 
-            assertThat(result.getAnswersDifferFromSubmitted()).isTrue();
+            assertThat(result.isAnswersDifferFromSubmitted()).isTrue();
         }
 
         @Test
@@ -2070,7 +2057,7 @@ class NotificationServiceTest {
                     .build(),
                 "trace", null, ORG_ID);
 
-            assertThat(result.getAnswersDifferFromSubmitted()).isFalse();
+            assertThat(result.isAnswersDifferFromSubmitted()).isFalse();
         }
 
         @Test
@@ -2082,11 +2069,11 @@ class NotificationServiceTest {
                 putOf(origin("ORIGINAL")).fulfilments(List.of(new Document("obligationId", "edited"))).build(),
                 "trace", null, ORG_ID);
 
-            assertThat(result.getAnswersDifferFromSubmitted()).isFalse();
+            assertThat(result.isAnswersDifferFromSubmitted()).isFalse();
         }
 
         @Test
-        void replace_shouldClearTheFlag_whenTheOriginalAnswerIsPutBack() {
+        void replace_shouldSetTheFlagFalse_whenTheOriginalAnswerIsPutBack() {
             givenSubmitted(new ArrayList<>());
             notificationService.amendNotification(REF, "trace", null, ORG_ID);
             notificationService.replace(REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
@@ -2094,37 +2081,35 @@ class NotificationServiceTest {
             NotificationAggregate result = notificationService.replace(
                 REF, putOf(origin("ORIGINAL")).build(), "trace", null, ORG_ID);
 
-            assertThat(result.getAnswersDifferFromSubmitted()).isFalse();
+            assertThat(result.isAnswersDifferFromSubmitted()).isFalse();
+        }
+
+        private NotificationAggregate replaceOriginOnStoredWithNoSnapshot(NotificationStatus status) {
+            givenStored(aggregateIn(REF, status)
+                .notification(Notification.builder().origin(origin("ORIGINAL")).build())
+                .build());
+            givenSaveReturnsItsArgument();
+
+            return notificationService.replace(
+                REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
         }
 
         @Test
         void replace_shouldReportAnswersAsUnchanged_whenAnAmendmentHasNoSubmittedSnapshot() {
-            givenStored(aggregateIn(REF, AMEND)
-                .notification(Notification.builder().origin(origin("ORIGINAL")).build())
-                .build());
-            givenSaveReturnsItsArgument();
+            NotificationAggregate result = replaceOriginOnStoredWithNoSnapshot(AMEND);
 
-            NotificationAggregate result = notificationService.replace(
-                REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
-
-            assertThat(result.getAnswersDifferFromSubmitted()).isFalse();
+            assertThat(result.isAnswersDifferFromSubmitted()).isFalse();
         }
 
         @Test
-        void replace_shouldLeaveTheFlagNull_whenSavingADraft() {
-            givenStored(aggregateIn(REF, DRAFT)
-                .notification(Notification.builder().origin(origin("ORIGINAL")).build())
-                .build());
-            givenSaveReturnsItsArgument();
+        void replace_shouldLeaveTheFlagFalse_whenSavingADraft() {
+            NotificationAggregate result = replaceOriginOnStoredWithNoSnapshot(DRAFT);
 
-            NotificationAggregate result = notificationService.replace(
-                REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
-
-            assertThat(result.getAnswersDifferFromSubmitted()).isNull();
+            assertThat(result.isAnswersDifferFromSubmitted()).isFalse();
         }
 
         @Test
-        void submitNotification_shouldClearTheFlag_whenResubmittingAnAmendment() {
+        void submitNotification_shouldSetTheFlagFalse_whenResubmittingAnAmendment() {
             givenSubmitted(new ArrayList<>());
             notificationService.amendNotification(REF, "trace", null, ORG_ID);
             notificationService.replace(REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
@@ -2132,11 +2117,11 @@ class NotificationServiceTest {
             NotificationAggregate result = notificationService.submitNotification(
                 REF, 0L, "trace", null, ORG_ID);
 
-            assertThat(result.getAnswersDifferFromSubmitted()).isNull();
+            assertThat(result.isAnswersDifferFromSubmitted()).isFalse();
         }
 
         @Test
-        void cancelAmendNotification_shouldClearTheFlag() {
+        void cancelAmendNotification_shouldSetTheFlagFalse() {
             givenSubmitted(new ArrayList<>());
             notificationService.amendNotification(REF, "trace", null, ORG_ID);
             notificationService.replace(REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
@@ -2144,7 +2129,7 @@ class NotificationServiceTest {
             NotificationAggregate result = notificationService.cancelAmendNotification(
                 REF, "trace", null, ORG_ID);
 
-            assertThat(result.getAnswersDifferFromSubmitted()).isNull();
+            assertThat(result.isAnswersDifferFromSubmitted()).isFalse();
         }
     }
 

@@ -147,11 +147,11 @@ public class NotificationService {
     }
 
     public NotificationFulfilmentsView findFulfilmentsView(String referenceNumber, String organisationId) {
-        Optional<NotificationFulfilmentsView> scoped =
-            notificationRepository.findFulfilmentsViewByReferenceNumberAndOrganisationId(
+        Optional<NotificationAggregate> scoped =
+            notificationRepository.findFulfilmentFieldsByReferenceNumberAndOrganisationId(
                 referenceNumber, organisationId);
         if (scoped.isPresent()) {
-            return scoped.get();
+            return NotificationFulfilmentsView.from(scoped.get());
         }
         if (notificationRepository.existsByReferenceNumber(referenceNumber)) {
             throw new ForbiddenException(
@@ -208,10 +208,6 @@ public class NotificationService {
         OutboxEventType eventType = notificationAggregate.getStatus() == NotificationStatus.AMEND
             ? OutboxEventType.NOTIFICATION_SUBMISSION_AMENDED
             : OutboxEventType.NOTIFICATION_SUBMITTED;
-
-        List<OutstandingItem> outstandingItems = OutstandingItem.outstandingAmong(
-            documentService.findClaimedScannedCleanByNotificationReferenceNumber(referenceNumber));
-        notificationAggregate.setOutstandingItems(outstandingItems);
 
         return saveWithStatusAndOutboxEvent(
             notificationAggregate,
@@ -274,7 +270,7 @@ public class NotificationService {
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
         notificationAggregate.setPreAmendFulfilments(null);
         notificationAggregate.setPreAmendNotification(null);
-        notificationAggregate.setAnswersDifferFromSubmitted(null);
+        notificationAggregate.setAnswersDifferFromSubmitted(false);
         return saveWithStatusAndOutboxEvent(
             notificationAggregate,
             referenceNumber,
@@ -313,7 +309,7 @@ public class NotificationService {
         if (notification.getStatus() == NotificationStatus.AMEND) {
             notification.setPreAmendFulfilments(null);
             notification.setPreAmendNotification(null);
-            notification.setAnswersDifferFromSubmitted(null);
+            notification.setAnswersDifferFromSubmitted(false);
         }
         notification.setSubmittedAt(clock.instant());
     }

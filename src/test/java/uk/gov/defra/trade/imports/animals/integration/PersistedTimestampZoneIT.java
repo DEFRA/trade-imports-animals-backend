@@ -86,7 +86,7 @@ class PersistedTimestampZoneIT extends IntegrationBase {
         notificationRepository.save(aggregate);
 
         // Then
-        Document stored = storedNotification();
+        Document stored = NotificationTestSupport.storedDocument(mongoTemplate, REF);
         assertThat(stored).isNotNull();
         assertThat(stored.get("created", Date.class).toInstant()).isEqualTo(CREATED);
         assertThat(stored.get("submittedAt", Date.class).toInstant()).isEqualTo(SUBMITTED_AT);
@@ -115,7 +115,7 @@ class PersistedTimestampZoneIT extends IntegrationBase {
         notificationRepository.save(aggregate);
 
         // Then
-        Document stored = storedNotification();
+        Document stored = NotificationTestSupport.storedDocument(mongoTemplate, REF);
         assertThat(stored).isNotNull();
         Document notification = stored.get("notification", Document.class);
         assertThat(notification.get("transport", Document.class).get("arrivalDate", String.class))
@@ -252,11 +252,5 @@ class PersistedTimestampZoneIT extends IntegrationBase {
         assertThat(descending.getContent())
             .extracting(NotificationAggregate::getReferenceNumber)
             .containsExactly("GBN-AG-26-TZ0002", "GBN-AG-26-TZ0003");
-    }
-
-    private Document storedNotification() {
-        return mongoTemplate.getCollection(NOTIFICATION_COLLECTION)
-            .find(new Document("referenceNumber", REF))
-            .first();
     }
 }

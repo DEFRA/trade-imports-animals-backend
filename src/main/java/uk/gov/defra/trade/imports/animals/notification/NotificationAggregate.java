@@ -55,9 +55,6 @@ public class NotificationAggregate {
     private Instant submittedAt;
 
     @JsonIgnore
-    private List<OutstandingItem> outstandingItems;
-
-    @JsonIgnore
     private Instant expireAt;
 
     private Notification notification;
@@ -70,7 +67,8 @@ public class NotificationAggregate {
     @JsonIgnore
     private List<Document> preAmendFulfilments;
 
-    private Boolean answersDifferFromSubmitted;
+    @Builder.Default
+    private boolean answersDifferFromSubmitted = false;
 
     /** Returns the notification sub-object, failing fast if absent. */
     public Notification requireNotification() {

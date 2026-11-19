@@ -41,7 +41,6 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.NotificationView;
-import uk.gov.defra.trade.imports.animals.notification.OutstandingItem;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberGenerator;
 import uk.gov.defra.trade.imports.animals.notification.ReferenceNumberPageResponse;
@@ -56,6 +55,9 @@ import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 class NotificationIT extends IntegrationBase {
 
+    private static final List<String> SUBMITTED_NOTIFICATION_STORED_FIELDS = List.of(
+        "_id", "_class", "referenceNumber", "organisationId", "concurrencyToken", "status", "created",
+        "updated", "submittedAt", "notification", "answersDifferFromSubmitted");
     private static final String NOTIFICATION_ENDPOINT = "/notifications";
     private static final String ADMIN_SECRET_HEADER = "Trade-Imports-Animals-Admin-Secret";
     private static final String VALID_ADMIN_SECRET = "test-admin-secret";
@@ -1266,39 +1268,35 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submit_shouldRecordSubmittedAndNoOutstandingItems_whenAClaimedCleanItahcWasUploaded() {
+    void submit_shouldBeSubmittedWithTheSubmittedDateAndExactlyTheSubmittedNotificationFields_whenNoDocumentIsUploaded() {
+        String referenceNumber = createDraftReference();
+
+        NotificationAggregate submitted = submitAndRead(referenceNumber);
+
+        assertStoredAsSubmitted(referenceNumber, submitted);
+    }
+
+    @Test
+    void submit_shouldBeSubmittedWithTheSubmittedDateAndExactlyTheSubmittedNotificationFields_whenAClaimedCleanItahcIsUploaded() {
         String referenceNumber = createDraftReference();
         saveClaimedCleanDocument(referenceNumber, "itahc-clean",
             DocumentType.ITAHC, "ITAHC-1", LocalDate.parse("2026-09-01"));
 
         NotificationAggregate submitted = submitAndRead(referenceNumber);
 
-        assertThat(submitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
-            .orElseThrow();
-        assertThat(stored.getOutstandingItems()).isEmpty();
-        assertThat(submittedOutboxEvent().getStatusChanges().getLast().getStatus())
-            .isEqualTo(NotificationStatus.SUBMITTED);
+        assertStoredAsSubmitted(referenceNumber, submitted);
     }
 
-    @Test
-    void submit_shouldRecordSubmittedWithTheItahcOutstanding_whenTheItahcIsUnclaimedStillScanningOrRejected() {
-        String referenceNumber = createDraftReference();
-        saveUnclaimedCleanDocument(referenceNumber, "itahc-unclaimed",
-            DocumentType.ITAHC, "ITAHC-1", LocalDate.parse("2026-09-01"));
-        saveClaimedPendingDocument(referenceNumber, "itahc-pending",
-            DocumentType.ITAHC, "ITAHC-2", LocalDate.parse("2026-09-02"));
-        saveClaimedRejectedDocument(referenceNumber, "itahc-rejected",
-            DocumentType.ITAHC, "ITAHC-3", LocalDate.parse("2026-09-03"));
-
-        NotificationAggregate submitted = submitAndRead(referenceNumber);
-
+    @SuppressWarnings("unchecked")
+    private void assertStoredAsSubmitted(String referenceNumber, NotificationAggregate submitted) {
         assertThat(submitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
-            .orElseThrow();
-        assertThat(stored.getOutstandingItems()).containsExactly(OutstandingItem.ITAHC);
-        Map<String, Object> exchangedDocument =
-            (Map<String, Object>) submittedOutboxEvent().getData().get("exchangedDocument");
+        Document stored = NotificationTestSupport.storedDocument(mongoTemplate, referenceNumber);
+        assertThat(stored.keySet()).containsExactlyInAnyOrderElementsOf(SUBMITTED_NOTIFICATION_STORED_FIELDS);
+        assertThat(stored.get("status")).isEqualTo("SUBMITTED");
+        assertThat(stored.get("submittedAt")).isNotNull();
+        OutboxEvent event = submittedOutboxEvent();
+        assertThat(event.getStatusChanges().getLast().getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        Map<String, Object> exchangedDocument = (Map<String, Object>) event.getData().get("exchangedDocument");
         assertThat(exchangedDocument.get("notificationStatusCode")).isEqualTo("SUBMITTED");
     }
 
@@ -2332,14 +2330,51 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submit_shouldClearTheAnswersDifferFlag_whenAnAmendmentIsResubmitted() {
+    void submit_shouldSetTheAnswersDifferFlagFalse_whenAnAmendmentIsResubmitted() {
         String referenceNumber = startAmendment();
         changeInternalReferenceWhileAmending(referenceNumber);
 
         submit(referenceNumber);
 
         NotificationAggregate resubmitted = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber).orElseThrow();
-        assertThat(resubmitted.getAnswersDifferFromSubmitted()).isNull();
+        assertThat(resubmitted.isAnswersDifferFromSubmitted()).isFalse();
+    }
+
+    @Test
+    void cancelAmend_shouldReportAnswersNotDiffering_whenAChangedAmendmentIsCancelled() {
+        String referenceNumber = startAmendment();
+        changeInternalReferenceWhileAmending(referenceNumber);
+        assertThat(answersDifferFromSubmitted(referenceNumber)).isTrue();
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/cancel-amend", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        assertThat(answersDifferFromSubmitted(referenceNumber)).isFalse();
+    }
+
+    @Test
+    void findFulfilments_shouldReportAnswersNotDiffering_forADraft() {
+        String referenceNumber = createDraftReference();
+
+        assertThat(answersDifferFromSubmitted(referenceNumber)).isFalse();
+    }
+
+    @Test
+    void findFulfilments_shouldReportAnswersNotDiffering_forASubmittedNotification() {
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
+
+        assertThat(answersDifferFromSubmitted(referenceNumber)).isFalse();
+    }
+
+    @Test
+    void findFulfilments_shouldReportAnswersNotDiffering_whenTheStoredNotificationHasNoRecordOfIt() {
+        String referenceNumber = createAndSubmitNotificationWithFullContent();
+        NotificationTestSupport.unsetStoredField(mongoTemplate, referenceNumber, "answersDifferFromSubmitted");
+
+        assertThat(NotificationTestSupport.storedDocument(mongoTemplate, referenceNumber))
+            .doesNotContainKey("answersDifferFromSubmitted");
+        assertThat(answersDifferFromSubmitted(referenceNumber)).isFalse();
     }
 
     @Test
@@ -2737,6 +2772,7 @@ class NotificationIT extends IntegrationBase {
             .returnResult()
             .getResponseBody();
         assertThat(fulfilmentsView).isNotNull();
+        assertThat(fulfilmentsView.get("answersDifferFromSubmitted")).isInstanceOf(Boolean.class);
         return (Boolean) fulfilmentsView.get("answersDifferFromSubmitted");
     }
 
