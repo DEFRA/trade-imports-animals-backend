@@ -162,8 +162,8 @@ public class DocumentService {
   }
 
   /**
-   * Returns the documents the journey claimed for the given notification that passed their virus
-   * scan, oldest first.
+   * Returns the claimed documents for the given notification whose virus scan completed clean,
+   * oldest first.
    *
    * @param notificationReferenceNumber the notification reference number
    * @return list of documents, possibly empty

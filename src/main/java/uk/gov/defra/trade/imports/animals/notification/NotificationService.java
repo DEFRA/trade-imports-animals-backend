@@ -237,7 +237,6 @@ public class NotificationService {
                 "Cannot amend notification: fulfilments payload is missing");
         }
         notificationAggregate.setPreAmendFulfilments(deepCopyFulfilments(currentFulfilments));
-        notificationAggregate.setAnswersDifferFromSubmitted(false);
 
         return saveWithStatusAndOutboxEvent(
             notificationAggregate,

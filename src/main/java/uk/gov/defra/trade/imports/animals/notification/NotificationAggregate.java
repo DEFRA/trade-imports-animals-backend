@@ -67,8 +67,7 @@ public class NotificationAggregate {
     @JsonIgnore
     private List<Document> preAmendFulfilments;
 
-    @Builder.Default
-    private boolean answersDifferFromSubmitted = false;
+    private boolean answersDifferFromSubmitted;
 
     /** Returns the notification sub-object, failing fast if absent. */
     public Notification requireNotification() {

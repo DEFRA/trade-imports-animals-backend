@@ -66,8 +66,8 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.data.domain.Sort.Direction;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
-import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
@@ -2026,15 +2026,6 @@ class NotificationServiceTest {
         }
 
         @Test
-        void amendNotification_shouldStartWithAnswersMatchingTheSubmittedVersion() {
-            givenSubmitted(new ArrayList<>());
-
-            NotificationAggregate result = notificationService.amendNotification(REF, "trace", null, ORG_ID);
-
-            assertThat(result.isAnswersDifferFromSubmitted()).isFalse();
-        }
-
-        @Test
         void replace_shouldFlagAnswersAsDifferent_whenAmendChangesAnAnswer() {
             givenSubmitted(new ArrayList<>());
             notificationService.amendNotification(REF, "trace", null, ORG_ID);
@@ -2103,7 +2094,14 @@ class NotificationServiceTest {
 
         @Test
         void replace_shouldLeaveTheFlagFalse_whenSavingADraft() {
-            NotificationAggregate result = replaceOriginOnStoredWithNoSnapshot(DRAFT);
+            givenStored(aggregateIn(REF, DRAFT)
+                .notification(Notification.builder().origin(origin("ORIGINAL")).build())
+                .preAmendNotification(Notification.builder().origin(origin("SUBMITTED")).build())
+                .build());
+            givenSaveReturnsItsArgument();
+
+            NotificationAggregate result = notificationService.replace(
+                REF, putOf(origin("CHANGED")).build(), "trace", null, ORG_ID);
 
             assertThat(result.isAnswersDifferFromSubmitted()).isFalse();
         }

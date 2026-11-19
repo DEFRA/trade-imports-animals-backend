@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
+import org.bson.Document;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,6 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.bson.Document;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
@@ -55,9 +55,6 @@ import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 class NotificationIT extends IntegrationBase {
 
-    private static final List<String> SUBMITTED_NOTIFICATION_STORED_FIELDS = List.of(
-        "_id", "_class", "referenceNumber", "organisationId", "concurrencyToken", "status", "created",
-        "updated", "submittedAt", "notification", "answersDifferFromSubmitted");
     private static final String NOTIFICATION_ENDPOINT = "/notifications";
     private static final String ADMIN_SECRET_HEADER = "Trade-Imports-Animals-Admin-Secret";
     private static final String VALID_ADMIN_SECRET = "test-admin-secret";
@@ -857,20 +854,6 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void submit_shouldTransitionStatusFromDraftToSubmitted_whenNoItahcWasUploaded() {
-        // Given — create a notification (starts as DRAFT)
-        String referenceNumber = createDraftReference();
-
-        // When — submit the notification
-        NotificationAggregate submitted = submitAndRead(referenceNumber);
-
-        assertThat(submitted).isNotNull();
-        assertThat(submitted.getReferenceNumber()).isEqualTo(referenceNumber);
-        assertThat(submitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
-        assertThat(submitted.getUpdated()).isNotNull();
-    }
-
-    @Test
     void amend_shouldTransitionStatusFromSubmittedToAmend() {
         // Given — submitted notification
         String referenceNumber = createAndSubmitNotificationWithFullContent();
@@ -996,8 +979,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(outboxConsignorParty(submittedOutboxEvent()))
             .containsEntry("name", "Astra Rosales");
 
-        Document rawNotification = mongoTemplate.getCollection("notification")
-            .find(Filters.eq("referenceNumber", referenceNumber)).first()
+        Document rawNotification = NotificationTestSupport.storedDocument(mongoTemplate, referenceNumber)
             .get("notification", Document.class);
         assertThat(rawNotification.get("consignor", Document.class)).doesNotContainKey("addressId");
     }
@@ -1031,8 +1013,7 @@ class NotificationIT extends IntegrationBase {
         assertThat(submittedOutboxEvent().getData().toString()).doesNotContain("typeOfCommodity");
 
         // And — the re-save sheds the field from the stored document
-        Document rawNotification = mongoTemplate.getCollection("notification")
-            .find(Filters.eq("referenceNumber", referenceNumber)).first()
+        Document rawNotification = NotificationTestSupport.storedDocument(mongoTemplate, referenceNumber)
             .get("notification", Document.class);
         assertThat(rawNotification.getList("commodities", Document.class)).singleElement()
             .satisfies(commodity -> assertThat(commodity).doesNotContainKey("typeOfCommodity"));
@@ -1289,9 +1270,14 @@ class NotificationIT extends IntegrationBase {
 
     @SuppressWarnings("unchecked")
     private void assertStoredAsSubmitted(String referenceNumber, NotificationAggregate submitted) {
+        List<String> submittedNotificationStoredFields = List.of(
+            "_id", "_class", "referenceNumber", "organisationId", "concurrencyToken", "status", "created",
+            "updated", "submittedAt", "notification", "answersDifferFromSubmitted");
+        assertThat(submitted.getReferenceNumber()).isEqualTo(referenceNumber);
         assertThat(submitted.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
+        assertThat(submitted.getUpdated()).isNotNull();
         Document stored = NotificationTestSupport.storedDocument(mongoTemplate, referenceNumber);
-        assertThat(stored.keySet()).containsExactlyInAnyOrderElementsOf(SUBMITTED_NOTIFICATION_STORED_FIELDS);
+        assertThat(stored.keySet()).containsExactlyInAnyOrderElementsOf(submittedNotificationStoredFields);
         assertThat(stored.get("status")).isEqualTo("SUBMITTED");
         assertThat(stored.get("submittedAt")).isNotNull();
         OutboxEvent event = submittedOutboxEvent();
