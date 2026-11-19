@@ -95,6 +95,7 @@ public class OutboxService {
             .aggregateVersion(nextVersion)
             .eventType(eventType.value())
             .timestamp(now)
+            .organisationId(notificationAggregate.getOrganisationId())
             .data(data)
             .metadata(OutboxEventMetadata.builder()
                 .correlationId(correlationId)
@@ -123,10 +124,8 @@ public class OutboxService {
         }
         long submissionCount = outboxEventRepository
             .countByAggregateIdAndEventTypeIn(aggregateId, SUBMISSION_EVENT_WIRE_VALUES);
-        // Submission events mint a new version; all others carry the current count forward.
-        return (int) (SUBMISSION_EVENT_WIRE_VALUES.contains(eventType.value())
-            ? submissionCount + 1
-            : submissionCount);
+        boolean mintsNewVersion = SUBMISSION_EVENT_WIRE_VALUES.contains(eventType.value());
+        return (int) (mintsNewVersion ? submissionCount + 1 : submissionCount);
     }
 
     public List<OutboxEvent> findByReferenceNumber(String referenceNumber) {
