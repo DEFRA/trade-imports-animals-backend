@@ -44,8 +44,8 @@ public class OutboxEvent {
     private Actor actor;
     private List<StatusChange> statusChanges;
 
-    /** Publish timestamp set before SNS publish. 
-     * Ignored from published event but stores the published timestamp */
+    private String organisationId;
+
     @JsonIgnore
     private Instant publishedAt;
 }
