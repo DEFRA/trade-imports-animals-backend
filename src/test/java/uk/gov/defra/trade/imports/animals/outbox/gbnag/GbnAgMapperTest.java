@@ -78,19 +78,6 @@ class GbnAgMapperTest {
         }
 
         @Test
-        void shouldMapConsignmentContactToIssuerWithNameAddressEmailAndPhone() {
-            TradeParty issuer = result.exchangedDocument().issuer();
-            assertThat(issuer.name()).isEqualTo("Animal and Plant Health Agency");
-            assertThat(issuer.postalAddress().lineOne()).isEqualTo("Woodham Lane");
-            assertThat(issuer.postalAddress().countryId()).isEqualTo("GB");
-            assertThat(issuer.definedContact()).singleElement().satisfies(contact -> {
-                assertThat(contact.emailURIUniversalCommunication()).isEqualTo("imports@apha.example.gov.uk");
-                assertThat(contact.telephoneUniversalCommunication()).isEqualTo("03000 200301");
-                assertThat(contact.personName()).isNull();
-            });
-        }
-
-        @Test
         void shouldMapEachAccompanyingDocumentToAReferenceDocumentInOrder() {
             assertThat(result.exchangedDocument().referenceDocument()).containsExactly(
                 new ReferencedDocument(
@@ -313,7 +300,6 @@ class GbnAgMapperTest {
             ExchangedDocument doc = result.exchangedDocument();
             assertThat(doc.traderAssignedId()).isNull();
             assertThat(doc.issueDateTime()).isNull();
-            assertThat(doc.issuer()).isNull();
             assertThat(doc.referenceDocument()).isNull();
 
             SpecifiedConsignment consignment = result.specifiedConsignment();
@@ -1168,12 +1154,6 @@ class GbnAgMapperTest {
                 .destination(party("Linus George Ltd", simpleAddress("558 Oak Street", "CH")))
                 .importer(party("GB Animal Imports", simpleAddress("5 Port Way", "GB")))
                 .placeOfOrigin(party("Granja del Valle de Tenerife", simpleAddress("Camino La Hornera 12", "ES")))
-                .consignment(ConsignmentParty.builder()
-                    .name("Animal and Plant Health Agency")
-                    .email("imports@apha.example.gov.uk")
-                    .phone("03000 200301")
-                    .address(simpleAddress("Woodham Lane", "GB"))
-                    .build())
                 .cphNumber("CPH19876")
                 .commodities(List.of(Commodity.builder()
                     .name("Cow")

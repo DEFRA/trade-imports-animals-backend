@@ -164,7 +164,6 @@ class NotificationControllerTest {
                 .consignor(consignors().getFirst())
                 .destination(destinations().getFirst())
                 .transport(Transport.builder().transporter(transporters().getFirst()).build())
-                .consignment(consignments().getFirst())
                 .build();
 
             NotificationAggregate savedNotification = new NotificationAggregate();
@@ -177,7 +176,6 @@ class NotificationControllerTest {
             savedNotification.getNotification().setConsignor(consignors().getFirst());
             savedNotification.getNotification().setDestination(destinations().getFirst());
             savedNotification.getNotification().setTransport(Transport.builder().transporter(transporters().getFirst()).build());
-            savedNotification.getNotification().setConsignment(consignments().getFirst());
 
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any(), anyString()))
                 .thenReturn(savedNotification);
@@ -209,13 +207,7 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.notification.transport.transporter.name").value(transporters().getFirst().getName()))
                 .andExpect(jsonPath("$.notification.transport.transporter.address").value(transporters().getFirst().getAddress()))
                 .andExpect(jsonPath("$.notification.transport.transporter.approvalNumber").value(transporters().getFirst().getApprovalNumber()))
-                .andExpect(jsonPath("$.notification.transport.transporter.type").value(transporters().getFirst().getType()))
-                .andExpect(jsonPath("$.notification.consignment.name")
-                    .value(consignments().getFirst().getName()))
-                .andExpect(jsonPath("$.notification.consignment.address.addressLine1")
-                    .value(consignments().getFirst().getAddress().getAddressLine1()))
-                .andExpect(jsonPath("$.notification.consignment.address.countryCode")
-                    .value(consignments().getFirst().getAddress().getCountryCode()));
+                .andExpect(jsonPath("$.notification.transport.transporter.type").value(transporters().getFirst().getType()));
         }
 
         @Test

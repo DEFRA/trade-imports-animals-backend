@@ -8,7 +8,7 @@ import org.springframework.stereotype.Component;
  * Maps a {@link NotificationAggregate} to a {@link NotificationDto} for copy-as-new.
  * Keeps origin, commodity identity (name, commodity code, description, type), reason for import,
  * certified-for purpose, party addresses, CPH, internal-market fields, port of exit, and fulfilments.
- * Resets per-animal counts and species, transport, consignment contact, exit date, and internal reference.
+ * Resets per-animal counts and species, transport, exit date, and internal reference.
  */
 @Component
 public class NotificationCopyMapper {

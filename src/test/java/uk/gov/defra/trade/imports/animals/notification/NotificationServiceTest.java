@@ -355,7 +355,6 @@ class NotificationServiceTest {
                 .reasonForImport("PERMANENT")
                 .cphNumber("123456789")
                 .transport(transport)
-                .consignment(consignments().getFirst())
                 .purposeInInternalMarket("Breeding")
                 .destinationCountry("DE")
                 .portOfExit("GB DVR")
@@ -371,7 +370,6 @@ class NotificationServiceTest {
                 .reasonForImport("PERMANENT")
                 .cphNumber("123456789")
                 .transport(transport)
-                .consignment(consignments().getFirst())
                 .purposeInInternalMarket("Breeding")
                 .destinationCountry("DE")
                 .portOfExit("GB DVR")
@@ -405,21 +403,15 @@ class NotificationServiceTest {
                 .thenAnswer(inv -> inv.getArgument(0));
 
             ConsignmentParty originParty = literalParty();
-            ConsignmentParty contactParty = ConsignmentParty.builder()
-                .name("Contact")
-                .email("contact@example.com")
-                .build();
             NotificationDto dto = NotificationDto.builder()
                 .referenceNumber(referenceNumber)
                 .concurrencyToken(0L)
                 .placeOfOrigin(originParty)
-                .consignment(contactParty)
                 .build();
 
             NotificationAggregate saved = notificationService.saveNotification(dto, "trace-orig-001", null, ORG_ID);
 
             assertThat(saved.getNotification().getPlaceOfOrigin()).isEqualTo(originParty);
-            assertThat(saved.getNotification().getConsignment()).isEqualTo(contactParty);
         }
 
         @Test
@@ -1121,19 +1113,12 @@ class NotificationServiceTest {
         @Test
         void submitNotification_shouldCarryEveryPartyOnTheOutboxEvent_exactlyAsStored() {
             String referenceNumber = "GBN-AG-26-REF011";
-            ConsignmentParty contact = ConsignmentParty.builder()
-                .name("Contact")
-                .email("contact@example.com")
-                .phone("01632 960001")
-                .address(Address.builder().addressLine1("1 Contact Road").countryCode("GB").build())
-                .build();
             Notification stored = Notification.builder()
                 .consignor(literalParty())
                 .consignee(literalParty().toBuilder().name("Consignee").build())
                 .importer(literalParty().toBuilder().name("Importer").build())
                 .placeOfOrigin(literalParty().toBuilder().name("Origin").build())
                 .destination(literalParty().toBuilder().name("Destination").build())
-                .consignment(contact)
                 .build();
             NotificationAggregate notificationAggregate = NotificationAggregate.builder()
                 .id("notif-id-ref")
@@ -1161,7 +1146,6 @@ class NotificationServiceTest {
             assertThat(emitted.getImporter()).isEqualTo(stored.getImporter());
             assertThat(emitted.getPlaceOfOrigin()).isEqualTo(stored.getPlaceOfOrigin());
             assertThat(emitted.getDestination()).isEqualTo(stored.getDestination());
-            assertThat(emitted.getConsignment()).isEqualTo(contact);
             assertThat(returned.getNotification().getConsignor()).isEqualTo(literalParty());
         }
 
@@ -1796,7 +1780,6 @@ class NotificationServiceTest {
                         .arrivalDate(LocalDate.parse("2026-05-01"))
                         .transporter(transporters().getFirst())
                         .build())
-                    .consignment(consignments().getFirst())
                     .build())
                 .build();
 
@@ -1846,7 +1829,6 @@ class NotificationServiceTest {
                         .portOfEntry("GBFXT")
                         .arrivalDate(LocalDate.parse("2026-06-01"))
                         .build())
-                    .consignment(consignments().getFirst())
                     .build())
                 .build();
 
@@ -1865,7 +1847,6 @@ class NotificationServiceTest {
             assertThat(saved.getNotification().getOrigin().getInternalReference()).isNull();
             assertThat(saved.getNotification().getAdditionalDetails().getUnweanedAnimals()).isNull();
             assertThat(saved.getNotification().getTransport()).isNull();
-            assertThat(saved.getNotification().getConsignment()).isNull();
             Commodity copiedCommodity = saved.getNotification().getCommodities().getFirst();
             assertThat(copiedCommodity.getName()).isEqualTo("Cattle");
             assertThat(copiedCommodity.getCommodityCode()).isEqualTo("0102");

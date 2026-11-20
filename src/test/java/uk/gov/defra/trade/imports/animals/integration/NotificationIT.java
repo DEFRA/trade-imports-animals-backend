@@ -2051,7 +2051,6 @@ class NotificationIT extends IntegrationBase {
         assertThat(notification.getOrigin().getInternalReference()).isNull();
         assertThat(notification.getAdditionalDetails().getUnweanedAnimals()).isNull();
         assertThat(notification.getTransport()).isNull();
-        assertThat(notification.getConsignment()).isNull();
         assertThat(notification.getCommodities().getFirst())
             .extracting(
                 Commodity::getTotalNoOfAnimals,
@@ -2077,7 +2076,6 @@ class NotificationIT extends IntegrationBase {
         assertThat(actual.getConsignee()).isEqualTo(expected.getConsignee());
         assertThat(actual.getImporter()).isEqualTo(expected.getImporter());
         assertThat(actual.getDestination()).isEqualTo(expected.getDestination());
-        assertThat(actual.getConsignment()).isEqualTo(expected.getConsignment());
         assertThat(actual.getCphNumber()).isEqualTo(expected.getCphNumber());
         assertThat(actual.getTransport()).isEqualTo(expected.getTransport());
     }
@@ -2819,7 +2817,6 @@ class NotificationIT extends IntegrationBase {
             .consignee(NotificationTestData.consignees().getFirst())
             .importer(NotificationTestData.importers().getFirst())
             .destination(NotificationTestData.destinations().getFirst())
-            .consignment(NotificationTestData.consignments().getFirst())
             .cphNumber("12/345/6789")
             .transport(Transport.builder()
                 .portOfEntry("GBDVR")
