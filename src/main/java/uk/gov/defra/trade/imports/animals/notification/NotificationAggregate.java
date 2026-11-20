@@ -67,6 +67,8 @@ public class NotificationAggregate {
     @JsonIgnore
     private List<Document> preAmendFulfilments;
 
+    private boolean answersDifferFromSubmitted;
+
     /** Returns the notification sub-object, failing fast if absent. */
     public Notification requireNotification() {
         return requireNonNull(notification, "NotificationAggregate has no notification sub-object");

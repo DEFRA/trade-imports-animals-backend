@@ -1188,18 +1188,17 @@ class NotificationControllerTest {
     class FindFulfilments {
 
         @Test
-        void findFulfilments_shouldReturn200WithProjection() throws Exception {
+        void findFulfilments_shouldReturn200WithTheFulfilmentsView() throws Exception {
             // Given
-            NotificationFulfilmentsView view = new NotificationFulfilmentsView() {
-                @Override public String getReferenceNumber() { return REF_1; }
-                @Override public Long getConcurrencyToken() { return 0L; }
-                @Override public NotificationStatus getStatus() { return NotificationStatus.SUBMITTED; }
-                @Override public Instant getCreated() { return Instant.parse("2026-07-21T06:42:17.123Z"); }
-                @Override public Instant getSubmittedAt() { return Instant.parse("2026-07-21T14:09:05Z"); }
-                @Override public java.util.List<org.bson.Document> getFulfilments() {
-                    return java.util.List.of(new org.bson.Document("obligationId", "abc"));
-                }
-            };
+            NotificationFulfilmentsView view = NotificationFulfilmentsView.builder()
+                .referenceNumber(REF_1)
+                .concurrencyToken(0L)
+                .status(NotificationStatus.SUBMITTED)
+                .created(Instant.parse("2026-07-21T06:42:17.123Z"))
+                .submittedAt(Instant.parse("2026-07-21T14:09:05Z"))
+                .fulfilments(java.util.List.of(new org.bson.Document("obligationId", "abc")))
+                .answersDifferFromSubmitted(true)
+                .build();
             when(notificationService.findFulfilmentsView(eq(REF_1), eq(ORG_ID))).thenReturn(view);
 
             // When / Then
@@ -1211,7 +1210,8 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.status").value("SUBMITTED"))
                 .andExpect(jsonPath("$.created").value("2026-07-21T06:42:17.123Z"))
                 .andExpect(jsonPath("$.submittedAt").value("2026-07-21T14:09:05Z"))
-                .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"));
+                .andExpect(jsonPath("$.fulfilments[0].obligationId").value("abc"))
+                .andExpect(jsonPath("$.answersDifferFromSubmitted").value(true));
         }
 
         @Test

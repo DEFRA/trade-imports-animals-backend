@@ -147,11 +147,11 @@ public class NotificationService {
     }
 
     public NotificationFulfilmentsView findFulfilmentsView(String referenceNumber, String organisationId) {
-        Optional<NotificationFulfilmentsView> scoped =
-            notificationRepository.findFulfilmentsViewByReferenceNumberAndOrganisationId(
+        Optional<NotificationAggregate> scoped =
+            notificationRepository.findFulfilmentFieldsByReferenceNumberAndOrganisationId(
                 referenceNumber, organisationId);
         if (scoped.isPresent()) {
-            return scoped.get();
+            return NotificationFulfilmentsView.from(scoped.get());
         }
         if (notificationRepository.existsByReferenceNumber(referenceNumber)) {
             throw new ForbiddenException(
@@ -269,6 +269,7 @@ public class NotificationService {
             priorFulfilments == null ? null : deepCopyFulfilments(priorFulfilments));
         notificationAggregate.setPreAmendFulfilments(null);
         notificationAggregate.setPreAmendNotification(null);
+        notificationAggregate.setAnswersDifferFromSubmitted(false);
         return saveWithStatusAndOutboxEvent(
             notificationAggregate,
             referenceNumber,
@@ -307,6 +308,7 @@ public class NotificationService {
         if (notification.getStatus() == NotificationStatus.AMEND) {
             notification.setPreAmendFulfilments(null);
             notification.setPreAmendNotification(null);
+            notification.setAnswersDifferFromSubmitted(false);
         }
         notification.setSubmittedAt(clock.instant());
     }
@@ -486,6 +488,21 @@ public class NotificationService {
         notification.setPortOfExit(dto.getPortOfExit());
         notification.setExitDate(dto.getExitDate());
         notificationAggregate.setFulfilments(dto.getFulfilments());
+        if (notificationAggregate.getStatus() == NotificationStatus.AMEND) {
+            notificationAggregate.setAnswersDifferFromSubmitted(
+                answersDifferFromSubmitted(notificationAggregate));
+        }
+    }
+
+    private boolean answersDifferFromSubmitted(NotificationAggregate notificationAggregate) {
+        Notification submittedNotification = notificationAggregate.getPreAmendNotification();
+        if (submittedNotification == null) {
+            log.warn("Amendment {} has no submitted snapshot, answers reported as not differing",
+                notificationAggregate.getReferenceNumber());
+            return false;
+        }
+        return !notificationContentMapper.deepClone(submittedNotification)
+            .equals(notificationContentMapper.deepClone(notificationAggregate.getNotification()));
     }
 
     private List<Commodity> commoditiesFromDto(List<Commodity> fromDto) {
