@@ -34,12 +34,6 @@ public final class NotificationTestData {
             party("Global Trading Co", "945 Main Street", "London", "LS1 5AB", "GB"));
     }
 
-    public static List<ConsignmentParty> consignments() {
-        return List.of(
-            party("Animal and Plant Health Agency", "Woodham Lane", "Addlestone", "KT15 3NB", "GB"),
-            party("EuroStore Services", "8448 Gleason Creek", "Calais", "62100", "FR"));
-    }
-
     public static List<ConsignmentParty> placesOfOrigin() {
         return List.of(
             party("Origin Farm", "1 Farm Lane", "Ennis", "V95 X7P2", "IE"),

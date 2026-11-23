@@ -78,6 +78,20 @@ class GbnAgMapperTest {
         }
 
         @Test
+        void shouldSendExactlyTheExchangedDocumentKeysPimsReads() {
+            JsonNode exchangedDocument = new ObjectMapper().valueToTree(result.exchangedDocument());
+
+            assertThat(exchangedDocument.fieldNames()).toIterable().containsExactlyInAnyOrder(
+                "identifier",
+                "traderAssignedId",
+                "notificationStatusCode",
+                "versionId",
+                "issueDateTime",
+                "firstSignatoryAuthentication",
+                "referenceDocument");
+        }
+
+        @Test
         void shouldMapEachAccompanyingDocumentToAReferenceDocumentInOrder() {
             assertThat(result.exchangedDocument().referenceDocument()).containsExactly(
                 new ReferencedDocument(
@@ -323,12 +337,6 @@ class GbnAgMapperTest {
             assertThat(result.exchangedDocument().firstSignatoryAuthentication().includedClause()).containsExactly(
                 new Clause("PURPOSE", null, null),
                 new Clause("GOODS_CERTIFIED_AS", null, null));
-        }
-
-        @Test
-        void shouldOmitIssuerKey_whenNoConsignmentContact() {
-            JsonNode exchangedDocument = new ObjectMapper().valueToTree(result.exchangedDocument());
-            assertThat(exchangedDocument.has("issuer")).isFalse();
         }
     }
 

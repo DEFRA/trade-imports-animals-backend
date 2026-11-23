@@ -23,7 +23,6 @@ import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import static uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_TRACE_ID;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_USER_ID;
-import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;

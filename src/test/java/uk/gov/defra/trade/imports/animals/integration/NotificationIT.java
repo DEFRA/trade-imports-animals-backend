@@ -1020,6 +1020,29 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
+    void put_shouldAcceptTheSaveAndStoreNoConsignmentParty_whenAnOlderClientStillSendsOne() {
+        String referenceNumber = createDraftReference(createNotificationDto("CH", "Live cattle"));
+        NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
+            .orElseThrow();
+        Map<String, Object> olderClientBody = Map.of("notification", Map.of(
+            "referenceNumber", referenceNumber,
+            "concurrencyToken", stored.getConcurrencyToken(),
+            "origin", Map.of("countryCode", "CH", "requiresRegionCode", "no"),
+            "commodities", List.of(Map.of("name", "Live cattle")),
+            "consignment", Map.of("name", "Animal and Plant Health Agency")));
+
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", referenceNumber)
+            .bodyValue(olderClientBody)
+            .exchange().expectStatus().isOk();
+
+        Document rawNotification = NotificationTestSupport.storedDocument(mongoTemplate, referenceNumber)
+            .get("notification", Document.class);
+        assertThat(rawNotification.get("origin", Document.class)).containsEntry("countryCode", "CH");
+        assertThat(rawNotification).doesNotContainKey("consignment");
+    }
+
+    @Test
     void amend_shouldReturn404_whenReferenceNumberDoesNotExist() {
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", NONEXISTENT_REF)

@@ -6,8 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * A party on a notification — consignor, consignee, importer, place of origin, destination or the
- * consignment contact.
+ * A party on a notification — consignor, consignee, importer, place of origin or destination — or
+ * the permanent address of an animal.
  *
  * <p>Held as a literal copy of the address the trader picked: later edits or deletions in the
  * address book never reach the notification.

@@ -22,7 +22,6 @@ import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.SUBMITTED;
 import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
 import static uk.gov.defra.trade.imports.animals.utils.LogCapture.messagesOf;
-import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
@@ -478,7 +477,7 @@ class NotificationServiceTest {
         }
 
         @Test
-        void saveNotification_shouldPersistInlinePartyDetailsFromTheDto_byteFaithfully() {
+        void saveNotification_shouldPersistThePlaceOfOriginFromTheDtoExactly() {
             String referenceNumber = "GBN-AG-26-ORIG01";
             NotificationAggregate existing = NotificationAggregate.builder()
                 .referenceNumber(referenceNumber)
