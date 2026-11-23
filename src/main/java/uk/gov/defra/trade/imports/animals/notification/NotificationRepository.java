@@ -5,6 +5,7 @@ import java.util.Optional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.mongodb.repository.MongoRepository;
+import org.springframework.data.mongodb.repository.Query;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -17,7 +18,11 @@ public interface NotificationRepository extends MongoRepository<NotificationAggr
 
     List<NotificationReferenceOnly> findAllReferencesByReferenceNumberIn(List<String> referenceNumbers);
 
-    Optional<NotificationFulfilmentsView> findFulfilmentsViewByReferenceNumberAndOrganisationId(
+    @Query(
+        value = "{ 'referenceNumber': ?0, 'organisationId': ?1 }",
+        fields = "{ 'referenceNumber': 1, 'concurrencyToken': 1, 'status': 1, 'created': 1, "
+            + "'submittedAt': 1, 'fulfilments': 1, 'answersDifferFromSubmitted': 1 }")
+    Optional<NotificationAggregate> findFulfilmentFieldsByReferenceNumberAndOrganisationId(
         String referenceNumber, String organisationId);
 
     Optional<NotificationView> findViewByReferenceNumberAndStatusInAndOrganisationId(

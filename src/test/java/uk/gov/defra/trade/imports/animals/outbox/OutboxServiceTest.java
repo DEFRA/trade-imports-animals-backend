@@ -24,13 +24,16 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentRepository;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentService;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.DocumentType;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.ScanStatus;
+import uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionRepository;
 import uk.gov.defra.trade.imports.animals.exceptions.OutboxWriteException;
 import uk.gov.defra.trade.imports.animals.notification.AdditionalDetails;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
+import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.notification.Transport;
@@ -46,13 +49,20 @@ class OutboxServiceTest {
     @Mock
     private AccompanyingDocumentRepository accompanyingDocumentRepository;
 
+    @Mock
+    private UploadSessionRepository uploadSessionRepository;
+
+    @Mock
+    private NotificationRepository notificationRepository;
+
     private OutboxService outboxService;
 
     @BeforeEach
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
         outboxService = new OutboxService(
-            outboxEventRepository, objectMapper, new GbnAgEventDataMapper(), accompanyingDocumentRepository);
+            outboxEventRepository, objectMapper, new GbnAgEventDataMapper(),
+            new DocumentService(accompanyingDocumentRepository, uploadSessionRepository, notificationRepository));
     }
 
     private NotificationAggregate aggregateFor(String referenceNumber, NotificationStatus status) {

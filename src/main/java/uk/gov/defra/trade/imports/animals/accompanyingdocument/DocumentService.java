@@ -162,6 +162,20 @@ public class DocumentService {
   }
 
   /**
+   * Returns the claimed documents for the given notification whose virus scan completed clean,
+   * oldest first.
+   *
+   * @param notificationReferenceNumber the notification reference number
+   * @return list of documents, possibly empty
+   */
+  public List<AccompanyingDocument> findClaimedScannedCleanByNotificationReferenceNumber(
+      String notificationReferenceNumber) {
+    return accompanyingDocumentRepository
+        .findAllByNotificationReferenceNumberAndScanStatusAndClaimedIsTrueOrderByCreatedAsc(
+            notificationReferenceNumber, ScanStatus.COMPLETE);
+  }
+
+  /**
    * Deletes all accompanying documents and upload sessions belonging to the given notification
    * reference numbers.
    *
