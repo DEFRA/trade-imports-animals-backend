@@ -8,6 +8,7 @@ import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.
 
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.ByteArrayOutputStream;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import software.amazon.awssdk.services.s3.model.S3Exception;
@@ -25,19 +26,26 @@ class AwsCallMetricsIT extends OutboxIntegrationBase {
   @Autowired private OutboxPublishService outboxPublishService;
   @Autowired private S3DocumentService s3DocumentService;
 
+  private int publishedMessages;
+
+  @AfterEach
+  void drainTheQueue() {
+    awaitSqsMessages(publishedMessages);
+    purgeQueue();
+  }
+
   @Test
   void anOutboxPublishIsRecordedAsASuccessfulSnsPublish() {
     createNewNotification("aws-call-metrics-it");
     long before = durationCount(meterRegistry, SNS_PUBLISH);
     double failuresBefore = failureTotal(meterRegistry, SNS_PUBLISH);
 
-    int published = outboxPublishService.publishUnpublishedEvents();
+    publishedMessages = outboxPublishService.publishUnpublishedEvents();
 
-    assertThat(published).isPositive();
-    assertThat(durationCount(meterRegistry, SNS_PUBLISH)).isEqualTo(before + published);
+    assertThat(publishedMessages).isPositive();
+    assertThat(durationCount(meterRegistry, SNS_PUBLISH)).isEqualTo(before + publishedMessages);
     assertThat(failureTotal(meterRegistry, SNS_PUBLISH)).isEqualTo(failuresBefore);
     assertThat(availability(meterRegistry, Dependency.SNS)).isEqualTo(1);
-    purgeQueue();
   }
 
   @Test
