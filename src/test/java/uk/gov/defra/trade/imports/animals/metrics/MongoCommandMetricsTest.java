@@ -58,7 +58,7 @@ class MongoCommandMetricsTest {
         "commitTransaction",
         "abortTransaction"
       })
-  void commandSucceeded_recordsAKnownCommandUnderItsOwnName(String commandName) {
+  void commandSucceeded_shouldRecordAKnownCommandUnderItsOwnName(String commandName) {
     listener.commandSucceeded(succeeded(commandName, 5));
 
     assertThat(durationCount(meterRegistry, mongodb(commandName))).isEqualTo(1);
@@ -67,7 +67,7 @@ class MongoCommandMetricsTest {
 
   @ParameterizedTest
   @ValueSource(strings = {"hello", "killCursors"})
-  void commandSucceeded_recordsAnUnknownCommandAsOther(String commandName) {
+  void commandSucceeded_shouldRecordAnUnknownCommandAsOther(String commandName) {
     listener.commandSucceeded(succeeded(commandName, 5));
 
     assertThat(durationCount(meterRegistry, mongodb("other"))).isEqualTo(1);
@@ -75,14 +75,14 @@ class MongoCommandMetricsTest {
   }
 
   @Test
-  void commandSucceeded_recordsTheElapsedTime() {
+  void commandSucceeded_shouldRecordTheElapsedTime() {
     listener.commandSucceeded(succeeded("find", 12));
 
     assertThat(totalDurationMillis(meterRegistry, mongodb("find"))).isEqualTo(12);
   }
 
   @Test
-  void commandFailed_recordsTheElapsedTimeAndAFailureAndLogsTheCause() {
+  void commandFailed_shouldRecordTheElapsedTimeAndAFailureAndLogTheCause() {
     List<ILoggingEvent> lines =
         loggedBy(
             ExternalCallRecorder.class,
