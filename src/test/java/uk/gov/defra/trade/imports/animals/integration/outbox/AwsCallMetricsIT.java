@@ -35,7 +35,7 @@ class AwsCallMetricsIT extends OutboxIntegrationBase {
   }
 
   @Test
-  void anOutboxPublishIsRecordedAsASuccessfulSnsPublish() {
+  void publishUnpublishedEvents_shouldRecordASuccessfulSnsPublish() {
     createNewNotification("aws-call-metrics-it");
     long publishesBefore = durationCount(meterRegistry, SNS_PUBLISH);
     double failuresBefore = failureTotal(meterRegistry, SNS_PUBLISH);
@@ -49,7 +49,7 @@ class AwsCallMetricsIT extends OutboxIntegrationBase {
   }
 
   @Test
-  void aDocumentReadThatS3RefusesIsRecordedAsAFailedGetObject() {
+  void streamToOutput_shouldRecordAFailedGetObject_whenTheKeyIsMissing() {
     double failuresBefore = failureTotal(meterRegistry, S3_GET_OBJECT);
 
     assertThatExceptionOfType(S3Exception.class)
