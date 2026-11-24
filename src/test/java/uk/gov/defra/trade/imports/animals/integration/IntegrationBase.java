@@ -1,6 +1,5 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
-import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.model.HttpResponse.response;
 import static org.testcontainers.utility.DockerImageName.parse;
@@ -40,6 +39,7 @@ import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.mockserver.MockServerContainer;
 import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
+import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.Notification;

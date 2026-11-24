@@ -1,6 +1,5 @@
 package uk.gov.defra.trade.imports.animals.integration.outbox;
 
-import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -14,6 +13,7 @@ import uk.gov.defra.trade.imports.animals.audit.Action;
 import uk.gov.defra.trade.imports.animals.audit.Audit;
 import uk.gov.defra.trade.imports.animals.audit.AuditRepository;
 import uk.gov.defra.trade.imports.animals.audit.Result;
+import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
@@ -62,7 +62,7 @@ class ReplayIT extends OutboxIntegrationBase {
             .expectBody(ReplayResponse.class)
             .returnResult().getResponseBody();
 
-        // Then — 1 events replayed, delivered to SQS
+        // Then — one event replayed, delivered to SQS
         assertThat(response).isNotNull();
         assertThat(response.eventsReplayed()).isEqualTo(1);
 
@@ -73,11 +73,6 @@ class ReplayIT extends OutboxIntegrationBase {
         assertThat(payload.get("aggregateVersion").asLong()).isEqualTo(1L);
     }
 
-    /**
-     * Delivery is asserted separately in {@link #replay_shouldRepublishEventToSns()}: replaying an
-     * already-published event reuses its eventId as the deduplication id, so SNS FIFO suppresses
-     * the message for five minutes. Only the outbox state is assertable here.
-     */
     @Test
     void replay_shouldNotMutateOutboxPublishedAt() {
         // Given — submit a notification so an outbox event exists, then publish it normally

@@ -30,7 +30,7 @@ public class RequestTracingFilter implements Filter {
     private static final String MDC_HTTP_STATUS = "http.response.status_code";
     private static final String MDC_URL_FULL = "url.full";
 
-    @Value("${cdp.tracing.header-name}")
+    @Value("${cdp.tracing.header-name:" + TRACE_ID_HEADER + "}")
     private String header;
     
     @Override
