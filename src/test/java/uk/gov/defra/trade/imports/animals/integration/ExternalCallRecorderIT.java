@@ -27,7 +27,7 @@ class ExternalCallRecorderIT extends IntegrationBase {
   @Autowired private MeterRegistry meterRegistry;
 
   @Test
-  void aNotificationCreateRecordsAMongodbInsert() {
+  void createNotification_shouldRecordAMongodbInsert() {
     long before = durationCount(meterRegistry, MONGODB_INSERT);
 
     createNewNotification("external-call-recorder-it");
@@ -36,7 +36,7 @@ class ExternalCallRecorderIT extends IntegrationBase {
   }
 
   @Test
-  void aFailedCommandIsRecordedAsAFailureOfItsOperation() {
+  void find_shouldRecordAFailure_whenTheCommandFails() {
     double before = failureTotal(meterRegistry, MONGODB_FIND);
 
     assertThatExceptionOfType(DataAccessException.class)
@@ -46,7 +46,7 @@ class ExternalCallRecorderIT extends IntegrationBase {
   }
 
   @Test
-  void aDuplicateKeyInsertIsRecordedAsAFailureOfInsert() {
+  void insert_shouldRecordAFailure_whenTheKeyIsADuplicate() {
     Document document = new Document("_id", new ObjectId());
     mongoTemplate.insert(document, SCRATCH_COLLECTION);
     double before = failureTotal(meterRegistry, MONGODB_INSERT);
@@ -58,7 +58,7 @@ class ExternalCallRecorderIT extends IntegrationBase {
   }
 
   @Test
-  void theConsoleWritesTheCallLineWithTheTraceIdAndANestedEventObject() {
+  void createNotification_shouldWriteTheCallLineWithTheTraceIdAndANestedEventObject() {
     CapturedConsole console = captureSystemOut();
     try (console) {
       createNewNotification("trace-from-the-caller");
@@ -73,7 +73,7 @@ class ExternalCallRecorderIT extends IntegrationBase {
   }
 
   @Test
-  void theConsoleWritesAFailedCallLineWithTheErrorTypeAndMessageButNoStackTrace()
+  void find_shouldWriteAFailedCallLineWithNoStackTrace_whenTheCommandFails()
       {
     CapturedConsole console = captureSystemOut();
     try (console) {
