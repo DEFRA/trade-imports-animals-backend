@@ -49,7 +49,6 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
  */
 abstract class OutboxIntegrationBase extends IntegrationBase {
 
-    protected static final String NOTIFICATION_ENDPOINT = "/notifications";
     protected static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
 
     private static final String AWS_REGION = "eu-west-2";

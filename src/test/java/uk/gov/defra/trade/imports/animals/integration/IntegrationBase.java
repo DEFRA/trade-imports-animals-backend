@@ -73,6 +73,7 @@ import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 public abstract class IntegrationBase {
 
     protected static final String DEFAULT_TRADER_ORG_ID = "5900002";
+    protected static final String NOTIFICATION_ENDPOINT = "/notifications";
 
     static final List<String> SERVICES_TO_MOCK = List.of();
 
@@ -168,7 +169,7 @@ public abstract class IntegrationBase {
 
     protected NotificationAggregate createNewNotification(String traceId) {
         return webClient("NoAuth")
-            .post().uri("/notifications")
+            .post().uri(NOTIFICATION_ENDPOINT)
             .header(NotificationController.HEADER_TRACE_ID, traceId)
             .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
             .exchange().expectStatus().isOk()
