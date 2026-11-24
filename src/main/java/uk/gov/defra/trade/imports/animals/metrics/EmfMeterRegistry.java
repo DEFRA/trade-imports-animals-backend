@@ -28,10 +28,10 @@ import software.amazon.cloudwatchlogs.emf.model.Unit;
  * meter's tags are its only dimensions.
  *
  * <p>Timers and distribution summaries publish every value recorded since the last publish, timers
- * in milliseconds. Counters publish the last step's count. Gauges publish their value when it is
- * finite. A gauge or distribution summary publishes in the CloudWatch unit of its base unit, such as
- * Bytes for {@code bytes}. With no base unit, a distribution summary publishes as Count and a gauge
- * as None. Long task timers, function counters, function timers and time gauges are not published.
+ * in milliseconds. Counters publish the last step's count as Count whatever their base unit. Gauges
+ * publish their value when it is finite. A gauge or distribution summary with the base unit {@code
+ * bytes} publishes as Bytes and one with any other base unit as None. With no base unit, a
+ * distribution summary publishes as Count and a gauge as None. Long task timers, function counters, function timers and time gauges are not published.
  * A meter that fails to publish is logged and the rest are still published.
  */
 @Slf4j
