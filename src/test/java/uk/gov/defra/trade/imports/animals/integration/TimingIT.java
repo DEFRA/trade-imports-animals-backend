@@ -17,7 +17,7 @@ class TimingIT extends IntegrationBase {
   @Autowired private MeterRegistry meterRegistry;
 
   @Test
-  void aNotificationCreateAddsOneCallToItsControllerAndServiceTimers() {
+  void postNotification_shouldAddOneCallToItsControllerAndServiceTimers() {
     long controllerBefore = timerCount(CREATE_CONTROLLER_TIMER);
     long serviceBefore = timerCount(CREATE_SERVICE_TIMER);
 
@@ -28,7 +28,7 @@ class TimingIT extends IntegrationBase {
   }
 
   @Test
-  void aDocumentListAddsOneCallToItsControllerAndServiceTimers() {
+  void listDocuments_shouldAddOneCallToItsControllerAndServiceTimers() {
     String referenceNumber = createNewNotification("timing-it").getReferenceNumber();
     long controllerBefore = timerCount(LIST_CONTROLLER_TIMER);
     long serviceBefore = timerCount(LIST_SERVICE_TIMER);
