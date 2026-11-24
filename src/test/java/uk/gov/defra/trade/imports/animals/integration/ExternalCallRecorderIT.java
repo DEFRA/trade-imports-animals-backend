@@ -39,8 +39,7 @@ class ExternalCallRecorderIT extends IntegrationBase {
   void find_shouldRecordAFailure_whenTheCommandFails() {
     double before = failureTotal(meterRegistry, MONGODB_FIND);
 
-    assertThatExceptionOfType(DataAccessException.class)
-        .isThrownBy(this::runFailingFind);
+    assertThatExceptionOfType(DataAccessException.class).isThrownBy(this::runFailingFind);
 
     assertThat(failureTotal(meterRegistry, MONGODB_FIND)).isEqualTo(before + 1);
   }
@@ -73,12 +72,10 @@ class ExternalCallRecorderIT extends IntegrationBase {
   }
 
   @Test
-  void find_shouldWriteAFailedCallLineWithNoStackTrace_whenTheCommandFails()
-      {
+  void find_shouldWriteAFailedCallLineWithNoStackTrace_whenTheCommandFails() {
     CapturedConsole console = captureSystemOut();
     try (console) {
-      assertThatExceptionOfType(DataAccessException.class)
-          .isThrownBy(this::runFailingFind);
+      assertThatExceptionOfType(DataAccessException.class).isThrownBy(this::runFailingFind);
     }
 
     JsonNode failedFind = consoleLineWithAction("mongodb/find", console);
