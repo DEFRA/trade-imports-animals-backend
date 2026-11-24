@@ -18,11 +18,6 @@ import software.amazon.cloudwatchlogs.emf.environment.Environments;
 import software.amazon.cloudwatchlogs.emf.logger.MetricsLogger;
 import uk.gov.defra.trade.imports.animals.metrics.EmfMeterRegistry;
 
-/**
- * The meter registry that publishes to CloudWatch when {@code aws.emf.enabled} is true, a startup
- * log line saying publishing is off when it is not, and the aspects that record {@code @Timed} and
- * {@code @Counted} methods.
- */
 @Slf4j
 @Configuration
 public class MetricsConfig {
