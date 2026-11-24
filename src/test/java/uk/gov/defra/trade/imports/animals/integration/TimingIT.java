@@ -9,24 +9,29 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 class TimingIT extends IntegrationBase {
 
+  private static final String CREATE_CONTROLLER_TIMER = "controller.postNotification.time";
+  private static final String CREATE_SERVICE_TIMER = "service.saveNotification.time";
+  private static final String LIST_CONTROLLER_TIMER = "controller.listDocuments.time";
+  private static final String LIST_SERVICE_TIMER = "service.findByNotificationReferenceNumber.time";
+
   @Autowired private MeterRegistry meterRegistry;
 
   @Test
   void aNotificationCreateAddsOneCallToItsControllerAndServiceTimers() {
-    long controllerBefore = timerCount("controller.postNotification.time");
-    long serviceBefore = timerCount("service.saveNotification.time");
+    long controllerBefore = timerCount(CREATE_CONTROLLER_TIMER);
+    long serviceBefore = timerCount(CREATE_SERVICE_TIMER);
 
     createNewNotification("timing-it");
 
-    assertThat(timerCount("controller.postNotification.time")).isEqualTo(controllerBefore + 1);
-    assertThat(timerCount("service.saveNotification.time")).isEqualTo(serviceBefore + 1);
+    assertThat(timerCount(CREATE_CONTROLLER_TIMER)).isEqualTo(controllerBefore + 1);
+    assertThat(timerCount(CREATE_SERVICE_TIMER)).isEqualTo(serviceBefore + 1);
   }
 
   @Test
   void aDocumentListAddsOneCallToItsControllerAndServiceTimers() {
     String referenceNumber = createNewNotification("timing-it").getReferenceNumber();
-    long controllerBefore = timerCount("controller.listDocuments.time");
-    long serviceBefore = timerCount("service.findByNotificationReferenceNumber.time");
+    long controllerBefore = timerCount(LIST_CONTROLLER_TIMER);
+    long serviceBefore = timerCount(LIST_SERVICE_TIMER);
 
     webClient("NoAuth")
         .get()
@@ -35,9 +40,8 @@ class TimingIT extends IntegrationBase {
         .expectStatus()
         .isOk();
 
-    assertThat(timerCount("controller.listDocuments.time")).isEqualTo(controllerBefore + 1);
-    assertThat(timerCount("service.findByNotificationReferenceNumber.time"))
-        .isEqualTo(serviceBefore + 1);
+    assertThat(timerCount(LIST_CONTROLLER_TIMER)).isEqualTo(controllerBefore + 1);
+    assertThat(timerCount(LIST_SERVICE_TIMER)).isEqualTo(serviceBefore + 1);
   }
 
   private long timerCount(String name) {
