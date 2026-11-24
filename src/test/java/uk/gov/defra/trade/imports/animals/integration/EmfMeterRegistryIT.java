@@ -36,12 +36,12 @@ class EmfMeterRegistryIT extends IntegrationBase {
   @Autowired private MeterRegistry meterRegistry;
 
   @Test
-  void theMeterRegistryInUseIsTheEmfMeterRegistry() {
+  void meterRegistry_shouldBeTheEmfMeterRegistry_whenEmfIsEnabled() {
     assertThat(meterRegistry).isInstanceOf(EmfMeterRegistry.class);
   }
 
   @Test
-  void theMetersANotificationCreateRecordsAndTheDependencyGaugeAreLetThroughTheAllowlist() {
+  void allowlist_shouldLetThroughTheMetersANotificationCreateRecords() {
     createNewNotification("emf-registry-it");
 
     for (String name :
@@ -56,7 +56,7 @@ class EmfMeterRegistryIT extends IntegrationBase {
   }
 
   @Test
-  void theRegistryPublishesARecordedCallOnItsOwnSchedule() throws Exception {
+  void emfMeterRegistry_shouldPublishARecordedCall_whenItsStepElapses() throws Exception {
     CapturedConsole console = captureSystemOut();
     try (console) {
       createNewNotification("emf-registry-it");
@@ -80,7 +80,7 @@ class EmfMeterRegistryIT extends IntegrationBase {
         "spring.data.repository.invocations",
         "http.server.requests.active"
       })
-  void aMeterOffTheAllowlistIsNeverRegistered(String name) {
+  void allowlist_shouldNotRegisterAMeter_whenItsNameIsNotListed(String name) {
     meterRegistry.counter(name).increment();
 
     assertThat(meterRegistry.find(name).meter()).isNull();
