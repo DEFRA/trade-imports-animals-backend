@@ -111,7 +111,7 @@ class EcsEventEncoderTest {
                     .setCause(new IllegalStateException("from the throwable"))
                     .log("External call failed"));
 
-    String line = new String(encoder.encode(event));
+    String line = new String(encoder.encode(event), StandardCharsets.UTF_8);
 
     assertThat(line)
         .contains("\"error.type\":\"java.lang.IllegalStateException\"")
@@ -135,7 +135,8 @@ class EcsEventEncoderTest {
     ILoggingEvent event =
         logged(() -> LOG.atInfo().addKeyValue("other.key", "value").log("Started"));
 
-    assertThat(new String(encoder.encode(event))).isEqualTo(new String(ecsEncoder.encode(event)));
+    assertThat(new String(encoder.encode(event), StandardCharsets.UTF_8))
+        .isEqualTo(new String(ecsEncoder.encode(event), StandardCharsets.UTF_8));
   }
 
   @Test
