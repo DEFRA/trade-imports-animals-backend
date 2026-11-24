@@ -21,19 +21,21 @@ public class AwsCallRecorder implements ExecutionInterceptor {
 
   private final ExternalCallRecorder externalCallRecorder;
   private final Dependency dependency;
-  private final Set<String> operations;
+  private final Set<String> namedOperations;
 
   /**
    * Creates a recorder for one client.
    *
    * @param dependency the system the client calls
-   * @param operations the kebab-case actions recorded by name
+   * @param namedOperations the kebab-case actions recorded by name
    */
   public AwsCallRecorder(
-      ExternalCallRecorder externalCallRecorder, Dependency dependency, Set<String> operations) {
+      ExternalCallRecorder externalCallRecorder,
+      Dependency dependency,
+      Set<String> namedOperations) {
     this.externalCallRecorder = externalCallRecorder;
     this.dependency = dependency;
-    this.operations = Set.copyOf(operations);
+    this.namedOperations = Set.copyOf(namedOperations);
   }
 
   @Override
@@ -57,7 +59,7 @@ public class AwsCallRecorder implements ExecutionInterceptor {
       return "other";
     }
     String operation = action.replaceAll("([a-z])([A-Z])", "$1-$2").toLowerCase(Locale.ROOT);
-    return operations.contains(operation) ? operation : "other";
+    return namedOperations.contains(operation) ? operation : "other";
   }
 
   private ExternalCall callOf(ExecutionAttributes attributes) {
