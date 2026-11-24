@@ -55,7 +55,6 @@ import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 class NotificationIT extends IntegrationBase {
 
-    private static final String NOTIFICATION_ENDPOINT = "/notifications";
     private static final String ADMIN_SECRET_HEADER = "Trade-Imports-Animals-Admin-Secret";
     private static final String VALID_ADMIN_SECRET = "test-admin-secret";
     private static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;

@@ -41,7 +41,6 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 class TransactionRetryAdvisorIT extends IntegrationBase {
 
     private static final String COLLECTION = "transaction_retry_probe";
-    private static final String NOTIFICATION_ENDPOINT = "/notifications";
 
     @Autowired
     private MongoTemplate mongoTemplate;
