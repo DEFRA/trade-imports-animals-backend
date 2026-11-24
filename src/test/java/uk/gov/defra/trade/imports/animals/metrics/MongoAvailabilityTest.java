@@ -27,26 +27,26 @@ class MongoAvailabilityTest {
   private final MongoAvailability availability = new MongoAvailability();
 
   @Test
-  void state_isUnknownBeforeAnyServerIsChecked() {
+  void state_shouldBeUnknown_beforeAnyServerIsChecked() {
     assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNKNOWN);
   }
 
   @Test
-  void state_isUnknownWhileAServerIsNotYetChecked() {
+  void state_shouldBeUnknown_whileAServerIsNotYetChecked() {
     report(availability, unchecked(FIRST));
 
     assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNKNOWN);
   }
 
   @Test
-  void state_isUnknownWhenTheDriverMonitorsNoServers() {
+  void state_shouldBeUnknown_whenTheDriverMonitorsNoServers() {
     report(availability);
 
     assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNKNOWN);
   }
 
   @Test
-  void state_isAvailableWhileAConnectedServerAcceptsWrites() {
+  void state_shouldBeAvailable_whileAConnectedServerAcceptsWrites() {
     report(availability, failing(FIRST), primary(SECOND));
 
     assertThat(availability.state()).isEqualTo(MongoAvailability.State.AVAILABLE);
@@ -63,35 +63,35 @@ class MongoAvailabilityTest {
   }
 
   @Test
-  void state_isUnknownWhileOneServerHasFailedAndAnotherIsNotYetChecked() {
+  void state_shouldBeUnknown_whileOneServerHasFailedAndAnotherIsNotYetChecked() {
     report(availability, failing(FIRST), unchecked(SECOND));
 
     assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNKNOWN);
   }
 
   @Test
-  void state_isUnavailableOnceEveryServerHasFailedItsCheck() {
+  void state_shouldBeUnavailable_onceEveryServerHasFailedItsCheck() {
     report(availability, failing(FIRST), failing(SECOND));
 
     assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNAVAILABLE);
   }
 
   @Test
-  void state_isUnavailableWhenTheConnectedServersAreSecondariesAndTheRestHaveFailed() {
+  void state_shouldBeUnavailable_whenTheConnectedServersAreSecondariesAndTheRestHaveFailed() {
     report(availability, failing(FIRST), secondary(SECOND));
 
     assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNAVAILABLE);
   }
 
   @Test
-  void state_isUnknownWhileASecondaryIsConnectedAndAnotherServerIsNotYetChecked() {
+  void state_shouldBeUnknown_whileASecondaryIsConnectedAndAnotherServerIsNotYetChecked() {
     report(availability, secondary(FIRST), unchecked(SECOND));
 
     assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNKNOWN);
   }
 
   @Test
-  void state_isUnavailableOnceThePrimaryIsRemoved() {
+  void state_shouldBeUnavailable_onceThePrimaryIsRemoved() {
     report(availability, failing(FIRST), primary(SECOND));
 
     report(availability, failing(FIRST));
@@ -100,7 +100,7 @@ class MongoAvailabilityTest {
   }
 
   @Test
-  void state_isAvailableAgainOnceAServerRecovers() {
+  void state_shouldBeAvailableAgain_onceAServerRecovers() {
     report(availability, failing(FIRST));
 
     report(availability, primary(FIRST));
@@ -109,7 +109,7 @@ class MongoAvailabilityTest {
   }
 
   @Test
-  void clusterDescriptionChanged_logsOnceAtWarnNamingTheServersWithTheFailure_whenUnavailable() {
+  void clusterDescriptionChanged_shouldWarnOnceWithTheFailure_whenUnavailable() {
     report(availability, primary(FIRST), primary(SECOND));
 
     List<ILoggingEvent> lines =
@@ -129,7 +129,7 @@ class MongoAvailabilityTest {
   }
 
   @Test
-  void clusterDescriptionChanged_logsOnceAtWarnNamingTheServersNoneWritable_whenThePrimaryIsLost() {
+  void clusterDescriptionChanged_shouldWarnOnceThatNoServerIsWritable_whenThePrimaryIsLost() {
     report(availability, primary(FIRST), secondary(SECOND));
 
     List<ILoggingEvent> lines =
@@ -148,7 +148,7 @@ class MongoAvailabilityTest {
   }
 
   @Test
-  void clusterDescriptionChanged_logsOnceAtInfoNamingTheServers_whenTheDatabaseBecomesAvailable() {
+  void clusterDescriptionChanged_shouldLogOnceAtInfo_whenTheDatabaseBecomesAvailable() {
     List<ILoggingEvent> lines =
         loggedBy(
             MongoAvailability.class,
@@ -162,7 +162,7 @@ class MongoAvailabilityTest {
   }
 
   @Test
-  void clusterDescriptionChanged_turnsUnknownLoggingOnceAtWarnNamingTheServers_fromAvailable() {
+  void clusterDescriptionChanged_shouldWarnOnce_whenAvailabilityTurnsUnknown() {
     report(availability, primary(FIRST), primary(SECOND));
 
     List<ILoggingEvent> lines =
@@ -182,7 +182,7 @@ class MongoAvailabilityTest {
   }
 
   @Test
-  void clusterDescriptionChanged_logsNothing_whileAnotherServerStillAcceptsWrites() {
+  void clusterDescriptionChanged_shouldLogNothing_whileAnotherServerStillAcceptsWrites() {
     report(availability, primary(FIRST), primary(SECOND));
 
     List<ILoggingEvent> lines =
