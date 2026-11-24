@@ -25,7 +25,7 @@ public class OutboxReplayService {
     private final AuditRepository auditRepository;
     private final OutboxConfig outboxConfig;
 
-    @Timed("service.replayOutboxEvents.time")
+    @Timed("service.replay.time")
     public int replay(String referenceNumber, AuditContext auditContext) {
         List<OutboxEvent> events = outboxService.findByReferenceNumber(referenceNumber);
         if (events.isEmpty()) {

@@ -128,7 +128,7 @@ public class OutboxService {
         return (int) (mintsNewVersion ? submissionCount + 1 : submissionCount);
     }
 
-    @Timed("service.findOutboxEventsByReferenceNumber.time")
+    @Timed("service.findByReferenceNumber.time")
     public List<OutboxEvent> findByReferenceNumber(String referenceNumber) {
         String aggregateId = buildAggregateId(referenceNumber);
         return outboxEventRepository.findAllByAggregateIdOrderByAggregateVersionAsc(aggregateId);
