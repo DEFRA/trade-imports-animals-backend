@@ -25,7 +25,7 @@ class EcsLoggingIT extends IntegrationBase {
 
     private static final String LOGGING_TEST_REF = "LOGGING-TEST";
     private static final String DOCUMENT_UPLOADS_PATH =
-        "/notifications/" + LOGGING_TEST_REF + "/document-uploads";
+        NOTIFICATION_ENDPOINT + "/" + LOGGING_TEST_REF + "/document-uploads";
 
     @Autowired
     private MockMvc mockMvc;

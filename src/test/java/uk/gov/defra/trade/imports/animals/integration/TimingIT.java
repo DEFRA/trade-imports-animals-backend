@@ -35,7 +35,7 @@ class TimingIT extends IntegrationBase {
 
     webClient("NoAuth")
         .get()
-        .uri("/notifications/{referenceNumber}/document-uploads", referenceNumber)
+        .uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/document-uploads", referenceNumber)
         .exchange()
         .expectStatus()
         .isOk();
