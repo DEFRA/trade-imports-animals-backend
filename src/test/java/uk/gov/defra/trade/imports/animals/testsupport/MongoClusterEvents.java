@@ -50,7 +50,7 @@ public final class MongoClusterEvents {
         .build();
   }
 
-  private static ServerDescription connected(ServerAddress address, ServerType type) {
+  public static ServerDescription connected(ServerAddress address, ServerType type) {
     return ServerDescription.builder()
         .address(address)
         .state(ServerConnectionState.CONNECTED)

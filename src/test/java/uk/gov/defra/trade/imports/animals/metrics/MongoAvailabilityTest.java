@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.loggedBy;
+import static uk.gov.defra.trade.imports.animals.testsupport.MongoClusterEvents.connected;
 import static uk.gov.defra.trade.imports.animals.testsupport.MongoClusterEvents.failing;
 import static uk.gov.defra.trade.imports.animals.testsupport.MongoClusterEvents.primary;
 import static uk.gov.defra.trade.imports.animals.testsupport.MongoClusterEvents.report;
@@ -11,8 +12,11 @@ import static uk.gov.defra.trade.imports.animals.testsupport.MongoClusterEvents.
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.mongodb.ServerAddress;
+import com.mongodb.connection.ServerType;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 class MongoAvailabilityTest {
 
@@ -43,6 +47,16 @@ class MongoAvailabilityTest {
   @Test
   void state_isAvailableWhileAConnectedServerAcceptsWrites() {
     report(availability, failing(FIRST), primary(SECOND));
+
+    assertThat(availability.state()).isEqualTo(MongoAvailability.State.AVAILABLE);
+  }
+
+  @ParameterizedTest
+  @EnumSource(
+      value = ServerType.class,
+      names = {"REPLICA_SET_PRIMARY", "STANDALONE", "SHARD_ROUTER", "LOAD_BALANCER"})
+  void state_shouldBeAvailable_whenAConnectedServerIsOfAWritableType(ServerType type) {
+    report(availability, connected(FIRST, type));
 
     assertThat(availability.state()).isEqualTo(MongoAvailability.State.AVAILABLE);
   }
