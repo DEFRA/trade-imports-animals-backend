@@ -64,7 +64,7 @@ class EcsEventEncoderTest {
   }
 
   @Test
-  void encode_keepsTheErrorFieldsAfterTheEventObject() throws IOException {
+  void encode_shouldKeepTheThrowablesErrorFields_withTheEventObject() throws IOException {
     ILoggingEvent event =
         logged(
             () ->
