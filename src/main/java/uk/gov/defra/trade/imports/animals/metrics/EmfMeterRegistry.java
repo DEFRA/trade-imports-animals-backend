@@ -51,13 +51,13 @@ public class EmfMeterRegistry extends StepMeterRegistry {
    */
   public EmfMeterRegistry(
       String namespace, Duration step, Clock clock, Supplier<MetricsLogger> metricsLoggers) {
-    super(stepsOf(step), clock);
+    super(stepRegistryConfig(step), clock);
     this.step = step;
     this.namespace = namespace;
     this.metricsLoggers = metricsLoggers;
   }
 
-  private static StepRegistryConfig stepsOf(Duration step) {
+  private static StepRegistryConfig stepRegistryConfig(Duration step) {
     return new StepRegistryConfig() {
       @Override
       public String prefix() {
