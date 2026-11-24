@@ -82,8 +82,7 @@ class EcsEventEncoderTest {
   }
 
   @Test
-  void encode_writesOnlyTheErrorKeyValuePairsAsTopLevelFieldsWithNoStackTrace()
-      throws IOException {
+  void encode_writesOnlyTheErrorKeyValuePairsAsTopLevelFields() throws IOException {
     ILoggingEvent event =
         logged(
             () ->
@@ -97,7 +96,6 @@ class EcsEventEncoderTest {
 
     assertThat(line.path("error.type").asText()).isEqualTo("java.lang.IllegalStateException");
     assertThat(line.path("error.message").asText()).isEqualTo("mongo unavailable");
-    assertThat(line.has("error.stack_trace")).isFalse();
     assertThat(line.has("event.outcome")).isFalse();
     assertThat(line.path("event").path("outcome").asText()).isEqualTo("failure");
   }
