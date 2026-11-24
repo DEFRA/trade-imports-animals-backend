@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 
 class EmfMeterRegistryTest {
 
-  private static final String NAMESPACE = "trade-imports-address-book";
+  private static final String NAMESPACE = "trade-imports-animals-backend";
   private static final Duration STEP = Duration.ofMinutes(1);
 
   private final MockClock clock = new MockClock();
@@ -84,16 +84,17 @@ class EmfMeterRegistryTest {
 
   @Test
   void publish_writesACountersCountForTheLastMinute() {
-    Counter counter = Counter.builder("address.change").tag("change", "create").register(registry);
+    Counter counter =
+        Counter.builder("notification.change").tag("change", "create").register(registry);
     counter.increment();
     counter.increment();
     clock.add(STEP);
 
     registry.publish();
 
-    JsonNode document = onlyDocumentFor("address.change");
+    JsonNode document = onlyDocumentFor("notification.change");
     assertThat(unitOf(document)).isEqualTo("Count");
-    assertThat(valuesOf(document, "address.change")).containsExactly(2.0);
+    assertThat(valuesOf(document, "notification.change")).containsExactly(2.0);
   }
 
   @Test
