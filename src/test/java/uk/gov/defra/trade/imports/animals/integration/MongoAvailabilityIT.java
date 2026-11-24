@@ -19,14 +19,14 @@ class MongoAvailabilityIT extends IntegrationBase {
   @Autowired private MongoAvailability applicationMongoAvailability;
 
   @Test
-  void theApplicationsOwnClientReportsMongoAvailable() {
+  void state_shouldBeAvailable_whenTheApplicationsDatabaseIsUp() {
     await()
         .atMost(Duration.ofSeconds(30))
         .until(() -> applicationMongoAvailability.state() == MongoAvailability.State.AVAILABLE);
   }
 
   @Test
-  void aDatabaseThatStopsIsReportedUnavailable() {
+  void state_shouldBeUnavailable_whenTheDatabaseStops() {
     MongoAvailability availability = new MongoAvailability();
     try (MongoDBContainer throwaway = new MongoDBContainer(DockerImageName.parse("mongo:7.0"))) {
       throwaway.start();
