@@ -52,10 +52,10 @@ class AwsCallMetricsIT extends OutboxIntegrationBase {
   @Test
   void streamToOutput_shouldRecordAFailedGetObject_whenTheKeyIsMissing() {
     double failuresBefore = failureTotal(meterRegistry, S3_GET_OBJECT);
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
     assertThatExceptionOfType(S3Exception.class)
-        .isThrownBy(
-            () -> s3DocumentService.streamToOutput("no-such-key", new ByteArrayOutputStream()));
+        .isThrownBy(() -> s3DocumentService.streamToOutput("no-such-key", outputStream));
 
     assertThat(failureTotal(meterRegistry, S3_GET_OBJECT)).isEqualTo(failuresBefore + 1);
     assertThat(availability(meterRegistry, Dependency.S3)).isZero();

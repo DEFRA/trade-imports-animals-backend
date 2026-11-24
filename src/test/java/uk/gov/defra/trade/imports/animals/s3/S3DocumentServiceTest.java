@@ -150,9 +150,9 @@ class S3DocumentServiceTest {
         .thenReturn(
             new ResponseInputStream<>(
                 GetObjectResponse.builder().build(), AbortableInputStream.create(failingStream)));
+    ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
-    assertThatThrownBy(
-            () -> s3DocumentService.streamToOutput("some-key", new ByteArrayOutputStream()))
+    assertThatThrownBy(() -> s3DocumentService.streamToOutput("some-key", outputStream))
         .isInstanceOf(UncheckedIOException.class);
 
     assertThat(failureTotal(meterRegistry, GET_OBJECT)).isEqualTo(1);
