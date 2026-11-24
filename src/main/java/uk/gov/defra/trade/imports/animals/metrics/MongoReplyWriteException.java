@@ -8,8 +8,8 @@ import org.bson.BsonValue;
 
 final class MongoReplyWriteException extends RuntimeException {
 
-  private MongoReplyWriteException(String errorCodes) {
-    super(errorCodes, null, false, false);
+  private MongoReplyWriteException(String writeFailures) {
+    super(writeFailures, null, false, false);
   }
 
   static Optional<MongoReplyWriteException> reportedBy(BsonDocument reply) {
