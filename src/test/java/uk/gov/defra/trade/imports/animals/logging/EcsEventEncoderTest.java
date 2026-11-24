@@ -9,6 +9,7 @@ import co.elastic.logging.logback.EcsEncoder;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -119,6 +120,15 @@ class EcsEventEncoderTest {
         .contains("\"error.message\":\"from the throwable\"")
         .doesNotContain("java.lang.IllegalArgumentException")
         .doesNotContain("from the key-value pair");
+  }
+
+  @Test
+  void encode_writesALineWithNoKeyValuePairsExactlyAsTheEcsEncoderDoes() {
+    MDC.put("trace.id", "trace-from-the-caller");
+    ILoggingEvent event = logged(() -> LOG.info("Started"));
+
+    assertThat(new String(encoder.encode(event), StandardCharsets.UTF_8))
+        .isEqualTo(new String(ecsEncoder.encode(event), StandardCharsets.UTF_8));
   }
 
   @Test
