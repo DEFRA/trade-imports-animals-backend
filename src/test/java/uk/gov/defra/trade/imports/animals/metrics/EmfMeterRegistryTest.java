@@ -107,7 +107,9 @@ class EmfMeterRegistryTest {
 
     registry.publish();
 
-    assertThat(valuesOf(onlyDocumentFor("external.dependency.available"), "external.dependency.available"))
+    assertThat(
+            valuesOf(
+                onlyDocumentFor("external.dependency.available"), "external.dependency.available"))
         .containsExactly(1.0);
     assertThat(emf.documentsFor("unknown.gauge")).isEmpty();
   }
