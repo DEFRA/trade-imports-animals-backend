@@ -75,6 +75,18 @@ class AwsCallRecorderTest {
     assertThat(lastCallOutcomes.lastCallSucceeded(Dependency.S3)).contains(false);
   }
 
+  @Test
+  void onExecutionFailure_shouldRecordAZeroDurationFailure_whenTheCallNeverBegan() {
+    S3Exception cause = (S3Exception) S3Exception.builder().message("NoSuchKey").build();
+    nanoTime.addAndGet(Duration.ofMillis(40).toNanos());
+
+    s3Recorder.onExecutionFailure(failedWith(cause), attributesFor("GetObject"));
+
+    ExternalCall getObject = new ExternalCall(Dependency.S3, "get-object");
+    assertThat(failureTotal(meterRegistry, getObject)).isEqualTo(1);
+    assertThat(totalDurationMillis(meterRegistry, getObject)).isZero();
+  }
+
   private static ExecutionAttributes attributesFor(String action) {
     ExecutionAttributes attributes = new ExecutionAttributes();
     attributes.putAttribute(SdkExecutionAttribute.OPERATION_NAME, action);
