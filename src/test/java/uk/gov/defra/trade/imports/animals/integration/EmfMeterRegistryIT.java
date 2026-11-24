@@ -16,10 +16,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
 import uk.gov.defra.trade.imports.animals.metrics.EmfMeterRegistry;
 import uk.gov.defra.trade.imports.animals.testsupport.CapturedConsole;
 
+@DirtiesContext
 @TestPropertySource(
     properties = {
       "aws.emf.enabled=true",
