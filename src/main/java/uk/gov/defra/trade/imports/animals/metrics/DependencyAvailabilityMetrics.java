@@ -7,9 +7,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Registers the gauge {@code external.dependency.available}, tagged {@code dependency}, for each
- * dependency: 1 while it is available, 0 while it is not, and NaN while unknown. MongoDB's comes
- * from the driver's server checks; every other dependency's from the outcome of its most recent
- * call.
+ * dependency: 1 while it is available, 0 while it is not, and NaN while unknown.
  */
 @Component
 public class DependencyAvailabilityMetrics {
