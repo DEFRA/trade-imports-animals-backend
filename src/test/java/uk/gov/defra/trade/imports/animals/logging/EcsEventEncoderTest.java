@@ -41,7 +41,7 @@ class EcsEventEncoderTest {
   }
 
   @Test
-  void encode_nestsTheEventKeyValuePairs_withAnIntegralDuration() throws IOException {
+  void encode_shouldNestEventKeyValuePairs_withAnIntegralDuration() throws IOException {
     ILoggingEvent event =
         logged(
             () ->
@@ -82,7 +82,7 @@ class EcsEventEncoderTest {
   }
 
   @Test
-  void encode_writesOnlyTheErrorKeyValuePairsAsTopLevelFields() throws IOException {
+  void encode_shouldWriteOnlyTheErrorKeyValuePairsAsTopLevelFields() throws IOException {
     ILoggingEvent event =
         logged(
             () ->
@@ -101,7 +101,7 @@ class EcsEventEncoderTest {
   }
 
   @Test
-  void encode_writesTheThrowablesErrorFieldsInsteadOfTheErrorKeyValuePairs() {
+  void encode_shouldWriteTheThrowablesErrorFields_insteadOfTheErrorKeyValuePairs() {
     ILoggingEvent event =
         logged(
             () ->
@@ -121,7 +121,7 @@ class EcsEventEncoderTest {
   }
 
   @Test
-  void encode_writesALineWithNoKeyValuePairsExactlyAsTheEcsEncoderDoes() {
+  void encode_shouldWriteALineWithNoKeyValuePairs_exactlyAsTheEcsEncoderDoes() {
     MDC.put("trace.id", "trace-from-the-caller");
     ILoggingEvent event = logged(() -> LOG.info("Started"));
 
@@ -130,7 +130,7 @@ class EcsEventEncoderTest {
   }
 
   @Test
-  void encode_writesALineWithNoEventKeyValuePairsExactlyAsTheEcsEncoderDoes() {
+  void encode_shouldWriteALineWithNoEventKeyValuePairs_exactlyAsTheEcsEncoderDoes() {
     MDC.put("trace.id", "trace-from-the-caller");
     ILoggingEvent event =
         logged(() -> LOG.atInfo().addKeyValue("other.key", "value").log("Started"));
@@ -139,7 +139,7 @@ class EcsEventEncoderTest {
   }
 
   @Test
-  void encode_escapesStringValues() throws IOException {
+  void encode_shouldEscapeStringValues() throws IOException {
     ILoggingEvent event =
         logged(() -> LOG.atInfo().addKeyValue("event.action", "say \"hi\" \\ there").log("Hi"));
 
@@ -149,7 +149,7 @@ class EcsEventEncoderTest {
   }
 
   @Test
-  void encode_writesANullValueAsJsonNull() throws IOException {
+  void encode_shouldWriteAJsonNull_whenAnEventValueIsNull() throws IOException {
     ILoggingEvent event =
         logged(() -> LOG.atInfo().addKeyValue("event.outcome", (Object) null).log("No outcome"));
 
@@ -159,7 +159,7 @@ class EcsEventEncoderTest {
   }
 
   @Test
-  void encode_writesANonFiniteNumberAsAString() throws IOException {
+  void encode_shouldWriteANonFiniteNumberAsAString() throws IOException {
     ILoggingEvent event =
         logged(
             () ->
