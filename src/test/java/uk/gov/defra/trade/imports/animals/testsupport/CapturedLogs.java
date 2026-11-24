@@ -1,5 +1,8 @@
 package uk.gov.defra.trade.imports.animals.testsupport;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
+import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
@@ -31,6 +34,15 @@ public final class CapturedLogs {
       logger.detachAppender(appender);
     }
     return appender.list;
+  }
+
+  public static ILoggingEvent assertOneLine(
+      List<ILoggingEvent> lines, Level level, String formattedMessage) {
+    assertThat(lines).hasSize(1);
+    ILoggingEvent line = lines.getFirst();
+    assertThat(line.getLevel()).isEqualTo(level);
+    assertThat(line.getFormattedMessage()).isEqualTo(formattedMessage);
+    return line;
   }
 
   public static Map<String, Object> keyValues(ILoggingEvent event) {

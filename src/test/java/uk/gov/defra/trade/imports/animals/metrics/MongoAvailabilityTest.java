@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.assertOneLine;
 import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.loggedBy;
 import static uk.gov.defra.trade.imports.animals.testsupport.MongoClusterEvents.connected;
 import static uk.gov.defra.trade.imports.animals.testsupport.MongoClusterEvents.failing;
@@ -119,11 +120,12 @@ class MongoAvailabilityTest {
               report(availability, failing(FIRST), failing(SECOND));
             });
 
-    assertThat(lines).hasSize(1);
-    assertThat(lines.getFirst().getLevel()).isEqualTo(Level.WARN);
-    assertThat(lines.getFirst().getFormattedMessage())
-        .isEqualTo("MongoDB is unavailable, servers [mongo-1:27017, mongo-2:27017]");
-    assertThat(lines.getFirst().getThrowableProxy().getMessage()).isEqualTo("refused");
+    ILoggingEvent line =
+        assertOneLine(
+            lines,
+            Level.WARN,
+            "MongoDB is unavailable, servers [mongo-1:27017, mongo-2:27017]");
+    assertThat(line.getThrowableProxy().getMessage()).isEqualTo("refused");
   }
 
   @Test
@@ -138,12 +140,11 @@ class MongoAvailabilityTest {
               report(availability, failing(FIRST), secondary(SECOND));
             });
 
-    assertThat(lines).hasSize(1);
-    assertThat(lines.getFirst().getLevel()).isEqualTo(Level.WARN);
-    assertThat(lines.getFirst().getFormattedMessage())
-        .isEqualTo(
-            "MongoDB is unavailable: servers [mongo-1:27017, mongo-2:27017] are connected but"
-                + " none accepts writes");
+    assertOneLine(
+        lines,
+        Level.WARN,
+        "MongoDB is unavailable: servers [mongo-1:27017, mongo-2:27017] are connected but"
+            + " none accepts writes");
   }
 
   @Test
@@ -156,10 +157,8 @@ class MongoAvailabilityTest {
               report(availability, primary(FIRST), primary(SECOND));
             });
 
-    assertThat(lines).hasSize(1);
-    assertThat(lines.getFirst().getLevel()).isEqualTo(Level.INFO);
-    assertThat(lines.getFirst().getFormattedMessage())
-        .isEqualTo("MongoDB is available, servers [mongo-1:27017, mongo-2:27017]");
+    assertOneLine(
+        lines, Level.INFO, "MongoDB is available, servers [mongo-1:27017, mongo-2:27017]");
   }
 
   @Test
@@ -175,12 +174,11 @@ class MongoAvailabilityTest {
             });
 
     assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNKNOWN);
-    assertThat(lines).hasSize(1);
-    assertThat(lines.getFirst().getLevel()).isEqualTo(Level.WARN);
-    assertThat(lines.getFirst().getFormattedMessage())
-        .isEqualTo(
-            "MongoDB availability is unknown until every server is checked, servers"
-                + " [mongo-1:27017, mongo-2:27017]");
+    assertOneLine(
+        lines,
+        Level.WARN,
+        "MongoDB availability is unknown until every server is checked, servers"
+            + " [mongo-1:27017, mongo-2:27017]");
   }
 
   @Test

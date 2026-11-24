@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.metrics;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.assertOneLine;
 import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.keyValues;
 import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.loggedBy;
 import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.durationCount;
@@ -55,10 +56,8 @@ class ExternalCallRecorderTest {
         loggedBy(
             ExternalCallRecorder.class, () -> recorder.recordSuccess(PUBLISH, Duration.ofMillis(2)));
 
-    assertThat(lines).hasSize(1);
-    ILoggingEvent line = lines.getFirst();
-    assertThat(line.getLevel()).isEqualTo(Level.INFO);
-    assertThat(line.getFormattedMessage()).isEqualTo("External call sns/publish success in 2 ms");
+    ILoggingEvent line =
+        assertOneLine(lines, Level.INFO, "External call sns/publish success in 2 ms");
     assertThat(keyValues(line))
         .containsEntry("event.category", "external-call")
         .containsEntry("event.action", "sns/publish")
@@ -75,9 +74,8 @@ class ExternalCallRecorderTest {
             ExternalCallRecorder.class,
             () -> recorder.recordFailure(GET_OBJECT, Duration.ofMillis(4), cause));
 
-    assertThat(lines).hasSize(1);
-    ILoggingEvent line = lines.getFirst();
-    assertThat(line.getLevel()).isEqualTo(Level.WARN);
+    ILoggingEvent line =
+        assertOneLine(lines, Level.WARN, "External call s3/get-object failure in 4 ms");
     assertThat(keyValues(line))
         .containsEntry("event.action", "s3/get-object")
         .containsEntry("event.outcome", "failure")
