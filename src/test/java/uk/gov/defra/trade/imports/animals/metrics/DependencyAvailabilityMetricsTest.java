@@ -28,26 +28,26 @@ class DependencyAvailabilityMetricsTest {
 
   @ParameterizedTest
   @EnumSource(Dependency.class)
-  void gauge_isNaNBeforeAnythingIsKnown(Dependency dependency) {
+  void availabilityGauge_shouldBeNaN_whenTheDependencyHasNotBeenCalled(Dependency dependency) {
     assertThat(availability(meterRegistry, dependency)).isNaN();
   }
 
   @Test
-  void mongodbGauge_isOneWhileMongoIsAvailable() {
+  void availabilityGauge_shouldBeOneForMongodb_whenMongoIsAvailable() {
     report(mongoAvailability, primary(ADDRESS));
 
     assertThat(availability(meterRegistry, Dependency.MONGODB)).isEqualTo(1);
   }
 
   @Test
-  void mongodbGauge_isZeroWhileMongoIsUnavailable() {
+  void availabilityGauge_shouldBeZeroForMongodb_whenMongoIsUnavailable() {
     report(mongoAvailability, failing(ADDRESS));
 
     assertThat(availability(meterRegistry, Dependency.MONGODB)).isZero();
   }
 
   @Test
-  void mongodbGauge_followsTheServerChecksNotTheLastCommand() {
+  void availabilityGauge_shouldFollowTheServerChecksForMongodb_notTheLastCommand() {
     report(mongoAvailability, primary(ADDRESS));
     lastCallOutcomes.recordFailure(Dependency.MONGODB);
 
@@ -56,7 +56,7 @@ class DependencyAvailabilityMetricsTest {
 
   @ParameterizedTest
   @EnumSource(value = Dependency.class, names = {"S3", "SNS"})
-  void awsGauge_isOneAfterASuccessfulCall(Dependency dependency) {
+  void availabilityGauge_shouldBeOneForAws_whenTheLastCallSucceeded(Dependency dependency) {
     lastCallOutcomes.recordSuccess(dependency);
 
     assertThat(availability(meterRegistry, dependency)).isEqualTo(1);
@@ -64,7 +64,7 @@ class DependencyAvailabilityMetricsTest {
 
   @ParameterizedTest
   @EnumSource(value = Dependency.class, names = {"S3", "SNS"})
-  void awsGauge_isZeroAfterAFailedCall(Dependency dependency) {
+  void availabilityGauge_shouldBeZeroForAws_whenTheLastCallFailed(Dependency dependency) {
     lastCallOutcomes.recordFailure(dependency);
 
     assertThat(availability(meterRegistry, dependency)).isZero();
