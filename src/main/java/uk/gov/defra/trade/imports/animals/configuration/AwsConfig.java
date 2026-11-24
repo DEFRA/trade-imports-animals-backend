@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.configuration;
 import java.net.URI;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -23,6 +24,9 @@ import software.amazon.awssdk.services.sts.model.GetWebIdentityTokenRequest;
 import software.amazon.awssdk.services.sts.model.GetWebIdentityTokenResponse;
 import software.amazon.awssdk.services.sts.model.StsException;
 import uk.gov.defra.trade.imports.animals.exceptions.TradeImportsAnimalsBackendException;
+import uk.gov.defra.trade.imports.animals.metrics.AwsCallRecorder;
+import uk.gov.defra.trade.imports.animals.metrics.Dependency;
+import uk.gov.defra.trade.imports.animals.metrics.ExternalCallRecorder;
 
 @Slf4j
 @Configuration
@@ -32,16 +36,19 @@ public class AwsConfig {
     private final String audience;
     private final Integer expiration;
     private final AppAwsConfig appAwsConfig;
+    private final ExternalCallRecorder externalCallRecorder;
 
     public AwsConfig(
         @Value("${aws.region}") String region,
         @Value("${aws.sts.token.audience}") String audience,
         @Value("${aws.sts.token.expiration}") Integer expiration,
-        AppAwsConfig appAwsConfig) {
+        AppAwsConfig appAwsConfig,
+        ExternalCallRecorder externalCallRecorder) {
         this.region = region;
         this.audience = audience;
         this.expiration = expiration;
         this.appAwsConfig = appAwsConfig;
+        this.externalCallRecorder = externalCallRecorder;
     }
 
     public String getWebIdentityToken() {
@@ -69,7 +76,9 @@ public class AwsConfig {
             .overrideConfiguration(c -> c
                 .retryStrategy(RetryMode.ADAPTIVE_V2)
                 .apiCallTimeout(Duration.ofSeconds(30))
-                .apiCallAttemptTimeout(Duration.ofSeconds(10)));
+                .apiCallAttemptTimeout(Duration.ofSeconds(10))
+                .addExecutionInterceptor(new AwsCallRecorder(
+                    externalCallRecorder, Dependency.S3, Set.of("get-object"))));
         applyS3EndpointOverride(builder);
         return builder.build();
     }
@@ -82,7 +91,9 @@ public class AwsConfig {
             .overrideConfiguration(c -> c
                 .retryStrategy(RetryMode.ADAPTIVE_V2)
                 .apiCallTimeout(Duration.ofSeconds(30))
-                .apiCallAttemptTimeout(Duration.ofSeconds(10)));
+                .apiCallAttemptTimeout(Duration.ofSeconds(10))
+                .addExecutionInterceptor(new AwsCallRecorder(
+                    externalCallRecorder, Dependency.SNS, Set.of("publish"))));
         applyEndpointOverride(builder);
         return builder.build();
     }

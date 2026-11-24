@@ -239,23 +239,6 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
         return created.getReferenceNumber();
     }
 
-    protected NotificationAggregate createNewNotification(String traceId) {
-        return webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .header(HEADER_TRACE_ID, traceId)
-            .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult()
-            .getResponseBody();
-    }
-
-    protected static NotificationDto minimalNotificationDto() {
-        return NotificationDto.builder()
-            .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF123").build())
-            .commodities(List.of(Commodity.builder().name("Live cattle").build()))
-            .build();
-    }
-
     // --- AWS client factories ---
 
     private static SnsClient snsClient() {

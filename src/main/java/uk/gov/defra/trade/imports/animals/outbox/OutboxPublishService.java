@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.outbox;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.annotation.Timed;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -38,6 +39,7 @@ public class OutboxPublishService {
      *
      * @return number of events successfully published in this run
      */
+    @Timed("service.publishUnpublishedEvents.time")
     public int publishUnpublishedEvents() {
         String topicArn = outboxConfig.sns().topicArn();
         if (topicArn == null || topicArn.isBlank()) {

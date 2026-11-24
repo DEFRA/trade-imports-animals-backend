@@ -40,11 +40,16 @@ import org.testcontainers.mockserver.MockServerContainer;
 import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
 import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
+import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
+import uk.gov.defra.trade.imports.animals.notification.NotificationController;
+import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
+import uk.gov.defra.trade.imports.animals.notification.Origin;
+import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 
 /**
  * Base class for Spring Boot integration tests, activating the {@code integration-test} profile
@@ -158,6 +163,23 @@ public abstract class IntegrationBase {
             .defaultHeader("INS-ConversationId", UUID.randomUUID().toString())
             .defaultHeader(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, organisationId)
             .responseTimeout(FIRST_REQUEST_WARM_UP_ALLOWANCE)
+            .build();
+    }
+
+    protected NotificationAggregate createNewNotification(String traceId) {
+        return webClient("NoAuth")
+            .post().uri("/notifications")
+            .header(NotificationController.HEADER_TRACE_ID, traceId)
+            .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody();
+    }
+
+    protected static NotificationDto minimalNotificationDto() {
+        return NotificationDto.builder()
+            .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF123").build())
+            .commodities(List.of(Commodity.builder().name("Live cattle").build()))
             .build();
     }
 

@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.s3;
 
+import io.micrometer.core.annotation.Timed;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
@@ -35,6 +36,7 @@ public class S3DocumentService {
    * @param s3Key        the S3 object key
    * @param outputStream the destination output stream; the caller is responsible for closing it
    */
+  @Timed("service.streamToOutput.time")
   public void streamToOutput(String s3Key, OutputStream outputStream) {
     Objects.requireNonNull(s3Key, "s3Key must not be null");
     String bucket = cdpConfig.s3().documentsBucket();

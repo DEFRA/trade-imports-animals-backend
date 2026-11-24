@@ -12,7 +12,7 @@
         <!-- Filter out /health endpoint to reduce noise -->
         <filter class="uk.gov.defra.trade.imports.animals.filter.HealthCheckFilter"/>
 
-        <encoder class="co.elastic.logging.logback.EcsEncoder">
+        <encoder class="uk.gov.defra.trade.imports.animals.logging.EcsEventEncoder">
             <serviceVersion>${service.version}</serviceVersion>
             <serviceName>${service.name}</serviceName>
             <!-- ECS encoder automatically includes all MDC fields -->

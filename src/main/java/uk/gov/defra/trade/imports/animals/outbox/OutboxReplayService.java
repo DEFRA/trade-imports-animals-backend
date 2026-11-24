@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.outbox;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import io.micrometer.core.annotation.Timed;
 import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ public class OutboxReplayService {
     private final AuditRepository auditRepository;
     private final OutboxConfig outboxConfig;
 
+    @Timed("service.replayOutboxEvents.time")
     public int replay(String referenceNumber, AuditContext auditContext) {
         List<OutboxEvent> events = outboxService.findByReferenceNumber(referenceNumber);
         if (events.isEmpty()) {

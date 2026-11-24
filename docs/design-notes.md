@@ -75,6 +75,13 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 - cdp-uploader owns the callback body's shape and echoes back every field the browser submitted, including ones this service has no use for, so the body is read leniently: the `form` section keeps only the values carrying a `fileId`, and a file entry tolerates fields this service does not know. An object-shaped `form` value without a `fileId` is not a file entry; it is dropped with a warning naming the field, because a document saved with no files can still finish as `COMPLETE` and support needs something to search on.
 - A download streams the file through this service's response. If S3 fails mid-stream after the headers are sent, the client gets a 200 with a truncated body; a failure before the first byte is still a 500.
 
+## Metrics and dependency calls
+
+- Every metric is a Micrometer meter, and `EmfMeterRegistry` publishes them to CloudWatch as Embedded Metric Format once a step. `management.metrics.enable` is the allowlist: a meter whose name is not on it is a no-op.
+- The service's dependencies are MongoDB, S3 (reading a document for download) and SNS (publishing outbox events). Each call is timed at the transport, not in the calling class: a MongoDB `CommandListener` for every command, and an AWS SDK `ExecutionInterceptor` on each of the S3 and SNS clients. Each call is published as `external.call.duration` and `external.call.failure`, tagged `dependency` and `operation`, and logged as one line with nested `event.*` fields, which `EcsEventEncoder` writes so CDP's OpenSearch keeps them.
+- `external.dependency.available` for MongoDB comes from the driver's server checks, which run every 10 seconds whether or not the service makes a call. For S3 and SNS it is the outcome of the last call, so it reads nothing until the first call after start-up, and one failure holds it at 0 until the next success. Alert on `external.call.failure` for those two, not on availability.
+- `/health` does not check any dependency. CDP restarts a task whose health check fails, so a dependency outage there would restart every task.
+
 ## Build
 
 - `spring-boot-devtools` gives hot reload in the workspace's docker-compose dev stack (the `dev-run` stage). It is `optional`, so it never reaches a project that depends on this one, and Spring Boot's `repackage` leaves it out of the production jar.
@@ -82,7 +89,7 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 
 ## Integration test profile
 
-- The EMF metrics publisher is off, because tests have no CloudWatch agent and a blank `AWS_EMF_NAMESPACE` raises `InvalidNamespaceException` on every scheduler tick.
+- Metrics are not published to CloudWatch (`aws.emf.enabled` is false), because tests have no CloudWatch agent. `EmfMeterRegistryIT` turns publishing on and writes the EMF documents to the console.
 - `notification.submit.lock-at-least-for` is `0ms`, so a rapid re-submission in a test can acquire the lock.
 
 ## Document upload integration tests

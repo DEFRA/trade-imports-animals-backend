@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.accompanyingdocument;
 
+import io.micrometer.core.annotation.Timed;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -48,6 +49,7 @@ public class DocumentService {
    * @return the recorded session
    * @throws ConflictException if either identifier is already recorded
    */
+  @Timed("service.registerUpload.time")
   public UploadSession registerUpload(
       String notificationReferenceNumber, RegisterUploadRequest request) {
     UploadSession session = UploadSession.builder()
@@ -67,6 +69,7 @@ public class DocumentService {
    * @return the session
    * @throws NotFoundException if that notification has no session under the correlationId
    */
+  @Timed("service.findSession.time")
   public UploadSession findSession(String notificationReferenceNumber, String correlationId) {
     return uploadSessionRepository
         .findByNotificationReferenceNumberAndCorrelationId(
@@ -86,6 +89,7 @@ public class DocumentService {
    * @throws NotFoundException if no session was ever opened under {@code uploadId}
    */
   @Transactional
+  @Timed("service.claimUpload.time")
   public AccompanyingDocument claimUpload(String uploadId, ClaimUploadRequest request) {
     UploadSession session = uploadSessionRepository.findByUploadId(uploadId)
         .orElseThrow(() -> new NotFoundException(
@@ -113,6 +117,7 @@ public class DocumentService {
    * @throws NotFoundException   if no session was opened under that correlationId
    */
   @Transactional
+  @Timed("service.handleScanResult.time")
   public void handleScanResult(CdpScanResultPayload payload) {
     String correlationId = extractCorrelationId(payload);
     UploadSession session = uploadSessionRepository.findByCorrelationId(correlationId)
@@ -141,6 +146,7 @@ public class DocumentService {
    * @param uploadId the upload session identifier
    * @throws NotFoundException if not found
    */
+  @Timed("service.deleteByUploadId.time")
   public void deleteByUploadId(String uploadId) {
     AccompanyingDocument document = findByUploadId(uploadId);
     accompanyingDocumentRepository.delete(document);
@@ -155,6 +161,7 @@ public class DocumentService {
    * @param notificationReferenceNumber the notification reference number
    * @return list of documents, possibly empty
    */
+  @Timed("service.findByNotificationReferenceNumber.time")
   public List<AccompanyingDocument> findByNotificationReferenceNumber(
       String notificationReferenceNumber) {
     return accompanyingDocumentRepository
@@ -168,6 +175,7 @@ public class DocumentService {
    * @param notificationReferenceNumber the notification reference number
    * @return list of documents, possibly empty
    */
+  @Timed("service.findClaimedScannedCleanByNotificationReferenceNumber.time")
   public List<AccompanyingDocument> findClaimedScannedCleanByNotificationReferenceNumber(
       String notificationReferenceNumber) {
     return accompanyingDocumentRepository
@@ -182,6 +190,7 @@ public class DocumentService {
    * @param notificationReferenceNumbers the parent notification reference numbers whose documents
    *     and sessions should be deleted
    */
+  @Timed("service.deleteForNotificationReferenceNumbers.time")
   public void deleteForNotificationReferenceNumbers(List<String> notificationReferenceNumbers) {
     Objects.requireNonNull(
         notificationReferenceNumbers, "notificationReferenceNumbers must not be null");
@@ -199,12 +208,14 @@ public class DocumentService {
    * @return the document
    * @throws NotFoundException if not found
    */
+  @Timed("service.findByUploadId.time")
   public AccompanyingDocument findByUploadId(String uploadId) {
     return accompanyingDocumentRepository.findByUploadId(uploadId)
         .orElseThrow(
             () -> new NotFoundException("No accompanying document found with uploadId: " + uploadId));
   }
 
+  @Timed("service.notificationReferenceNumberForUploadId.time")
   public String notificationReferenceNumberForUploadId(String uploadId) {
     return uploadSessionRepository.findByUploadId(uploadId)
         .map(UploadSession::getNotificationReferenceNumber)
@@ -220,6 +231,7 @@ public class DocumentService {
    * @throws NotFoundException if no document exists for the uploadId, it has no file, or its file
    *     was rejected
    */
+  @Timed("service.findFile.time")
   public UploadedFile findFile(String uploadId) {
     AccompanyingDocument document = findByUploadId(uploadId);
     UploadedFile file = document.getFiles().stream()

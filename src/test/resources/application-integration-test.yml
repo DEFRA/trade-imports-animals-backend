@@ -42,10 +42,8 @@ aws:
   emf:
     enabled: ${AWS_EMF_ENABLED:false}
     environment: ${AWS_EMF_ENVIRONMENT:Local}
-    namespace: ${AWS_EMF_NAMESPACE:}
-    service:
-      name: ${AWS_EMF_SERVICE_NAME:trade-imports-animals-backend}
-      type: ${AWS_EMF_SERVICE_TYPE:SpringBootApp}
+    namespace: ${AWS_EMF_NAMESPACE:trade-imports-animals-backend}
+    step: ${AWS_EMF_STEP:1m}
 
 # Logging configuration
 logging:
@@ -73,10 +71,6 @@ management:
   health:
     mongo:
       enabled: false
-  # Keeps the EMF metrics publisher off: tests have no CloudWatch agent and a blank
-  # namespace, which fails every scheduled publish.
-  metrics:
-    enabled: false
 
 # Admin secret for privileged endpoints
 admin:

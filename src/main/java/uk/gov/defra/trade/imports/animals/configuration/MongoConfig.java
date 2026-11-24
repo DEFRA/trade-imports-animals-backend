@@ -23,6 +23,8 @@ import org.springframework.data.mongodb.MongoTransactionManager;
 import org.springframework.data.mongodb.config.EnableMongoAuditing;
 import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
 import uk.gov.defra.trade.imports.animals.configuration.tls.TrustStoreConfiguration;
+import uk.gov.defra.trade.imports.animals.metrics.MongoAvailability;
+import uk.gov.defra.trade.imports.animals.metrics.MongoCommandMetrics;
 
 /**
  * MongoDB configuration for CDP Java Backend Template.
@@ -63,11 +65,15 @@ public class MongoConfig {
       @Value("${spring.data.mongodb.read-preference}") ReadPreference readPreference,
       @Value("${spring.data.mongodb.write-concern}") WriteConcern writeConcern,
       TrustStoreConfiguration trustStoreConfiguration,
-      ConnectionPoolSettings connectionPoolSettings) {
+      ConnectionPoolSettings connectionPoolSettings,
+      MongoAvailability mongoAvailability,
+      MongoCommandMetrics mongoCommandMetrics) {
 
       MongoClientSettings.Builder builder = MongoClientSettings.builder()
           .applyConnectionString(new ConnectionString(mongoUri))
           .applyToConnectionPoolSettings(bdr -> bdr.applySettings(connectionPoolSettings))
+          .applyToClusterSettings(bdr -> bdr.addClusterListener(mongoAvailability))
+          .addCommandListener(mongoCommandMetrics)
           .readPreference(readPreference)
           .writeConcern(writeConcern);
       
