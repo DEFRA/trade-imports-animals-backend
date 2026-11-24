@@ -9,6 +9,7 @@ import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,7 +46,7 @@ public class MetricsConfig {
   }
 
   @Bean
-  @ConditionalOnProperty(name = "aws.emf.enabled", havingValue = "false", matchIfMissing = true)
+  @ConditionalOnExpression("!'${aws.emf.enabled:false}'.equalsIgnoreCase('true')")
   ApplicationRunner emfPublishingOffLog() {
     return args -> log.info("Not publishing metrics to CloudWatch: aws.emf.enabled is not true");
   }
