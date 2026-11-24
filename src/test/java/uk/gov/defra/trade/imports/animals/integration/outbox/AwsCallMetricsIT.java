@@ -37,26 +37,26 @@ class AwsCallMetricsIT extends OutboxIntegrationBase {
   @Test
   void anOutboxPublishIsRecordedAsASuccessfulSnsPublish() {
     createNewNotification("aws-call-metrics-it");
-    long before = durationCount(meterRegistry, SNS_PUBLISH);
+    long publishesBefore = durationCount(meterRegistry, SNS_PUBLISH);
     double failuresBefore = failureTotal(meterRegistry, SNS_PUBLISH);
 
     publishedMessages = outboxPublishService.publishUnpublishedEvents();
 
     assertThat(publishedMessages).isPositive();
-    assertThat(durationCount(meterRegistry, SNS_PUBLISH)).isEqualTo(before + publishedMessages);
+    assertThat(durationCount(meterRegistry, SNS_PUBLISH)).isEqualTo(publishesBefore + publishedMessages);
     assertThat(failureTotal(meterRegistry, SNS_PUBLISH)).isEqualTo(failuresBefore);
     assertThat(availability(meterRegistry, Dependency.SNS)).isEqualTo(1);
   }
 
   @Test
   void aDocumentReadThatS3RefusesIsRecordedAsAFailedGetObject() {
-    double before = failureTotal(meterRegistry, S3_GET_OBJECT);
+    double failuresBefore = failureTotal(meterRegistry, S3_GET_OBJECT);
 
     assertThatExceptionOfType(S3Exception.class)
         .isThrownBy(
             () -> s3DocumentService.streamToOutput("no-such-key", new ByteArrayOutputStream()));
 
-    assertThat(failureTotal(meterRegistry, S3_GET_OBJECT)).isEqualTo(before + 1);
+    assertThat(failureTotal(meterRegistry, S3_GET_OBJECT)).isEqualTo(failuresBefore + 1);
     assertThat(availability(meterRegistry, Dependency.S3)).isZero();
   }
 }
