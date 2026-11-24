@@ -69,15 +69,23 @@ public class S3DocumentService {
       byte[] buffer = new byte[BUFFER_SIZE];
       int read;
       while ((read = s3Object.read(buffer)) != -1) {
-        try {
-          outputStream.write(buffer, 0, read);
-        } catch (IOException ex) {
-          return ex;
+        IOException writeFailure = writeChunk(outputStream, buffer, read);
+        if (writeFailure != null) {
+          return writeFailure;
         }
       }
       return null;
     } catch (IOException ex) {
       throw new UncheckedIOException("I/O error while streaming document from S3", ex);
+    }
+  }
+
+  private static IOException writeChunk(OutputStream outputStream, byte[] buffer, int length) {
+    try {
+      outputStream.write(buffer, 0, length);
+      return null;
+    } catch (IOException ex) {
+      return ex;
     }
   }
 }
