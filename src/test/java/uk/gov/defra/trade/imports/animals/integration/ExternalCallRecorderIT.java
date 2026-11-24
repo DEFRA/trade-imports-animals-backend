@@ -7,7 +7,6 @@ import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.
 import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.failureTotal;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.bson.Document;
 import org.bson.types.ObjectId;
@@ -21,7 +20,6 @@ import uk.gov.defra.trade.imports.animals.testsupport.CapturedConsole;
 
 class ExternalCallRecorderIT extends IntegrationBase {
 
-  private static final ObjectMapper JSON = new ObjectMapper();
   private static final ExternalCall MONGODB_INSERT = new ExternalCall(Dependency.MONGODB, "insert");
   private static final ExternalCall MONGODB_FIND = new ExternalCall(Dependency.MONGODB, "find");
   private static final String SCRATCH_COLLECTION = "external_call_recorder_it";
@@ -42,10 +40,7 @@ class ExternalCallRecorderIT extends IntegrationBase {
     double before = failureTotal(meterRegistry, MONGODB_FIND);
 
     assertThatExceptionOfType(DataAccessException.class)
-        .isThrownBy(
-            () ->
-                mongoTemplate.executeCommand(
-                    "{find: '" + SCRATCH_COLLECTION + "', filter: {$notAnOperator: 1}}"));
+        .isThrownBy(this::runFailingFind);
 
     assertThat(failureTotal(meterRegistry, MONGODB_FIND)).isEqualTo(before + 1);
   }
@@ -63,7 +58,7 @@ class ExternalCallRecorderIT extends IntegrationBase {
   }
 
   @Test
-  void theConsoleWritesTheCallLineWithTheTraceIdAndANestedEventObject() throws Exception {
+  void theConsoleWritesTheCallLineWithTheTraceIdAndANestedEventObject() {
     CapturedConsole console = captureSystemOut();
     try (console) {
       createNewNotification("trace-from-the-caller");
@@ -79,14 +74,11 @@ class ExternalCallRecorderIT extends IntegrationBase {
 
   @Test
   void theConsoleWritesAFailedCallLineWithTheErrorTypeAndMessageButNoStackTrace()
-      throws Exception {
+      {
     CapturedConsole console = captureSystemOut();
     try (console) {
       assertThatExceptionOfType(DataAccessException.class)
-          .isThrownBy(
-              () ->
-                  mongoTemplate.executeCommand(
-                      "{find: '" + SCRATCH_COLLECTION + "', filter: {$notAnOperator: 1}}"));
+          .isThrownBy(this::runFailingFind);
     }
 
     JsonNode failedFind = consoleLineWithAction("mongodb/find", console);
@@ -98,16 +90,15 @@ class ExternalCallRecorderIT extends IntegrationBase {
     assertThat(failedFind.has("error.stack_trace")).isFalse();
   }
 
-  private static JsonNode consoleLineWithAction(String action, CapturedConsole console)
-      throws Exception {
-    for (String line : console.text().split("\n")) {
-      if (line.trim().startsWith("{")) {
-        JsonNode json = JSON.readTree(line);
-        if (action.equals(json.path("event").path("action").asText())) {
-          return json;
-        }
-      }
-    }
-    throw new AssertionError("No console line has event.action " + action);
+  private void runFailingFind() {
+    mongoTemplate.executeCommand(
+        "{find: '" + SCRATCH_COLLECTION + "', filter: {$notAnOperator: 1}}");
+  }
+
+  private static JsonNode consoleLineWithAction(String action, CapturedConsole console) {
+    return console.jsonLines().stream()
+        .filter(line -> action.equals(line.path("event").path("action").asText()))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("No console line has event.action " + action));
   }
 }

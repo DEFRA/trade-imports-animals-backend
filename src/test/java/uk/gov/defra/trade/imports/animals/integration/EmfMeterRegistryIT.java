@@ -6,9 +6,7 @@ import static uk.gov.defra.trade.imports.animals.testsupport.CapturedConsole.cap
 import static uk.gov.defra.trade.imports.animals.testsupport.EmfDocuments.namespaceOf;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
@@ -30,8 +28,6 @@ import uk.gov.defra.trade.imports.animals.testsupport.CapturedConsole;
       "aws.emf.step=1s"
     })
 class EmfMeterRegistryIT extends IntegrationBase {
-
-  private static final ObjectMapper JSON = new ObjectMapper();
 
   @Autowired private MeterRegistry meterRegistry;
 
@@ -56,7 +52,7 @@ class EmfMeterRegistryIT extends IntegrationBase {
   }
 
   @Test
-  void emfMeterRegistry_shouldPublishARecordedCall_whenItsStepElapses() throws Exception {
+  void emfMeterRegistry_shouldPublishARecordedCall_whenItsStepElapses() {
     CapturedConsole console = captureSystemOut();
     try (console) {
       createNewNotification("emf-registry-it");
@@ -86,13 +82,9 @@ class EmfMeterRegistryIT extends IntegrationBase {
     assertThat(meterRegistry.find(name).meter()).isNull();
   }
 
-  private static Optional<JsonNode> emfDocumentFor(String metricName, CapturedConsole console)
-      throws IOException {
-    for (String line : console.text().split("\n")) {
-      if (line.contains("\"_aws\"") && line.contains("\"" + metricName + "\"")) {
-        return Optional.of(JSON.readTree(line));
-      }
-    }
-    return Optional.empty();
+  private static Optional<JsonNode> emfDocumentFor(String metricName, CapturedConsole console) {
+    return console.jsonLines().stream()
+        .filter(line -> line.has("_aws") && line.has(metricName))
+        .findFirst();
   }
 }
