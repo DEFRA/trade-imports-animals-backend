@@ -77,7 +77,7 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 
 ## Metrics and dependency calls
 
-- Every metric is a Micrometer meter, and `EmfMeterRegistry` publishes them to CloudWatch as Embedded Metric Format once a step. `management.metrics.enable` is the allowlist: a meter whose name is not on it is a no-op.
+- Every metric is a Micrometer meter, and `EmfMeterRegistry` publishes them to CloudWatch as Embedded Metric Format once a minute (`aws.emf.step`). `management.metrics.enable` is the allowlist: a meter whose name is not on it is a no-op.
 - The service's dependencies are MongoDB, S3 (reading a document for download) and SNS (publishing outbox events). Each call is timed at the transport, not in the calling class: a MongoDB `CommandListener` for every command, and an AWS SDK `ExecutionInterceptor` on each of the S3 and SNS clients. Each call is published as `external.call.duration` and `external.call.failure`, tagged `dependency` and `operation`, and logged as one line with nested `event.*` fields, which `EcsEventEncoder` writes so CDP's OpenSearch keeps them.
 - `external.dependency.available` for MongoDB comes from the driver's server checks, which run every 10 seconds whether or not the service makes a call. For S3 and SNS it is the outcome of the last call, so it reads nothing until the first call after start-up, and one failure holds it at 0 until the next success. Alert on `external.call.failure` for those two, not on availability.
 - `/health` does not check any dependency. CDP restarts a task whose health check fails, so a dependency outage there would restart every task.
