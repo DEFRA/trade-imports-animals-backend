@@ -43,7 +43,8 @@ class AwsCallMetricsIT extends OutboxIntegrationBase {
     publishedMessages = outboxPublishService.publishUnpublishedEvents();
 
     assertThat(publishedMessages).isPositive();
-    assertThat(durationCount(meterRegistry, SNS_PUBLISH)).isEqualTo(publishesBefore + publishedMessages);
+    assertThat(durationCount(meterRegistry, SNS_PUBLISH))
+        .isEqualTo(publishesBefore + publishedMessages);
     assertThat(failureTotal(meterRegistry, SNS_PUBLISH)).isEqualTo(failuresBefore);
     assertThat(availability(meterRegistry, Dependency.SNS)).isEqualTo(1);
   }
