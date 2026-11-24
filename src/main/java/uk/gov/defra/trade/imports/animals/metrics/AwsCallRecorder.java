@@ -23,12 +23,6 @@ public class AwsCallRecorder implements ExecutionInterceptor {
   private final Dependency dependency;
   private final Set<String> namedOperations;
 
-  /**
-   * Creates a recorder for one client.
-   *
-   * @param dependency the system the client calls
-   * @param namedOperations the kebab-case actions recorded by name
-   */
   public AwsCallRecorder(
       ExternalCallRecorder externalCallRecorder,
       Dependency dependency,
