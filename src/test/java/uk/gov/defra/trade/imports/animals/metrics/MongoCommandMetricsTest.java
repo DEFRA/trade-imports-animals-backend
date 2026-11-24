@@ -33,7 +33,24 @@ class MongoCommandMetricsTest {
       new MongoCommandMetrics(new ExternalCallRecorder(meterRegistry, new LastCallOutcomes()));
 
   @ParameterizedTest
-  @ValueSource(strings = {"find", "findAndModify", "createIndexes", "commitTransaction"})
+  @ValueSource(
+      strings = {
+        "find",
+        "getMore",
+        "insert",
+        "update",
+        "delete",
+        "findAndModify",
+        "aggregate",
+        "count",
+        "distinct",
+        "createIndexes",
+        "listIndexes",
+        "dropIndexes",
+        "listCollections",
+        "commitTransaction",
+        "abortTransaction"
+      })
   void commandSucceeded_recordsAKnownCommandUnderItsOwnName(String commandName) {
     listener.commandSucceeded(succeeded(commandName, 5));
 
