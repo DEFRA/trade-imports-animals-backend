@@ -18,13 +18,6 @@ import uk.gov.defra.trade.imports.animals.metrics.Dependency;
 import uk.gov.defra.trade.imports.animals.metrics.ExternalCall;
 import uk.gov.defra.trade.imports.animals.metrics.ExternalCallRecorder;
 
-/**
- * Streams documents from S3 to a caller-supplied output stream.
- *
- * <p>Lets AWS SDK exceptions ({@code S3Exception} and friends, all {@code RuntimeException}s)
- * bubble up to {@code GlobalExceptionHandler}; the only thing we wrap here is the checked
- * {@link IOException} from the underlying transfer, which becomes an {@link UncheckedIOException}.
- */
 @Service
 @Slf4j
 @RequiredArgsConstructor

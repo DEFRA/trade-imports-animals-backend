@@ -81,7 +81,6 @@ notification:
   list:
     page-size: 2
   submit:
-    # No minimum hold on the submit lock, so a re-submission in the same test is not refused.
     lock-at-least-for: 0ms
   ttl:
     environment: ${ENVIRONMENT:local}

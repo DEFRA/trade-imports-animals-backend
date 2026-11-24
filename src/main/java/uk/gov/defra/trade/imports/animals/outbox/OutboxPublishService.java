@@ -32,13 +32,6 @@ public class OutboxPublishService {
     private final ObjectMapper objectMapper;
     private final OutboxConfig outboxConfig;
 
-    /**
-     * Publishes unpublished outbox events to SNS in the order they were written, taking further
-     * batches until the backlog is drained, a publish fails, or
-     * {@code outbox.poller.max-events-per-run} is reached.
-     *
-     * @return number of events successfully published in this run
-     */
     @Timed("service.publishUnpublishedEvents.time")
     public int publishUnpublishedEvents() {
         String topicArn = outboxConfig.sns().topicArn();
@@ -98,9 +91,9 @@ public class OutboxPublishService {
                 break;
             } catch (SnsException e) {
                 event.setPublishedAt(null);
-                log.error("Failed to publish outbox event eventId={} aggregateId={} version={}: {}",
-                    event.getEventId(), event.getAggregateId(), event.getAggregateVersion(),
-                    e.getMessage(), e);
+                log.error(
+                    "Failed to publish outbox event eventId={} aggregateId={} version={}",
+                    event.getEventId(), event.getAggregateId(), event.getAggregateVersion(), e);
                 stoppedOnError = true;
                 break;
             }

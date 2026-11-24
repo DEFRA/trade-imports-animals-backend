@@ -19,10 +19,6 @@ import uk.gov.defra.trade.imports.animals.exceptions.NotFoundException;
 import uk.gov.defra.trade.imports.animals.notification.NotificationExpiry;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 
-/**
- * Business logic for accompanying documents: recording an upload session, taking the document that
- * comes through it on, recording the scan result, and reading or removing what was stored.
- */
 @Service
 @Slf4j
 public class DocumentService {
@@ -40,15 +36,6 @@ public class DocumentService {
     this.notificationRepository = notificationRepository;
   }
 
-  /**
-   * Records an upload session for a notification, which may already hold others. No document is
-   * written.
-   *
-   * @param notificationReferenceNumber the parent notification reference number
-   * @param request the upload session's identifiers
-   * @return the recorded session
-   * @throws ConflictException if either identifier is already recorded
-   */
   @Timed("service.registerUpload.time")
   public UploadSession registerUpload(
       String notificationReferenceNumber, RegisterUploadRequest request) {
@@ -61,14 +48,6 @@ public class DocumentService {
     return saveSession(session);
   }
 
-  /**
-   * Returns the upload session a notification opened under the given correlationId.
-   *
-   * @param notificationReferenceNumber the parent notification reference number
-   * @param correlationId the correlationId the session was opened under
-   * @return the session
-   * @throws NotFoundException if that notification has no session under the correlationId
-   */
   @Timed("service.findSession.time")
   public UploadSession findSession(String notificationReferenceNumber, String correlationId) {
     return uploadSessionRepository
@@ -79,15 +58,6 @@ public class DocumentService {
                 + " with correlationId: " + correlationId));
   }
 
-  /**
-   * Writes the given details onto the session's document and marks it claimed, creating the
-   * document when none exists yet. Claiming again replaces the details.
-   *
-   * @param uploadId the upload session identifier
-   * @param request  the document details the trader gave
-   * @return the claimed document
-   * @throws NotFoundException if no session was ever opened under {@code uploadId}
-   */
   @Transactional
   @Timed("service.claimUpload.time")
   public AccompanyingDocument claimUpload(String uploadId, ClaimUploadRequest request) {
@@ -108,14 +78,6 @@ public class DocumentService {
     return claimed;
   }
 
-  /**
-   * Records a scan result against the document of the session opened under
-   * {@code metadata.correlationId}, creating the document when none exists yet.
-   *
-   * @param payload the callback payload
-   * @throws BadRequestException if the payload metadata does not include a correlationId
-   * @throws NotFoundException   if no session was opened under that correlationId
-   */
   @Transactional
   @Timed("service.handleScanResult.time")
   public void handleScanResult(CdpScanResultPayload payload) {
@@ -139,13 +101,6 @@ public class DocumentService {
         documentExisted ? "already existed" : "created by this callback");
   }
 
-  /**
-   * Deletes the accompanying document with the given upload ID and the session it was uploaded
-   * through.
-   *
-   * @param uploadId the upload session identifier
-   * @throws NotFoundException if not found
-   */
   @Timed("service.deleteByUploadId.time")
   public void deleteByUploadId(String uploadId) {
     AccompanyingDocument document = findByUploadId(uploadId);
@@ -155,12 +110,6 @@ public class DocumentService {
         uploadId, document.getCorrelationId());
   }
 
-  /**
-   * Returns all accompanying documents for the given notification reference number.
-   *
-   * @param notificationReferenceNumber the notification reference number
-   * @return list of documents, possibly empty
-   */
   @Timed("service.findByNotificationReferenceNumber.time")
   public List<AccompanyingDocument> findByNotificationReferenceNumber(
       String notificationReferenceNumber) {
@@ -168,13 +117,6 @@ public class DocumentService {
         .findAllByNotificationReferenceNumber(notificationReferenceNumber);
   }
 
-  /**
-   * Returns the claimed documents for the given notification whose virus scan completed clean,
-   * oldest first.
-   *
-   * @param notificationReferenceNumber the notification reference number
-   * @return list of documents, possibly empty
-   */
   @Timed("service.findClaimedScannedCleanByNotificationReferenceNumber.time")
   public List<AccompanyingDocument> findClaimedScannedCleanByNotificationReferenceNumber(
       String notificationReferenceNumber) {
@@ -183,13 +125,6 @@ public class DocumentService {
             notificationReferenceNumber, ScanStatus.COMPLETE);
   }
 
-  /**
-   * Deletes all accompanying documents and upload sessions belonging to the given notification
-   * reference numbers.
-   *
-   * @param notificationReferenceNumbers the parent notification reference numbers whose documents
-   *     and sessions should be deleted
-   */
   @Timed("service.deleteForNotificationReferenceNumbers.time")
   public void deleteForNotificationReferenceNumbers(List<String> notificationReferenceNumbers) {
     Objects.requireNonNull(
@@ -201,13 +136,6 @@ public class DocumentService {
     uploadSessionRepository.deleteAllByNotificationReferenceNumberIn(notificationReferenceNumbers);
   }
 
-  /**
-   * Returns the accompanying document with the given upload ID.
-   *
-   * @param uploadId the upload session identifier
-   * @return the document
-   * @throws NotFoundException if not found
-   */
   @Timed("service.findByUploadId.time")
   public AccompanyingDocument findByUploadId(String uploadId) {
     return accompanyingDocumentRepository.findByUploadId(uploadId)
@@ -223,14 +151,6 @@ public class DocumentService {
             "No upload session found with uploadId: " + uploadId));
   }
 
-  /**
-   * Returns the first uploaded file for the given upload session.
-   *
-   * @param uploadId the upload session identifier
-   * @return the uploaded file record
-   * @throws NotFoundException if no document exists for the uploadId, it has no file, or its file
-   *     was rejected
-   */
   @Timed("service.findFile.time")
   public UploadedFile findFile(String uploadId) {
     AccompanyingDocument document = findByUploadId(uploadId);

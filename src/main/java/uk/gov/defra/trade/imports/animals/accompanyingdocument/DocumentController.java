@@ -207,6 +207,7 @@ public class DocumentController {
    * Get a single accompanying document upload session by upload ID.
    *
    * @param uploadId the upload session identifier
+   * @param organisationId the trader's organisation, from {@code Trade-Imports-Organisation-Id}
    * @return 200 OK with the accompanying document DTO
    */
   @GetMapping("/document-uploads/{uploadId}")
@@ -235,6 +236,7 @@ public class DocumentController {
    * Delete an accompanying document upload session.
    *
    * @param uploadId the upload session identifier
+   * @param organisationId the trader's organisation, from {@code Trade-Imports-Organisation-Id}
    * @return 204 No Content
    */
   @DeleteMapping("/document-uploads/{uploadId}")
@@ -284,6 +286,7 @@ public class DocumentController {
    * Download the first uploaded file of a document upload session.
    *
    * @param uploadId the upload session identifier
+   * @param organisationId the trader's organisation, from {@code Trade-Imports-Organisation-Id}
    * @return 200 OK with the file content streamed from S3
    */
   @GetMapping("/document-uploads/{uploadId}/file")

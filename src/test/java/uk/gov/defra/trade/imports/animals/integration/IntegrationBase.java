@@ -61,11 +61,10 @@ import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
  *
  * <p>{@link #webClient(String)} returns a {@link WebTestClient} pre-authenticated with a token
  * minted by the mock OAuth server using {@code clientType} as the {@code client_id}; the token
- * is decided by the {@code /integration/oauth2-mock-server.json} fixture, and tests currently
- * pass {@code "NoAuth"}. {@link #webClient(String)} also sends
+ * is decided by the {@code /integration/oauth2-mock-server.json} fixture.
+ * {@link #webClient(String)} also sends
  * {@link TraderOrganisationHeaderFilter#ORGANISATION_ID_HEADER} defaulting to
- * {@link #DEFAULT_TRADER_ORG_ID}. Subclasses inherit an {@code @AfterEach} hook that resets all
- * MockServer expectations, so per-test stubs do not leak across tests.
+ * {@link #DEFAULT_TRADER_ORG_ID}.
  */
 @Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -74,8 +73,6 @@ public abstract class IntegrationBase {
 
     protected static final String DEFAULT_TRADER_ORG_ID = "5900002";
     protected static final String NOTIFICATION_ENDPOINT = "/notifications";
-
-    static final List<String> SERVICES_TO_MOCK = List.of();
 
     private static final Duration FIRST_REQUEST_WARM_UP_ALLOWANCE = Duration.ofSeconds(30);
 
@@ -103,13 +100,6 @@ public abstract class IntegrationBase {
 
     @DynamicPropertySource
     static void setProperties(DynamicPropertyRegistry registry) {
-
-        // Service API urls
-        SERVICES_TO_MOCK.forEach(
-            service -> registry.add("%s.url".formatted(service),
-                () -> "%s/%s/".formatted(MOCK_SERVER_CONTAINER.getEndpoint(), service)));
-
-        // Oauth Server container config
         registry.add("auth-api.url",
             () -> "http://%s:%d/oauth2/token".formatted(OAUTH_CONTAINER.getHost(),
                 OAUTH_CONTAINER.getMappedPort(8080)));
@@ -135,12 +125,6 @@ public abstract class IntegrationBase {
         registry.add("spring.data.mongodb.ssl.enabled", () -> "false");
     }
 
-    /**
-     * The main MockServerClient to be used for stubbing out the requests that we need to be
-     * verifiable.
-     *
-     * @return the MockServerClient to be used for stubbing out external services.
-     */
     protected MockServerClient usingStub() {
         if (mockServerClient == null) {
             mockServerClient = new MockServerClient(MOCK_SERVER_CONTAINER.getHost(),
@@ -247,16 +231,10 @@ public abstract class IntegrationBase {
         }
     }
 
-    /**
-     * Loads a classpath fixture file as a UTF-8 String.
-     */
     protected String loadFixtureAsString(String classpathResource) throws IOException {
         return new String(readResourceBytes(classpathResource), StandardCharsets.UTF_8);
     }
 
-    /**
-     * Loads a classpath fixture file as raw bytes.
-     */
     protected byte[] loadFixtureAsBytes(String classpathResource) throws IOException {
         return readResourceBytes(classpathResource);
     }
