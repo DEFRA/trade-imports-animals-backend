@@ -30,7 +30,7 @@ class EcsEventEncoderTest {
     var context = (LoggerContext) LoggerFactory.getILoggerFactory();
     for (EcsEncoder each : new EcsEncoder[] {encoder, ecsEncoder}) {
       each.setContext(context);
-      each.setServiceName("trade-imports-address-book");
+      each.setServiceName("trade-imports-animals-backend");
       each.start();
     }
   }
