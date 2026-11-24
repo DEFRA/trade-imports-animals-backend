@@ -76,9 +76,7 @@ public class AwsConfig {
             .overrideConfiguration(c -> c
                 .retryStrategy(RetryMode.ADAPTIVE_V2)
                 .apiCallTimeout(Duration.ofSeconds(30))
-                .apiCallAttemptTimeout(Duration.ofSeconds(10))
-                .addExecutionInterceptor(new AwsCallRecorder(
-                    externalCallRecorder, Dependency.S3, Set.of("get-object"))));
+                .apiCallAttemptTimeout(Duration.ofSeconds(10)));
         applyS3EndpointOverride(builder);
         return builder.build();
     }

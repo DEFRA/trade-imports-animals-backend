@@ -47,7 +47,26 @@ public class ExternalCallRecorder {
   }
 
   /**
-   * The time a call starts, for {@link #elapsedSince(long)} once it ends.
+   * Runs the call and records it: a success when it returns, a failure when it throws, which is
+   * then rethrown.
+   *
+   * @param call the call made
+   * @param action makes the call
+   */
+  public void measure(ExternalCall call, Runnable action) {
+    long startedAt = callStartedAt();
+    try {
+      action.run();
+    } catch (RuntimeException e) {
+      recordFailure(call, elapsedSince(startedAt), e);
+      throw e;
+    }
+    recordSuccess(call, elapsedSince(startedAt));
+  }
+
+  /**
+   * The time a call starts, for {@link #elapsedSince(long)} once it ends. For a call made where
+   * {@link #measure} cannot wrap it.
    *
    * @return the current time in nanoseconds
    */
