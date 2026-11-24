@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.integration.outbox;
 
+import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -103,7 +104,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         // direct status reset adds no outbox event; second submit → NOTIFICATION_SUBMITTED (v3)
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(HEADER_TRACE_ID, "trace-v2")
+            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-v2")
             .exchange()
             .expectStatus().isOk();
 
@@ -205,7 +206,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(HEADER_TRACE_ID, "trace-submit")
+            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-submit")
             .exchange()
             .expectStatus().isOk();
 

@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.integration.outbox;
 
+import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,7 +32,6 @@ import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
-import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
@@ -191,7 +191,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}",
                 referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(NotificationController.HEADER_TRACE_ID, traceId)
+            .header(RequestTracingFilter.TRACE_ID_HEADER, traceId)
             .exchange()
             .expectStatus().isOk();
 
@@ -209,7 +209,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .header(NotificationController.HEADER_TRACE_ID, traceId)
+            .header(RequestTracingFilter.TRACE_ID_HEADER, traceId)
             .bodyValue(SaveNotificationDto.of(minimalNotificationDto().toBuilder()
                 .referenceNumber(created.getReferenceNumber())
                 .concurrencyToken(created.getConcurrencyToken())

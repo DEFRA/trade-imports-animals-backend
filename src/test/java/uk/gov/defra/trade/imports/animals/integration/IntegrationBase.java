@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
+import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import static org.mockserver.model.HttpRequest.request;
 import static org.mockserver.model.HttpResponse.response;
 import static org.testcontainers.utility.DockerImageName.parse;
@@ -43,7 +44,6 @@ import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
-import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
@@ -154,7 +154,7 @@ public abstract class IntegrationBase {
     protected NotificationAggregate createNewNotification(String traceId) {
         return webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .header(NotificationController.HEADER_TRACE_ID, traceId)
+            .header(RequestTracingFilter.TRACE_ID_HEADER, traceId)
             .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
             .exchange().expectStatus().isOk()
             .expectBody(NotificationAggregate.class).returnResult()

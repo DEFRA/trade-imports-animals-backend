@@ -33,7 +33,7 @@ import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
 import uk.gov.defra.trade.imports.animals.notification.MeansOfTransport;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
-import uk.gov.defra.trade.imports.animals.notification.NotificationController;
+import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationPageResponse;
@@ -57,7 +57,7 @@ class NotificationIT extends IntegrationBase {
 
     private static final String ADMIN_SECRET_HEADER = "Trade-Imports-Animals-Admin-Secret";
     private static final String VALID_ADMIN_SECRET = "test-admin-secret";
-    private static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
+    private static final String HEADER_TRACE_ID = RequestTracingFilter.TRACE_ID_HEADER;
     private static final String REF_FORMAT_REGEX = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN;
     private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
     private static final String OTHER_ORG_ID = "9999999";

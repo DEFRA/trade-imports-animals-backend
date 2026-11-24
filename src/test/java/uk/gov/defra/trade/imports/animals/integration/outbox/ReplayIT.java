@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.integration.outbox;
 
+import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -54,7 +55,7 @@ class ReplayIT extends OutboxIntegrationBase {
         ReplayResponse response = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/replay", referenceNumber)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header(HEADER_TRACE_ID, "trace-replay-001")
+            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-replay-001")
             .header("User-Id", "user-replay-001")
             .exchange()
             .expectStatus().isOk()
@@ -90,7 +91,7 @@ class ReplayIT extends OutboxIntegrationBase {
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/replay", referenceNumber)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header(HEADER_TRACE_ID, "trace-replay-002")
+            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-replay-002")
             .header("User-Id", "user-replay-002")
             .exchange()
             .expectStatus().isOk();
@@ -111,7 +112,7 @@ class ReplayIT extends OutboxIntegrationBase {
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(HEADER_TRACE_ID, "trace-v2")
+            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-v2")
             .exchange().expectStatus().isOk();
 
         assertThat(outboxEventRepository.count()).isEqualTo(3);
@@ -120,7 +121,7 @@ class ReplayIT extends OutboxIntegrationBase {
         ReplayResponse response = webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/replay", referenceNumber)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header(HEADER_TRACE_ID, "trace-replay-multi")
+            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-replay-multi")
             .header("User-Id", "user-replay-multi")
             .exchange()
             .expectStatus().isOk()
@@ -149,7 +150,7 @@ class ReplayIT extends OutboxIntegrationBase {
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/replay", referenceNumber)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header(HEADER_TRACE_ID, "trace-audit")
+            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-audit")
             .header("User-Id", "user-audit-001")
             .exchange()
             .expectStatus().isOk();
@@ -184,7 +185,7 @@ class ReplayIT extends OutboxIntegrationBase {
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/replay", referenceNumber)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header(HEADER_TRACE_ID, "trace-404")
+            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-404")
             .header("User-Id", "user-404")
             .exchange()
             .expectStatus().isNotFound();
@@ -198,7 +199,7 @@ class ReplayIT extends OutboxIntegrationBase {
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/replay", referenceNumber)
-            .header(HEADER_TRACE_ID, "trace-401")
+            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-401")
             .header("User-Id", "user-401")
             .exchange()
             .expectStatus().isUnauthorized();

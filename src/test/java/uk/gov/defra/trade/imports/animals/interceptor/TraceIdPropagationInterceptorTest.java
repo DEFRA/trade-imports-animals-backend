@@ -13,6 +13,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpRequest;
 import org.springframework.http.client.ClientHttpRequestExecution;
 import org.springframework.http.client.ClientHttpResponse;
+import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 
 import java.io.IOException;
 
@@ -30,7 +31,7 @@ import static org.mockito.Mockito.verify;
 @ExtendWith(MockitoExtension.class)
 class TraceIdPropagationInterceptorTest {
 
-  private static final String TRACE_ID_HEADER = "x-cdp-request-id";
+  private static final String TRACE_ID_HEADER = RequestTracingFilter.TRACE_ID_HEADER;
   private static final String MDC_TRACE_ID = "trace.id";
 
   @Mock private HttpRequest request;
