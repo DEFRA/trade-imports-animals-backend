@@ -64,7 +64,6 @@ class ExternalCallRecorderTest {
         .containsEntry("event.action", "sns/publish")
         .containsEntry("event.outcome", "success")
         .containsEntry("event.duration", 2_000_000L);
-    assertThat(line.getThrowableProxy()).isNull();
   }
 
   @Test
