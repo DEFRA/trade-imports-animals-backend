@@ -95,7 +95,7 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 
 ## Local AWS credentials
 
-`AwsConfig` uses static credentials whenever `APP_AWS_ENDPOINT_OVERRIDE` and both `app.aws.access-key-id` and `app.aws.secret-access-key` are set, and nothing checks which environment it runs in. They are for local development against a stand-in such as LocalStack; never set real credentials in them.
+`AwsConfig` uses static credentials whenever `APP_AWS_ENDPOINT_OVERRIDE` and both `app.aws.access-key-id` and `app.aws.secret-access-key` are set, and nothing checks which environment it runs in. They are for local development against a stand-in such as Floci; never set real credentials in them.
 
 ## Outbound proxy
 
