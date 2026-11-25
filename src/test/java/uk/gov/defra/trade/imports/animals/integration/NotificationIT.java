@@ -993,7 +993,7 @@ class NotificationIT extends IntegrationBase {
             Updates.set("notification.commodities.0.typeOfCommodity", "Domestic"));
 
         // When — the stored draft is saved again by a client that still sends the field
-        Document rawNotification = putRawSave(referenceNumber, Map.of(
+        Document rawNotification = saveRawAndReadStoredNotification(referenceNumber, Map.of(
             "commodities", List.of(Map.of("name", "Live cattle", "typeOfCommodity", "Domestic"))));
         submitAs(referenceNumber, DEFAULT_TRADER_ORG_ID);
 
@@ -1010,11 +1010,13 @@ class NotificationIT extends IntegrationBase {
     @Test
     void put_shouldAcceptTheSaveAndStoreNoConsignmentParty_whenAnOlderClientStillSendsOne() {
         String referenceNumber = createDraftReference(createNotificationDto("CH", "Live cattle"));
-        Document rawNotification = putRawSave(referenceNumber,
-            Map.of("consignment", Map.of("name", "Animal and Plant Health Agency")));
+        Document storedNotification = saveRawAndReadStoredNotification(referenceNumber, Map.of(
+            "origin", Map.of("countryCode", "CH", "requiresRegionCode", "no", "internalReference", "REF-123"),
+            "consignment", Map.of("name", "Animal and Plant Health Agency")));
 
-        assertThat(rawNotification.get("origin", Document.class)).containsEntry("countryCode", "CH");
-        assertThat(rawNotification).doesNotContainKey("consignment");
+        assertThat(storedNotification.get("origin", Document.class))
+            .containsEntry("internalReference", "REF-123");
+        assertThat(storedNotification.keySet()).containsExactlyInAnyOrder("origin", "commodities");
     }
 
     @Test
@@ -1302,7 +1304,8 @@ class NotificationIT extends IntegrationBase {
         assertThat(restored.getSubmittedAt()).isEqualTo(submittedAt);
     }
 
-    private Document putRawSave(String referenceNumber, Map<String, Object> extraNotificationFields) {
+    private Document saveRawAndReadStoredNotification(String referenceNumber,
+                                                      Map<String, Object> notificationFieldOverrides) {
         NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
             .orElseThrow();
         Map<String, Object> notification = new HashMap<>(Map.of(
@@ -1310,7 +1313,7 @@ class NotificationIT extends IntegrationBase {
             "concurrencyToken", stored.getConcurrencyToken(),
             "origin", Map.of("countryCode", "CH", "requiresRegionCode", "no"),
             "commodities", List.of(Map.of("name", "Live cattle"))));
-        notification.putAll(extraNotificationFields);
+        notification.putAll(notificationFieldOverrides);
         webClient("NoAuth")
             .put().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", referenceNumber)
             .bodyValue(Map.of("notification", notification))
