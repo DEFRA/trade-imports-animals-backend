@@ -15,7 +15,6 @@ public record ExchangedDocument(
     String notificationStatusCode,
     Integer versionId,
     String issueDateTime,
-    TradeParty issuer,
     Authentication firstSignatoryAuthentication,
     List<ReferencedDocument> referenceDocument
 ) {
@@ -32,7 +31,6 @@ public record ExchangedDocument(
             notificationAggregate.getStatus() != null ? notificationAggregate.getStatus().name() : null,
             versionId,
             toUtcDateTime(notificationAggregate.getUpdated()),
-            TradeParty.from(notification.getConsignment()),
             Authentication.from(notification, notificationAggregate.getReferenceNumber()),
             referenceDocuments(claimedScannedDocuments));
     }
