@@ -1,29 +1,14 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
-import static org.mockserver.model.HttpRequest.request;
-import static org.mockserver.model.HttpResponse.response;
-import static org.testcontainers.utility.DockerImageName.parse;
-
-import com.fasterxml.jackson.core.StreamReadFeature;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.mockserver.client.MockServerClient;
-import org.mockserver.model.JsonBody;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
@@ -36,7 +21,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.lifecycle.Startables;
-import org.testcontainers.mockserver.MockServerContainer;
 import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
 import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
@@ -53,11 +37,9 @@ import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 
 /**
  * Base class for Spring Boot integration tests, activating the {@code integration-test} profile
- * on a random port and starting three shared Testcontainers in a static block: a
- * {@link OAuthMockServerContainer mock OAuth2 server} (token + JWKS issuer), a
- * {@link org.testcontainers.mockserver.MockServerContainer MockServer} for stubbing downstream
- * HTTP services via {@link #usingStub()}, and a MongoDB container wired in via
- * {@code spring.data.mongodb.uri}.
+ * on a random port and starting two shared Testcontainers in a static block: a
+ * {@link OAuthMockServerContainer mock OAuth2 server} (token + JWKS issuer) and a MongoDB
+ * container wired in via {@code spring.data.mongodb.uri}.
  *
  * <p>{@link #webClient(String)} returns a {@link WebTestClient} pre-authenticated with a token
  * minted by the mock OAuth server using {@code clientType} as the {@code client_id}; the token
@@ -66,7 +48,6 @@ import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
  * {@link TraderOrganisationHeaderFilter#ORGANISATION_ID_HEADER} defaulting to
  * {@link #DEFAULT_TRADER_ORG_ID}.
  */
-@Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
 public abstract class IntegrationBase {
@@ -82,20 +63,15 @@ public abstract class IntegrationBase {
     @Autowired
     protected MongoTemplate mongoTemplate;
 
-    private MockServerClient mockServerClient;
+    protected static final DockerImageName MONGO_IMAGE = DockerImageName.parse("mongo:7.0");
 
     static final OAuthMockServerContainer OAUTH_CONTAINER = new OAuthMockServerContainer();
-    static final MockServerContainer MOCK_SERVER_CONTAINER = new MockServerContainer(
-        parse("mockserver/mockserver").withTag(
-            "mockserver-" + MockServerClient.class.getPackage().getImplementationVersion()));
 
-    static MongoDBContainer MONGO_CONTAINER = new MongoDBContainer(
-        DockerImageName.parse("mongo:7.0")).withExposedPorts(27017).withReplicaSet();
+    static MongoDBContainer MONGO_CONTAINER =
+        new MongoDBContainer(MONGO_IMAGE).withExposedPorts(27017).withReplicaSet();
 
     static {
-        Startables.deepStart(
-            OAUTH_CONTAINER, MONGO_CONTAINER, MOCK_SERVER_CONTAINER
-        ).join();
+        Startables.deepStart(OAUTH_CONTAINER, MONGO_CONTAINER).join();
     }
 
     @DynamicPropertySource
@@ -123,17 +99,6 @@ public abstract class IntegrationBase {
 
         registry.add("spring.data.mongodb.uri", MONGO_CONTAINER::getReplicaSetUrl);
         registry.add("spring.data.mongodb.ssl.enabled", () -> "false");
-    }
-
-    protected MockServerClient usingStub() {
-        if (mockServerClient == null) {
-            mockServerClient = new MockServerClient(MOCK_SERVER_CONTAINER.getHost(),
-                MOCK_SERVER_CONTAINER.getServerPort());
-            log.info(
-                "You should be able to find the dashboard here : http://{}:{}/mockserver/dashboard",
-                MOCK_SERVER_CONTAINER.getHost(), MOCK_SERVER_CONTAINER.getServerPort());
-        }
-        return mockServerClient;
     }
 
     protected WebTestClient webClient(String clientType) {
@@ -203,32 +168,6 @@ public abstract class IntegrationBase {
             .map(body -> body.get("access_token"))
             .map(JsonNode::asText)
             .orElseThrow();
-    }
-    
-    @SneakyThrows
-    JsonBody getJsonFromFile(String filename) {
-        return new JsonBody(
-            Files.readString(Paths.get(getClass().getClassLoader().getResource(filename).toURI())));
-    }
-
-    @AfterEach
-    void tearDown() {
-        usingStub().reset();
-    }
-
-    <T> T getResponseAsObject(byte[] bytes, Class<T> clazz) {
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            mapper.registerModule(new JavaTimeModule());
-            mapper.enable(StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION.mappedFeature());
-            mapper.configure(DeserializationFeature.FAIL_ON_IGNORED_PROPERTIES, false);
-            mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-            return bytes.length > 0
-                ? mapper.reader().forType(clazz).readValue(bytes)
-                : null;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     protected String loadFixtureAsString(String classpathResource) throws IOException {

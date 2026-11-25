@@ -28,28 +28,28 @@ class MongoAvailabilityTest {
 
   @Test
   void state_shouldBeUnknown_beforeAnyServerIsChecked() {
-    assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNKNOWN);
+    assertThat(availability.state()).isEqualTo(Availability.UNKNOWN);
   }
 
   @Test
   void state_shouldBeUnknown_whileAServerIsNotYetChecked() {
     report(availability, unchecked(FIRST));
 
-    assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNKNOWN);
+    assertThat(availability.state()).isEqualTo(Availability.UNKNOWN);
   }
 
   @Test
   void state_shouldBeUnknown_whenTheDriverMonitorsNoServers() {
     report(availability);
 
-    assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNKNOWN);
+    assertThat(availability.state()).isEqualTo(Availability.UNKNOWN);
   }
 
   @Test
   void state_shouldBeAvailable_whileAConnectedServerAcceptsWrites() {
     report(availability, failing(FIRST), primary(SECOND));
 
-    assertThat(availability.state()).isEqualTo(MongoAvailability.State.AVAILABLE);
+    assertThat(availability.state()).isEqualTo(Availability.AVAILABLE);
   }
 
   @ParameterizedTest
@@ -59,35 +59,35 @@ class MongoAvailabilityTest {
   void state_shouldBeAvailable_whenAConnectedServerIsOfAWritableType(ServerType type) {
     report(availability, connected(FIRST, type));
 
-    assertThat(availability.state()).isEqualTo(MongoAvailability.State.AVAILABLE);
+    assertThat(availability.state()).isEqualTo(Availability.AVAILABLE);
   }
 
   @Test
   void state_shouldBeUnknown_whileOneServerHasFailedAndAnotherIsNotYetChecked() {
     report(availability, failing(FIRST), unchecked(SECOND));
 
-    assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNKNOWN);
+    assertThat(availability.state()).isEqualTo(Availability.UNKNOWN);
   }
 
   @Test
   void state_shouldBeUnavailable_onceEveryServerHasFailedItsCheck() {
     report(availability, failing(FIRST), failing(SECOND));
 
-    assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNAVAILABLE);
+    assertThat(availability.state()).isEqualTo(Availability.UNAVAILABLE);
   }
 
   @Test
   void state_shouldBeUnavailable_whenTheConnectedServersAreSecondariesAndTheRestHaveFailed() {
     report(availability, failing(FIRST), secondary(SECOND));
 
-    assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNAVAILABLE);
+    assertThat(availability.state()).isEqualTo(Availability.UNAVAILABLE);
   }
 
   @Test
   void state_shouldBeUnknown_whileASecondaryIsConnectedAndAnotherServerIsNotYetChecked() {
     report(availability, secondary(FIRST), unchecked(SECOND));
 
-    assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNKNOWN);
+    assertThat(availability.state()).isEqualTo(Availability.UNKNOWN);
   }
 
   @Test
@@ -96,7 +96,7 @@ class MongoAvailabilityTest {
 
     report(availability, failing(FIRST));
 
-    assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNAVAILABLE);
+    assertThat(availability.state()).isEqualTo(Availability.UNAVAILABLE);
   }
 
   @Test
@@ -105,7 +105,7 @@ class MongoAvailabilityTest {
 
     report(availability, primary(FIRST));
 
-    assertThat(availability.state()).isEqualTo(MongoAvailability.State.AVAILABLE);
+    assertThat(availability.state()).isEqualTo(Availability.AVAILABLE);
   }
 
   @Test
@@ -124,12 +124,13 @@ class MongoAvailabilityTest {
         assertOneLine(
             lines,
             Level.WARN,
-            "MongoDB is unavailable, servers [mongo-1:27017, mongo-2:27017]");
+            "MongoDB is unavailable, no server accepts writes: connected servers [], failed"
+                + " servers [mongo-1:27017, mongo-2:27017]");
     assertThat(line.getThrowableProxy().getMessage()).isEqualTo("refused");
   }
 
   @Test
-  void clusterDescriptionChanged_shouldWarnOnceThatNoServerIsWritable_whenThePrimaryIsLost() {
+  void clusterDescriptionChanged_shouldWarnOnceNamingTheConnectedAndFailedServersWithTheFailure_whenThePrimaryIsLost() {
     report(availability, primary(FIRST), secondary(SECOND));
 
     List<ILoggingEvent> lines =
@@ -140,11 +141,13 @@ class MongoAvailabilityTest {
               report(availability, failing(FIRST), secondary(SECOND));
             });
 
-    assertOneLine(
-        lines,
-        Level.WARN,
-        "MongoDB is unavailable: servers [mongo-1:27017, mongo-2:27017] are connected but"
-            + " none accepts writes");
+    ILoggingEvent line =
+        assertOneLine(
+            lines,
+            Level.WARN,
+            "MongoDB is unavailable, no server accepts writes: connected servers"
+                + " [mongo-2:27017], failed servers [mongo-1:27017]");
+    assertThat(line.getThrowableProxy().getMessage()).isEqualTo("refused");
   }
 
   @Test
@@ -173,7 +176,7 @@ class MongoAvailabilityTest {
               report(availability, unchecked(FIRST), unchecked(SECOND));
             });
 
-    assertThat(availability.state()).isEqualTo(MongoAvailability.State.UNKNOWN);
+    assertThat(availability.state()).isEqualTo(Availability.UNKNOWN);
     assertOneLine(
         lines,
         Level.WARN,

@@ -13,26 +13,30 @@ final class MongoReplyWriteException extends RuntimeException {
   }
 
   static Optional<MongoReplyWriteException> reportedBy(BsonDocument reply) {
+    int duplicateKey = 11000;
     List<String> writeFailures = new ArrayList<>();
     BsonValue writeErrors = reply.get("writeErrors");
-    if (writeErrors != null && writeErrors.isArray() && !writeErrors.asArray().isEmpty()) {
-      List<String> codes =
+    if (writeErrors != null && writeErrors.isArray()) {
+      List<String> labels =
           writeErrors.asArray().stream()
               .map(BsonValue::asDocument)
-              .map(MongoReplyWriteException::errorCodeOf)
+              .filter(error -> error.getNumber("code").intValue() != duplicateKey)
+              .map(MongoReplyWriteException::errorCodeLabelOf)
               .toList();
-      writeFailures.add("writeErrors codes " + codes);
+      if (!labels.isEmpty()) {
+        writeFailures.add("writeErrors " + labels);
+      }
     }
     if (reply.isDocument("writeConcernError")) {
       writeFailures.add(
-          "writeConcernError code " + errorCodeOf(reply.getDocument("writeConcernError")));
+          "writeConcernError " + errorCodeLabelOf(reply.getDocument("writeConcernError")));
     }
     return writeFailures.isEmpty()
         ? Optional.empty()
         : Optional.of(new MongoReplyWriteException(String.join("; ", writeFailures)));
   }
 
-  private static String errorCodeOf(BsonDocument error) {
+  private static String errorCodeLabelOf(BsonDocument error) {
     String code = String.valueOf(error.getNumber("code").intValue());
     return error.isString("codeName") ? code + " " + error.getString("codeName").getValue() : code;
   }

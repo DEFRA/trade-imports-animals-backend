@@ -36,6 +36,17 @@ public final class CapturedLogs {
     return appender.list;
   }
 
+  public static List<ILoggingEvent> loggedBy(Class<?> loggerOwner, Level level, Runnable action) {
+    Logger logger = (Logger) LoggerFactory.getLogger(loggerOwner);
+    Level configuredLevel = logger.getLevel();
+    logger.setLevel(level);
+    try {
+      return loggedBy(loggerOwner, action);
+    } finally {
+      logger.setLevel(configuredLevel);
+    }
+  }
+
   public static ILoggingEvent assertOneLine(
       List<ILoggingEvent> lines, Level level, String formattedMessage) {
     assertThat(lines).hasSize(1);
@@ -43,6 +54,14 @@ public final class CapturedLogs {
     assertThat(line.getLevel()).isEqualTo(level);
     assertThat(line.getFormattedMessage()).isEqualTo(formattedMessage);
     return line;
+  }
+
+  public static List<String> messagesOf(List<ILoggingEvent> lines) {
+    return lines.stream().map(ILoggingEvent::getFormattedMessage).toList();
+  }
+
+  public static List<String> messagesAt(Level level, List<ILoggingEvent> lines) {
+    return messagesOf(lines.stream().filter(line -> line.getLevel() == level).toList());
   }
 
   public static Map<String, Object> keyValues(ILoggingEvent event) {

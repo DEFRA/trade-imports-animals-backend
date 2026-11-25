@@ -8,12 +8,16 @@ public final class EmfDocuments {
 
   private EmfDocuments() {}
 
+  public static boolean isDocumentFor(JsonNode document, String metricName) {
+    return document.has("_aws") && document.has(metricName);
+  }
+
   public static String namespaceOf(JsonNode document) {
     return directiveOf(document).path("Namespace").asText();
   }
 
   public static String unitOf(JsonNode document) {
-    return directiveOf(document).path("Metrics").get(0).path("Unit").asText();
+    return directiveOf(document).path("Metrics").path(0).path("Unit").asText();
   }
 
   public static List<List<String>> dimensionSetsOf(JsonNode document) {
@@ -29,7 +33,17 @@ public final class EmfDocuments {
     return dimensionSets;
   }
 
+  public static List<Double> valuesOf(JsonNode document, String metricName) {
+    JsonNode values = document.path(metricName);
+    if (!values.isArray()) {
+      return List.of(values.asDouble());
+    }
+    List<Double> doubles = new ArrayList<>();
+    values.forEach(value -> doubles.add(value.asDouble()));
+    return doubles;
+  }
+
   private static JsonNode directiveOf(JsonNode document) {
-    return document.path("_aws").path("CloudWatchMetrics").get(0);
+    return document.path("_aws").path("CloudWatchMetrics").path(0);
   }
 }

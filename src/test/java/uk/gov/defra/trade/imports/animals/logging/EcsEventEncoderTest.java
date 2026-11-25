@@ -1,6 +1,7 @@
 package uk.gov.defra.trade.imports.animals.logging;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter.MDC_TRACE_ID;
 import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.loggedBy;
 
 import ch.qos.logback.classic.LoggerContext;
@@ -101,28 +102,8 @@ class EcsEventEncoderTest {
   }
 
   @Test
-  void encode_shouldWriteTheThrowablesErrorFields_insteadOfTheErrorKeyValuePairs() {
-    ILoggingEvent event =
-        logged(
-            () ->
-                LOG.atWarn()
-                    .addKeyValue("error.type", "java.lang.IllegalArgumentException")
-                    .addKeyValue("error.message", "from the key-value pair")
-                    .setCause(new IllegalStateException("from the throwable"))
-                    .log("External call failed"));
-
-    String line = new String(encoder.encode(event), StandardCharsets.UTF_8);
-
-    assertThat(line)
-        .contains("\"error.type\":\"java.lang.IllegalStateException\"")
-        .contains("\"error.message\":\"from the throwable\"")
-        .doesNotContain("java.lang.IllegalArgumentException")
-        .doesNotContain("from the key-value pair");
-  }
-
-  @Test
   void encode_shouldWriteALineWithNoKeyValuePairs_exactlyAsTheEcsEncoderDoes() {
-    MDC.put("trace.id", "trace-from-the-caller");
+    MDC.put(MDC_TRACE_ID, "trace-from-the-caller");
     ILoggingEvent event = logged(() -> LOG.info("Started"));
 
     assertThat(new String(encoder.encode(event), StandardCharsets.UTF_8))
@@ -131,7 +112,7 @@ class EcsEventEncoderTest {
 
   @Test
   void encode_shouldWriteALineWithNoEventKeyValuePairs_exactlyAsTheEcsEncoderDoes() {
-    MDC.put("trace.id", "trace-from-the-caller");
+    MDC.put(MDC_TRACE_ID, "trace-from-the-caller");
     ILoggingEvent event =
         logged(() -> LOG.atInfo().addKeyValue("other.key", "value").log("Started"));
 

@@ -88,7 +88,7 @@ public class NotificationService {
         this.adminPageSize = adminPageSize;
     }
 
-    @Timed("service.saveNotification.time")
+    @Timed("service.postNotification.time")
     public NotificationAggregate saveNotification(
         NotificationDto notificationDto, String correlationId, Actor actor, String organisationId) {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
@@ -100,7 +100,7 @@ public class NotificationService {
     }
 
     @Transactional
-    @Timed("service.replace.time")
+    @Timed("service.replaceNotification.time")
     public NotificationAggregate replace(String referenceNumber, NotificationDto dto,
         String correlationId, Actor actor, String organisationId) {
         return replaceContent(referenceNumber, dto, correlationId, actor, organisationId);
@@ -150,7 +150,7 @@ public class NotificationService {
         return createNotification(notificationCopyMapper.toCopyDto(source), correlationId, actor, organisationId);
     }
 
-    @Timed("service.findFulfilmentsView.time")
+    @Timed("service.getFulfilments.time")
     public NotificationFulfilmentsView findFulfilmentsView(String referenceNumber, String organisationId) {
         Optional<NotificationAggregate> scoped =
             notificationRepository.findFulfilmentFieldsByReferenceNumberAndOrganisationId(
@@ -390,7 +390,7 @@ public class NotificationService {
             actor);
     }
 
-    @Timed("service.findAllReferenceNumbers.time")
+    @Timed("service.getAllReferenceNumbers.time")
     public ReferenceNumberPageResponse findAllReferenceNumbers(int page) {
         log.debug("Fetching notification reference numbers page {} (size {})", page, adminPageSize);
         Page<NotificationReferenceOnly> result = notificationRepository.findAllReferencesBy(
@@ -401,7 +401,7 @@ public class NotificationService {
     }
 
     @Transactional(noRollbackFor = NotFoundException.class)
-    @Timed("service.deleteByReferenceNumbers.time")
+    @Timed("service.deleteNotifications.time")
     public void deleteByReferenceNumbers(List<String> referenceNumbers, AuditContext auditContext) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return;

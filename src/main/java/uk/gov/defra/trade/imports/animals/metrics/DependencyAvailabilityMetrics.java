@@ -2,13 +2,9 @@ package uk.gov.defra.trade.imports.animals.metrics;
 
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.function.ToDoubleFunction;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 
-/**
- * Registers the gauge {@code external.dependency.available}, tagged {@code dependency}, for each
- * dependency: 1 while it is available, 0 while it is not, and NaN while unknown.
- */
 @Component
 public class DependencyAvailabilityMetrics {
 
@@ -16,44 +12,27 @@ public class DependencyAvailabilityMetrics {
       MeterRegistry meterRegistry,
       MongoAvailability mongoAvailability,
       LastCallOutcomes lastCallOutcomes) {
-    register(
-        meterRegistry,
-        Dependency.MONGODB,
-        mongoAvailability,
-        availability -> gaugeValueOf(availability.state()));
+    register(meterRegistry, Dependency.MONGODB, mongoAvailability::state);
     for (Dependency dependency : Dependency.values()) {
       if (dependency != Dependency.MONGODB) {
         register(
-            meterRegistry,
-            dependency,
-            lastCallOutcomes,
-            outcomes -> lastCallGaugeValueOf(outcomes, dependency));
+            meterRegistry, dependency, () -> lastCallOutcomes.lastCallAvailability(dependency));
       }
     }
   }
 
-  private static <T> void register(
-      MeterRegistry meterRegistry,
-      Dependency dependency,
-      T source,
-      ToDoubleFunction<T> value) {
-    Gauge.builder("external.dependency.available", source, value)
+  private static void register(
+      MeterRegistry meterRegistry, Dependency dependency, Supplier<Availability> availability) {
+    Gauge.builder("external.dependency.available", () -> gaugeValueOf(availability.get()))
         .tag(ExternalCallRecorder.DEPENDENCY_TAG, dependency.tagValue())
         .register(meterRegistry);
   }
 
-  private static double gaugeValueOf(MongoAvailability.State state) {
-    return switch (state) {
+  private static double gaugeValueOf(Availability availability) {
+    return switch (availability) {
       case AVAILABLE -> 1;
       case UNAVAILABLE -> 0;
       case UNKNOWN -> Double.NaN;
     };
-  }
-
-  private static double lastCallGaugeValueOf(LastCallOutcomes outcomes, Dependency dependency) {
-    return outcomes
-        .lastCallSucceeded(dependency)
-        .map(succeeded -> succeeded ? 1.0 : 0.0)
-        .orElse(Double.NaN);
   }
 }

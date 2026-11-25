@@ -9,23 +9,19 @@ import org.slf4j.event.KeyValuePair;
 /**
  * The ECS encoder, plus a nested {@code event} object built from the line's {@code event.*}
  * key-value pairs. A {@link Number} value is written as a JSON number, and a non-finite one as a
- * string. The line's {@code error.*} key-value pairs are written as top-level fields, unless the
- * line carries a throwable, whose own ECS {@code error.*} fields are written instead. A line with
+ * string. The line's {@code error.*} key-value pairs are written as top-level fields. A line with
  * no {@code event.*} or {@code error.*} key-value pairs is written exactly as the ECS encoder
  * writes it.
  */
 public class EcsEventEncoder extends EcsEncoder {
 
   private static final String EVENT_PREFIX = "event.";
-  private static final String ERROR_PREFIX = "error.";
 
   @Override
   protected void addCustomFields(ILoggingEvent event, StringBuilder builder) {
     super.addCustomFields(event, builder);
     appendEventObject(fieldsStartingWith(EVENT_PREFIX, event), builder);
-    if (event.getThrowableProxy() == null) {
-      appendFlatFields(fieldsStartingWith(ERROR_PREFIX, event), builder);
-    }
+    appendFlatFields(fieldsStartingWith("error.", event), builder);
   }
 
   private static void appendEventObject(List<KeyValuePair> eventFields, StringBuilder builder) {

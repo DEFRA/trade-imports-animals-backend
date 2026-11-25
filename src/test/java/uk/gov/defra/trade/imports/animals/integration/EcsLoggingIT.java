@@ -1,8 +1,6 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,15 +9,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.PrintStream;
-import java.nio.charset.StandardCharsets;
+import uk.gov.defra.trade.imports.animals.testsupport.CapturedConsole;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedConsole.captureSystemOut;
 
 @AutoConfigureMockMvc
 class EcsLoggingIT extends IntegrationBase {
@@ -34,29 +29,22 @@ class EcsLoggingIT extends IntegrationBase {
     @Autowired
     private NotificationRepository notificationRepository;
 
-    private final ByteArrayOutputStream outputStreamCaptor = new ByteArrayOutputStream();
-    private final PrintStream originalOut = System.out;
-    private static final ObjectMapper objectMapper = new ObjectMapper();
-
     @BeforeEach
     void setUp() {
         seedDraftNotificationOwnedBy(notificationRepository, LOGGING_TEST_REF);
-        System.setOut(new PrintStream(outputStreamCaptor));
-    }
-
-    @AfterEach
-    void tearDown() {
-        System.setOut(originalOut);
     }
 
     @Test
     void requestLogging_shouldProduceEcsJsonFormat() throws Exception {
-        mockMvc.perform(get(DOCUMENT_UPLOADS_PATH)
-                        .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, DEFAULT_TRADER_ORG_ID)
-                        .header(RequestTracingFilter.TRACE_ID_HEADER, "test-trace-123"))
-                .andExpect(status().isOk());
+        CapturedConsole console = captureSystemOut();
+        try (console) {
+            mockMvc.perform(get(DOCUMENT_UPLOADS_PATH)
+                            .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, DEFAULT_TRADER_ORG_ID)
+                            .header(RequestTracingFilter.TRACE_ID_HEADER, "test-trace-123"))
+                    .andExpect(status().isOk());
+        }
 
-        JsonNode logJson = requestLogLine(outputStreamCaptor.toString(StandardCharsets.UTF_8));
+        JsonNode logJson = requestLogLine(console);
 
         assertThat(logJson.has("@timestamp")).isTrue();
         assertThat(logJson.has("log.level")).isTrue();
@@ -77,37 +65,31 @@ class EcsLoggingIT extends IntegrationBase {
 
     @Test
     void healthEndpoint_shouldBeFilteredFromLogs() throws Exception {
-        outputStreamCaptor.reset();
+        CapturedConsole console = captureSystemOut();
+        try (console) {
+            mockMvc.perform(get("/health"))
+                    .andExpect(status().isOk());
+        }
 
-        mockMvc.perform(get("/health"))
-                .andExpect(status().isOk());
-
-        assertThat(outputStreamCaptor.toString(StandardCharsets.UTF_8)).doesNotContain("/health");
+        assertThat(console.text()).doesNotContain("/health");
     }
 
     @Test
     void missingTraceIdHeader_shouldOmitTraceId() throws Exception {
-        outputStreamCaptor.reset();
+        CapturedConsole console = captureSystemOut();
+        try (console) {
+            mockMvc.perform(get(DOCUMENT_UPLOADS_PATH)
+                            .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, DEFAULT_TRADER_ORG_ID))
+                    .andExpect(status().isOk());
+        }
 
-        mockMvc.perform(get(DOCUMENT_UPLOADS_PATH)
-                        .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, DEFAULT_TRADER_ORG_ID))
-                .andExpect(status().isOk());
-
-        JsonNode logJson = requestLogLine(outputStreamCaptor.toString(StandardCharsets.UTF_8));
-        assertThat(logJson).as("Expected a log line with url.full field").isNotNull();
-        assertThat(logJson.has("trace.id")).isFalse();
+        assertThat(requestLogLine(console).has("trace.id")).isFalse();
     }
 
-    private static JsonNode requestLogLine(String logOutput) throws IOException {
-        for (String line : logOutput.split("\n")) {
-            if (!line.trim().startsWith("{")) {
-                continue;
-            }
-            JsonNode candidate = objectMapper.readTree(line);
-            if (candidate.has("url.full")) {
-                return candidate;
-            }
-        }
-        return null;
+    private static JsonNode requestLogLine(CapturedConsole console) {
+        return console.jsonLines().stream()
+            .filter(line -> line.has("url.full"))
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("No console line has url.full"));
     }
 }

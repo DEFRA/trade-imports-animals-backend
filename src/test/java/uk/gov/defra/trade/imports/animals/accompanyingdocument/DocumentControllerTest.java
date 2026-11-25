@@ -20,7 +20,7 @@ import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSess
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.UPLOAD_ID;
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registerUploadRequest;
 import static uk.gov.defra.trade.imports.animals.accompanyingdocument.UploadSessionFixtures.registeredSession;
-import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.loggedBy;
 
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,7 +56,6 @@ import uk.gov.defra.trade.imports.animals.notification.NotificationService;
 @WebMvcTest(DocumentController.class)
 @EnableConfigurationProperties(AppConfig.class)
 @TestPropertySource(properties = {
-    "cdp.tracing.header-name=x-cdp-request-id",
     "app.base-url=http://localhost:8085",
     "outbox.sns.topic-arn=arn:aws:sns:eu-west-2:000000000000:unit-test-outbox.fifo"
 })
@@ -538,7 +537,7 @@ class DocumentControllerTest {
     void shouldLogTheCorrelationIdTheCallbackCarries() {
       CdpScanResultPayload payload = payloadWithMetadata(Map.of("correlationId", CORRELATION_ID));
 
-      List<ILoggingEvent> events = logEventsDuring(DocumentController.class, () -> {
+      List<ILoggingEvent> events = loggedBy(DocumentController.class, () -> {
         try {
           postScanResult(payload);
         } catch (Exception e) {

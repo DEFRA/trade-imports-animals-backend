@@ -1,6 +1,5 @@
 package uk.gov.defra.trade.imports.animals.integration.outbox;
 
-import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -8,11 +7,11 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import software.amazon.awssdk.services.sqs.model.Message;
+import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
@@ -29,13 +28,6 @@ class OutboxPollerIT extends OutboxIntegrationBase {
 
     @Autowired
     private OutboxPublishService outboxPublishService;
-
-    @BeforeEach
-    void setUp() {
-        notificationRepository.deleteAll();
-        outboxEventRepository.deleteAll();
-        purgeQueue();
-    }
 
     @Test
     void publishUnpublishedEvents_shouldDeliverToSnsAndMarkPublishedAt() throws Exception {

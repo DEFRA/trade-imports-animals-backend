@@ -4,9 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.assertOneLine;
 import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.keyValues;
 import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.loggedBy;
-import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.durationCount;
+import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.S3_GET_OBJECT;
+import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.SNS_PUBLISH;
+import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.durationSampleCount;
+import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.failureSampleCount;
 import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.failureTotal;
-import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.recordedCallCount;
 import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.totalDurationMillis;
 
 import ch.qos.logback.classic.Level;
@@ -19,9 +21,6 @@ import org.junit.jupiter.api.Test;
 
 class ExternalCallRecorderTest {
 
-  private static final ExternalCall PUBLISH = new ExternalCall(Dependency.SNS, "publish");
-  private static final ExternalCall GET_OBJECT = new ExternalCall(Dependency.S3, "get-object");
-
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
   private final LastCallOutcomes lastCallOutcomes = new LastCallOutcomes();
   private final AtomicLong nanoTime = new AtomicLong();
@@ -29,32 +28,34 @@ class ExternalCallRecorderTest {
       new ExternalCallRecorder(meterRegistry, lastCallOutcomes, nanoTime::get);
 
   @Test
-  void recordSuccess_shouldRecordTheDurationAZeroFailureAndTheDependencyAsSucceeded() {
-    recorder.recordSuccess(PUBLISH, Duration.ofMillis(7));
+  void recordSuccess_shouldRecordTheDurationAZeroFailureAndTheDependencyAsAvailable() {
+    recorder.recordSuccess(SNS_PUBLISH, Duration.ofMillis(7));
 
-    assertThat(durationCount(meterRegistry, PUBLISH)).isEqualTo(1);
-    assertThat(totalDurationMillis(meterRegistry, PUBLISH)).isEqualTo(7);
-    assertThat(recordedCallCount(meterRegistry, PUBLISH)).isEqualTo(1);
-    assertThat(failureTotal(meterRegistry, PUBLISH)).isZero();
-    assertThat(lastCallOutcomes.lastCallSucceeded(Dependency.SNS)).contains(true);
+    assertThat(durationSampleCount(meterRegistry, SNS_PUBLISH)).isEqualTo(1);
+    assertThat(totalDurationMillis(meterRegistry, SNS_PUBLISH)).isEqualTo(7);
+    assertThat(failureSampleCount(meterRegistry, SNS_PUBLISH)).isEqualTo(1);
+    assertThat(failureTotal(meterRegistry, SNS_PUBLISH)).isZero();
+    assertThat(lastCallOutcomes.lastCallAvailability(Dependency.SNS))
+        .isEqualTo(Availability.AVAILABLE);
   }
 
   @Test
-  void recordFailure_shouldRecordTheDurationAFailureOfOneAndTheDependencyAsFailed() {
-    recorder.recordFailure(GET_OBJECT, Duration.ofMillis(3), new IllegalStateException());
+  void recordFailure_shouldRecordTheDurationAFailureOfOneAndTheDependencyAsUnavailable() {
+    recorder.recordFailure(S3_GET_OBJECT, Duration.ofMillis(3), new IllegalStateException());
 
-    assertThat(durationCount(meterRegistry, GET_OBJECT)).isEqualTo(1);
-    assertThat(totalDurationMillis(meterRegistry, GET_OBJECT)).isEqualTo(3);
-    assertThat(recordedCallCount(meterRegistry, GET_OBJECT)).isEqualTo(1);
-    assertThat(failureTotal(meterRegistry, GET_OBJECT)).isEqualTo(1);
-    assertThat(lastCallOutcomes.lastCallSucceeded(Dependency.S3)).contains(false);
+    assertThat(durationSampleCount(meterRegistry, S3_GET_OBJECT)).isEqualTo(1);
+    assertThat(totalDurationMillis(meterRegistry, S3_GET_OBJECT)).isEqualTo(3);
+    assertThat(failureSampleCount(meterRegistry, S3_GET_OBJECT)).isEqualTo(1);
+    assertThat(failureTotal(meterRegistry, S3_GET_OBJECT)).isEqualTo(1);
+    assertThat(lastCallOutcomes.lastCallAvailability(Dependency.S3))
+        .isEqualTo(Availability.UNAVAILABLE);
   }
 
   @Test
   void recordSuccess_shouldLogOneInfoLineWithTheEventFieldsAndANanosecondDuration() {
     List<ILoggingEvent> lines =
         loggedBy(
-            ExternalCallRecorder.class, () -> recorder.recordSuccess(PUBLISH, Duration.ofMillis(2)));
+            ExternalCallRecorder.class, () -> recorder.recordSuccess(SNS_PUBLISH, Duration.ofMillis(2)));
 
     ILoggingEvent line =
         assertOneLine(lines, Level.INFO, "External call sns/publish success in 2 ms");
@@ -72,7 +73,7 @@ class ExternalCallRecorderTest {
     List<ILoggingEvent> lines =
         loggedBy(
             ExternalCallRecorder.class,
-            () -> recorder.recordFailure(GET_OBJECT, Duration.ofMillis(4), cause));
+            () -> recorder.recordFailure(S3_GET_OBJECT, Duration.ofMillis(4), cause));
 
     ILoggingEvent line =
         assertOneLine(lines, Level.WARN, "External call s3/get-object failure in 4 ms");

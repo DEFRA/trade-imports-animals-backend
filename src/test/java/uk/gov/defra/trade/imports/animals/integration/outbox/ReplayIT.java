@@ -37,11 +37,8 @@ class ReplayIT extends OutboxIntegrationBase {
     private OutboxPublishService outboxPublishService;
 
     @BeforeEach
-    void setUp() {
-        notificationRepository.deleteAll();
-        outboxEventRepository.deleteAll();
+    void clearAudits() {
         auditRepository.deleteAll();
-        purgeQueue();
     }
 
     @Test

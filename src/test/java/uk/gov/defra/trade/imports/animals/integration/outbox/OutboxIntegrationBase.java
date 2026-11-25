@@ -1,6 +1,5 @@
 package uk.gov.defra.trade.imports.animals.integration.outbox;
 
-import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -11,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -20,6 +20,7 @@ import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
 import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sns.model.CreateTopicRequest;
 import software.amazon.awssdk.services.sns.model.SubscribeRequest;
@@ -30,6 +31,7 @@ import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
+import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
@@ -57,6 +59,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     static final String TOPIC_ARN;
     static final String QUEUE_URL;
     static final SqsClient SQS_CLIENT;
+    static final S3Client S3_CLIENT;
 
     static {
         Startables.deepStart(FLOCI).join();
@@ -68,6 +71,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
             .build()).topicArn();
 
         SQS_CLIENT = configure(SqsClient.builder()).build();
+        S3_CLIENT = configure(S3Client.builder()).forcePathStyle(true).build();
         QUEUE_URL = SQS_CLIENT.createQueue(CreateQueueRequest.builder()
             .queueName(QUEUE_NAME)
             .attributes(Map.of(QueueAttributeName.FIFO_QUEUE, "true"))
@@ -122,6 +126,21 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
 
     @Autowired
     protected ObjectMapper objectMapper;
+
+    @BeforeEach
+    void clearOutboxState() {
+        notificationRepository.deleteAll();
+        outboxEventRepository.deleteAll();
+        purgeQueue();
+    }
+
+    protected void ensureBucketExists(String bucket) {
+        boolean exists = S3_CLIENT.listBuckets().buckets().stream()
+            .anyMatch(existing -> existing.name().equals(bucket));
+        if (!exists) {
+            S3_CLIENT.createBucket(builder -> builder.bucket(bucket));
+        }
+    }
 
     protected Message awaitSqsMessage() {
         return awaitSqsMessages(1).getFirst();

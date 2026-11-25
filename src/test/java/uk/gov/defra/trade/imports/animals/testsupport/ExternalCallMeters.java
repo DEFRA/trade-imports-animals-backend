@@ -10,9 +10,14 @@ import uk.gov.defra.trade.imports.animals.metrics.ExternalCall;
 
 public final class ExternalCallMeters {
 
+  public static final ExternalCall S3_GET_OBJECT = new ExternalCall(Dependency.S3, "get-object");
+  public static final ExternalCall SNS_PUBLISH = new ExternalCall(Dependency.SNS, "publish");
+  public static final ExternalCall MONGODB_INSERT = new ExternalCall(Dependency.MONGODB, "insert");
+  public static final ExternalCall MONGODB_FIND = new ExternalCall(Dependency.MONGODB, "find");
+
   private ExternalCallMeters() {}
 
-  public static long durationCount(MeterRegistry registry, ExternalCall call) {
+  public static long durationSampleCount(MeterRegistry registry, ExternalCall call) {
     return duration(registry, call).map(Timer::count).orElse(0L);
   }
 
@@ -22,7 +27,7 @@ public final class ExternalCallMeters {
         .orElse(0.0);
   }
 
-  public static long recordedCallCount(MeterRegistry registry, ExternalCall call) {
+  public static long failureSampleCount(MeterRegistry registry, ExternalCall call) {
     return failure(registry, call).map(DistributionSummary::count).orElse(0L);
   }
 

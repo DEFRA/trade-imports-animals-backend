@@ -1,5 +1,7 @@
 package uk.gov.defra.trade.imports.animals.exceptions;
 
+import static uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter.MDC_TRACE_ID;
+
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -31,7 +33,6 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class GlobalExceptionHandler {
 
-    private static final String MDC_TRACE_ID = "trace.id";
     private static final String PROPERTY_TRACE_ID = "traceId";
     private static final String PROPERTY_ERRORS = "errors";
     private static final String TITLE_VALIDATION_ERROR = "Validation Error";

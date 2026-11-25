@@ -2,7 +2,7 @@ package uk.gov.defra.trade.imports.animals.cdp.uploader;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.loggedBy;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -219,7 +219,7 @@ class CdpScanResultFormTest {
     }
 
     private List<ILoggingEvent> logEventsWhileDeserializing(String json) {
-      return logEventsDuring(CdpScanResultForm.Deserializer.class, () -> {
+      return loggedBy(CdpScanResultForm.Deserializer.class, () -> {
         try {
           objectMapper.readValue(json, CdpScanResultForm.class);
         } catch (JsonProcessingException e) {

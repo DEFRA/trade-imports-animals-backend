@@ -55,16 +55,18 @@ class DependencyAvailabilityMetricsTest {
   }
 
   @ParameterizedTest
-  @EnumSource(value = Dependency.class, names = {"S3", "SNS"})
-  void availabilityGauge_shouldBeOneForAws_whenTheLastCallSucceeded(Dependency dependency) {
+  @EnumSource(value = Dependency.class, names = "MONGODB", mode = EnumSource.Mode.EXCLUDE)
+  void availabilityGauge_shouldBeOne_whenTheLastCallSucceeded_forEveryDependencyButMongodb(
+      Dependency dependency) {
     lastCallOutcomes.recordSuccess(dependency);
 
     assertThat(availability(meterRegistry, dependency)).isEqualTo(1);
   }
 
   @ParameterizedTest
-  @EnumSource(value = Dependency.class, names = {"S3", "SNS"})
-  void availabilityGauge_shouldBeZeroForAws_whenTheLastCallFailed(Dependency dependency) {
+  @EnumSource(value = Dependency.class, names = "MONGODB", mode = EnumSource.Mode.EXCLUDE)
+  void availabilityGauge_shouldBeZero_whenTheLastCallFailed_forEveryDependencyButMongodb(
+      Dependency dependency) {
     lastCallOutcomes.recordFailure(dependency);
 
     assertThat(availability(meterRegistry, dependency)).isZero();

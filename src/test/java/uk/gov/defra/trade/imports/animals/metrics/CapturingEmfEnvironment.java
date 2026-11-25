@@ -1,5 +1,7 @@
 package uk.gov.defra.trade.imports.animals.metrics;
 
+import static uk.gov.defra.trade.imports.animals.testsupport.EmfDocuments.isDocumentFor;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,7 +28,7 @@ public class CapturingEmfEnvironment implements Environment {
   }
 
   public List<JsonNode> documentsFor(String metricName) {
-    return documents().stream().filter(document -> document.has(metricName)).toList();
+    return documents().stream().filter(document -> isDocumentFor(document, metricName)).toList();
   }
 
   private static JsonNode parse(String document) {

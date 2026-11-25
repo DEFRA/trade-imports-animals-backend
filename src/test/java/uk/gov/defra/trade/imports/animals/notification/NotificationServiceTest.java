@@ -20,8 +20,8 @@ import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DELETED;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.DRAFT;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationStatus.SUBMITTED;
-import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
-import static uk.gov.defra.trade.imports.animals.utils.LogCapture.messagesOf;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.loggedBy;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.messagesOf;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
@@ -368,7 +368,7 @@ class NotificationServiceTest {
 
         @Test
         void saveNotification_shouldLogEachAttemptWithNoPromiseOfARetry_whenAllPersistenceAttemptsCollide() {
-            List<ILoggingEvent> events = logEventsDuring(NotificationService.class,
+            List<ILoggingEvent> events = loggedBy(NotificationService.class,
                 () -> failureOfSaveWhoseThreeAttemptsCollide(new DuplicateKeyException("last collision")));
 
             assertThat(messagesOf(events)).containsExactly(
@@ -379,7 +379,7 @@ class NotificationServiceTest {
 
         @Test
         void saveNotification_shouldLogTheThrowableOfEachCollision_whenAllPersistenceAttemptsCollide() {
-            List<ILoggingEvent> events = logEventsDuring(NotificationService.class,
+            List<ILoggingEvent> events = loggedBy(NotificationService.class,
                 () -> failureOfSaveWhoseThreeAttemptsCollide(new DuplicateKeyException("last collision")));
 
             assertThat(events)
@@ -943,7 +943,7 @@ class NotificationServiceTest {
             when(notificationRepository.findAllReferencesBy(any(Pageable.class)))
                 .thenReturn(new PageImpl<>(Collections.emptyList(), PageRequest.of(0, 50), 0));
 
-            List<String> messages = messagesOf(logEventsDuring(NotificationService.class, Level.DEBUG,
+            List<String> messages = messagesOf(loggedBy(NotificationService.class, Level.DEBUG,
                 () -> notificationService.findAllReferenceNumbers(0)));
 
             assertThat(messages).first().isEqualTo("Fetching notification reference numbers page 0 (size 50)");
@@ -2593,7 +2593,7 @@ class NotificationServiceTest {
         }
 
         private List<String> messagesLoggedDuring(Runnable action) {
-            return messagesOf(logEventsDuring(NotificationService.class, action));
+            return messagesOf(loggedBy(NotificationService.class, action));
         }
 
         @Test

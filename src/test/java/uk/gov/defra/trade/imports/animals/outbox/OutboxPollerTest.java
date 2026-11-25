@@ -6,7 +6,7 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.loggedBy;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
@@ -64,7 +64,7 @@ class OutboxPollerTest {
         void shouldPublishUnpublishedEvents_whenLockAcquired() {
             when(outboxPublishService.publishUnpublishedEvents()).thenReturn(2);
 
-            List<ILoggingEvent> events = logEventsDuring(OutboxPoller.class, Level.DEBUG, outboxPoller::poll);
+            List<ILoggingEvent> events = loggedBy(OutboxPoller.class, Level.DEBUG, outboxPoller::poll);
 
             verify(outboxPublishService).publishUnpublishedEvents();
             assertThat(events)
@@ -97,7 +97,7 @@ class OutboxPollerTest {
         void shouldNotLogPublishedCount_whenNoEventsPublished() {
             when(outboxPublishService.publishUnpublishedEvents()).thenReturn(0);
 
-            List<ILoggingEvent> events = logEventsDuring(OutboxPoller.class, Level.DEBUG, outboxPoller::poll);
+            List<ILoggingEvent> events = loggedBy(OutboxPoller.class, Level.DEBUG, outboxPoller::poll);
 
             verify(outboxPublishService).publishUnpublishedEvents();
             assertThat(events)

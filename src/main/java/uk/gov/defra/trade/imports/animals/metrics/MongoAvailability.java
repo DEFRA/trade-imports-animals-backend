@@ -20,19 +20,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class MongoAvailability implements ClusterListener {
 
-  /** What the driver's checks say of the database. */
-  public enum State {
-    AVAILABLE,
-    UNAVAILABLE,
-    UNKNOWN
-  }
-
-  private volatile State state = State.UNKNOWN;
+  private volatile Availability state = Availability.UNKNOWN;
 
   @Override
   public synchronized void clusterDescriptionChanged(ClusterDescriptionChangedEvent event) {
     List<ServerDescription> servers = event.getNewDescription().getServerDescriptions();
-    State reported = stateOf(servers);
+    Availability reported = stateOf(servers);
     if (reported == state) {
       return;
     }
@@ -47,24 +40,22 @@ public class MongoAvailability implements ClusterListener {
     }
   }
 
-  private static State stateOf(List<ServerDescription> servers) {
+  private static Availability stateOf(List<ServerDescription> servers) {
     if (servers.stream().anyMatch(MongoAvailability::acceptsWrites)) {
-      return State.AVAILABLE;
+      return Availability.AVAILABLE;
     }
     if (!servers.isEmpty() && servers.stream().allMatch(MongoAvailability::isChecked)) {
-      return State.UNAVAILABLE;
+      return Availability.UNAVAILABLE;
     }
-    return State.UNKNOWN;
+    return Availability.UNKNOWN;
   }
 
   private static void logUnavailable(List<ServerDescription> servers) {
-    if (servers.stream().anyMatch(MongoAvailability::isConnected)) {
-      log.warn(
-          "MongoDB is unavailable: servers {} are connected but none accepts writes",
-          addressesOf(servers));
-    } else {
-      log.warn("MongoDB is unavailable, servers {}", addressesOf(servers), firstFailure(servers));
-    }
+    log.warn(
+        "MongoDB is unavailable, no server accepts writes: connected servers {}, failed servers {}",
+        addressesOf(servers.stream().filter(MongoAvailability::isConnected).toList()),
+        addressesOf(servers.stream().filter(server -> server.getException() != null).toList()),
+        firstFailure(servers));
   }
 
   private static boolean acceptsWrites(ServerDescription server) {
@@ -96,7 +87,7 @@ public class MongoAvailability implements ClusterListener {
    *
    * @return the state
    */
-  public State state() {
+  public Availability state() {
     return state;
   }
 }

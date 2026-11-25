@@ -5,7 +5,7 @@ import static org.junit.jupiter.params.provider.Arguments.arguments;
 import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.assertOneLine;
 import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.keyValues;
 import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.loggedBy;
-import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.durationCount;
+import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.durationSampleCount;
 import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.failureTotal;
 import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.totalDurationMillis;
 
@@ -29,15 +29,15 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-class MongoCommandMetricsTest {
+class MongoCallRecorderTest {
 
   private static final String DATABASE_NAME = "trade-imports-animals-backend";
   private static final ConnectionDescription CONNECTION =
       new ConnectionDescription(new ServerId(new ClusterId(), new ServerAddress()));
 
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
-  private final MongoCommandMetrics listener =
-      new MongoCommandMetrics(new ExternalCallRecorder(meterRegistry, new LastCallOutcomes()));
+  private final MongoCallRecorder listener =
+      new MongoCallRecorder(new ExternalCallRecorder(meterRegistry, new LastCallOutcomes()));
 
   @ParameterizedTest
   @ValueSource(
@@ -61,7 +61,7 @@ class MongoCommandMetricsTest {
   void commandSucceeded_shouldRecordAKnownCommandUnderItsOwnName(String commandName) {
     listener.commandSucceeded(succeeded(commandName, 5));
 
-    assertThat(durationCount(meterRegistry, mongodb(commandName))).isEqualTo(1);
+    assertThat(durationSampleCount(meterRegistry, mongodb(commandName))).isEqualTo(1);
     assertThat(failureTotal(meterRegistry, mongodb(commandName))).isZero();
   }
 
@@ -70,7 +70,7 @@ class MongoCommandMetricsTest {
   void commandSucceeded_shouldRecordAnUnknownCommandAsOther(String commandName) {
     listener.commandSucceeded(succeeded(commandName, 5));
 
-    assertThat(durationCount(meterRegistry, mongodb("other"))).isEqualTo(1);
+    assertThat(durationSampleCount(meterRegistry, mongodb("other"))).isEqualTo(1);
     assertThat(failureTotal(meterRegistry, mongodb("other"))).isZero();
   }
 
@@ -109,8 +109,8 @@ class MongoCommandMetricsTest {
   }
 
   @ParameterizedTest
-  @MethodSource("repliesWithErrors")
-  void commandSucceeded_shouldRecordAReplyWithAnErrorAsAFailure(
+  @MethodSource("repliesReportingWriteErrors")
+  void commandSucceeded_shouldRecordAFailure_whenTheReplyReportsAWriteError(
       String commandName, String replyJson, String errorMessage) {
     List<ILoggingEvent> lines =
         loggedBy(
@@ -119,7 +119,7 @@ class MongoCommandMetricsTest {
                 listener.commandSucceeded(
                     succeeded(commandName, 4, BsonDocument.parse(replyJson))));
 
-    assertThat(durationCount(meterRegistry, mongodb(commandName))).isEqualTo(1);
+    assertThat(durationSampleCount(meterRegistry, mongodb(commandName))).isEqualTo(1);
     assertThat(failureTotal(meterRegistry, mongodb(commandName))).isEqualTo(1);
     ILoggingEvent line =
         assertOneLine(
@@ -130,22 +130,47 @@ class MongoCommandMetricsTest {
         .containsEntry("error.message", errorMessage);
   }
 
-  private static Stream<Arguments> repliesWithErrors() {
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        """
+        {ok: 1, n: 0, writeErrors: [{index: 0, code: 11000,
+          errmsg: "E11000 duplicate key error dup key: { referenceNumber: \\"DRAFT.GB.1\\" }"}]}
+        """,
+        "{ok: 1, n: 1, writeErrors: []}"
+      })
+  void commandSucceeded_shouldRecordASuccess_whenTheReplyReportsOnlyDuplicateKeysOrNoWriteErrors(
+      String replyJson) {
+    listener.commandSucceeded(succeeded("insert", 4, BsonDocument.parse(replyJson)));
+
+    assertThat(durationSampleCount(meterRegistry, mongodb("insert"))).isEqualTo(1);
+    assertThat(failureTotal(meterRegistry, mongodb("insert"))).isZero();
+  }
+
+  private static Stream<Arguments> repliesReportingWriteErrors() {
     return Stream.of(
         arguments(
             "insert",
             """
-            {ok: 1, n: 0, writeErrors: [{index: 0, code: 11000,
-              errmsg: "E11000 duplicate key error dup key: { referenceNumber: \\"DRAFT.GB.1\\" }"}]}
+            {ok: 1, n: 0, writeErrors: [{index: 0, code: 11000, errmsg: "duplicate key"},
+              {index: 1, code: 121, codeName: "DocumentValidationFailure",
+              errmsg: "Document failed validation"}]}
             """,
-            "writeErrors codes [11000]"),
+            "writeErrors [121 DocumentValidationFailure]"),
         arguments(
             "update",
             """
             {ok: 1, n: 1, writeConcernError: {code: 64, codeName: "WriteConcernFailed",
               errmsg: "waiting for replication timed out"}}
             """,
-            "writeConcernError code 64 WriteConcernFailed"));
+            "writeConcernError 64 WriteConcernFailed"),
+        arguments(
+            "update",
+            """
+            {ok: 1, n: 0, writeErrors: [{index: 0, code: 121}],
+              writeConcernError: {code: 64, codeName: "WriteConcernFailed"}}
+            """,
+            "writeErrors [121]; writeConcernError 64 WriteConcernFailed"));
   }
 
   private static ExternalCall mongodb(String operation) {

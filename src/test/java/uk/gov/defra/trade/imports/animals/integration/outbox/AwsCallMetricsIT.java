@@ -2,59 +2,50 @@ package uk.gov.defra.trade.imports.animals.integration.outbox;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.S3_GET_OBJECT;
+import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.SNS_PUBLISH;
 import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.availability;
-import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.durationCount;
+import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.durationSampleCount;
 import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.failureTotal;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.ByteArrayOutputStream;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import software.amazon.awssdk.services.s3.model.S3Exception;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
+import uk.gov.defra.trade.imports.animals.configuration.CdpConfig;
 import uk.gov.defra.trade.imports.animals.metrics.Dependency;
-import uk.gov.defra.trade.imports.animals.metrics.ExternalCall;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxPublishService;
 import uk.gov.defra.trade.imports.animals.s3.S3DocumentService;
 
 class AwsCallMetricsIT extends OutboxIntegrationBase {
 
-  private static final ExternalCall SNS_PUBLISH = new ExternalCall(Dependency.SNS, "publish");
-  private static final ExternalCall S3_GET_OBJECT = new ExternalCall(Dependency.S3, "get-object");
-
   @Autowired private MeterRegistry meterRegistry;
   @Autowired private OutboxPublishService outboxPublishService;
   @Autowired private S3DocumentService s3DocumentService;
-
-  private int publishedMessages;
-
-  @AfterEach
-  void drainTheQueue() {
-    awaitSqsMessages(publishedMessages);
-    purgeQueue();
-  }
+  @Autowired private CdpConfig cdpConfig;
 
   @Test
   void publishUnpublishedEvents_shouldRecordASuccessfulSnsPublish() {
     createNewNotification("aws-call-metrics-it");
-    long publishesBefore = durationCount(meterRegistry, SNS_PUBLISH);
+    long publishesBefore = durationSampleCount(meterRegistry, SNS_PUBLISH);
     double failuresBefore = failureTotal(meterRegistry, SNS_PUBLISH);
 
-    publishedMessages = outboxPublishService.publishUnpublishedEvents();
+    assertThat(outboxPublishService.publishUnpublishedEvents()).isEqualTo(1);
+    awaitSqsMessage();
 
-    assertThat(publishedMessages).isPositive();
-    assertThat(durationCount(meterRegistry, SNS_PUBLISH))
-        .isEqualTo(publishesBefore + publishedMessages);
+    assertThat(durationSampleCount(meterRegistry, SNS_PUBLISH)).isEqualTo(publishesBefore + 1);
     assertThat(failureTotal(meterRegistry, SNS_PUBLISH)).isEqualTo(failuresBefore);
     assertThat(availability(meterRegistry, Dependency.SNS)).isEqualTo(1);
   }
 
   @Test
-  void streamToOutput_shouldRecordAFailedGetObject_whenTheKeyIsMissing() {
+  void streamToOutput_shouldRecordAFailedGetObjectAndMarkS3Unavailable_whenTheKeyIsMissing() {
+    ensureBucketExists(cdpConfig.s3().documentsBucket());
     double failuresBefore = failureTotal(meterRegistry, S3_GET_OBJECT);
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
-    assertThatExceptionOfType(S3Exception.class)
+    assertThatExceptionOfType(NoSuchKeyException.class)
         .isThrownBy(() -> s3DocumentService.streamToOutput("no-such-key", outputStream));
 
     assertThat(failureTotal(meterRegistry, S3_GET_OBJECT)).isEqualTo(failuresBefore + 1);

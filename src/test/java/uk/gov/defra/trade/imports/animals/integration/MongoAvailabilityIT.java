@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.testcontainers.mongodb.MongoDBContainer;
-import org.testcontainers.utility.DockerImageName;
+import uk.gov.defra.trade.imports.animals.metrics.Availability;
 import uk.gov.defra.trade.imports.animals.metrics.MongoAvailability;
 
 class MongoAvailabilityIT extends IntegrationBase {
@@ -22,24 +22,24 @@ class MongoAvailabilityIT extends IntegrationBase {
   void state_shouldBeAvailable_whenTheApplicationsDatabaseIsUp() {
     await()
         .atMost(Duration.ofSeconds(30))
-        .until(() -> applicationMongoAvailability.state() == MongoAvailability.State.AVAILABLE);
+        .until(() -> applicationMongoAvailability.state() == Availability.AVAILABLE);
   }
 
   @Test
   void state_shouldBeUnavailable_whenTheDatabaseStops() {
     MongoAvailability availability = new MongoAvailability();
-    try (MongoDBContainer throwaway = new MongoDBContainer(DockerImageName.parse("mongo:7.0"))) {
+    try (MongoDBContainer throwaway = new MongoDBContainer(MONGO_IMAGE)) {
       throwaway.start();
       try (var _ = clientOf(throwaway, availability)) {
         await()
             .atMost(Duration.ofSeconds(30))
-            .until(() -> availability.state() == MongoAvailability.State.AVAILABLE);
+            .until(() -> availability.state() == Availability.AVAILABLE);
 
         throwaway.stop();
 
         await()
             .atMost(Duration.ofSeconds(30))
-            .until(() -> availability.state() == MongoAvailability.State.UNAVAILABLE);
+            .until(() -> availability.state() == Availability.UNAVAILABLE);
       }
     }
   }

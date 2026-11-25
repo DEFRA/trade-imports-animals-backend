@@ -24,15 +24,16 @@ import software.amazon.cloudwatchlogs.emf.model.DimensionSet;
 import software.amazon.cloudwatchlogs.emf.model.Unit;
 
 /**
- * Publishes every meter to CloudWatch as Embedded Metric Format, once a step, in one namespace. A
- * meter's tags are its only dimensions.
+ * Publishes timers, distribution summaries, counters and gauges to CloudWatch as Embedded Metric
+ * Format, once a step, in one namespace. A meter's tags are its only dimensions.
  *
  * <p>Timers and distribution summaries publish every value recorded since the last publish, timers
- * in milliseconds. Counters publish the last step's count as Count whatever their base unit. Gauges
- * publish their value when it is finite. A gauge or distribution summary with the base unit {@code
- * bytes} publishes as Bytes and one with any other base unit as None. With no base unit, a
- * distribution summary publishes as Count and a gauge as None. Long task timers, function counters, function timers and time gauges are not published.
- * A meter that fails to publish is logged and the rest are still published.
+ * in milliseconds. Counters publish the last step's count as Count whatever their base unit.
+ * Gauges publish their value when it is finite. A gauge or distribution summary with the base unit
+ * {@code bytes} publishes as Bytes and one with any other base unit as None. With no base unit, a
+ * distribution summary publishes as Count and a gauge as None. Long task timers, function
+ * counters, function timers and time gauges are not published. A meter that fails to publish is
+ * logged with its name and tags, and the rest are still published.
  */
 @Slf4j
 public class EmfMeterRegistry extends StepMeterRegistry {
@@ -114,7 +115,7 @@ public class EmfMeterRegistry extends StepMeterRegistry {
       try {
         publishReadings(meter, readingsOf(meter));
       } catch (RuntimeException e) {
-        log.warn("Could not publish meter {}", meter.getId().getName(), e);
+        log.warn("Could not publish meter {}", meter.getId(), e);
       }
     }
   }
@@ -123,10 +124,10 @@ public class EmfMeterRegistry extends StepMeterRegistry {
     static final Readings NONE = new Readings(List.of(), Unit.NONE);
   }
 
-  private static Readings readingsOf(Meter meter) {
+  private Readings readingsOf(Meter meter) {
     return switch (meter) {
       case ValueRecordingTimer timer ->
-          new Readings(millisOf(timer.recordedNanos().takeAll()), Unit.MILLISECONDS);
+          new Readings(timer.recordedValues().takeAll(), unitOf(getBaseTimeUnit()));
       case ValueRecordingDistributionSummary summary ->
           new Readings(summary.recordedAmounts().takeAll(), unitOf(summary.getId(), Unit.COUNT));
       case Counter counter -> new Readings(List.of(counter.count()), Unit.COUNT);
@@ -144,8 +145,11 @@ public class EmfMeterRegistry extends StepMeterRegistry {
     return BaseUnits.BYTES.equals(baseUnit) ? Unit.BYTES : Unit.NONE;
   }
 
-  private static List<Double> millisOf(List<Double> nanos) {
-    return nanos.stream().map(each -> each / TimeUnit.MILLISECONDS.toNanos(1)).toList();
+  private static Unit unitOf(TimeUnit timeUnit) {
+    return switch (timeUnit) {
+      case MILLISECONDS -> Unit.MILLISECONDS;
+      default -> throw new IllegalStateException("No EMF unit for " + timeUnit);
+    };
   }
 
   private static List<Double> finiteValueOf(Gauge gauge) {

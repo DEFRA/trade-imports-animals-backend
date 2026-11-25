@@ -7,9 +7,9 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.util.NamedThreadFactory;
 import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -28,11 +28,7 @@ public class MetricsConfig {
       @Value("${aws.emf.namespace}") String namespace,
       @Value("${aws.emf.step}") Duration step,
       @Value("${aws.emf.environment:}") String environment) {
-    if (!environment.isBlank()) {
-      EnvironmentConfigurationProvider.getConfig()
-          .setEnvironmentOverride(Environments.valueOf(environment));
-      log.info("Writing metrics to the {} EMF environment", environment);
-    }
+    overrideEmfEnvironment(environment);
     EmfMeterRegistry emfRegistry =
         new EmfMeterRegistry(namespace, step, Clock.SYSTEM, MetricsLogger::new);
     emfRegistry.start(new NamedThreadFactory("emf-meter-registry"));
@@ -41,9 +37,12 @@ public class MetricsConfig {
   }
 
   @Bean
-  @ConditionalOnExpression("!'${aws.emf.enabled:false}'.equalsIgnoreCase('true')")
-  ApplicationRunner emfPublishingOffLog() {
-    return args -> log.info("Not publishing metrics to CloudWatch: aws.emf.enabled is not true");
+  ApplicationRunner emfPublishingOffLog(ObjectProvider<EmfMeterRegistry> emfMeterRegistry) {
+    return args -> {
+      if (emfMeterRegistry.getIfAvailable() == null) {
+        log.info("Not publishing metrics to CloudWatch: aws.emf.enabled is not true");
+      }
+    };
   }
 
   @Bean
@@ -55,5 +54,14 @@ public class MetricsConfig {
   @Bean
   CountedAspect countedAspect(MeterRegistry meterRegistry) {
     return new CountedAspect(meterRegistry);
+  }
+
+  private static void overrideEmfEnvironment(String environment) {
+    if (environment.isBlank()) {
+      return;
+    }
+    EnvironmentConfigurationProvider.getConfig()
+        .setEnvironmentOverride(Environments.valueOf(environment));
+    log.info("Writing metrics to the {} EMF environment", environment);
   }
 }

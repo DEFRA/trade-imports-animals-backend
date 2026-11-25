@@ -4,6 +4,7 @@ import com.mongodb.event.CommandFailedEvent;
 import com.mongodb.event.CommandListener;
 import com.mongodb.event.CommandSucceededEvent;
 import java.time.Duration;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -11,11 +12,29 @@ import org.springframework.stereotype.Component;
 /**
  * Records every MongoDB command as an external call to {@code mongodb}, its operation the command
  * name, or {@code other} for a command outside the fixed set. A command fails when it errors or
- * when its reply reports {@code writeErrors} or a {@code writeConcernError}.
+ * when its reply reports a {@code writeConcernError} or a write error other than a duplicate key.
  */
 @Component
 @RequiredArgsConstructor
-public class MongoCommandMetrics implements CommandListener {
+public class MongoCallRecorder implements CommandListener {
+
+  private static final Set<String> KNOWN_COMMANDS =
+      Set.of(
+          "find",
+          "getMore",
+          "insert",
+          "update",
+          "delete",
+          "findAndModify",
+          "aggregate",
+          "count",
+          "distinct",
+          "createIndexes",
+          "listIndexes",
+          "dropIndexes",
+          "listCollections",
+          "commitTransaction",
+          "abortTransaction");
 
   private final ExternalCallRecorder externalCallRecorder;
 
@@ -38,26 +57,6 @@ public class MongoCommandMetrics implements CommandListener {
   }
 
   private static ExternalCall callOf(String commandName) {
-    String operation =
-        switch (commandName) {
-          case "find",
-              "getMore",
-              "insert",
-              "update",
-              "delete",
-              "findAndModify",
-              "aggregate",
-              "count",
-              "distinct",
-              "createIndexes",
-              "listIndexes",
-              "dropIndexes",
-              "listCollections",
-              "commitTransaction",
-              "abortTransaction" ->
-              commandName;
-          default -> "other";
-        };
-    return new ExternalCall(Dependency.MONGODB, operation);
+    return ExternalCall.of(Dependency.MONGODB, commandName, KNOWN_COMMANDS);
   }
 }

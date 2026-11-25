@@ -26,8 +26,6 @@ spring:
 cdp:
   environment: ${ENVIRONMENT:local}
   service-version: ${SERVICE_VERSION:0.0.0-local}
-  tracing:
-    header-name: ${TRACING_HEADER:x-cdp-request-id}
   proxy:
     url: ${HTTP_PROXY:}
   s3:
@@ -41,15 +39,13 @@ aws:
   region: ${AWS_REGION:eu-west-2}
   emf:
     enabled: ${AWS_EMF_ENABLED:false}
-    namespace: ${AWS_EMF_NAMESPACE:trade-imports-animals-backend}
-    step: ${AWS_EMF_STEP:1m}
 
 # Logging configuration
 logging:
+  config: classpath:logback-spring.xml
   level:
     root: INFO
     uk.gov.defra.trade.imports.animals: ${LOG_LEVEL:INFO}
-    uk.gov.defra.trade.imports.animals.common.metrics: INFO
     org.springframework: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK:INFO}
     org.springframework.web: INFO
     org.mongodb.driver: ${LOGGING_LEVEL_ORG_MONGODB_DRIVER:WARN}

@@ -47,26 +47,7 @@ public class ExternalCallRecorder {
   }
 
   /**
-   * Runs the call and records it: a success when it returns, a failure when it throws, which is
-   * then rethrown.
-   *
-   * @param call the call made
-   * @param action makes the call
-   */
-  public void measure(ExternalCall call, Runnable action) {
-    long startedAt = callStartedAt();
-    try {
-      action.run();
-    } catch (RuntimeException e) {
-      recordFailure(call, elapsedSince(startedAt), e);
-      throw e;
-    }
-    recordSuccess(call, elapsedSince(startedAt));
-  }
-
-  /**
-   * The time a call starts, for {@link #elapsedSince(long)} once it ends. For a call made where
-   * {@link #measure} cannot wrap it.
+   * The time a call starts, for {@link #elapsedSince(long)} once it ends.
    *
    * @return the current time in nanoseconds
    */
@@ -91,7 +72,8 @@ public class ExternalCallRecorder {
    * @param elapsed how long the call took
    */
   public void recordSuccess(ExternalCall call, Duration elapsed) {
-    recordMeters(call, elapsed, 0);
+    durationOf(call).record(elapsed);
+    failureOf(call).record(0);
     logCall(Level.INFO, call, "success", elapsed, null);
     lastCallOutcomes.recordSuccess(call.dependency());
   }
@@ -104,34 +86,64 @@ public class ExternalCallRecorder {
    * @param cause why it failed
    */
   public void recordFailure(ExternalCall call, Duration elapsed, Throwable cause) {
-    recordMeters(call, elapsed, 1);
+    durationOf(call).record(elapsed);
+    failureOf(call).record(1);
     logCall(Level.WARN, call, "failure", elapsed, cause);
     lastCallOutcomes.recordFailure(call.dependency());
   }
 
-  private void recordMeters(ExternalCall call, Duration elapsed, int failure) {
-    Tags tags =
-        Tags.of(DEPENDENCY_TAG, call.dependency().tagValue(), "operation", call.operation());
-    Timer.builder("external.call.duration").tags(tags).register(meterRegistry).record(elapsed);
-    DistributionSummary.builder("external.call.failure")
-        .tags(tags)
-        .register(meterRegistry)
-        .record(failure);
+  /**
+   * Records a call that failed with no known start time. No duration is recorded or logged, and its
+   * line says the start time is missing.
+   *
+   * @param call the call made
+   * @param cause why it failed
+   */
+  public void recordUntimedFailure(ExternalCall call, Throwable cause) {
+    failureOf(call).record(1);
+    String action = actionOf(call);
+    eventLine(Level.WARN, action, "failure", cause)
+        .log("External call {} failure with no start time recorded", action);
+    lastCallOutcomes.recordFailure(call.dependency());
+  }
+
+  private Timer durationOf(ExternalCall call) {
+    return Timer.builder("external.call.duration").tags(tagsOf(call)).register(meterRegistry);
+  }
+
+  private DistributionSummary failureOf(ExternalCall call) {
+    return DistributionSummary.builder("external.call.failure")
+        .tags(tagsOf(call))
+        .register(meterRegistry);
+  }
+
+  private static Tags tagsOf(ExternalCall call) {
+    return Tags.of(DEPENDENCY_TAG, call.dependency().tagValue(), "operation", call.operation());
   }
 
   private static void logCall(
       Level level, ExternalCall call, String outcome, Duration elapsed, Throwable cause) {
-    String action = call.dependency().tagValue() + "/" + call.operation();
+    String action = actionOf(call);
+    eventLine(level, action, outcome, cause)
+        .addKeyValue("event.duration", elapsed.toNanos())
+        .log("External call {} {} in {} ms", action, outcome, elapsed.toMillis());
+  }
+
+  private static LoggingEventBuilder eventLine(
+      Level level, String action, String outcome, Throwable cause) {
     LoggingEventBuilder line =
         log.atLevel(level)
             .addKeyValue("event.category", "external-call")
             .addKeyValue("event.action", action)
-            .addKeyValue("event.outcome", outcome)
-            .addKeyValue("event.duration", elapsed.toNanos());
+            .addKeyValue("event.outcome", outcome);
     if (cause != null) {
       line.addKeyValue("error.type", cause.getClass().getName())
           .addKeyValue("error.message", cause.getMessage());
     }
-    line.log("External call {} {} in {} ms", action, outcome, elapsed.toMillis());
+    return line;
+  }
+
+  private static String actionOf(ExternalCall call) {
+    return call.dependency().tagValue() + "/" + call.operation();
   }
 }

@@ -3,6 +3,7 @@ package uk.gov.defra.trade.imports.animals.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static uk.gov.defra.trade.imports.animals.testsupport.CapturedConsole.captureSystemOut;
+import static uk.gov.defra.trade.imports.animals.testsupport.EmfDocuments.isDocumentFor;
 import static uk.gov.defra.trade.imports.animals.testsupport.EmfDocuments.namespaceOf;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -44,11 +45,15 @@ class EmfMeterRegistryIT extends IntegrationBase {
         List.of(
             "external.call.duration",
             "external.call.failure",
-            "external.dependency.available",
             "controller.postNotification.time",
-            "service.saveNotification.time")) {
+            "service.postNotification.time")) {
       assertThat(meterRegistry.find(name).meter()).as(name).isNotNull();
     }
+  }
+
+  @Test
+  void allowlist_shouldLetThroughTheDependencyAvailabilityGauge() {
+    assertThat(meterRegistry.find("external.dependency.available").gauge()).isNotNull();
   }
 
   @Test
@@ -84,7 +89,7 @@ class EmfMeterRegistryIT extends IntegrationBase {
 
   private static Optional<JsonNode> emfDocumentFor(String metricName, CapturedConsole console) {
     return console.jsonLines().stream()
-        .filter(line -> line.has("_aws") && line.has(metricName))
+        .filter(line -> isDocumentFor(line, metricName))
         .findFirst();
   }
 }

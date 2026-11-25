@@ -1,35 +1,35 @@
 package uk.gov.defra.trade.imports.animals.metrics;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
 
 /**
- * Whether the most recent call to each dependency succeeded. The outcome has no time attached: one
- * failed call, on any of the dependency's operations, marks the whole dependency as failed until
- * its next call succeeds.
+ * The outcome of the most recent call to each dependency. The outcome has no time attached: one
+ * failed call, on any of the dependency's operations, marks the whole dependency as unavailable
+ * until its next call succeeds.
  */
 @Component
 public class LastCallOutcomes {
 
-  private final Map<Dependency, Boolean> succeededByDependency = new ConcurrentHashMap<>();
+  private final Map<Dependency, Availability> availabilityByDependency = new ConcurrentHashMap<>();
 
   public void recordSuccess(Dependency dependency) {
-    succeededByDependency.put(dependency, true);
+    availabilityByDependency.put(dependency, Availability.AVAILABLE);
   }
 
   public void recordFailure(Dependency dependency) {
-    succeededByDependency.put(dependency, false);
+    availabilityByDependency.put(dependency, Availability.UNAVAILABLE);
   }
 
   /**
-   * The outcome of the dependency's most recent call.
+   * The dependency's availability as its most recent call left it.
    *
    * @param dependency the system called
-   * @return whether it succeeded, or empty when the dependency has not been called since start-up
+   * @return available after a success, unavailable after a failure, and unknown when the
+   *     dependency has not been called since start-up
    */
-  public Optional<Boolean> lastCallSucceeded(Dependency dependency) {
-    return Optional.ofNullable(succeededByDependency.get(dependency));
+  public Availability lastCallAvailability(Dependency dependency) {
+    return availabilityByDependency.getOrDefault(dependency, Availability.UNKNOWN);
   }
 }

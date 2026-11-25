@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static uk.gov.defra.trade.imports.animals.testsupport.EmfDocuments.dimensionSetsOf;
 import static uk.gov.defra.trade.imports.animals.testsupport.EmfDocuments.namespaceOf;
 import static uk.gov.defra.trade.imports.animals.testsupport.EmfDocuments.unitOf;
+import static uk.gov.defra.trade.imports.animals.testsupport.EmfDocuments.valuesOf;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import io.micrometer.core.instrument.Counter;
@@ -83,18 +84,23 @@ class EmfMeterRegistryTest {
   }
 
   @Test
-  void publish_shouldWriteACountersCountForTheLastMinute() {
+  void publish_shouldWriteOnlyTheLastStepsCountForACounter() {
     Counter counter =
         Counter.builder("notification.change").tag("change", "create").register(registry);
     counter.increment();
     counter.increment();
     clock.add(STEP);
+    registry.publish();
+    counter.increment();
+    clock.add(STEP);
 
     registry.publish();
 
-    JsonNode document = onlyDocumentFor("notification.change");
-    assertThat(unitOf(document)).isEqualTo("Count");
-    assertThat(valuesOf(document, "notification.change")).containsExactly(2.0);
+    List<JsonNode> documents = emf.documentsFor("notification.change");
+    assertThat(documents).hasSize(2);
+    assertThat(unitOf(documents.getLast())).isEqualTo("Count");
+    assertThat(valuesOf(documents.getFirst(), "notification.change")).containsExactly(2.0);
+    assertThat(valuesOf(documents.getLast(), "notification.change")).containsExactly(1.0);
   }
 
   @Test
@@ -129,6 +135,30 @@ class EmfMeterRegistryTest {
   }
 
   @Test
+  void publish_shouldWriteADistributionSummaryInBytes_whenItsBaseUnitIsBytes() {
+    DistributionSummary.builder("http.request.size")
+        .baseUnit(BaseUnits.BYTES)
+        .register(registry)
+        .record(512);
+
+    registry.publish();
+
+    assertThat(unitOf(onlyDocumentFor("http.request.size"))).isEqualTo("Bytes");
+  }
+
+  @Test
+  void publish_shouldWriteADistributionSummaryWithNoUnit_whenItsBaseUnitIsNotBytes() {
+    DistributionSummary.builder("disk.used.share")
+        .baseUnit(BaseUnits.PERCENT)
+        .register(registry)
+        .record(40);
+
+    registry.publish();
+
+    assertThat(unitOf(onlyDocumentFor("disk.used.share"))).isEqualTo("None");
+  }
+
+  @Test
   void publish_shouldWriteAGaugeWithNoUnit_whenItHasNoBaseUnit() {
     Gauge.builder("external.dependency.available", () -> 1).register(registry);
 
@@ -149,7 +179,7 @@ class EmfMeterRegistryTest {
   @Test
   void publish_shouldSplitMoreThan100ValuesAcrossDocuments() {
     Timer timer = Timer.builder("external.call.duration").register(registry);
-    IntStream.rangeClosed(1, 150).forEach(each -> timer.record(Duration.ofMillis(each)));
+    IntStream.rangeClosed(1, 150).forEach(millis -> timer.record(Duration.ofMillis(millis)));
 
     registry.publish();
 
@@ -196,15 +226,5 @@ class EmfMeterRegistryTest {
     List<JsonNode> documents = emf.documentsFor(metricName);
     assertThat(documents).hasSize(1);
     return documents.getFirst();
-  }
-
-  private static List<Double> valuesOf(JsonNode document, String metricName) {
-    JsonNode values = document.path(metricName);
-    if (!values.isArray()) {
-      return List.of(values.asDouble());
-    }
-    List<Double> doubles = new ArrayList<>();
-    values.forEach(value -> doubles.add(value.asDouble()));
-    return doubles;
   }
 }
