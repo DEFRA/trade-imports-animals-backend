@@ -6,7 +6,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.test.web.servlet.MockMvc;
-import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.testsupport.CapturedConsole;
@@ -40,7 +39,7 @@ class EcsLoggingIT extends IntegrationBase {
         try (console) {
             mockMvc.perform(get(DOCUMENT_UPLOADS_PATH)
                             .header(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, DEFAULT_TRADER_ORG_ID)
-                            .header(RequestTracingFilter.TRACE_ID_HEADER, "test-trace-123"))
+                            .header(traceIdHeader, "test-trace-123"))
                     .andExpect(status().isOk());
         }
 

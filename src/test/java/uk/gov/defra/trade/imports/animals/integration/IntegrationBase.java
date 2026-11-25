@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
@@ -62,6 +63,9 @@ public abstract class IntegrationBase {
 
     @Autowired
     protected MongoTemplate mongoTemplate;
+
+    @Value(RequestTracingFilter.TRACE_ID_HEADER_PROPERTY)
+    protected String traceIdHeader;
 
     protected static final DockerImageName MONGO_IMAGE = DockerImageName.parse("mongo:7.0");
 
@@ -119,7 +123,7 @@ public abstract class IntegrationBase {
     protected NotificationAggregate createNewNotification(String traceId) {
         return webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .header(RequestTracingFilter.TRACE_ID_HEADER, traceId)
+            .header(traceIdHeader, traceId)
             .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
             .exchange().expectStatus().isOk()
             .expectBody(NotificationAggregate.class).returnResult()

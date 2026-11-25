@@ -26,6 +26,8 @@ spring:
 cdp:
   environment: ${ENVIRONMENT:local}
   service-version: ${SERVICE_VERSION:0.0.0-local}
+  tracing:
+    header-name: ${TRACING_HEADER:x-cdp-request-id}
   proxy:
     url: ${HTTP_PROXY:}
   s3:

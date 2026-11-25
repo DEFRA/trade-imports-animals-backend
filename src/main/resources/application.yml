@@ -36,6 +36,8 @@ cdp:
   metrics:
     enabled: true
   service-version: ${SERVICE_VERSION:0.0.0-local}
+  tracing:
+    header-name: ${TRACING_HEADER:x-cdp-request-id}
   cloudwatch:
     endpoint: ${AWS_EMF_AGENT_ENDPOINT:http://localhost:4566}
   proxyUrl: ${HTTP_PROXY:}

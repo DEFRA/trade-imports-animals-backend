@@ -31,7 +31,6 @@ import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
-import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
@@ -210,7 +209,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}",
                 referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(RequestTracingFilter.TRACE_ID_HEADER, traceId)
+            .header(traceIdHeader, traceId)
             .exchange()
             .expectStatus().isOk();
 
@@ -228,7 +227,7 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .header(RequestTracingFilter.TRACE_ID_HEADER, traceId)
+            .header(traceIdHeader, traceId)
             .bodyValue(SaveNotificationDto.of(minimalNotificationDto().toBuilder()
                 .referenceNumber(created.getReferenceNumber())
                 .concurrencyToken(created.getConcurrencyToken())

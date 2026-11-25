@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import static uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER;
-import static uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter.TRACE_ID_HEADER;
+import static uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter.TRACE_ID_HEADER_PROPERTY;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_USER_ID;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
@@ -40,6 +40,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -74,6 +75,9 @@ class NotificationControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Value(TRACE_ID_HEADER_PROPERTY)
+    private String traceIdHeader;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -483,7 +487,7 @@ class NotificationControllerTest {
 
             // When & Then
             mockMvc.perform(post("/notifications")
-                    .header(TRACE_ID_HEADER, "my-trace-id")
+                    .header(traceIdHeader,"my-trace-id")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(ORGANISATION_ID_HEADER, ORG_ID)
                     .content(objectMapper.writeValueAsString(
@@ -591,7 +595,7 @@ class NotificationControllerTest {
 
             mockMvc.perform(post("/notifications/{referenceNumber}/copy", REF_1)
                     .queryParam("concurrencyToken", "0")
-                    .header(TRACE_ID_HEADER, "trace-copy-001")
+                    .header(traceIdHeader,"trace-copy-001")
                     .header(ORGANISATION_ID_HEADER, ORG_ID))
                 .andExpect(status().isOk());
 
@@ -707,7 +711,7 @@ class NotificationControllerTest {
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/submit", REF_1)
                     .queryParam("concurrencyToken", String.valueOf(SUBMIT_TOKEN))
-                    .header(TRACE_ID_HEADER, "trace-abc")
+                    .header(traceIdHeader,"trace-abc")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(ORGANISATION_ID_HEADER, ORG_ID))
                 .andExpect(status().isOk());
@@ -825,7 +829,7 @@ class NotificationControllerTest {
 
             // When & Then
             mockMvc.perform(post("/notifications/{referenceNumber}/amend", REF_1)
-                    .header(TRACE_ID_HEADER, "trace-xyz")
+                    .header(traceIdHeader,"trace-xyz")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(ORGANISATION_ID_HEADER, ORG_ID))
                 .andExpect(status().isOk());
@@ -925,7 +929,7 @@ class NotificationControllerTest {
                 .thenReturn(restored);
 
             mockMvc.perform(post("/notifications/{referenceNumber}/cancel-amend", REF_1)
-                    .header(TRACE_ID_HEADER, "trace-cancel-001")
+                    .header(traceIdHeader,"trace-cancel-001")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(ORGANISATION_ID_HEADER, ORG_ID))
                 .andExpect(status().isOk());
@@ -1109,7 +1113,7 @@ class NotificationControllerTest {
             mockMvc.perform(delete("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
-                    .header(TRACE_ID_HEADER, "trace-abc")
+                    .header(traceIdHeader,"trace-abc")
                     .header(HEADER_USER_ID, "user-123")
                     .content(objectMapper.writeValueAsString(referenceNumbers)))
                 .andExpect(status().isNoContent());
@@ -1129,7 +1133,7 @@ class NotificationControllerTest {
             mockMvc.perform(delete("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
-                    .header(TRACE_ID_HEADER, "trace-abc")
+                    .header(traceIdHeader,"trace-abc")
                     .header(HEADER_USER_ID, "user-123")
                     .content(objectMapper.writeValueAsString(referenceNumbers)))
                 .andExpect(status().isNotFound())
@@ -1143,7 +1147,7 @@ class NotificationControllerTest {
             mockMvc.perform(delete("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
-                    .header(TRACE_ID_HEADER, "trace-abc")
+                    .header(traceIdHeader,"trace-abc")
                     .header(HEADER_USER_ID, "user-123")
                     .content("[]"))
                 .andExpect(status().isBadRequest());
@@ -1176,7 +1180,7 @@ class NotificationControllerTest {
             mockMvc.perform(delete("/notifications")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
-                    .header(TRACE_ID_HEADER, "trace-abc")
+                    .header(traceIdHeader,"trace-abc")
                     .content(objectMapper.writeValueAsString(referenceNumbers)))
                 .andExpect(status().isBadRequest());
 
@@ -1392,7 +1396,7 @@ class NotificationControllerTest {
                 .thenReturn(deleted);
 
             mockMvc.perform(post("/notifications/{referenceNumber}/soft-delete", REF_1)
-                    .header(TRACE_ID_HEADER, "trace-delete-001")
+                    .header(traceIdHeader,"trace-delete-001")
                     .contentType(MediaType.APPLICATION_JSON)
                     .header(ORGANISATION_ID_HEADER, ORG_ID))
                 .andExpect(status().isOk());
@@ -1440,7 +1444,7 @@ class NotificationControllerTest {
 
             mockMvc.perform(post("/notifications/{referenceNumber}/replay", REF_1)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
-                    .header(TRACE_ID_HEADER, "trace-abc")
+                    .header(traceIdHeader,"trace-abc")
                     .header(HEADER_USER_ID, "user-123"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.eventsReplayed").value(2));
@@ -1455,7 +1459,7 @@ class NotificationControllerTest {
 
             mockMvc.perform(post("/notifications/{referenceNumber}/replay", REF_1)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
-                    .header(TRACE_ID_HEADER, "trace-abc")
+                    .header(traceIdHeader,"trace-abc")
                     .header(HEADER_USER_ID, "user-123"))
                 .andExpect(status().isNotFound());
         }
@@ -1463,7 +1467,7 @@ class NotificationControllerTest {
         @Test
         void replay_shouldReturn401_whenAdminSecretIsMissing() throws Exception {
             mockMvc.perform(post("/notifications/{referenceNumber}/replay", REF_1)
-                    .header(TRACE_ID_HEADER, "trace-abc")
+                    .header(traceIdHeader,"trace-abc")
                     .header(HEADER_USER_ID, "user-123"))
                 .andExpect(status().isUnauthorized());
 
@@ -1474,7 +1478,7 @@ class NotificationControllerTest {
         void replay_shouldReturn400_whenUserIdHeaderIsMissing() throws Exception {
             mockMvc.perform(post("/notifications/{referenceNumber}/replay", REF_1)
                     .header("Trade-Imports-Animals-Admin-Secret", "test-secret")
-                    .header(TRACE_ID_HEADER, "trace-abc"))
+                    .header(traceIdHeader,"trace-abc"))
                 .andExpect(status().isBadRequest());
 
             verify(outboxReplayService, never()).replay(any(), any());

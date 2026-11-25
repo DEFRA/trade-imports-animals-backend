@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import software.amazon.awssdk.services.sqs.model.Message;
-import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
@@ -96,7 +95,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         // direct status reset adds no outbox event; second submit → NOTIFICATION_SUBMITTED (v3)
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-v2")
+            .header(traceIdHeader, "trace-v2")
             .exchange()
             .expectStatus().isOk();
 
@@ -198,7 +197,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-submit")
+            .header(traceIdHeader, "trace-submit")
             .exchange()
             .expectStatus().isOk();
 

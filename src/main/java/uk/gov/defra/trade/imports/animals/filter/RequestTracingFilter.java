@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -16,12 +17,18 @@ import java.io.IOException;
 @Slf4j
 public class RequestTracingFilter implements Filter {
 
-    public static final String TRACE_ID_HEADER = "x-cdp-request-id";
+    public static final String TRACE_ID_HEADER_PROPERTY = "${cdp.tracing.header-name}";
     public static final String MDC_TRACE_ID = "trace.id";
 
     private static final String MDC_HTTP_METHOD = "http.request.method";
     private static final String MDC_HTTP_STATUS = "http.response.status_code";
     private static final String MDC_URL_FULL = "url.full";
+
+    private final String traceIdHeaderName;
+
+    public RequestTracingFilter(@Value(TRACE_ID_HEADER_PROPERTY) String traceIdHeaderName) {
+        this.traceIdHeaderName = traceIdHeaderName;
+    }
 
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
@@ -53,8 +60,8 @@ public class RequestTracingFilter implements Filter {
         }
     }
 
-    private static void putTraceIdInMdc(HttpServletRequest request) {
-        String traceId = request.getHeader(TRACE_ID_HEADER);
+    private void putTraceIdInMdc(HttpServletRequest request) {
+        String traceId = request.getHeader(traceIdHeaderName);
         if (traceId != null && !traceId.isBlank()) {
             MDC.put(MDC_TRACE_ID, traceId);
         }

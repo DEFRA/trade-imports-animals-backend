@@ -15,6 +15,7 @@ import org.springframework.validation.annotation.Validated;
  * @param certificate    the CDP platform TLS certificate (PEM-encoded)
  * @param metrics        metrics-publishing configuration
  * @param serviceVersion the running service version, surfaced in metrics and traces
+ * @param tracing        distributed tracing configuration
  * @param cloudwatch     CloudWatch logging endpoint configuration
  * @param proxyUrl       the outbound HTTP proxy URL used to reach CDP services
  * @param s3             S3 document storage configuration
@@ -25,6 +26,7 @@ public record CdpConfig(
     String certificate,
     MetricsConfig metrics,
     String serviceVersion,
+    TracingConfig tracing,
     CloudwatchConfig cloudwatch,
     String proxyUrl,
     @Valid @NotNull S3Config s3) {
@@ -42,6 +44,13 @@ public record CdpConfig(
    * @param enabled whether metrics publishing is enabled
    */
   public record MetricsConfig(boolean enabled) {}
+
+  /**
+   * Distributed tracing configuration.
+   *
+   * @param headerName the name of the HTTP header carrying the trace identifier
+   */
+  public record TracingConfig(String headerName) {}
 
   /**
    * CloudWatch logging endpoint configuration.

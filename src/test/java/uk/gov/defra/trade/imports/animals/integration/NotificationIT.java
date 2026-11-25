@@ -33,7 +33,6 @@ import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
 import uk.gov.defra.trade.imports.animals.notification.MeansOfTransport;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
-import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationPageResponse;
@@ -717,7 +716,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-001")
+            .header(traceIdHeader, "trace-001")
             .header("User-Id", "user-001")
             .bodyValue(List.of(ref1, ref2))
             .exchange()
@@ -736,7 +735,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-audit-success")
+            .header(traceIdHeader, "trace-audit-success")
             .header("User-Id", "user-audit")
             .bodyValue(List.of(ref))
             .exchange()
@@ -760,7 +759,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-002")
+            .header(traceIdHeader, "trace-002")
             .header("User-Id", "user-002")
             .bodyValue(List.of(NONEXISTENT_REF))
             .exchange()
@@ -777,7 +776,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-audit-failure")
+            .header(traceIdHeader, "trace-audit-failure")
             .header("User-Id", "user-audit-failure")
             .bodyValue(List.of(NONEXISTENT_REF))
             .exchange()
@@ -802,7 +801,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-003")
+            .header(traceIdHeader, "trace-003")
             .header("User-Id", "user-003")
             .bodyValue(List.of(existingRef, NONEXISTENT_REF))
             .exchange()
@@ -902,7 +901,7 @@ class NotificationIT extends IntegrationBase {
         // When — amend with a trace ID
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", referenceNumber)
-            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-amend-001")
+            .header(traceIdHeader, "trace-amend-001")
             .exchange()
             .expectStatus().isOk();
 
@@ -1189,7 +1188,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — submit it with a trace ID
         submitRequest(referenceNumber)
-            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-outbox-001")
+            .header(traceIdHeader, "trace-outbox-001")
             .exchange()
             .expectStatus().isOk();
 
@@ -1794,7 +1793,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header(RequestTracingFilter.TRACE_ID_HEADER, "trace-cascade-001")
+            .header(traceIdHeader, "trace-cascade-001")
             .header("User-Id", "user-cascade-001")
             .bodyValue(List.of(referenceNumber))
             .exchange()

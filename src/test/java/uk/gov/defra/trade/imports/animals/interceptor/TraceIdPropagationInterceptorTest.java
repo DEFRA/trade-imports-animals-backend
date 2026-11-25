@@ -21,7 +21,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter.MDC_TRACE_ID;
-import static uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter.TRACE_ID_HEADER;
 
 /**
  * Unit tests for TraceIdPropagationInterceptor.
@@ -42,12 +41,14 @@ class TraceIdPropagationInterceptorTest {
 
   @Captor private ArgumentCaptor<byte[]> bodyCaptor;
 
+  private static final String TRACE_ID_HEADER = "x-configured-trace-header";
+
   private TraceIdPropagationInterceptor interceptor;
   private HttpHeaders headers;
 
   @BeforeEach
   void setUp() throws IOException {
-    interceptor = new TraceIdPropagationInterceptor();
+    interceptor = new TraceIdPropagationInterceptor(TRACE_ID_HEADER);
     headers = new HttpHeaders();
     lenient().when(request.getHeaders()).thenReturn(headers);
     lenient().when(execution.execute(any(HttpRequest.class), any(byte[].class))).thenReturn(response);
