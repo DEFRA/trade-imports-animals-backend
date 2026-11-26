@@ -42,10 +42,21 @@ class AwsCallRecorderTest {
 
   @ParameterizedTest(name = "{0} is {1}")
   @CsvSource({"Publish, publish", "PublishBatch, other", "GetTopicAttributes, other"})
-  void callOf_shouldBeTheActionInKebabCase_orOtherOutsideTheKnownSet(
-      String action, String operation) {
+  void callOf_shouldBeTheKnownAction_orOtherOutsideTheKnownSet(String action, String operation) {
     assertThat(snsRecorder.callOf(attributesFor(action)))
         .isEqualTo(new ExternalCall(Dependency.SNS, operation));
+  }
+
+  @Test
+  void callOf_shouldHyphenateTheWordsOfAMultiWordAction() {
+    AwsCallRecorder recorder =
+        new AwsCallRecorder(
+            new ExternalCallRecorder(meterRegistry, lastCallOutcomes, nanoTime::get),
+            Dependency.SNS,
+            Set.of("get-topic-attributes"));
+
+    assertThat(recorder.callOf(attributesFor("GetTopicAttributes")).operation())
+        .isEqualTo("get-topic-attributes");
   }
 
   @Test

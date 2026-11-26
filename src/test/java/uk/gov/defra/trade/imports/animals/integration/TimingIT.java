@@ -12,7 +12,7 @@ class TimingIT extends IntegrationBase {
   @Autowired private MeterRegistry meterRegistry;
 
   @Test
-  void postNotification_shouldAddOneCallToItsControllerAndServiceTimersAndAppendOneOutboxEvent() {
+  void postNotification_shouldAddOneCallToItsControllerServiceAndAppendEventTimers() {
     String controllerTimer = "controller.postNotification.time";
     String serviceTimer = "service.postNotification.time";
     String appendEventTimer = "service.appendEvent.time";

@@ -1,7 +1,6 @@
 package uk.gov.defra.trade.imports.animals.integration.document;
 
 import io.floci.testcontainers.FlociContainer;
-import java.net.URI;
 import java.time.Duration;
 import java.util.Map;
 import org.slf4j.LoggerFactory;
@@ -10,9 +9,6 @@ import org.testcontainers.containers.Network;
 import org.testcontainers.containers.output.Slf4jLogConsumer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.Event;
 import software.amazon.awssdk.services.s3.model.NotificationConfiguration;
@@ -104,33 +100,6 @@ final class CdpUploaderTestSupport {
             .withNetwork(network)
             .withNetworkAliases(FLOCI_ALIAS)
             .withRegion(region);
-    }
-
-    /**
-     * Builds an AWS S3 client pointed at Floci and signing for the given region.
-     * Path-style addressing is forced because virtual-hosted-style attempts to resolve
-     * {@code <bucket>.<host>} which doesn't work against a containerised endpoint.
-     */
-    static S3Client s3Client(FlociContainer flociContainer, String region) {
-        return S3Client.builder()
-            .endpointOverride(URI.create(flociContainer.getEndpoint()))
-            .credentialsProvider(StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(flociContainer.getAccessKey(), flociContainer.getSecretKey())))
-            .region(Region.of(region))
-            .forcePathStyle(true)
-            .build();
-    }
-
-    /**
-     * Builds an AWS SQS client pointed at Floci and signing for the given region.
-     */
-    static SqsClient sqsClient(FlociContainer flociContainer, String region) {
-        return SqsClient.builder()
-            .endpointOverride(URI.create(flociContainer.getEndpoint()))
-            .credentialsProvider(StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(flociContainer.getAccessKey(), flociContainer.getSecretKey())))
-            .region(Region.of(region))
-            .build();
     }
 
     /**

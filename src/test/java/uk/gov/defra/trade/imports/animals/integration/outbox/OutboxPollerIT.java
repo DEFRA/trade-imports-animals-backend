@@ -93,11 +93,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         notificationRepository.save(notificationAggregate);
 
         // direct status reset adds no outbox event; second submit → NOTIFICATION_SUBMITTED (v3)
-        webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(traceIdHeader, "trace-v2")
-            .exchange()
-            .expectStatus().isOk();
+        submitNotification(referenceNumber, "trace-v2");
 
         List<OutboxEvent> unpublished = outboxEventRepository.findAll().stream()
             .filter(e -> e.getPublishedAt() == null)
@@ -195,11 +191,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         // submit → NOTIFICATION_SUBMITTED (v3)
         String referenceNumber = createAndSaveNotification("trace-page-save");
 
-        webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(traceIdHeader, "trace-submit")
-            .exchange()
-            .expectStatus().isOk();
+        submitNotification(referenceNumber, "trace-submit");
 
         assertThat(outboxPublishService.publishUnpublishedEvents()).isEqualTo(3);
 

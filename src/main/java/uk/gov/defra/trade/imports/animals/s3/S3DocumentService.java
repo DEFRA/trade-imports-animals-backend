@@ -54,31 +54,40 @@ public class S3DocumentService {
       byte[] buffer = new byte[8192];
       int read;
       while ((read = s3Object.read(buffer)) != -1) {
-        s3Time = s3Time.plus(externalCallRecorder.elapsedSince(waitStartedAt));
-        writeToClient(s3Key, outputStream, buffer, read, s3Time);
+        s3Time = s3TimeWithWaitSince(s3Time, waitStartedAt);
+        writeToClient(s3Key, outputStream, buffer, read);
         waitStartedAt = externalCallRecorder.callStartedAt();
       }
+    } catch (ClientStoppedReadingException e) {
+      externalCallRecorder.recordSuccess(S3_GET_OBJECT, s3Time);
+      throw e;
     } catch (SdkException e) {
-      externalCallRecorder.recordFailure(
-          S3_GET_OBJECT, s3Time.plus(externalCallRecorder.elapsedSince(waitStartedAt)), e);
+      externalCallRecorder.recordFailure(S3_GET_OBJECT, s3TimeWithWaitSince(s3Time, waitStartedAt), e);
       throw e;
     } catch (IOException e) {
-      externalCallRecorder.recordFailure(
-          S3_GET_OBJECT, s3Time.plus(externalCallRecorder.elapsedSince(waitStartedAt)), e);
+      externalCallRecorder.recordFailure(S3_GET_OBJECT, s3TimeWithWaitSince(s3Time, waitStartedAt), e);
       throw new UncheckedIOException("Could not read document " + s3Key + " from S3", e);
     }
-    externalCallRecorder.recordSuccess(
-        S3_GET_OBJECT, s3Time.plus(externalCallRecorder.elapsedSince(waitStartedAt)));
+    externalCallRecorder.recordSuccess(S3_GET_OBJECT, s3TimeWithWaitSince(s3Time, waitStartedAt));
   }
 
-  private void writeToClient(
-      String s3Key, OutputStream outputStream, byte[] buffer, int length, Duration s3Time) {
+  private Duration s3TimeWithWaitSince(Duration s3Time, long waitStartedAt) {
+    return s3Time.plus(externalCallRecorder.elapsedSince(waitStartedAt));
+  }
+
+  private static void writeToClient(
+      String s3Key, OutputStream outputStream, byte[] buffer, int length) {
     try {
       outputStream.write(buffer, 0, length);
     } catch (IOException clientFailure) {
-      externalCallRecorder.recordSuccess(S3_GET_OBJECT, s3Time);
       log.info("Client stopped reading document {} from S3", s3Key, clientFailure);
-      throw new UncheckedIOException("Client stopped reading document " + s3Key, clientFailure);
+      throw new ClientStoppedReadingException(s3Key, clientFailure);
+    }
+  }
+
+  private static final class ClientStoppedReadingException extends UncheckedIOException {
+    ClientStoppedReadingException(String s3Key, IOException cause) {
+      super("Client stopped reading document " + s3Key, cause);
     }
   }
 }

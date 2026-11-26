@@ -91,7 +91,7 @@ class MongoAvailabilityTest {
   }
 
   @Test
-  void state_shouldBeUnavailable_onceThePrimaryIsRemoved() {
+  void state_shouldBeUnavailable_onceThePrimaryIsRemovedAndTheRestHaveFailed() {
     report(availability, failing(FIRST), primary(SECOND));
 
     report(availability, failing(FIRST));
@@ -100,7 +100,7 @@ class MongoAvailabilityTest {
   }
 
   @Test
-  void state_shouldBeAvailableAgain_onceAServerRecovers() {
+  void state_shouldBeAvailableAgain_onceAFailedServerRecoversAsPrimary() {
     report(availability, failing(FIRST));
 
     report(availability, primary(FIRST));

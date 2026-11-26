@@ -27,9 +27,14 @@ class DependencyAvailabilityMetricsTest {
   }
 
   @ParameterizedTest
-  @EnumSource(Dependency.class)
+  @EnumSource(value = Dependency.class, names = "MONGODB", mode = EnumSource.Mode.EXCLUDE)
   void availabilityGauge_shouldBeNaN_whenTheDependencyHasNotBeenCalled(Dependency dependency) {
     assertThat(availability(meterRegistry, dependency)).isNaN();
+  }
+
+  @Test
+  void availabilityGauge_shouldBeNaNForMongodb_whenNoServerCheckHasBeenReported() {
+    assertThat(availability(meterRegistry, Dependency.MONGODB)).isNaN();
   }
 
   @Test

@@ -54,7 +54,7 @@ public class MongoAvailability implements ClusterListener {
     log.warn(
         "MongoDB is unavailable, no server accepts writes: connected servers {}, failed servers {}",
         addressesOf(servers.stream().filter(MongoAvailability::isConnected).toList()),
-        addressesOf(servers.stream().filter(server -> server.getException() != null).toList()),
+        addressesOf(servers.stream().filter(MongoAvailability::hasFailed).toList()),
         firstFailure(servers));
   }
 
@@ -63,7 +63,11 @@ public class MongoAvailability implements ClusterListener {
   }
 
   private static boolean isChecked(ServerDescription server) {
-    return isConnected(server) || server.getException() != null;
+    return isConnected(server) || hasFailed(server);
+  }
+
+  private static boolean hasFailed(ServerDescription server) {
+    return server.getException() != null;
   }
 
   private static boolean isConnected(ServerDescription server) {

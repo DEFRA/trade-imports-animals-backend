@@ -16,10 +16,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.utility.DockerImageName;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.awscore.client.builder.AwsClientBuilder;
-import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sns.model.CreateTopicRequest;
@@ -31,6 +27,7 @@ import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
+import uk.gov.defra.trade.imports.animals.integration.FlociClients;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
@@ -63,14 +60,14 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     static {
         Startables.deepStart(FLOCI).join();
 
-        SNS_CLIENT = configure(SnsClient.builder()).build();
+        SNS_CLIENT = FlociClients.pointedAt(FLOCI, AWS_REGION, SnsClient.builder()).build();
         TOPIC_ARN = SNS_CLIENT.createTopic(CreateTopicRequest.builder()
             .name(TOPIC_NAME)
             .attributes(Map.of("FifoTopic", "true"))
             .build()).topicArn();
 
-        SQS_CLIENT = configure(SqsClient.builder()).build();
-        S3_CLIENT = configure(S3Client.builder()).forcePathStyle(true).build();
+        SQS_CLIENT = FlociClients.sqsClient(FLOCI, AWS_REGION);
+        S3_CLIENT = FlociClients.s3Client(FLOCI, AWS_REGION);
         QUEUE_URL = SQS_CLIENT.createQueue(CreateQueueRequest.builder()
             .queueName(QUEUE_NAME)
             .attributes(Map.of(QueueAttributeName.FIFO_QUEUE, "true"))
@@ -205,15 +202,17 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
 
     protected String createAndSubmitNotification(String traceId) {
         String referenceNumber = createNewNotification(traceId).getReferenceNumber();
+        submitNotification(referenceNumber, traceId);
+        return referenceNumber;
+    }
 
+    protected void submitNotification(String referenceNumber, String traceId) {
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}",
                 referenceNumber, currentConcurrencyToken(referenceNumber))
             .header(traceIdHeader, traceId)
             .exchange()
             .expectStatus().isOk();
-
-        return referenceNumber;
     }
 
     protected Long currentConcurrencyToken(String referenceNumber) {
@@ -236,13 +235,5 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
             .expectStatus().isOk();
 
         return created.getReferenceNumber();
-    }
-
-    private static <B extends AwsClientBuilder<B, C>, C> B configure(B builder) {
-        return builder
-            .endpointOverride(java.net.URI.create(FLOCI.getEndpoint()))
-            .credentialsProvider(StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(FLOCI.getAccessKey(), FLOCI.getSecretKey())))
-            .region(Region.of(AWS_REGION));
     }
 }

@@ -101,10 +101,7 @@ class ReplayIT extends OutboxIntegrationBase {
         notificationAggregate.setStatus(NotificationStatus.DRAFT);
         notificationRepository.save(notificationAggregate);
 
-        webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(traceIdHeader, "trace-v2")
-            .exchange().expectStatus().isOk();
+        submitNotification(referenceNumber, "trace-v2");
 
         assertThat(outboxEventRepository.count()).isEqualTo(3);
 
