@@ -11,6 +11,7 @@ import static uk.gov.defra.trade.imports.animals.testsupport.ExternalCallMeters.
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.spi.ILoggingEvent;
+import com.mongodb.MongoCommandException;
 import com.mongodb.MongoSocketReadException;
 import com.mongodb.ServerAddress;
 import com.mongodb.connection.ClusterId;
@@ -88,15 +89,8 @@ class MongoCallRecorderTest {
             ExternalCallRecorder.class,
             () ->
                 listener.commandFailed(
-                    new CommandFailedEvent(
-                        null,
-                        1,
-                        1,
-                        CONNECTION,
-                        DATABASE_NAME,
-                        "insert",
-                        TimeUnit.MILLISECONDS.toNanos(3),
-                        new MongoSocketReadException("closed", new ServerAddress()))));
+                    failed(
+                        "insert", 3, new MongoSocketReadException("closed", new ServerAddress()))));
 
     assertThat(totalDurationMillis(meterRegistry, mongodb("insert"))).isEqualTo(3);
     assertThat(failureTotal(meterRegistry, mongodb("insert"))).isEqualTo(1);
@@ -106,6 +100,23 @@ class MongoCallRecorderTest {
         .containsEntry("event.action", "mongodb/insert")
         .containsEntry("error.type", "com.mongodb.MongoSocketReadException")
         .containsEntry("error.message", "closed");
+  }
+
+  @Test
+  void commandFailed_shouldRecordASuccess_whenTheCommandFailsWithADuplicateKey() {
+    MongoCommandException duplicateKey =
+        new MongoCommandException(
+            BsonDocument.parse(
+                """
+                {ok: 0, code: 11000, codeName: "DuplicateKey",
+                  errmsg: "E11000 duplicate key error collection: shedLock dup key: { _id: \\"outbox\\" }"}
+                """),
+            new ServerAddress());
+
+    listener.commandFailed(failed("findAndModify", 2, duplicateKey));
+
+    assertThat(durationSampleCount(meterRegistry, mongodb("findAndModify"))).isEqualTo(1);
+    assertThat(failureTotal(meterRegistry, mongodb("findAndModify"))).isZero();
   }
 
   @ParameterizedTest
@@ -192,5 +203,18 @@ class MongoCallRecorderTest {
         commandName,
         reply,
         TimeUnit.MILLISECONDS.toNanos(elapsedMillis));
+  }
+
+  private static CommandFailedEvent failed(
+      String commandName, long elapsedMillis, Throwable failure) {
+    return new CommandFailedEvent(
+        null,
+        1,
+        1,
+        CONNECTION,
+        DATABASE_NAME,
+        commandName,
+        TimeUnit.MILLISECONDS.toNanos(elapsedMillis),
+        failure);
   }
 }
