@@ -2,54 +2,66 @@ package uk.gov.defra.trade.imports.animals.configuration;
 
 import io.micrometer.core.aop.CountedAspect;
 import io.micrometer.core.aop.TimedAspect;
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.DistributionSummary;
-import io.micrometer.core.instrument.FunctionCounter;
-import io.micrometer.core.instrument.FunctionTimer;
-import io.micrometer.core.instrument.Gauge;
-import io.micrometer.core.instrument.Measurement;
-import io.micrometer.core.instrument.Meter;
-import io.micrometer.core.instrument.Meter.Id;
-import io.micrometer.core.instrument.Meter.Type;
+import io.micrometer.core.instrument.Clock;
 import io.micrometer.core.instrument.MeterRegistry;
-import io.micrometer.core.instrument.Timer;
-import io.micrometer.core.instrument.composite.CompositeMeterRegistry;
-import io.micrometer.core.instrument.distribution.DistributionStatisticConfig;
-import io.micrometer.core.instrument.distribution.pause.PauseDetector;
-import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.util.concurrent.TimeUnit;
-import java.util.function.ToDoubleFunction;
-import java.util.function.ToLongFunction;
+import io.micrometer.core.instrument.util.NamedThreadFactory;
+import java.time.Duration;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import software.amazon.cloudwatchlogs.emf.config.EnvironmentConfigurationProvider;
+import software.amazon.cloudwatchlogs.emf.environment.Environments;
+import software.amazon.cloudwatchlogs.emf.logger.MetricsLogger;
+import uk.gov.defra.trade.imports.animals.metrics.EmfMeterRegistry;
 
-/**
- * Configuration for Micrometer metrics.
- * <p>
- * Micrometer provides standard JVM, HTTP, and database metrics via Spring Boot Actuator.
- * Custom business metrics use AWS EMF (see EmfMetricsConfig and MetricsService).
- * <p>
- * ARCHITECTURE:
- * - Standard metrics (JVM, HTTP, DB): Micrometer via Spring Boot Actuator
- * - Custom business metrics: AWS Embedded Metrics Format (EMF)
- * <p>
- * This configuration only provides a fallback SimpleMeterRegistry when metrics are disabled.
- * When enabled, Spring Boot Actuator auto-configures appropriate registries.
- */
 @Slf4j
 @Configuration
 public class MetricsConfig {
 
-    @Bean
-    public TimedAspect timedAspect(MeterRegistry meterRegistry) {
-        log.debug("Creating TimedAspect for {}", meterRegistry.getClass().getSimpleName());
-        return new TimedAspect(meterRegistry);
-    }
+  @Bean
+  @ConditionalOnProperty(name = "aws.emf.enabled", havingValue = "true")
+  EmfMeterRegistry emfMeterRegistry(
+      @Value("${aws.emf.namespace}") String namespace,
+      @Value("${aws.emf.step}") Duration step,
+      @Value("${aws.emf.environment:}") String environment) {
+    overrideEmfEnvironment(environment);
+    EmfMeterRegistry emfRegistry =
+        new EmfMeterRegistry(namespace, step, Clock.SYSTEM, MetricsLogger::new);
+    emfRegistry.start(new NamedThreadFactory("emf-meter-registry"));
+    log.info("Publishing metrics to CloudWatch namespace {} every {}", namespace, step);
+    return emfRegistry;
+  }
 
-    @Bean
-    CountedAspect countedAspect(MeterRegistry registry) {
-        return new CountedAspect(registry);
+  @Bean
+  ApplicationRunner emfPublishingOffLog(ObjectProvider<EmfMeterRegistry> emfMeterRegistry) {
+    return args -> {
+      if (emfMeterRegistry.getIfAvailable() == null) {
+        log.info("Not publishing metrics to CloudWatch: aws.emf.enabled is not true");
+      }
+    };
+  }
+
+  @Bean
+  TimedAspect timedAspect(MeterRegistry meterRegistry) {
+    log.debug("Creating TimedAspect for {}", meterRegistry.getClass().getSimpleName());
+    return new TimedAspect(meterRegistry);
+  }
+
+  @Bean
+  CountedAspect countedAspect(MeterRegistry meterRegistry) {
+    return new CountedAspect(meterRegistry);
+  }
+
+  private static void overrideEmfEnvironment(String environment) {
+    if (environment.isBlank()) {
+      return;
     }
- 
+    EnvironmentConfigurationProvider.getConfig()
+        .setEnvironmentOverride(Environments.valueOf(environment));
+    log.info("Writing metrics to the {} EMF environment", environment);
+  }
 }

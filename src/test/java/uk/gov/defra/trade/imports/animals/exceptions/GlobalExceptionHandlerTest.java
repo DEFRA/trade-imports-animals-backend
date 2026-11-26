@@ -4,6 +4,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter.MDC_TRACE_ID;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -65,7 +66,7 @@ class GlobalExceptionHandlerTest {
     void handleValidationException_shouldReturnBadRequestWithFieldErrors() {
         // Given
         String traceId = "test-trace-123";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
 
         MethodArgumentNotValidException exception = createValidationException(
             new FieldError("notification", "origin", "must not be null"),
@@ -97,7 +98,7 @@ class GlobalExceptionHandlerTest {
     void handleConstraintViolationException_shouldReturnBadRequestWithFieldErrors() {
         // Given
         String traceId = "test-trace-456";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
 
         @SuppressWarnings("unchecked")
         ConstraintViolation<Object> violation = mock(ConstraintViolation.class);
@@ -149,7 +150,7 @@ class GlobalExceptionHandlerTest {
     void handleUnreadableRequestBody_shouldReturnBadRequest_withoutEchoingTheParserMessage() {
         // Given
         String traceId = "test-trace-unreadable-1";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
         HttpMessageNotReadableException exception = unreadableRequestBodyException();
 
         // When
@@ -235,7 +236,7 @@ class GlobalExceptionHandlerTest {
     void handleMissingRequestParameter_shouldReturnBadRequestNamingTheParameter() {
         // Given
         String traceId = "test-trace-missing-param-1";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
         MissingServletRequestParameterException exception =
             new MissingServletRequestParameterException("concurrencyToken", "Long");
 
@@ -271,7 +272,7 @@ class GlobalExceptionHandlerTest {
     void handleRequestParameterTypeMismatch_shouldReturnBadRequest_withoutEchoingTheValue() {
         // Given
         String traceId = "test-trace-type-mismatch-1";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
         MethodArgumentTypeMismatchException exception = typeMismatchException("not-a-number");
 
         // When
@@ -315,7 +316,7 @@ class GlobalExceptionHandlerTest {
     void handleNotFoundException_shouldReturnNotFound() {
         // Given
         String traceId = "test-trace-456";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
         NotFoundException exception = new NotFoundException("NotificationAggregate with id 12345 not found");
 
         // When
@@ -356,7 +357,7 @@ class GlobalExceptionHandlerTest {
     void handleConflictException_shouldReturnConflict() {
         // Given
         String traceId = "test-trace-789";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
         ConflictException exception = new ConflictException("NotificationAggregate with reference GBN-AG-26-000001 already exists");
 
         // When
@@ -397,7 +398,7 @@ class GlobalExceptionHandlerTest {
     void handleOptimisticLockingFailure_shouldReturn409_withStaleConcurrencyTokenCode() {
         // Given
         String traceId = "test-trace-stale-1";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
         OptimisticLockingFailureException exception =
             new OptimisticLockingFailureException(
                 "Cannot save entity with id 1; version does not match: expected 3, actual 5");
@@ -442,7 +443,7 @@ class GlobalExceptionHandlerTest {
     void handleBadRequestException_shouldReturnBadRequestWithDetail() {
         // Given
         String traceId = "test-trace-bad-1";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
         BadRequestException exception =
             new BadRequestException("Scan callback missing required correlationId in metadata");
 
@@ -486,7 +487,7 @@ class GlobalExceptionHandlerTest {
     void handleException_shouldReturnInternalServerError_forRuntimeException() {
         // Given
         String traceId = "test-trace-999";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
         RuntimeException exception = new RuntimeException("Unexpected database error");
 
         // When
@@ -554,7 +555,7 @@ class GlobalExceptionHandlerTest {
     void handleOutboxWriteException_shouldReturn500_withGenericMessage_andNoInternalDetailsLeaked() {
         // Given
         String traceId = "test-trace-outbox-1";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
         OutboxWriteException exception = new OutboxWriteException(
             "Duplicate aggregateVersion on outbox insert",
             "Imports.Notification.GBN-AG.GBN-AG-26-ABC123",
@@ -608,7 +609,7 @@ class GlobalExceptionHandlerTest {
     @Test
     void handleForbiddenException_shouldReturnForbiddenWithDetail() {
         String traceId = "test-trace-forbidden-1";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
         String detail = "Fulfilment read denied for referenceNumber=GBN-AG-26-ABC001 organisationId=5900002";
 
         ResponseEntity<ProblemDetail> response =
@@ -629,7 +630,7 @@ class GlobalExceptionHandlerTest {
     @Test
     void handleForbiddenException_shouldLogTheReferenceAndOrganisationOnceWithoutAStackTrace() {
         String traceId = "test-trace-forbidden-1";
-        MDC.put("trace.id", traceId);
+        MDC.put(MDC_TRACE_ID, traceId);
         String detail =
             "Cannot read fulfilments for notification with reference number: "
                 + "GBN-AG-26-ABC001 organisationId: 5900002";

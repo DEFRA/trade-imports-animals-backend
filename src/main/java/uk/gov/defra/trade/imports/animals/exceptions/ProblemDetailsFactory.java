@@ -1,5 +1,7 @@
 package uk.gov.defra.trade.imports.animals.exceptions;
 
+import static uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter.MDC_TRACE_ID;
+
 import java.net.URI;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
@@ -7,7 +9,6 @@ import org.springframework.http.ProblemDetail;
 
 public final class ProblemDetailsFactory {
 
-    private static final String MDC_TRACE_ID = "trace.id";
     private static final String PROPERTY_TRACE_ID = "traceId";
 
     private ProblemDetailsFactory() {

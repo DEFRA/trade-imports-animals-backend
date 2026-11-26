@@ -1,29 +1,15 @@
 package uk.gov.defra.trade.imports.animals.integration;
 
-import static org.mockserver.model.HttpRequest.request;
-import static org.mockserver.model.HttpResponse.response;
-import static org.testcontainers.utility.DockerImageName.parse;
-
-import com.fasterxml.jackson.core.StreamReadFeature;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import lombok.SneakyThrows;
-import lombok.extern.slf4j.Slf4j;
-import org.junit.jupiter.api.AfterEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.mockserver.client.MockServerClient;
-import org.mockserver.model.JsonBody;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
@@ -36,40 +22,39 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.client.RestClient;
 import org.testcontainers.lifecycle.Startables;
-import org.testcontainers.mockserver.MockServerContainer;
 import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
+import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
+import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
+import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationStatus;
 import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
+import uk.gov.defra.trade.imports.animals.notification.Origin;
+import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 
 /**
  * Base class for Spring Boot integration tests, activating the {@code integration-test} profile
- * on a random port and starting three shared Testcontainers in a static block: a
- * {@link OAuthMockServerContainer mock OAuth2 server} (token + JWKS issuer), a
- * {@link org.testcontainers.mockserver.MockServerContainer MockServer} for stubbing downstream
- * HTTP services via {@link #usingStub()}, and a MongoDB container wired in via
- * {@code spring.data.mongodb.uri}.
+ * on a random port and starting two shared Testcontainers in a static block: a
+ * {@link OAuthMockServerContainer mock OAuth2 server} (token + JWKS issuer) and a MongoDB
+ * container wired in via {@code spring.data.mongodb.uri}.
  *
  * <p>{@link #webClient(String)} returns a {@link WebTestClient} pre-authenticated with a token
  * minted by the mock OAuth server using {@code clientType} as the {@code client_id}; the token
- * is decided by the {@code /integration/oauth2-mock-server.json} fixture, and tests currently
- * pass {@code "NoAuth"}. {@link #webClient(String)} also sends
+ * is decided by the {@code /integration/oauth2-mock-server.json} fixture.
+ * {@link #webClient(String)} also sends
  * {@link TraderOrganisationHeaderFilter#ORGANISATION_ID_HEADER} defaulting to
- * {@link #DEFAULT_TRADER_ORG_ID}. Subclasses inherit an {@code @AfterEach} hook that resets all
- * MockServer expectations, so per-test stubs do not leak across tests.
+ * {@link #DEFAULT_TRADER_ORG_ID}.
  */
-@Slf4j
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("integration-test")
 public abstract class IntegrationBase {
 
     protected static final String DEFAULT_TRADER_ORG_ID = "5900002";
-
-    static final List<String> SERVICES_TO_MOCK = List.of();
+    protected static final String NOTIFICATION_ENDPOINT = "/notifications";
 
     private static final Duration FIRST_REQUEST_WARM_UP_ALLOWANCE = Duration.ofSeconds(30);
 
@@ -79,31 +64,22 @@ public abstract class IntegrationBase {
     @Autowired
     protected MongoTemplate mongoTemplate;
 
-    private MockServerClient mockServerClient;
+    @Value(RequestTracingFilter.TRACE_ID_HEADER_PROPERTY)
+    protected String traceIdHeader;
+
+    protected static final DockerImageName MONGO_IMAGE = DockerImageName.parse("mongo:7.0");
 
     static final OAuthMockServerContainer OAUTH_CONTAINER = new OAuthMockServerContainer();
-    static final MockServerContainer MOCK_SERVER_CONTAINER = new MockServerContainer(
-        parse("mockserver/mockserver").withTag(
-            "mockserver-" + MockServerClient.class.getPackage().getImplementationVersion()));
 
-    static MongoDBContainer MONGO_CONTAINER = new MongoDBContainer(
-        DockerImageName.parse("mongo:7.0")).withExposedPorts(27017).withReplicaSet();
+    static MongoDBContainer MONGO_CONTAINER =
+        new MongoDBContainer(MONGO_IMAGE).withExposedPorts(27017).withReplicaSet();
 
     static {
-        Startables.deepStart(
-            OAUTH_CONTAINER, MONGO_CONTAINER, MOCK_SERVER_CONTAINER
-        ).join();
+        Startables.deepStart(OAUTH_CONTAINER, MONGO_CONTAINER).join();
     }
 
     @DynamicPropertySource
     static void setProperties(DynamicPropertyRegistry registry) {
-
-        // Service API urls
-        SERVICES_TO_MOCK.forEach(
-            service -> registry.add("%s.url".formatted(service),
-                () -> "%s/%s/".formatted(MOCK_SERVER_CONTAINER.getEndpoint(), service)));
-
-        // Oauth Server container config
         registry.add("auth-api.url",
             () -> "http://%s:%d/oauth2/token".formatted(OAUTH_CONTAINER.getHost(),
                 OAUTH_CONTAINER.getMappedPort(8080)));
@@ -129,23 +105,6 @@ public abstract class IntegrationBase {
         registry.add("spring.data.mongodb.ssl.enabled", () -> "false");
     }
 
-    /**
-     * The main MockServerClient to be used for stubbing out the requests that we need to be
-     * verifiable.
-     *
-     * @return the MockServerClient to be used for stubbing out external services.
-     */
-    protected MockServerClient usingStub() {
-        if (mockServerClient == null) {
-            mockServerClient = new MockServerClient(MOCK_SERVER_CONTAINER.getHost(),
-                MOCK_SERVER_CONTAINER.getServerPort());
-            log.info(
-                "You should be able to find the dashboard here : http://{}:{}/mockserver/dashboard",
-                MOCK_SERVER_CONTAINER.getHost(), MOCK_SERVER_CONTAINER.getServerPort());
-        }
-        return mockServerClient;
-    }
-
     protected WebTestClient webClient(String clientType) {
         return webClient(clientType, DEFAULT_TRADER_ORG_ID);
     }
@@ -158,6 +117,23 @@ public abstract class IntegrationBase {
             .defaultHeader("INS-ConversationId", UUID.randomUUID().toString())
             .defaultHeader(TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER, organisationId)
             .responseTimeout(FIRST_REQUEST_WARM_UP_ALLOWANCE)
+            .build();
+    }
+
+    protected NotificationAggregate createNewNotification(String traceId) {
+        return webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT)
+            .header(traceIdHeader, traceId)
+            .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
+            .exchange().expectStatus().isOk()
+            .expectBody(NotificationAggregate.class).returnResult()
+            .getResponseBody();
+    }
+
+    protected static NotificationDto minimalNotificationDto() {
+        return NotificationDto.builder()
+            .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF123").build())
+            .commodities(List.of(Commodity.builder().name("Live cattle").build()))
             .build();
     }
 
@@ -197,43 +173,11 @@ public abstract class IntegrationBase {
             .map(JsonNode::asText)
             .orElseThrow();
     }
-    
-    @SneakyThrows
-    JsonBody getJsonFromFile(String filename) {
-        return new JsonBody(
-            Files.readString(Paths.get(getClass().getClassLoader().getResource(filename).toURI())));
-    }
 
-    @AfterEach
-    void tearDown() {
-        usingStub().reset();
-    }
-
-    <T> T getResponseAsObject(byte[] bytes, Class<T> clazz) {
-        try {
-            ObjectMapper mapper = new ObjectMapper();
-            mapper.registerModule(new JavaTimeModule());
-            mapper.enable(StreamReadFeature.INCLUDE_SOURCE_IN_LOCATION.mappedFeature());
-            mapper.configure(DeserializationFeature.FAIL_ON_IGNORED_PROPERTIES, false);
-            mapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
-            return bytes.length > 0
-                ? mapper.reader().forType(clazz).readValue(bytes)
-                : null;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     * Loads a classpath fixture file as a UTF-8 String.
-     */
     protected String loadFixtureAsString(String classpathResource) throws IOException {
         return new String(readResourceBytes(classpathResource), StandardCharsets.UTF_8);
     }
 
-    /**
-     * Loads a classpath fixture file as raw bytes.
-     */
     protected byte[] loadFixtureAsBytes(String classpathResource) throws IOException {
         return readResourceBytes(classpathResource);
     }

@@ -2,6 +2,7 @@ package uk.gov.defra.trade.imports.animals.outbox;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.annotation.Timed;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -47,6 +48,7 @@ public class OutboxService {
     private final GbnAgEventDataMapper gbnAgEventDataMapper;
     private final DocumentService documentService;
 
+    @Timed("service.appendEvent.time")
     public void appendEvent(NotificationAggregate notificationAggregate, OutboxEventType eventType, String correlationId, Actor actor) {
         String aggregateId = buildAggregateId(notificationAggregate.getReferenceNumber());
 
@@ -126,6 +128,7 @@ public class OutboxService {
         return (int) (mintsNewVersion ? submissionCount + 1 : submissionCount);
     }
 
+    @Timed("service.findByReferenceNumber.time")
     public List<OutboxEvent> findByReferenceNumber(String referenceNumber) {
         String aggregateId = buildAggregateId(referenceNumber);
         return outboxEventRepository.findAllByAggregateIdOrderByAggregateVersionAsc(aggregateId);

@@ -41,18 +41,13 @@ aws:
   region: ${AWS_REGION:eu-west-2}
   emf:
     enabled: ${AWS_EMF_ENABLED:false}
-    environment: ${AWS_EMF_ENVIRONMENT:Local}
-    namespace: ${AWS_EMF_NAMESPACE:}
-    service:
-      name: ${AWS_EMF_SERVICE_NAME:trade-imports-animals-backend}
-      type: ${AWS_EMF_SERVICE_TYPE:SpringBootApp}
 
 # Logging configuration
 logging:
+  config: classpath:logback-spring.xml
   level:
     root: INFO
     uk.gov.defra.trade.imports.animals: ${LOG_LEVEL:INFO}
-    uk.gov.defra.trade.imports.animals.common.metrics: INFO
     org.springframework: ${LOGGING_LEVEL_ORG_SPRINGFRAMEWORK:INFO}
     org.springframework.web: INFO
     org.mongodb.driver: ${LOGGING_LEVEL_ORG_MONGODB_DRIVER:WARN}
@@ -73,10 +68,6 @@ management:
   health:
     mongo:
       enabled: false
-  # Keeps the EMF metrics publisher off: tests have no CloudWatch agent and a blank
-  # namespace, which fails every scheduled publish.
-  metrics:
-    enabled: false
 
 # Admin secret for privileged endpoints
 admin:
@@ -88,7 +79,6 @@ notification:
   list:
     page-size: 2
   submit:
-    # No minimum hold on the submit lock, so a re-submission in the same test is not refused.
     lock-at-least-for: 0ms
   ttl:
     environment: ${ENVIRONMENT:local}

@@ -7,7 +7,6 @@ import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -28,13 +27,6 @@ class OutboxPollerIT extends OutboxIntegrationBase {
 
     @Autowired
     private OutboxPublishService outboxPublishService;
-
-    @BeforeEach
-    void setUp() {
-        notificationRepository.deleteAll();
-        outboxEventRepository.deleteAll();
-        purgeQueue();
-    }
 
     @Test
     void publishUnpublishedEvents_shouldDeliverToSnsAndMarkPublishedAt() throws Exception {
@@ -101,11 +93,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         notificationRepository.save(notificationAggregate);
 
         // direct status reset adds no outbox event; second submit → NOTIFICATION_SUBMITTED (v3)
-        webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(HEADER_TRACE_ID, "trace-v2")
-            .exchange()
-            .expectStatus().isOk();
+        submitNotification(referenceNumber, "trace-v2");
 
         List<OutboxEvent> unpublished = outboxEventRepository.findAll().stream()
             .filter(e -> e.getPublishedAt() == null)
@@ -203,11 +191,7 @@ class OutboxPollerIT extends OutboxIntegrationBase {
         // submit → NOTIFICATION_SUBMITTED (v3)
         String referenceNumber = createAndSaveNotification("trace-page-save");
 
-        webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}", referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(HEADER_TRACE_ID, "trace-submit")
-            .exchange()
-            .expectStatus().isOk();
+        submitNotification(referenceNumber, "trace-submit");
 
         assertThat(outboxPublishService.publishUnpublishedEvents()).isEqualTo(3);
 

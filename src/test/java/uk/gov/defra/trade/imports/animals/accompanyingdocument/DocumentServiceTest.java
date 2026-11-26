@@ -8,9 +8,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
-import static uk.gov.defra.trade.imports.animals.utils.LogCapture.messagesAt;
-import static uk.gov.defra.trade.imports.animals.utils.LogCapture.messagesOf;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.loggedBy;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.messagesAt;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.messagesOf;
 
 import ch.qos.logback.classic.Level;
 import java.time.Instant;
@@ -125,7 +125,7 @@ class DocumentServiceTest {
   }
 
   private static List<String> warningsLoggedDuring(Runnable action) {
-    return messagesAt(Level.WARN, logEventsDuring(DocumentService.class, action));
+    return messagesAt(Level.WARN, loggedBy(DocumentService.class, action));
   }
 
   @Nested
@@ -528,7 +528,7 @@ class DocumentServiceTest {
     void deleteForNotificationReferenceNumbers_shouldLogThatDocumentsAndSessionsAreDeleted() {
       List<String> notificationReferenceNumbers = List.of("GBN-AG-26-000111", "GBN-AG-26-000222");
 
-      List<String> messages = messagesOf(logEventsDuring(DocumentService.class,
+      List<String> messages = messagesOf(loggedBy(DocumentService.class,
           () -> documentService.deleteForNotificationReferenceNumbers(notificationReferenceNumbers)));
 
       assertThat(messages).containsExactly(

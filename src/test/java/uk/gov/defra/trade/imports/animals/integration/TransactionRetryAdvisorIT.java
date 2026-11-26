@@ -6,7 +6,6 @@ import static org.assertj.core.groups.Tuple.tuple;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.writeConflictAtCommit;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.writeConflictOnOutboxCreation;
 
-import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,7 +21,6 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.transaction.TransactionSystemException;
 import org.springframework.transaction.annotation.Transactional;
-import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
@@ -41,7 +39,6 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 class TransactionRetryAdvisorIT extends IntegrationBase {
 
     private static final String COLLECTION = "transaction_retry_probe";
-    private static final String NOTIFICATION_ENDPOINT = "/notifications";
 
     @Autowired
     private MongoTemplate mongoTemplate;
@@ -115,12 +112,11 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
 
     @Test
     void put_shouldSucceedAndWriteOneOutboxEvent_whenTheCommitFailsTransientlyOnce() {
-        NotificationAggregate draft = createDraft();
+        NotificationAggregate draft = createNewNotification("trace-retry-001");
         String referenceNumber = draft.getReferenceNumber();
-        NotificationDto edit = NotificationDto.builder()
+        NotificationDto edit = minimalNotificationDto().toBuilder()
             .referenceNumber(referenceNumber)
             .origin(Origin.builder().countryCode("GB").requiresRegionCode("no").internalReference("EDITED").build())
-            .commodities(List.of(Commodity.builder().name("Live cattle").build()))
             .concurrencyToken(draft.getConcurrencyToken())
             .build();
         transactionManager.failNextCommits(1);
@@ -138,23 +134,6 @@ class TransactionRetryAdvisorIT extends IntegrationBase {
                     OutboxEventType.NOTIFICATION_CREATED.value()),
                 tuple(OutboxService.buildAggregateId(referenceNumber),
                     OutboxEventType.NOTIFICATION_EDITED.value()));
-    }
-
-    private NotificationAggregate createDraft() {
-        Origin origin = Origin.builder().build();
-        origin.setCountryCode("GB");
-        NotificationDto dto = NotificationDto.builder()
-            .origin(origin)
-            .commodities(List.of(Commodity.builder().name("Live cattle").build()))
-            .build();
-
-        return webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .bodyValue(SaveNotificationDto.of(dto))
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody(NotificationAggregate.class)
-            .returnResult().getResponseBody();
     }
 
     @TestConfiguration

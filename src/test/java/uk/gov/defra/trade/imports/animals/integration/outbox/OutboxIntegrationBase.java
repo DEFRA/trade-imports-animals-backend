@@ -9,14 +9,14 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.lifecycle.Startables;
 import org.testcontainers.utility.DockerImageName;
-import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
-import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
-import software.amazon.awssdk.regions.Region;
+import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.sns.SnsClient;
 import software.amazon.awssdk.services.sns.model.CreateTopicRequest;
 import software.amazon.awssdk.services.sns.model.SubscribeRequest;
@@ -27,30 +27,20 @@ import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SetQueueAttributesRequest;
+import uk.gov.defra.trade.imports.animals.integration.FlociClients;
 import uk.gov.defra.trade.imports.animals.integration.IntegrationBase;
-import uk.gov.defra.trade.imports.animals.notification.Commodity;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
-import uk.gov.defra.trade.imports.animals.notification.NotificationController;
-import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationRepository;
 import uk.gov.defra.trade.imports.animals.notification.NotificationTestSupport;
-import uk.gov.defra.trade.imports.animals.notification.Origin;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEventRepository;
 
 /**
  * Base class for integration tests that publish to SNS and consume from SQS via Floci. Starts a
  * single shared Floci container, creates the outbox SNS topic and a test SQS subscriber queue, and
  * wires them into the Spring context via {@link DynamicPropertySource}.
- *
- * <p>Subclasses inherit {@link #purgeQueue()}, {@link #awaitSqsMessages(int)}, and
- * {@link #createAndSubmitNotification(String)} so they only need to add test-specific beans and
- * test methods.
  */
 abstract class OutboxIntegrationBase extends IntegrationBase {
-
-    protected static final String NOTIFICATION_ENDPOINT = "/notifications";
-    protected static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
 
     private static final String AWS_REGION = "eu-west-2";
     private static final String TOPIC_NAME = "trade-imports-animals-outbox-it.fifo";
@@ -65,17 +55,19 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     static final String TOPIC_ARN;
     static final String QUEUE_URL;
     static final SqsClient SQS_CLIENT;
+    static final S3Client S3_CLIENT;
 
     static {
         Startables.deepStart(FLOCI).join();
 
-        SNS_CLIENT = snsClient();
+        SNS_CLIENT = FlociClients.pointedAt(FLOCI, AWS_REGION, SnsClient.builder()).build();
         TOPIC_ARN = SNS_CLIENT.createTopic(CreateTopicRequest.builder()
             .name(TOPIC_NAME)
             .attributes(Map.of("FifoTopic", "true"))
             .build()).topicArn();
 
-        SQS_CLIENT = sqsClient();
+        SQS_CLIENT = FlociClients.sqsClient(FLOCI, AWS_REGION);
+        S3_CLIENT = FlociClients.s3Client(FLOCI, AWS_REGION);
         QUEUE_URL = SQS_CLIENT.createQueue(CreateQueueRequest.builder()
             .queueName(QUEUE_NAME)
             .attributes(Map.of(QueueAttributeName.FIFO_QUEUE, "true"))
@@ -131,13 +123,36 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
     @Autowired
     protected ObjectMapper objectMapper;
 
-    // --- SQS helpers ---
+    @BeforeEach
+    void clearOutboxState() {
+        notificationRepository.deleteAll();
+        outboxEventRepository.deleteAll();
+        purgeQueue();
+    }
+
+    protected void ensureBucketExists(String bucket) {
+        boolean exists = S3_CLIENT.listBuckets().buckets().stream()
+            .anyMatch(existing -> existing.name().equals(bucket));
+        if (!exists) {
+            S3_CLIENT.createBucket(builder -> builder.bucket(bucket));
+        }
+    }
 
     protected Message awaitSqsMessage() {
         return awaitSqsMessages(1).getFirst();
     }
 
     protected List<Message> awaitSqsMessages(int expectedCount) {
+        return awaitMessages(expectedCount, message -> {
+            deleteMessage(message);
+        });
+    }
+
+    protected List<Message> awaitInFlightMessages(int expectedCount) {
+        return awaitMessages(expectedCount, message -> {});
+    }
+
+    private List<Message> awaitMessages(int expectedCount, Consumer<Message> onEach) {
         List<Message> collected = new ArrayList<>();
         await()
             .atMost(Duration.ofSeconds(20))
@@ -145,28 +160,13 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
             .until(() -> {
                 receiveMessages().forEach(message -> {
                     collected.add(message);
-                    deleteMessage(message);
+                    onEach.accept(message);
                 });
                 return collected.size();
             }, count -> count >= expectedCount);
         return List.copyOf(collected);
     }
 
-    protected List<Message> awaitInFlightMessages(int expectedCount) {
-        List<Message> collected = new ArrayList<>();
-        await()
-            .atMost(Duration.ofSeconds(20))
-            .pollInterval(Duration.ofMillis(200))
-            .until(() -> {
-                collected.addAll(receiveMessages());
-                return collected.size();
-            }, count -> count >= expectedCount);
-        return List.copyOf(collected);
-    }
-
-    /**
-     * Peeks at the queue without acknowledging, leaving received messages in flight.
-     */
     protected List<Message> receiveMessages() {
         List<Message> messages = SQS_CLIENT.receiveMessage(ReceiveMessageRequest.builder()
                 .queueUrl(QUEUE_URL)
@@ -200,19 +200,19 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
         throw new AssertionError("No SNS message found for aggregateVersion " + aggregateVersion);
     }
 
-    // --- NotificationAggregate helpers ---
-
     protected String createAndSubmitNotification(String traceId) {
         String referenceNumber = createNewNotification(traceId).getReferenceNumber();
+        submitNotification(referenceNumber, traceId);
+        return referenceNumber;
+    }
 
+    protected void submitNotification(String referenceNumber, String traceId) {
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/submit?concurrencyToken={token}",
                 referenceNumber, currentConcurrencyToken(referenceNumber))
-            .header(HEADER_TRACE_ID, traceId)
+            .header(traceIdHeader, traceId)
             .exchange()
             .expectStatus().isOk();
-
-        return referenceNumber;
     }
 
     protected Long currentConcurrencyToken(String referenceNumber) {
@@ -226,53 +226,14 @@ abstract class OutboxIntegrationBase extends IntegrationBase {
 
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT)
-            .header(HEADER_TRACE_ID, traceId)
-            .bodyValue(SaveNotificationDto.of(NotificationDto.builder()
+            .header(traceIdHeader, traceId)
+            .bodyValue(SaveNotificationDto.of(minimalNotificationDto().toBuilder()
                 .referenceNumber(created.getReferenceNumber())
                 .concurrencyToken(created.getConcurrencyToken())
-                .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF123").build())
-                .commodities(List.of(Commodity.builder().name("Live cattle").build()))
                 .build()))
             .exchange()
             .expectStatus().isOk();
 
         return created.getReferenceNumber();
-    }
-
-    protected NotificationAggregate createNewNotification(String traceId) {
-        return webClient("NoAuth")
-            .post().uri(NOTIFICATION_ENDPOINT)
-            .header(HEADER_TRACE_ID, traceId)
-            .bodyValue(SaveNotificationDto.of(minimalNotificationDto()))
-            .exchange().expectStatus().isOk()
-            .expectBody(NotificationAggregate.class).returnResult()
-            .getResponseBody();
-    }
-
-    protected static NotificationDto minimalNotificationDto() {
-        return NotificationDto.builder()
-            .origin(Origin.builder().countryCode("GB").requiresRegionCode("true").internalReference("REF123").build())
-            .commodities(List.of(Commodity.builder().name("Live cattle").build()))
-            .build();
-    }
-
-    // --- AWS client factories ---
-
-    private static SnsClient snsClient() {
-        return SnsClient.builder()
-            .endpointOverride(java.net.URI.create(FLOCI.getEndpoint()))
-            .credentialsProvider(StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(FLOCI.getAccessKey(), FLOCI.getSecretKey())))
-            .region(Region.of(AWS_REGION))
-            .build();
-    }
-
-    private static SqsClient sqsClient() {
-        return SqsClient.builder()
-            .endpointOverride(java.net.URI.create(FLOCI.getEndpoint()))
-            .credentialsProvider(StaticCredentialsProvider.create(
-                AwsBasicCredentials.create(FLOCI.getAccessKey(), FLOCI.getSecretKey())))
-            .region(Region.of(AWS_REGION))
-            .build();
     }
 }

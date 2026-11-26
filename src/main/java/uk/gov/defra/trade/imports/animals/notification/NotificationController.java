@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter;
 import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import uk.gov.defra.trade.imports.animals.outbox.Actor;
 import uk.gov.defra.trade.imports.animals.outbox.OutboxEvent;
@@ -39,7 +40,6 @@ import uk.gov.defra.trade.imports.animals.outbox.OutboxService;
 @Validated
 public class NotificationController {
 
-    public static final String HEADER_TRACE_ID = "x-cdp-request-id";
     public static final String HEADER_USER_ID = "User-Id";
 
     private final NotificationService notificationService;
@@ -51,7 +51,7 @@ public class NotificationController {
     @Timed("controller.postNotification.time")
     public ResponseEntity<NotificationAggregate> post(
         @Valid @RequestBody SaveNotificationDto saveNotificationDto,
-        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestHeader(value = RequestTracingFilter.TRACE_ID_HEADER_PROPERTY, required = false, defaultValue = "") String traceId,
         @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
         NotificationDto notificationDto = saveNotificationDto.getNotification();
         Actor actor = resolveActor(saveNotificationDto.getActor(), organisationId);
@@ -72,7 +72,7 @@ public class NotificationController {
     public ResponseEntity<NotificationAggregate> replace(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @Valid @RequestBody SaveNotificationDto saveNotificationDto,
-        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestHeader(value = RequestTracingFilter.TRACE_ID_HEADER_PROPERTY, required = false, defaultValue = "") String traceId,
         @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
         Actor actor = resolveActor(saveNotificationDto.getActor(), organisationId);
         log.info("PUT /notifications/{} - Replacing notification content userId={}",
@@ -92,7 +92,7 @@ public class NotificationController {
     public ResponseEntity<NotificationAggregate> copy(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @RequestParam Long concurrencyToken,
-        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestHeader(value = RequestTracingFilter.TRACE_ID_HEADER_PROPERTY, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest,
         @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
         Actor actor = resolveActor(actorRequest, organisationId);
@@ -125,7 +125,7 @@ public class NotificationController {
     public ResponseEntity<NotificationAggregate> submit(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
         @RequestParam Long concurrencyToken,
-        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestHeader(value = RequestTracingFilter.TRACE_ID_HEADER_PROPERTY, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest,
         @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
         Actor actor = resolveActor(actorRequest, organisationId);
@@ -148,7 +148,7 @@ public class NotificationController {
     @Timed("controller.amendNotification.time")
     public ResponseEntity<NotificationAggregate> amend(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestHeader(value = RequestTracingFilter.TRACE_ID_HEADER_PROPERTY, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest,
         @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
         Actor actor = resolveActor(actorRequest, organisationId);
@@ -168,7 +168,7 @@ public class NotificationController {
     @Timed("controller.cancelAmendNotification.time")
     public ResponseEntity<NotificationAggregate> cancelAmend(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestHeader(value = RequestTracingFilter.TRACE_ID_HEADER_PROPERTY, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest,
         @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
         Actor actor = resolveActor(actorRequest, organisationId);
@@ -247,7 +247,7 @@ public class NotificationController {
     @Timed("controller.replayOutboxEvents.time")
     public ResponseEntity<ReplayResponse> replay(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestHeader(value = RequestTracingFilter.TRACE_ID_HEADER_PROPERTY, required = false, defaultValue = "") String traceId,
         @RequestHeader(value = HEADER_USER_ID, required = true) String userId) {
         log.info("POST /notifications/{}/replay - userId={}", referenceNumber, userId);
         int count = outboxReplayService.replay(referenceNumber, new AuditContext(traceId, userId));
@@ -265,7 +265,7 @@ public class NotificationController {
     @Timed("controller.softDeleteNotification.time")
     public ResponseEntity<NotificationAggregate> softDelete(
         @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN) @PathVariable String referenceNumber,
-        @RequestHeader(value = HEADER_TRACE_ID, required = false, defaultValue = "") String traceId,
+        @RequestHeader(value = RequestTracingFilter.TRACE_ID_HEADER_PROPERTY, required = false, defaultValue = "") String traceId,
         @RequestBody(required = false) ActorRequest actorRequest,
         @RequestHeader(value = TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER) String organisationId) {
         Actor actor = resolveActor(actorRequest, organisationId);
@@ -298,7 +298,7 @@ public class NotificationController {
     @Operation(summary = "Delete notifications", description = "Deletes notifications by reference numbers")
     @Timed("controller.deleteNotifications.time")
     public ResponseEntity<Void> delete(@RequestBody List<String> referenceNumbers,
-        @RequestHeader(value = NotificationController.HEADER_TRACE_ID, required = true) String traceId,
+        @RequestHeader(value = RequestTracingFilter.TRACE_ID_HEADER_PROPERTY, required = true) String traceId,
         @RequestHeader(value = NotificationController.HEADER_USER_ID, required = true) String userId) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return ResponseEntity.badRequest().build();

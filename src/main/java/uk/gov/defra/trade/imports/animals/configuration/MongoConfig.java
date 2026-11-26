@@ -23,18 +23,9 @@ import org.springframework.data.mongodb.MongoTransactionManager;
 import org.springframework.data.mongodb.config.EnableMongoAuditing;
 import org.springframework.data.mongodb.core.convert.MongoCustomConversions;
 import uk.gov.defra.trade.imports.animals.configuration.tls.TrustStoreConfiguration;
+import uk.gov.defra.trade.imports.animals.metrics.MongoAvailability;
+import uk.gov.defra.trade.imports.animals.metrics.MongoCallRecorder;
 
-/**
- * MongoDB configuration for CDP Java Backend Template.
- *
- * <p>Configures MongoDB connection with: - AWS IAM authentication (via connection string
- * authMechanism=MONGODB-AWS) - Custom SSL/TLS certificates from TRUSTSTORE_* environment variables
- * - Read preference: secondary (configurable) - Write concern: majority (configurable) - Connection
- * pooling - Graceful shutdown
- *
- * <p>Connection string format for AWS IAM auth:
- * mongodb://host:port/database?authMechanism=MONGODB-AWS&authSource=$external
- */
 @Configuration
 @EnableMongoAuditing
 @Slf4j
@@ -63,11 +54,15 @@ public class MongoConfig {
       @Value("${spring.data.mongodb.read-preference}") ReadPreference readPreference,
       @Value("${spring.data.mongodb.write-concern}") WriteConcern writeConcern,
       TrustStoreConfiguration trustStoreConfiguration,
-      ConnectionPoolSettings connectionPoolSettings) {
+      ConnectionPoolSettings connectionPoolSettings,
+      MongoAvailability mongoAvailability,
+      MongoCallRecorder mongoCallRecorder) {
 
       MongoClientSettings.Builder builder = MongoClientSettings.builder()
           .applyConnectionString(new ConnectionString(mongoUri))
           .applyToConnectionPoolSettings(bdr -> bdr.applySettings(connectionPoolSettings))
+          .applyToClusterSettings(bdr -> bdr.addClusterListener(mongoAvailability))
+          .addCommandListener(mongoCallRecorder)
           .readPreference(readPreference)
           .writeConcern(writeConcern);
       
@@ -81,12 +76,6 @@ public class MongoConfig {
     return builder.build();
   }
 
-  /**
-   * Registers the {@code LocalDate} string converters ahead of Spring Data's built-in JSR-310
-   * pair, so date-only fields persist as a {@code YYYY-MM-DD} string rather than a BSON date at
-   * start-of-day in the JVM's default timezone. See {@link LocalDateStringConverters} for the
-   * rationale.
-   */
   @Bean
   MongoCustomConversions mongoCustomConversions() {
     return new MongoCustomConversions(List.of(

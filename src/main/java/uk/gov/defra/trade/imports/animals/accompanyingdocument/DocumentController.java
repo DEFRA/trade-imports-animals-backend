@@ -84,7 +84,7 @@ public class DocumentController {
   @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
   @ApiResponse(responseCode = "409", description = "Upload session already registered",
       content = @Content)
-  @Timed("document.register")
+  @Timed("controller.registerDocumentUpload.time")
   public ResponseEntity<UploadSessionDto> register(
       @PathVariable @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
       String referenceNumber,
@@ -120,7 +120,7 @@ public class DocumentController {
   @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
       content = @Content)
   @ApiResponse(responseCode = "404", description = "Session or notification not found", content = @Content)
-  @Timed("document.session")
+  @Timed("controller.getUploadSession.time")
   public ResponseEntity<UploadSessionDto> session(
       @PathVariable @Pattern(regexp = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN)
       String referenceNumber,
@@ -155,7 +155,7 @@ public class DocumentController {
   @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
       content = @Content)
   @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
-  @Timed("document.claim")
+  @Timed("controller.claimDocument.time")
   public ResponseEntity<AccompanyingDocumentDto> claim(
       @PathVariable
       @Pattern(regexp = UPLOAD_SESSION_IDENTIFIER_PATTERN) String uploadId,
@@ -189,7 +189,7 @@ public class DocumentController {
   @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
       content = @Content)
   @ApiResponse(responseCode = "404", description = "Notification not found", content = @Content)
-  @Timed("document.list")
+  @Timed("controller.listDocuments.time")
   public ResponseEntity<DocumentListResponse> list(
       @PathVariable String referenceNumber,
       @Parameter(hidden = true)
@@ -207,6 +207,7 @@ public class DocumentController {
    * Get a single accompanying document upload session by upload ID.
    *
    * @param uploadId the upload session identifier
+   * @param organisationId the trader's organisation, from {@code Trade-Imports-Organisation-Id}
    * @return 200 OK with the accompanying document DTO
    */
   @GetMapping("/document-uploads/{uploadId}")
@@ -218,7 +219,7 @@ public class DocumentController {
   @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
       content = @Content)
   @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
-  @Timed("document.get")
+  @Timed("controller.getDocument.time")
   public ResponseEntity<AccompanyingDocumentDto> get(
       @PathVariable String uploadId,
       @Parameter(hidden = true)
@@ -235,6 +236,7 @@ public class DocumentController {
    * Delete an accompanying document upload session.
    *
    * @param uploadId the upload session identifier
+   * @param organisationId the trader's organisation, from {@code Trade-Imports-Organisation-Id}
    * @return 204 No Content
    */
   @DeleteMapping("/document-uploads/{uploadId}")
@@ -245,7 +247,7 @@ public class DocumentController {
   @ApiResponse(responseCode = "404", description = "Upload not found", content = @Content)
   @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
       content = @Content)
-  @Timed("document.delete")
+  @Timed("controller.deleteDocument.time")
   public ResponseEntity<Void> delete(
       @PathVariable String uploadId,
       @Parameter(hidden = true)
@@ -269,7 +271,7 @@ public class DocumentController {
       summary = "Handle scan result",
       description = "Receives the cdp-uploader antivirus scan result callback")
   @ApiResponse(responseCode = "204", description = "Scan result processed", content = @Content)
-  @Timed("document.scanResult")
+  @Timed("controller.handleScanResult.time")
   public ResponseEntity<Void> scanResult(
       @PathVariable String pathSegment,
       @RequestBody CdpScanResultPayload payload) {
@@ -284,6 +286,7 @@ public class DocumentController {
    * Download the first uploaded file of a document upload session.
    *
    * @param uploadId the upload session identifier
+   * @param organisationId the trader's organisation, from {@code Trade-Imports-Organisation-Id}
    * @return 200 OK with the file content streamed from S3
    */
   @GetMapping("/document-uploads/{uploadId}/file")
@@ -295,7 +298,7 @@ public class DocumentController {
   @ApiResponse(responseCode = "404", description = "File not found", content = @Content)
   @ApiResponse(responseCode = "403", description = "Notification belongs to another organisation",
       content = @Content)
-  @Timed("document.downloadFile")
+  @Timed("controller.downloadDocumentFile.time")
   public ResponseEntity<StreamingResponseBody> downloadFile(
       @PathVariable String uploadId,
       @Parameter(hidden = true)

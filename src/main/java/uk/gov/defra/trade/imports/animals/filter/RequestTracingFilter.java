@@ -12,25 +12,24 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 
-/**
- * Servlet filter that populates MDC (Mapped Diagnostic Context) with request tracing information
- * for ECS (Elastic Common Schema) structured logging.
- *
- * Runs at HIGHEST_PRECEDENCE to ensure MDC is populated before any other filters or interceptors.
- */
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE)
 @Slf4j
 public class RequestTracingFilter implements Filter {
 
-    private static final String MDC_TRACE_ID = "trace.id";
+    public static final String TRACE_ID_HEADER_PROPERTY = "${cdp.tracing.header-name}";
+    public static final String MDC_TRACE_ID = "trace.id";
+
     private static final String MDC_HTTP_METHOD = "http.request.method";
     private static final String MDC_HTTP_STATUS = "http.response.status_code";
     private static final String MDC_URL_FULL = "url.full";
 
-    @Value("${cdp.tracing.header-name}")
-    private String header;
-    
+    private final String traceIdHeaderName;
+
+    public RequestTracingFilter(@Value(TRACE_ID_HEADER_PROPERTY) String traceIdHeaderName) {
+        this.traceIdHeaderName = traceIdHeaderName;
+    }
+
     @Override
     public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
             throws IOException, ServletException {
@@ -41,13 +40,7 @@ public class RequestTracingFilter implements Filter {
         }
 
         try {
-            // Extract trace ID from CDP request header (leave empty if not present)
-            String traceId = httpRequest.getHeader(header);
-            if (traceId != null && !traceId.isBlank()) {
-                MDC.put(MDC_TRACE_ID, traceId);
-            }
-
-            // Populate request metadata
+            putTraceIdInMdc(httpRequest);
             final String method = httpRequest.getMethod();
             final String url = httpRequest.getRequestURL().toString();
             MDC.put(MDC_HTTP_METHOD, method);
@@ -55,18 +48,22 @@ public class RequestTracingFilter implements Filter {
 
             log.debug("{} {}", method, url);
 
-            // Execute filter chain
             chain.doFilter(request, response);
 
-            // Capture response status after chain completes
             if (response instanceof HttpServletResponse httpResponse) {
                 MDC.put(MDC_HTTP_STATUS, String.valueOf(httpResponse.getStatus()));
                 log.debug("Response status {} for {}", httpResponse.getStatus(), url);
             }
 
         } finally {
-            // Critical: Clear MDC to prevent data leakage across requests in thread pool
             MDC.clear();
+        }
+    }
+
+    private void putTraceIdInMdc(HttpServletRequest request) {
+        String traceId = request.getHeader(traceIdHeaderName);
+        if (traceId != null && !traceId.isBlank()) {
+            MDC.put(MDC_TRACE_ID, traceId);
         }
     }
 }

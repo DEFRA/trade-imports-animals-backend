@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
+import static uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter.MDC_TRACE_ID;
 
 /**
  * Unit tests for TraceIdPropagationInterceptor.
@@ -29,9 +30,6 @@ import static org.mockito.Mockito.verify;
  */
 @ExtendWith(MockitoExtension.class)
 class TraceIdPropagationInterceptorTest {
-
-  private static final String TRACE_ID_HEADER = "x-cdp-request-id";
-  private static final String MDC_TRACE_ID = "trace.id";
 
   @Mock private HttpRequest request;
 
@@ -43,12 +41,14 @@ class TraceIdPropagationInterceptorTest {
 
   @Captor private ArgumentCaptor<byte[]> bodyCaptor;
 
+  private static final String TRACE_ID_HEADER = "x-configured-trace-header";
+
   private TraceIdPropagationInterceptor interceptor;
   private HttpHeaders headers;
 
   @BeforeEach
   void setUp() throws IOException {
-    interceptor = new TraceIdPropagationInterceptor("x-cdp-request-id");
+    interceptor = new TraceIdPropagationInterceptor(TRACE_ID_HEADER);
     headers = new HttpHeaders();
     lenient().when(request.getHeaders()).thenReturn(headers);
     lenient().when(execution.execute(any(HttpRequest.class), any(byte[].class))).thenReturn(response);

@@ -1,5 +1,6 @@
 package uk.gov.defra.trade.imports.animals.notification;
 
+import io.micrometer.core.annotation.Timed;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
@@ -87,6 +88,7 @@ public class NotificationService {
         this.adminPageSize = adminPageSize;
     }
 
+    @Timed("service.postNotification.time")
     public NotificationAggregate saveNotification(
         NotificationDto notificationDto, String correlationId, Actor actor, String organisationId) {
         if (StringUtils.isBlank(notificationDto.getReferenceNumber())) {
@@ -98,6 +100,7 @@ public class NotificationService {
     }
 
     @Transactional
+    @Timed("service.replaceNotification.time")
     public NotificationAggregate replace(String referenceNumber, NotificationDto dto,
         String correlationId, Actor actor, String organisationId) {
         return replaceContent(referenceNumber, dto, correlationId, actor, organisationId);
@@ -123,6 +126,7 @@ public class NotificationService {
     }
 
     @Transactional
+    @Timed("service.copyNotification.time")
     public NotificationAggregate copyNotification(String referenceNumber, Long expectedConcurrencyToken,
         String correlationId, Actor actor, String organisationId) {
         NotificationAggregate source = requireTraderNotification(referenceNumber, organisationId);
@@ -146,6 +150,7 @@ public class NotificationService {
         return createNotification(notificationCopyMapper.toCopyDto(source), correlationId, actor, organisationId);
     }
 
+    @Timed("service.getFulfilments.time")
     public NotificationFulfilmentsView findFulfilmentsView(String referenceNumber, String organisationId) {
         Optional<NotificationAggregate> scoped =
             notificationRepository.findFulfilmentFieldsByReferenceNumberAndOrganisationId(
@@ -161,6 +166,7 @@ public class NotificationService {
         throw new NotFoundException(CANNOT_FIND_NOTIFICATION_WITH_REFERENCE_NUMBER + referenceNumber);
     }
 
+    @Timed("service.findDashboardPage.time")
     public NotificationPageResponse findDashboardPage(
         int page, String sort, String referenceNumber, String organisationId) {
         List<NotificationStatus> dashboardStatuses = List.of(
@@ -190,6 +196,7 @@ public class NotificationService {
     }
 
     @Transactional
+    @Timed("service.submitNotification.time")
     public NotificationAggregate submitNotification(String referenceNumber, Long expectedConcurrencyToken,
         String correlationId, Actor actor, String organisationId) {
         NotificationAggregate notificationAggregate =
@@ -219,6 +226,7 @@ public class NotificationService {
     }
 
     @Transactional
+    @Timed("service.amendNotification.time")
     public NotificationAggregate amendNotification(
         String referenceNumber, String correlationId, Actor actor, String organisationId) {
         NotificationAggregate notificationAggregate =
@@ -248,6 +256,7 @@ public class NotificationService {
     }
 
     @Transactional
+    @Timed("service.cancelAmendNotification.time")
     public NotificationAggregate cancelAmendNotification(
         String referenceNumber, String correlationId, Actor actor, String organisationId) {
         NotificationAggregate notificationAggregate =
@@ -354,6 +363,7 @@ public class NotificationService {
     }
 
     @Transactional
+    @Timed("service.softDeleteNotification.time")
     public NotificationAggregate softDeleteNotification(
         String referenceNumber, String correlationId, Actor actor, String organisationId) {
         NotificationAggregate notificationAggregate =
@@ -380,6 +390,7 @@ public class NotificationService {
             actor);
     }
 
+    @Timed("service.getAllReferenceNumbers.time")
     public ReferenceNumberPageResponse findAllReferenceNumbers(int page) {
         log.debug("Fetching notification reference numbers page {} (size {})", page, adminPageSize);
         Page<NotificationReferenceOnly> result = notificationRepository.findAllReferencesBy(
@@ -390,6 +401,7 @@ public class NotificationService {
     }
 
     @Transactional(noRollbackFor = NotFoundException.class)
+    @Timed("service.deleteNotifications.time")
     public void deleteByReferenceNumbers(List<String> referenceNumbers, AuditContext auditContext) {
         if (referenceNumbers == null || referenceNumbers.isEmpty()) {
             return;
@@ -422,6 +434,7 @@ public class NotificationService {
             notificationAggregate.setExpireAt(notificationAggregate.getCreated().plus(days, ChronoUnit.DAYS)));
     }
 
+    @Timed("service.requireTraderAccess.time")
     public void requireTraderAccess(String referenceNumber, String organisationId) {
         requireTraderNotification(referenceNumber, organisationId);
     }

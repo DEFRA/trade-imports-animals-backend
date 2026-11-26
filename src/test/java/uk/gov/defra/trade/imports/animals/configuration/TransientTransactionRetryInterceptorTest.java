@@ -2,8 +2,8 @@ package uk.gov.defra.trade.imports.animals.configuration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static uk.gov.defra.trade.imports.animals.utils.LogCapture.logEventsDuring;
-import static uk.gov.defra.trade.imports.animals.utils.LogCapture.messagesAt;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.loggedBy;
+import static uk.gov.defra.trade.imports.animals.testsupport.CapturedLogs.messagesAt;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.transientNetworkFailureAtCommit;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.unknownCommitResultAtCommit;
 import static uk.gov.defra.trade.imports.animals.utils.TransientMongoFailure.writeConflictAtCommit;
@@ -32,7 +32,7 @@ class TransientTransactionRetryInterceptorTest {
     }
 
     private static List<ILoggingEvent> interceptorLogEventsDuring(Runnable action) {
-        return logEventsDuring(TransientTransactionRetryInterceptor.class, action);
+        return loggedBy(TransientTransactionRetryInterceptor.class, action);
     }
 
     @Test

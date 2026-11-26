@@ -34,7 +34,6 @@ import uk.gov.defra.trade.imports.animals.notification.ConsignmentParty;
 import uk.gov.defra.trade.imports.animals.notification.MeansOfTransport;
 import uk.gov.defra.trade.imports.animals.notification.Notification;
 import uk.gov.defra.trade.imports.animals.notification.NotificationAggregate;
-import uk.gov.defra.trade.imports.animals.notification.NotificationController;
 import uk.gov.defra.trade.imports.animals.notification.NotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.SaveNotificationDto;
 import uk.gov.defra.trade.imports.animals.notification.NotificationPageResponse;
@@ -56,10 +55,8 @@ import uk.gov.defra.trade.imports.animals.utils.NotificationTestData;
 
 class NotificationIT extends IntegrationBase {
 
-    private static final String NOTIFICATION_ENDPOINT = "/notifications";
     private static final String ADMIN_SECRET_HEADER = "Trade-Imports-Animals-Admin-Secret";
     private static final String VALID_ADMIN_SECRET = "test-admin-secret";
-    private static final String HEADER_TRACE_ID = NotificationController.HEADER_TRACE_ID;
     private static final String REF_FORMAT_REGEX = ReferenceNumberGenerator.REFERENCE_NUMBER_PATTERN;
     private static final String NONEXISTENT_REF = "GBN-AG-00-000000";
     private static final String OTHER_ORG_ID = "9999999";
@@ -720,7 +717,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header("x-cdp-request-id", "trace-001")
+            .header(traceIdHeader, "trace-001")
             .header("User-Id", "user-001")
             .bodyValue(List.of(ref1, ref2))
             .exchange()
@@ -739,7 +736,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header("x-cdp-request-id", "trace-audit-success")
+            .header(traceIdHeader, "trace-audit-success")
             .header("User-Id", "user-audit")
             .bodyValue(List.of(ref))
             .exchange()
@@ -763,7 +760,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header("x-cdp-request-id", "trace-002")
+            .header(traceIdHeader, "trace-002")
             .header("User-Id", "user-002")
             .bodyValue(List.of(NONEXISTENT_REF))
             .exchange()
@@ -780,7 +777,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header("x-cdp-request-id", "trace-audit-failure")
+            .header(traceIdHeader, "trace-audit-failure")
             .header("User-Id", "user-audit-failure")
             .bodyValue(List.of(NONEXISTENT_REF))
             .exchange()
@@ -805,7 +802,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header("x-cdp-request-id", "trace-003")
+            .header(traceIdHeader, "trace-003")
             .header("User-Id", "user-003")
             .bodyValue(List.of(existingRef, NONEXISTENT_REF))
             .exchange()
@@ -905,7 +902,7 @@ class NotificationIT extends IntegrationBase {
         // When — amend with a trace ID
         webClient("NoAuth")
             .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", referenceNumber)
-            .header(HEADER_TRACE_ID, "trace-amend-001")
+            .header(traceIdHeader, "trace-amend-001")
             .exchange()
             .expectStatus().isOk();
 
@@ -1191,7 +1188,7 @@ class NotificationIT extends IntegrationBase {
 
         // When — submit it with a trace ID
         submitRequest(referenceNumber)
-            .header(HEADER_TRACE_ID, "trace-outbox-001")
+            .header(traceIdHeader, "trace-outbox-001")
             .exchange()
             .expectStatus().isOk();
 
@@ -1814,7 +1811,7 @@ class NotificationIT extends IntegrationBase {
         webClient("NoAuth")
             .method(HttpMethod.DELETE).uri(NOTIFICATION_ENDPOINT)
             .header(ADMIN_SECRET_HEADER, VALID_ADMIN_SECRET)
-            .header("x-cdp-request-id", "trace-cascade-001")
+            .header(traceIdHeader, "trace-cascade-001")
             .header("User-Id", "user-cascade-001")
             .bodyValue(List.of(referenceNumber))
             .exchange()

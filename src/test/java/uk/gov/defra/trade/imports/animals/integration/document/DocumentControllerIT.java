@@ -41,6 +41,7 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.CreateBucketRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.sqs.SqsClient;
+import uk.gov.defra.trade.imports.animals.integration.FlociClients;
 import uk.gov.defra.trade.imports.animals.integration.PortReservation;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocument;
 import uk.gov.defra.trade.imports.animals.accompanyingdocument.AccompanyingDocumentDto;
@@ -96,8 +97,8 @@ class DocumentControllerIT extends IntegrationBase {
             "SQS_SCAN_RESULTS_CALLBACK",
             "http://floci:4566/000000000000/" + CdpUploaderTestSupport.SCAN_RESULTS_CALLBACK_QUEUE);
 
-        flociS3Client = CdpUploaderTestSupport.s3Client(FLOCI_CONTAINER, AWS_REGION);
-        flociSqsClient = CdpUploaderTestSupport.sqsClient(FLOCI_CONTAINER, AWS_REGION);
+        flociS3Client = FlociClients.s3Client(FLOCI_CONTAINER, AWS_REGION);
+        flociSqsClient = FlociClients.sqsClient(FLOCI_CONTAINER, AWS_REGION);
 
         flociS3Client.createBucket(
             CreateBucketRequest.builder().bucket(CdpUploaderTestSupport.DOCUMENTS_BUCKET).build());
