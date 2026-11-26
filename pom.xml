@@ -202,7 +202,7 @@
     <dependency>
       <groupId>net.javacrumbs.shedlock</groupId>
       <artifactId>shedlock-provider-mongo</artifactId>
-      <version>6.6.0</version>
+      <version>7.11.0</version>
     </dependency>
 
     <!-- Testing -->
