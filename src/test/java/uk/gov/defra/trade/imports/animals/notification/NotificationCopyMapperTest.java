@@ -2,7 +2,6 @@ package uk.gov.defra.trade.imports.animals.notification;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignees;
-import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.importers;
@@ -362,17 +361,6 @@ class NotificationCopyMapperTest {
             NotificationDto result = mapper.toCopyDto(source);
 
             assertThat(result.getTransport()).isNull();
-        }
-
-        @Test
-        void toCopyDto_shouldOmitConsignment() {
-            NotificationAggregate source = aggregateOf(Notification.builder()
-                .consignment(consignments().getFirst())
-                .build());
-
-            NotificationDto result = mapper.toCopyDto(source);
-
-            assertThat(result.getConsignment()).isNull();
         }
 
         @Test

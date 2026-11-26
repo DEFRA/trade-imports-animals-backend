@@ -104,7 +104,7 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 
 ## Local AWS credentials
 
-`AwsConfig` uses static credentials whenever `APP_AWS_ENDPOINT_OVERRIDE` and both `app.aws.access-key-id` and `app.aws.secret-access-key` are set, and nothing checks which environment it runs in. They are for local development against a stand-in such as LocalStack; never set real credentials in them.
+`AwsConfig` uses static credentials whenever `APP_AWS_ENDPOINT_OVERRIDE` and both `app.aws.access-key-id` and `app.aws.secret-access-key` are set, and nothing checks which environment it runs in. They are for local development against a stand-in such as Floci; never set real credentials in them.
 
 ## Outbound proxy
 
@@ -132,7 +132,7 @@ Document type codes follow `schemas/codelists/gbn-ag-document-types.json` in tra
 
 The `PURPOSE`, `INTERNAL_MARKET_PURPOSE` and `GOODS_CERTIFIED_AS` clauses carry CAPITAL_CASE codes from `gbn-ag-purposes.json`, `gbn-ag-internal-market-purposes.json` and `gbn-ag-goods-certified-as.json` in trade-imports-schemas, each with its list's `urlId`. The frontend stores its own keys, so `Clause` translates them when the event is built and stored notifications keep the keys. A stored key with no code in `Clause` is sent unchanged and logged at warn, so the value still reaches PIMS and the missing code shows in the logs; a value added to a frontend list needs its code added to the schemas list and to `Clause`. Animal identifiers carry the `animal_identifier_types` list's `urlId`.
 
-`exchangedDocument.issuer` is the consignment contact: the person responsible for the consignment. PIMS name the person from the submitting actor on the event.
+The event carries no `exchangedDocument.issuer`: the contact address page is out of the journey.
 
 Open gaps, where the event leaves a field empty until the source data or a decision exists:
 

@@ -7,6 +7,7 @@ import com.mongodb.client.model.Updates;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -988,20 +989,9 @@ class NotificationIT extends IntegrationBase {
             Filters.eq("referenceNumber", referenceNumber),
             Updates.set("notification.commodities.0.typeOfCommodity", "Domestic"));
 
-        // When — the stored draft is read and saved again by a client that still sends the field
-        NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
-            .orElseThrow();
-        assertThat(stored.getNotification().getCommodities()).singleElement()
-            .satisfies(commodity -> assertThat(commodity.getName()).isEqualTo("Live cattle"));
-        Map<String, Object> staleClientBody = Map.of("notification", Map.of(
-            "referenceNumber", referenceNumber,
-            "concurrencyToken", stored.getConcurrencyToken(),
-            "origin", Map.of("countryCode", "CH", "requiresRegionCode", "no"),
+        // When — the stored draft is saved again by a client that still sends the field
+        Document rawNotification = saveRawAndReadStoredNotification(referenceNumber, Map.of(
             "commodities", List.of(Map.of("name", "Live cattle", "typeOfCommodity", "Domestic"))));
-        webClient("NoAuth")
-            .put().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", referenceNumber)
-            .bodyValue(staleClientBody)
-            .exchange().expectStatus().isOk();
         submitAs(referenceNumber, DEFAULT_TRADER_ORG_ID);
 
         assertThat(NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
@@ -1010,10 +1000,20 @@ class NotificationIT extends IntegrationBase {
         assertThat(submittedOutboxEvent().getData().toString()).doesNotContain("typeOfCommodity");
 
         // And — the re-save sheds the field from the stored document
-        Document rawNotification = NotificationTestSupport.storedDocument(mongoTemplate, referenceNumber)
-            .get("notification", Document.class);
         assertThat(rawNotification.getList("commodities", Document.class)).singleElement()
             .satisfies(commodity -> assertThat(commodity).doesNotContainKey("typeOfCommodity"));
+    }
+
+    @Test
+    void put_shouldAcceptTheSaveAndStoreNoConsignmentParty_whenAnOlderClientStillSendsOne() {
+        String referenceNumber = createDraftReference(createNotificationDto("CH", "Live cattle"));
+        Document storedNotification = saveRawAndReadStoredNotification(referenceNumber, Map.of(
+            "origin", Map.of("countryCode", "CH", "requiresRegionCode", "no", "internalReference", "REF-123"),
+            "consignment", Map.of("name", "Animal and Plant Health Agency")));
+
+        assertThat(storedNotification.get("origin", Document.class))
+            .containsEntry("internalReference", "REF-123");
+        assertThat(storedNotification.keySet()).containsExactlyInAnyOrder("origin", "commodities");
     }
 
     @Test
@@ -1299,6 +1299,24 @@ class NotificationIT extends IntegrationBase {
 
         assertThat(restored.getStatus()).isEqualTo(NotificationStatus.SUBMITTED);
         assertThat(restored.getSubmittedAt()).isEqualTo(submittedAt);
+    }
+
+    private Document saveRawAndReadStoredNotification(String referenceNumber,
+                                                      Map<String, Object> notificationFieldOverrides) {
+        NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, referenceNumber)
+            .orElseThrow();
+        Map<String, Object> notification = new HashMap<>(Map.of(
+            "referenceNumber", referenceNumber,
+            "concurrencyToken", stored.getConcurrencyToken(),
+            "origin", Map.of("countryCode", "CH", "requiresRegionCode", "no"),
+            "commodities", List.of(Map.of("name", "Live cattle"))));
+        notification.putAll(notificationFieldOverrides);
+        webClient("NoAuth")
+            .put().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}", referenceNumber)
+            .bodyValue(Map.of("notification", notification))
+            .exchange().expectStatus().isOk();
+        return NotificationTestSupport.storedDocument(mongoTemplate, referenceNumber)
+            .get("notification", Document.class);
     }
 
     private String createDraftReference() {
@@ -1935,7 +1953,6 @@ class NotificationIT extends IntegrationBase {
         assertThat(notification.getOrigin().getInternalReference()).isNull();
         assertThat(notification.getAdditionalDetails().getUnweanedAnimals()).isNull();
         assertThat(notification.getTransport()).isNull();
-        assertThat(notification.getConsignment()).isNull();
         assertThat(notification.getCommodities().getFirst())
             .extracting(
                 Commodity::getTotalNoOfAnimals,
@@ -1961,7 +1978,6 @@ class NotificationIT extends IntegrationBase {
         assertThat(actual.getConsignee()).isEqualTo(expected.getConsignee());
         assertThat(actual.getImporter()).isEqualTo(expected.getImporter());
         assertThat(actual.getDestination()).isEqualTo(expected.getDestination());
-        assertThat(actual.getConsignment()).isEqualTo(expected.getConsignment());
         assertThat(actual.getCphNumber()).isEqualTo(expected.getCphNumber());
         assertThat(actual.getTransport()).isEqualTo(expected.getTransport());
     }
@@ -2706,7 +2722,6 @@ class NotificationIT extends IntegrationBase {
             .consignee(NotificationTestData.consignees().getFirst())
             .importer(NotificationTestData.importers().getFirst())
             .destination(NotificationTestData.destinations().getFirst())
-            .consignment(NotificationTestData.consignments().getFirst())
             .cphNumber("12/345/6789")
             .transport(Transport.builder()
                 .portOfEntry("GBDVR")

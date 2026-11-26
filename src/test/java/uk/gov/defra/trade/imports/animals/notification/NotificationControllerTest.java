@@ -23,7 +23,6 @@ import uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter;
 import static uk.gov.defra.trade.imports.animals.filter.TraderOrganisationHeaderFilter.ORGANISATION_ID_HEADER;
 import static uk.gov.defra.trade.imports.animals.filter.RequestTracingFilter.TRACE_ID_HEADER_PROPERTY;
 import static uk.gov.defra.trade.imports.animals.notification.NotificationController.HEADER_USER_ID;
-import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignments;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.consignors;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.destinations;
 import static uk.gov.defra.trade.imports.animals.utils.NotificationTestData.species;
@@ -168,7 +167,6 @@ class NotificationControllerTest {
                 .consignor(consignors().getFirst())
                 .destination(destinations().getFirst())
                 .transport(Transport.builder().transporter(transporters().getFirst()).build())
-                .consignment(consignments().getFirst())
                 .build();
 
             NotificationAggregate savedNotification = new NotificationAggregate();
@@ -181,7 +179,6 @@ class NotificationControllerTest {
             savedNotification.getNotification().setConsignor(consignors().getFirst());
             savedNotification.getNotification().setDestination(destinations().getFirst());
             savedNotification.getNotification().setTransport(Transport.builder().transporter(transporters().getFirst()).build());
-            savedNotification.getNotification().setConsignment(consignments().getFirst());
 
             when(notificationService.saveNotification(any(NotificationDto.class), any(), any(), anyString()))
                 .thenReturn(savedNotification);
@@ -213,13 +210,7 @@ class NotificationControllerTest {
                 .andExpect(jsonPath("$.notification.transport.transporter.name").value(transporters().getFirst().getName()))
                 .andExpect(jsonPath("$.notification.transport.transporter.address").value(transporters().getFirst().getAddress()))
                 .andExpect(jsonPath("$.notification.transport.transporter.approvalNumber").value(transporters().getFirst().getApprovalNumber()))
-                .andExpect(jsonPath("$.notification.transport.transporter.type").value(transporters().getFirst().getType()))
-                .andExpect(jsonPath("$.notification.consignment.name")
-                    .value(consignments().getFirst().getName()))
-                .andExpect(jsonPath("$.notification.consignment.address.addressLine1")
-                    .value(consignments().getFirst().getAddress().getAddressLine1()))
-                .andExpect(jsonPath("$.notification.consignment.address.countryCode")
-                    .value(consignments().getFirst().getAddress().getCountryCode()));
+                .andExpect(jsonPath("$.notification.transport.transporter.type").value(transporters().getFirst().getType()));
         }
 
         @Test

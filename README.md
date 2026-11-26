@@ -1,6 +1,8 @@
 # trade-imports-animals-backend
 
-Core delivery Java Spring Boot backend template.
+Spring Boot service that stores animals import notifications and their
+accompanying documents, and publishes their outbox events. It listens on port
+8085.
 
 * [Running the local stack](#running-the-local-stack)
 * [MongoDB](#mongodb)
@@ -14,9 +16,9 @@ Core delivery Java Spring Boot backend template.
 ### Running the local stack
 
 The full local environment (MongoDB, Floci, Redis, `cdp-uploader`, the
-stubs, and every trade-imports-animals service including this one) is the
+stubs, and every trade-imports service including this one) is the
 workspace stack in
-[DEFRA/trade-imports-animals-workspace](https://github.com/DEFRA/trade-imports-animals-workspace):
+[DEFRA/trade-imports-workspace](https://github.com/DEFRA/trade-imports-workspace):
 
 ```bash
 # from the workspace root
@@ -28,7 +30,7 @@ tim docker down           # tear down and wipe volumes
 
 To run only the infrastructure this service needs rather than the full stack,
 limit it to the `database` and `infrastructure` profiles (MongoDB, Floci,
-Redis):
+Redis and `cdp-uploader`):
 
 ```bash
 tim docker up --profile database --profile infrastructure
@@ -56,9 +58,12 @@ The workspace stack provides MongoDB via the `database` profile (see
 Alternatively install MongoDB locally:
 
 - Install [MongoDB](https://www.mongodb.com/docs/manual/tutorial/#installation) on your local machine
-- Start MongoDB:
+- Start MongoDB as a single-member replica set. The service writes a
+  notification and its outbox event in one transaction, and MongoDB allows
+  transactions only on a replica set:
 ```bash
-sudo mongod --dbpath ~/mongodb-cdp
+sudo mongod --replSet rs0 --dbpath ~/mongodb-cdp
+mongosh --eval 'rs.initiate()'
 ```
 
 #### MongoDB in CDP environments
@@ -78,13 +83,18 @@ You can use the CDP Terminal to access the environments' MongoDB.
 
 ### Testing
 
-Run the tests with:
-
-Tests run by running a full Spring Boot application backed by [Testcontainers](https://testcontainers.com/).
-Tests do not use mocking of any sort and read and write from the containerized database.
+Unit tests (`*Test.java`) run with Surefire:
 
 ```bash
 mvn test
+```
+
+Integration tests (`*IT.java`) start the full Spring Boot application against
+[Testcontainers](https://testcontainers.com/), so they need Docker. Failsafe
+runs them after the unit tests, then JaCoCo checks coverage:
+
+```bash
+mvn verify
 ```
 
 ### Running
@@ -116,12 +126,14 @@ mvn spring-boot:run
 
 ### SonarCloud
 
-Example SonarCloud configuration are available in the GitHub Action workflows.
+The SonarCloud scan is
+[.github/workflows/sonarcloud.yml](.github/workflows/sonarcloud.yml). It runs
+on every pull request and on every merge to `main`.
 
 ### Dependabot
 
-We have added a dependabot configuration file to the repository at
-[.github/dependabot.yml](.github/dependabot.yml).
+[.github/dependabot.yml](.github/dependabot.yml) proposes updates to direct
+Maven dependencies and GitHub Actions every Monday.
 
 
 ### About the licence
