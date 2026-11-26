@@ -1,5 +1,7 @@
 package uk.gov.defra.trade.imports.animals.metrics;
 
+import com.mongodb.ErrorCategory;
+import com.mongodb.MongoServerException;
 import com.mongodb.event.CommandFailedEvent;
 import com.mongodb.event.CommandListener;
 import com.mongodb.event.CommandSucceededEvent;
@@ -11,8 +13,9 @@ import org.springframework.stereotype.Component;
 
 /**
  * Records every MongoDB command as an external call to {@code mongodb}, its operation the command
- * name, or {@code other} for a command outside the fixed set. A command fails when it errors or
- * when its reply reports a {@code writeConcernError} or a write error other than a duplicate key.
+ * name, or {@code other} for a command outside the fixed set. A command fails when it errors with
+ * anything but a duplicate key, or when its reply reports a {@code writeConcernError} or a write
+ * error other than a duplicate key.
  */
 @Component
 @RequiredArgsConstructor
@@ -50,10 +53,22 @@ public class MongoCallRecorder implements CommandListener {
 
   @Override
   public void commandFailed(CommandFailedEvent event) {
-    externalCallRecorder.recordFailure(
-        callOf(event.getCommandName()),
-        Duration.ofNanos(event.getElapsedTime(TimeUnit.NANOSECONDS)),
-        event.getThrowable());
+    ExternalCall call = callOf(event.getCommandName());
+    Duration elapsed = Duration.ofNanos(event.getElapsedTime(TimeUnit.NANOSECONDS));
+    if (isDuplicateKey(event.getThrowable())) {
+      externalCallRecorder.recordSuccess(call, elapsed);
+    } else {
+      externalCallRecorder.recordFailure(call, elapsed, event.getThrowable());
+    }
+  }
+
+  static boolean isDuplicateKey(int errorCode) {
+    return ErrorCategory.fromErrorCode(errorCode) == ErrorCategory.DUPLICATE_KEY;
+  }
+
+  private static boolean isDuplicateKey(Throwable failure) {
+    return failure instanceof MongoServerException serverFailure
+        && isDuplicateKey(serverFailure.getCode());
   }
 
   private static ExternalCall callOf(String commandName) {
