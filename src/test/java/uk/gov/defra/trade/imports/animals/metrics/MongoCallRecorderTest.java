@@ -89,15 +89,8 @@ class MongoCallRecorderTest {
             ExternalCallRecorder.class,
             () ->
                 listener.commandFailed(
-                    new CommandFailedEvent(
-                        null,
-                        1,
-                        1,
-                        CONNECTION,
-                        DATABASE_NAME,
-                        "insert",
-                        TimeUnit.MILLISECONDS.toNanos(3),
-                        new MongoSocketReadException("closed", new ServerAddress()))));
+                    failed(
+                        "insert", 3, new MongoSocketReadException("closed", new ServerAddress()))));
 
     assertThat(totalDurationMillis(meterRegistry, mongodb("insert"))).isEqualTo(3);
     assertThat(failureTotal(meterRegistry, mongodb("insert"))).isEqualTo(1);
@@ -120,16 +113,7 @@ class MongoCallRecorderTest {
                 """),
             new ServerAddress());
 
-    listener.commandFailed(
-        new CommandFailedEvent(
-            null,
-            1,
-            1,
-            CONNECTION,
-            DATABASE_NAME,
-            "findAndModify",
-            TimeUnit.MILLISECONDS.toNanos(2),
-            duplicateKey));
+    listener.commandFailed(failed("findAndModify", 2, duplicateKey));
 
     assertThat(durationSampleCount(meterRegistry, mongodb("findAndModify"))).isEqualTo(1);
     assertThat(failureTotal(meterRegistry, mongodb("findAndModify"))).isZero();
@@ -219,5 +203,18 @@ class MongoCallRecorderTest {
         commandName,
         reply,
         TimeUnit.MILLISECONDS.toNanos(elapsedMillis));
+  }
+
+  private static CommandFailedEvent failed(
+      String commandName, long elapsedMillis, Throwable failure) {
+    return new CommandFailedEvent(
+        null,
+        1,
+        1,
+        CONNECTION,
+        DATABASE_NAME,
+        commandName,
+        TimeUnit.MILLISECONDS.toNanos(elapsedMillis),
+        failure);
   }
 }
