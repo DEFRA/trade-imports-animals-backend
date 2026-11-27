@@ -22,6 +22,7 @@
     <java.version>25</java.version>
     <maven.compiler.source>25</maven.compiler.source>
     <maven.compiler.target>25</maven.compiler.target>
+    <httpcore5.version>5.4.4</httpcore5.version>
     <jjwt.version>0.13.0</jjwt.version>
     <mapstruct.version>1.6.3</mapstruct.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
