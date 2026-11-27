@@ -9,6 +9,17 @@ updates:
     directory: /
     open-pull-requests-limit: 10
 
+    # One rolling PR for every patch and minor bump. Majors match no group, so
+    # Dependabot raises each one on its own.
+    groups:
+      patch-and-minor:
+        applies-to: version-updates
+        update-types:
+          - 'patch'
+          - 'minor'
+        patterns:
+          - '*'
+
     # A held package stays at its current version: Dependabot does not propose
     # the versions it breaks, security fixes among them.
     ignore:
@@ -38,6 +49,18 @@ updates:
   # Update GitHub Actions
   - package-ecosystem: github-actions
     directory: /
+
+    # Same policy as Maven: one rolling PR for patch and minor bumps, majors
+    # raised one at a time. Action majors change inputs or runtime, so they
+    # are the ones worth reading.
+    groups:
+      patch-and-minor:
+        applies-to: version-updates
+        update-types:
+          - 'patch'
+          - 'minor'
+        patterns:
+          - '*'
 
     # Check for updates on this schedule, local time
     schedule:
