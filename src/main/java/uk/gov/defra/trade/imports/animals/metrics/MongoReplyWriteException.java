@@ -13,14 +13,13 @@ final class MongoReplyWriteException extends RuntimeException {
   }
 
   static Optional<MongoReplyWriteException> reportedBy(BsonDocument reply) {
-    int duplicateKey = 11000;
     List<String> writeFailures = new ArrayList<>();
     BsonValue writeErrors = reply.get("writeErrors");
     if (writeErrors != null && writeErrors.isArray()) {
       List<String> labels =
           writeErrors.asArray().stream()
               .map(BsonValue::asDocument)
-              .filter(error -> error.getNumber("code").intValue() != duplicateKey)
+              .filter(error -> !MongoCallRecorder.isDuplicateKey(error.getNumber("code").intValue()))
               .map(MongoReplyWriteException::errorCodeLabelOf)
               .toList();
       if (!labels.isEmpty()) {
