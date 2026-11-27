@@ -92,6 +92,13 @@ class GbnAgMapperTest {
         }
 
         @Test
+        void shouldSendNoIssuerAnywhereInTheEventData() {
+            JsonNode eventData = new ObjectMapper().valueToTree(result);
+
+            assertThat(eventData.findValues("issuer")).isEmpty();
+        }
+
+        @Test
         void shouldMapEachAccompanyingDocumentToAReferenceDocumentInOrder() {
             assertThat(result.exchangedDocument().referenceDocument()).containsExactly(
                 new ReferencedDocument(
