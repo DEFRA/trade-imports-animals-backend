@@ -58,7 +58,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DuplicateKeyException;
@@ -113,12 +112,12 @@ class NotificationServiceTest {
 
     private NotificationService notificationService;
 
-    @InjectMocks
     private DefaultLockingTaskExecutor lockingTaskExecutor;
 
     @BeforeEach
     void setUp() {
         documentService = new DocumentService(accompanyingDocumentRepository, uploadSessionRepository, notificationRepository);
+        lockingTaskExecutor = new DefaultLockingTaskExecutor(lockProvider);
         lenient().when(lockProvider.lock(any()))
             .thenReturn(Optional.of(mock(SimpleLock.class)));
         notificationService = buildService(new NotificationTtlConfig(null, "local"));

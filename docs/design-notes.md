@@ -106,6 +106,10 @@ The browser uploads straight to cdp-uploader, so the uploaded bytes never arrive
 
 `AwsConfig` uses static credentials whenever `APP_AWS_ENDPOINT_OVERRIDE` and both `app.aws.access-key-id` and `app.aws.secret-access-key` are set, and nothing checks which environment it runs in. They are for local development against a stand-in such as Floci; never set real credentials in them.
 
+## AWS HTTP client
+
+`AwsConfig` builds the S3, SNS and STS clients without naming an HTTP client, so each uses the AWS SDK's default sync client, `apache5-client` (Apache HttpClient 5). `apache5-client` pulls in `httpclient5`, but the pom also declares it directly, and that declaration wins, so it must stay at `runtime` scope or the clients fail to build at start-up with `NoClassDefFoundError`. Spring Boot manages `httpcore5` at an older line than `httpclient5` is built against, so the pom sets `httpcore5.version` to the version that `httpclient5` release names. Move the two together.
+
 ## Outbound proxy
 
 On CDP all egress except the database goes through the platform proxy named by `HTTP_PROXY`. `ProxyConfig` sets the JVM proxy properties and the default `ProxySelector`, so every HTTP client uses it; the proxy routes internal `*.cdp-int.defra.cloud` URLs itself. A malformed `HTTP_PROXY` is logged with any credentials replaced by `***`.
