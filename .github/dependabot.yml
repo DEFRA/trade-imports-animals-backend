@@ -14,6 +14,12 @@ updates:
     allow:
       - dependency-type: direct
 
+    # springdoc-openapi 3 needs Spring Boot 4. Held until this service
+    # moves to Boot 4.
+    ignore:
+      - dependency-name: 'org.springdoc:springdoc-openapi*'
+        versions: ['>= 3']
+
   # Update GitHub Actions
   - package-ecosystem: github-actions
     directory: /
