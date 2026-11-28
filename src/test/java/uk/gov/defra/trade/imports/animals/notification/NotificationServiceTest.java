@@ -123,6 +123,12 @@ class NotificationServiceTest {
         notificationService = buildService(new NotificationTtlConfig(null, "local"));
     }
 
+    private static final String FULFILMENT_OBLIGATION_ID = "a01b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+
+    private static Document fulfilment(String value) {
+        return Document.parse("{\"obligationId\":\"" + FULFILMENT_OBLIGATION_ID + "\",\"value\":\"" + value + "\"}");
+    }
+
     private static ConsignmentParty literalParty() {
         return ConsignmentParty.builder()
             .name("Astra Rosales")
@@ -222,7 +228,6 @@ class NotificationServiceTest {
     private NotificationService buildService(NotificationTtlConfig ttlConfig, Clock clock) {
         return new NotificationService(notificationRepository, auditRepository,
             documentService, outboxService, lockingTaskExecutor,
-            new NotificationCopyMapper(),
             Mappers.getMapper(NotificationContentMapper.class),
             referenceNumberGenerator, ttlConfig, clock,
             Duration.ZERO, 54, 50);
@@ -1737,55 +1742,61 @@ class NotificationServiceTest {
         }
 
         @Test
-        void copyNotification_shouldRetainCopiedFields() {
+        void copyNotification_shouldCopyTheSourceFulfilmentsPayload() {
             String sourceRef = "GBN-AG-26-SRC002";
-            Origin origin = Origin.builder()
-                .countryCode("DE")
-                .requiresRegionCode("yes")
-                .internalReference("INTERNAL-REF")
-                .build();
-            AdditionalDetails additionalDetails = new AdditionalDetails("Breeding", "yes");
-            Commodity commodity = Commodity.builder()
-                .name("Live bovine animals")
-                .totalNoOfAnimals(10)
-                .totalNoOfPackages(5)
-                .species(List.of(species()))
-                .build();
-
+            String newRef = "GBN-AG-26-CPY002";
+            List<Document> sourceFulfilments = List.of(fulfilment("FR"));
             NotificationAggregate source = aggregateIn(sourceRef, DRAFT)
                 .concurrencyToken(0L)
-                .notification(Notification.builder()
-                    .origin(origin)
-                    .commodities(List.of(commodity))
-                    .reasonForImport("internalMarket")
-                    .additionalDetails(additionalDetails)
-                    .consignor(consignors().getFirst())
-                    .destination(destinations().getFirst())
-                    .cphNumber("12/345/6789")
-                    .transport(Transport.builder()
-                        .portOfEntry("GBDVR")
-                        .arrivalDate(LocalDate.parse("2026-05-01"))
-                        .transporter(transporters().getFirst())
-                        .build())
-                    .build())
+                .fulfilments(new ArrayList<>(sourceFulfilments))
+                .notification(Notification.builder().build())
                 .build();
 
-            NotificationAggregate saved = copyAndCaptureSaved(source, "GBN-AG-26-CPY002");
+            NotificationAggregate saved = copyAndCaptureSaved(source, newRef);
 
             assertThat(saved.getStatus()).isEqualTo(NotificationStatus.DRAFT);
-            assertThat(saved.getNotification().getOrigin().getCountryCode()).isEqualTo("DE");
-            assertThat(saved.getNotification().getOrigin().getRequiresRegionCode()).isEqualTo("yes");
-            assertThat(saved.getNotification().getReasonForImport()).isEqualTo("internalMarket");
-            assertThat(saved.getNotification().getCommodities().getFirst().getName()).isEqualTo("Live bovine animals");
-            assertThat(saved.getNotification().getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
-            assertThat(saved.getNotification().getConsignor()).isEqualTo(consignors().getFirst());
-            assertThat(saved.getNotification().getDestination()).isEqualTo(destinations().getFirst());
-            assertThat(saved.getNotification().getCphNumber()).isEqualTo("12/345/6789");
+            assertThat(saved.getFulfilments()).isEqualTo(sourceFulfilments);
         }
 
         @Test
-        void copyNotification_shouldResetExcludedFields() {
+        void copyNotification_shouldCopyThePreAmendFulfilmentsPayloadRatherThanTheEditsInProgress() {
+            String sourceRef = "GBN-AG-26-AMD010";
+            String newRef = "GBN-AG-26-NEW011";
+            List<Document> submittedFulfilments = List.of(fulfilment("FR"));
+            List<Document> inProgressFulfilments = List.of(fulfilment("DE"));
+            NotificationAggregate source = aggregateIn(sourceRef, AMEND)
+                .concurrencyToken(0L)
+                .fulfilments(new ArrayList<>(inProgressFulfilments))
+                .preAmendFulfilments(new ArrayList<>(submittedFulfilments))
+                .notification(Notification.builder().build())
+                .build();
+
+            NotificationAggregate saved = copyAndCaptureSaved(source, newRef);
+
+            assertThat(saved.getFulfilments()).isEqualTo(submittedFulfilments);
+        }
+
+        @Test
+        void copyNotification_shouldDeepCopyTheFulfilmentsPayload() {
             String sourceRef = "GBN-AG-26-SRC003";
+            String newRef = "GBN-AG-26-CPY003";
+            Document entry = fulfilment("FR");
+            NotificationAggregate source = aggregateIn(sourceRef, DRAFT)
+                .concurrencyToken(0L)
+                .fulfilments(new ArrayList<>(List.of(entry)))
+                .notification(Notification.builder().build())
+                .build();
+
+            NotificationAggregate saved = copyAndCaptureSaved(source, newRef);
+            entry.put("value", "DE");
+
+            assertThat(saved.getFulfilments().getFirst().getString("value")).isEqualTo("FR");
+        }
+
+        @Test
+        void copyNotification_shouldStartWithTheContentOfANewlyCreatedNotification() {
+            String sourceRef = "GBN-AG-26-SRC004";
+            String newRef = "GBN-AG-26-CPY004";
             Commodity commodity = Commodity.builder()
                 .name("Cattle")
                 .commodityCode("0102")
@@ -1800,6 +1811,7 @@ class NotificationServiceTest {
                     .origin(Origin.builder().countryCode("FR").requiresRegionCode("no").internalReference("DO-NOT-COPY").build())
                     .commodities(List.of(commodity))
                     .additionalDetails(new AdditionalDetails("Slaughter", "no"))
+                    .consignor(consignors().getFirst())
                     .transport(Transport.builder()
                         .portOfEntry("GBFXT")
                         .arrivalDate(LocalDate.parse("2026-06-01"))
@@ -1807,18 +1819,13 @@ class NotificationServiceTest {
                     .build())
                 .build();
 
-            NotificationAggregate saved = copyAndCaptureSaved(source, "GBN-AG-26-CPY003");
+            NotificationAggregate saved = copyAndCaptureSaved(source, newRef);
 
-            assertThat(saved.getNotification().getOrigin().getInternalReference()).isNull();
-            assertThat(saved.getNotification().getAdditionalDetails().getUnweanedAnimals()).isNull();
+            assertThat(saved.getNotification().getOrigin()).isNull();
+            assertThat(saved.getNotification().getAdditionalDetails()).isNull();
+            assertThat(saved.getNotification().getConsignor()).isNull();
             assertThat(saved.getNotification().getTransport()).isNull();
-            Commodity copiedCommodity = saved.getNotification().getCommodities().getFirst();
-            assertThat(copiedCommodity.getName()).isEqualTo("Cattle");
-            assertThat(copiedCommodity.getCommodityCode()).isEqualTo("0102");
-            assertThat(copiedCommodity.getDescription()).isEqualTo("Live cattle");
-            assertThat(copiedCommodity.getTotalNoOfAnimals()).isNull();
-            assertThat(copiedCommodity.getTotalNoOfPackages()).isNull();
-            assertThat(copiedCommodity.getSpecies()).isEmpty();
+            assertThat(saved.getNotification().getCommodities()).isEmpty();
         }
 
         @Test
@@ -1936,16 +1943,14 @@ class NotificationServiceTest {
         }
 
         @Test
-        void copyNotification_shouldPersistAndEmitTheSourceConsignorLiteral() {
+        void copyNotification_shouldPersistAndEmitTheSameFulfilmentsPayload() {
             String sourceRef = "GBN-AG-26-CPY-REF";
             String newRef = "GBN-AG-26-CPY-OUT";
-            NotificationAggregate source = NotificationAggregate.builder()
-                .referenceNumber(sourceRef)
-                .status(SUBMITTED)
-                .notification(Notification.builder()
-                    .consignor(literalParty())
-                    .build())
+            List<Document> sourceFulfilments = List.of(fulfilment("FR"));
+            NotificationAggregate source = aggregateIn(sourceRef, SUBMITTED)
                 .concurrencyToken(0L)
+                .fulfilments(new ArrayList<>(sourceFulfilments))
+                .notification(Notification.builder().build())
                 .build();
 
             when(notificationRepository.findByReferenceNumberAndOrganisationId(sourceRef, ORG_ID))
@@ -1961,15 +1966,13 @@ class NotificationServiceTest {
             ArgumentCaptor<NotificationAggregate> savedCaptor =
                 ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(notificationRepository).save(savedCaptor.capture());
-            assertThat(savedCaptor.getValue().getNotification().getConsignor())
-                .isEqualTo(literalParty());
+            assertThat(savedCaptor.getValue().getFulfilments()).isEqualTo(sourceFulfilments);
 
             ArgumentCaptor<NotificationAggregate> outboxCaptor =
                 ArgumentCaptor.forClass(NotificationAggregate.class);
             verify(outboxService).appendEvent(
                 outboxCaptor.capture(), eq(OutboxEventType.NOTIFICATION_CREATED), eq("trace"), eq(actor));
-            assertThat(outboxCaptor.getValue().getNotification().getConsignor())
-                .isEqualTo(literalParty());
+            assertThat(outboxCaptor.getValue().getFulfilments()).isEqualTo(sourceFulfilments);
         }
     }
 

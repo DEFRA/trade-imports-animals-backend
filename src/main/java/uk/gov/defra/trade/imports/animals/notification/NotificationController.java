@@ -82,7 +82,9 @@ public class NotificationController {
     }
 
     @PostMapping("/{referenceNumber}/copy")
-    @Operation(summary = "Copy notification", description = "Creates a new DRAFT notification copied from an existing one")
+    @Operation(summary = "Copy notification",
+        description = "Creates a new DRAFT notification carrying the answer payload of the existing "
+            + "notification's submitted version. The new draft's notification content starts empty.")
     @ApiResponse(responseCode = "200", description = "New DRAFT notification created",
         content = @Content(schema = @Schema(implementation = NotificationAggregate.class)))
     @ApiResponse(responseCode = "400", description = "Source notification is not in a copyable status", content = @Content)

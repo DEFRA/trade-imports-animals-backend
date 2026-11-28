@@ -50,7 +50,6 @@ public class NotificationService {
     private final DocumentService documentService;
     private final OutboxService outboxService;
     private final LockingTaskExecutor lockingTaskExecutor;
-    private final NotificationCopyMapper notificationCopyMapper;
     private final NotificationContentMapper notificationContentMapper;
     private final ReferenceNumberGenerator referenceNumberGenerator;
     private final NotificationTtlConfig ttlConfig;
@@ -65,7 +64,6 @@ public class NotificationService {
         DocumentService documentService,
         OutboxService outboxService,
         LockingTaskExecutor lockingTaskExecutor,
-        NotificationCopyMapper notificationCopyMapper,
         NotificationContentMapper notificationContentMapper,
         ReferenceNumberGenerator referenceNumberGenerator,
         NotificationTtlConfig ttlConfig,
@@ -78,7 +76,6 @@ public class NotificationService {
         this.documentService = documentService;
         this.outboxService = outboxService;
         this.lockingTaskExecutor = lockingTaskExecutor;
-        this.notificationCopyMapper = notificationCopyMapper;
         this.notificationContentMapper = notificationContentMapper;
         this.referenceNumberGenerator = referenceNumberGenerator;
         this.ttlConfig = ttlConfig;
@@ -146,8 +143,16 @@ public class NotificationService {
                 "Copy source " + referenceNumber + " has advanced from expected concurrencyToken "
                     + expectedConcurrencyToken + " to " + source.getConcurrencyToken());
         }
-        log.info("Copying notification {}", referenceNumber);
-        return createNotification(notificationCopyMapper.toCopyDto(source), correlationId, actor, organisationId);
+        boolean copyingPreAmendSnapshot = source.getStatus() == NotificationStatus.AMEND;
+        List<Document> fulfilmentsToCopy = copyingPreAmendSnapshot
+            ? source.getPreAmendFulfilments()
+            : source.getFulfilments();
+        log.info("Copying notification {} in status {} from its {} answers", referenceNumber,
+            source.getStatus(), copyingPreAmendSnapshot ? "pre-amendment" : "own");
+        NotificationDto copyDto = NotificationDto.builder()
+            .fulfilments(fulfilmentsToCopy == null ? null : deepCopyFulfilments(fulfilmentsToCopy))
+            .build();
+        return createNotification(copyDto, correlationId, actor, organisationId);
     }
 
     @Timed("service.getFulfilments.time")

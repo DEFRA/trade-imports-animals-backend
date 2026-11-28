@@ -9,11 +9,10 @@ import lombok.experimental.SuperBuilder;
 import org.bson.Document;
 
 /**
- * Inbound request shape: the {@code notification} member of {@link SaveNotificationDto}, and the
- * internal carrier {@link NotificationCopyMapper} hands to the create path. It is never a response
- * body — every endpoint returns {@link NotificationAggregate} or one of the view projections — so
- * the aggregate's server-stamped {@code created}/{@code updated} instants are deliberately absent
- * here; a client cannot set them and the server would discard them.
+ * Inbound request shape: the {@code notification} member of {@link SaveNotificationDto}. It is
+ * never a response body — every endpoint returns {@link NotificationAggregate} or one of the view
+ * projections — so the aggregate's server-stamped {@code created}/{@code updated} instants are
+ * deliberately absent here; a client cannot set them and the server would discard them.
  */
 @Data
 @SuperBuilder(toBuilder = true)

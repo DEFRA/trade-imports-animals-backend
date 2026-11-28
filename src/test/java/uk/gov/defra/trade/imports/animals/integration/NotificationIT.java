@@ -1781,22 +1781,6 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void copy_shouldRetainTheConsignorLiteral() {
-        NotificationDto sourceDto = createNotificationDto("DE", "Live cattle");
-        sourceDto.setConsignor(literalConsignor());
-
-        NotificationAggregate source = createAndRead(sourceDto);
-
-        assertThat(source).isNotNull();
-        assertThat(source.getNotification().getConsignor()).isEqualTo(literalConsignor());
-
-        NotificationAggregate copy = copyAndRead(source);
-
-        assertThat(copy).isNotNull();
-        assertThat(copy.getNotification().getConsignor()).isEqualTo(literalConsignor());
-    }
-
-    @Test
     void delete_shouldCascadeDeleteAccompanyingDocuments_whenNotificationDeleted() {
         // Given — create a notification
         String referenceNumber = createDraftReference(createNotificationDto("FR", "Live pigs"));
@@ -1936,31 +1920,6 @@ class NotificationIT extends IntegrationBase {
         assertThat(copy.getOrganisationId()).isEqualTo(DEFAULT_TRADER_ORG_ID);
     }
 
-    private void assertCopyRetainsIdentificationFields(NotificationAggregate copy) {
-        Notification notification = copy.getNotification();
-        assertThat(notification.getOrigin())
-            .extracting(Origin::getCountryCode, Origin::getRequiresRegionCode)
-            .containsExactly("DE", "yes");
-        assertThat(notification.getReasonForImport()).isEqualTo("internalMarket");
-        assertThat(notification.getCommodities()).hasSize(1);
-        assertThat(notification.getCommodities().getFirst().getName()).isEqualTo("Live bovine animals");
-        assertThat(notification.getAdditionalDetails().getCertifiedFor()).isEqualTo("Breeding");
-        assertThat(notification.getCphNumber()).isEqualTo("12/345/6789");
-    }
-
-    private void assertCopyClearsExcludedFields(NotificationAggregate copy) {
-        Notification notification = copy.getNotification();
-        assertThat(notification.getOrigin().getInternalReference()).isNull();
-        assertThat(notification.getAdditionalDetails().getUnweanedAnimals()).isNull();
-        assertThat(notification.getTransport()).isNull();
-        assertThat(notification.getCommodities().getFirst())
-            .extracting(
-                Commodity::getTotalNoOfAnimals,
-                Commodity::getTotalNoOfPackages,
-                Commodity::getSpecies)
-            .containsExactly(null, null, List.of());
-    }
-
     private void assertSourceUnchangedAfterCopy(String sourceRef) {
         NotificationAggregate original = NotificationTestSupport.findByReferenceNumber(mongoTemplate, sourceRef).orElseThrow();
         assertThat(original.getNotification().getOrigin().getInternalReference()).isEqualTo("INTERNAL-DO-NOT-COPY");
@@ -2034,9 +1993,11 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void copy_shouldCreateNewDraftFromSourceNotification() {
-        // Given — create a source notification with a full set of fields
+    void copy_shouldCreateNewDraftCarryingTheSourceFulfilmentsPayloadWithEmptyContent() {
+        // Given — a source notification with a full set of content fields and a fulfilments payload
+        Document fulfilment = fulfilment("FR");
         NotificationDto sourceDto = sourceNotificationWithAllOperators();
+        sourceDto.setFulfilments(List.of(fulfilment));
 
         NotificationAggregate source = webClient("NoAuth")
             .post()
@@ -2063,27 +2024,18 @@ class NotificationIT extends IntegrationBase {
             .returnResult().getResponseBody();
 
         assertCopiedNotificationDraft(copy, sourceRef);
-        assertCopyRetainsIdentificationFields(copy);
-        assertCopyClearsExcludedFields(copy);
+        assertThat(copy.getFulfilments()).containsExactly(fulfilment);
+        assertThat(copy.getNotification().getOrigin()).isNull();
+        assertThat(copy.getNotification().getCommodities()).isEmpty();
+        assertThat(copy.getNotification().getAdditionalDetails()).isNull();
+        assertThat(copy.getNotification().getConsignor()).isNull();
+        assertThat(copy.getNotification().getTransport()).isNull();
+
+        // Then — the source's own content and fulfilments are unchanged
         assertSourceUnchangedAfterCopy(sourceRef);
-    }
-
-    @Test
-    void copy_shouldRetainAllOperatorAddresses() {
-        NotificationDto sourceDto = sourceNotificationWithAllOperators();
-
-        NotificationAggregate source = createAndRead(sourceDto);
-
-        assertThat(source).isNotNull();
-
-        NotificationAggregate copy = copyAndRead(source);
-
-        assertThat(copy).isNotNull();
-        assertThat(copy.getNotification().getPlaceOfOrigin()).isEqualTo(NotificationTestData.placesOfOrigin().getFirst());
-        assertThat(copy.getNotification().getConsignor()).isEqualTo(NotificationTestData.consignors().getFirst());
-        assertThat(copy.getNotification().getConsignee()).isEqualTo(NotificationTestData.consignees().getFirst());
-        assertThat(copy.getNotification().getImporter()).isEqualTo(NotificationTestData.importers().getFirst());
-        assertThat(copy.getNotification().getDestination()).isEqualTo(NotificationTestData.destinations().getFirst());
+        NotificationAggregate original = NotificationTestSupport.findByReferenceNumber(mongoTemplate, sourceRef).orElseThrow();
+        assertThat(original.getNotification().getConsignor()).isEqualTo(NotificationTestData.consignors().getFirst());
+        assertThat(original.getFulfilments()).containsExactly(fulfilment);
     }
 
     @Test
@@ -2114,8 +2066,11 @@ class NotificationIT extends IntegrationBase {
 
     @Test
     void copy_shouldCreateNewDraftFromSubmittedNotification() {
-        // Given — create a notification and submit it
-        String sourceRef = createDraftReference(createNotificationDto("IE", "Live cattle"));
+        // Given — create a notification carrying a fulfilments payload and submit it
+        Document fulfilment = fulfilment("IE");
+        NotificationDto sourceDto = createNotificationDto("IE", "Live cattle");
+        sourceDto.setFulfilments(List.of(fulfilment));
+        String sourceRef = createDraftReference(sourceDto);
 
         submit(sourceRef);
 
@@ -2134,11 +2089,49 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class)
             .returnResult().getResponseBody();
 
-        // Then — copy is a new DRAFT with a different reference number
+        // Then — copy is a new DRAFT with a different reference number, carrying the source's payload
         assertThat(copy).isNotNull();
         assertThat(copy.getReferenceNumber()).isNotEqualTo(sourceRef);
         assertThat(copy.getReferenceNumber()).matches(REF_FORMAT_REGEX);
         assertThat(copy.getStatus()).isEqualTo(NotificationStatus.DRAFT);
+        assertThat(copy.getFulfilments()).containsExactly(fulfilment);
+    }
+
+    @Test
+    void copy_shouldCreateNewDraftFromThePreAmendFulfilmentsPayload_whenSourceIsAmending() {
+        // Given — a submitted notification, amended, whose payload is then changed again
+        Document submittedFulfilment = fulfilment("FR");
+        Document inProgressFulfilment = fulfilment("DE");
+        NotificationDto sourceDto = createNotificationDto("FR", "Live cattle");
+        sourceDto.setFulfilments(List.of(submittedFulfilment));
+        String referenceNumber = createDraftReference(sourceDto);
+        submit(referenceNumber);
+
+        webClient("NoAuth")
+            .post().uri(NOTIFICATION_ENDPOINT + "/{referenceNumber}/amend", referenceNumber)
+            .exchange().expectStatus().isOk();
+
+        NotificationDto edit = createNotificationDto("FR", "Live cattle");
+        edit.setFulfilments(List.of(inProgressFulfilment));
+        putWhileAmending(referenceNumber, edit);
+
+        Long amendVersion = currentConcurrencyToken(referenceNumber);
+
+        // When — the amendment is copied
+        NotificationAggregate copy = webClient("NoAuth")
+            .post()
+            .uri(uriBuilder -> uriBuilder
+                .path(NOTIFICATION_ENDPOINT + "/{referenceNumber}/copy")
+                .queryParam("concurrencyToken", amendVersion)
+                .build(referenceNumber))
+            .exchange()
+            .expectStatus().isOk()
+            .expectBody(NotificationAggregate.class)
+            .returnResult().getResponseBody();
+
+        // Then — the copy carries the submitted payload, not the edit in progress
+        assertThat(copy).isNotNull();
+        assertThat(copy.getFulfilments()).containsExactly(submittedFulfilment);
     }
 
     @Test
@@ -2221,9 +2214,13 @@ class NotificationIT extends IntegrationBase {
     }
 
     @Test
-    void copy_shouldCarryTheSourceConsignorLiteral_onCreatedOutbox_whenSourceIsSubmitted() {
-        // Given — submitted notification whose consignor is a literal copy
-        String sourceRef = createNotificationWithLiteralConsignor();
+    void copy_shouldStoreTheSourceFulfilmentsPayloadWithEmptyContent_andEmitNotificationCreated_whenSourceIsSubmitted() {
+        // Given — a submitted notification whose consignor is a literal copy and carries a fulfilments payload
+        Document fulfilment = fulfilment("CH");
+        NotificationDto sourceDto = createNotificationDto("CH", "Live cattle");
+        sourceDto.setConsignor(literalConsignor());
+        sourceDto.setFulfilments(List.of(fulfilment));
+        String sourceRef = createDraftReference(sourceDto);
         submitAs(sourceRef, DEFAULT_TRADER_ORG_ID);
 
         NotificationAggregate source = NotificationTestSupport.findByReferenceNumber(mongoTemplate, sourceRef).orElseThrow();
@@ -2241,22 +2238,17 @@ class NotificationIT extends IntegrationBase {
             .expectBody(NotificationAggregate.class).returnResult()
             .getResponseBody();
 
-        // Then — stored draft and Created outbox both carry the source's literal party
+        // Then
         assertThat(copy).isNotNull();
         NotificationAggregate stored = NotificationTestSupport.findByReferenceNumber(mongoTemplate, copy.getReferenceNumber())
             .orElseThrow();
-        assertThat(stored.getNotification().getConsignor()).isEqualTo(literalConsignor());
+        assertThat(stored.getFulfilments()).containsExactly(fulfilment);
+        assertThat(stored.getNotification().getConsignor()).isNull();
 
-        OutboxEvent created = outboxEventRepository.findAll().stream()
-            .filter(e -> e.getAggregateId().equals(OutboxService.buildAggregateId(copy.getReferenceNumber())))
-            .filter(e -> e.getEventType().endsWith("NotificationCreated"))
-            .findFirst()
-            .orElseThrow();
-        Map<String, Object> consignor = outboxConsignorParty(created);
-        assertThat(consignor).containsEntry("name", "Astra Rosales");
-        assertThat((Map<String, Object>) consignor.get("postalAddress"))
-            .containsEntry("postcodeCode", "30055")
-            .containsEntry("cityName", "Vernier");
+        boolean createdEventWritten = outboxEventRepository.findAll().stream()
+            .anyMatch(e -> e.getAggregateId().equals(OutboxService.buildAggregateId(copy.getReferenceNumber()))
+                && e.getEventType().endsWith("NotificationCreated"));
+        assertThat(createdEventWritten).isTrue();
     }
 
     @Test
@@ -2703,6 +2695,16 @@ class NotificationIT extends IntegrationBase {
 
     private List<Document> sampleFulfilments() {
         return List.of(new Document("obligationId", "it-obligation").append("value", "1"));
+    }
+
+    private static final String FULFILMENT_OBLIGATION_ID = "a01b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+
+    private static Document fulfilment(String obligationId, String value) {
+        return new Document("obligationId", obligationId).append("value", value);
+    }
+
+    private static Document fulfilment(String value) {
+        return fulfilment(FULFILMENT_OBLIGATION_ID, value);
     }
 
     private NotificationDto sourceNotificationWithAllOperators() {
